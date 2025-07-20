@@ -1,0 +1,292 @@
+/* app/globals.css */
+
+    /* --- IMPORTANT: External @imports MUST come before @tailwind directives --- */
+    @import 'katex/dist/katex.min.css';
+    @import 'highlight.js/styles/github.css'; /* Or another theme like 'atom-one-light.css' */
+
+
+    @tailwind base;
+    @tailwind components;
+    @tailwind utilities;
+
+    @layer base {
+      :root {
+        --background: 0 0% 100%;
+        --foreground: 222.2 47.4% 11.2%;
+
+        --muted: 210 40% 96.1%;
+        --muted-foreground: 215.4 16.3% 46.9%;
+
+        --popover: 0 0% 100%;
+        --popover-foreground: 222.2 47.4% 11.2%;
+
+        --border: 214.3 31.8% 91.4%;
+        --input: 214.3 31.8% 91.4%;
+        --ring: 222.2 47.4% 11.2%;
+
+        --card: 0 0% 100%;
+        --card-foreground: 222.2 47.4% 11.2%;
+
+        --primary: 222.2 47.4% 11.2%;
+        --primary-foreground: 210 40% 98%;
+
+        --secondary: 210 40% 96.1%;
+        --secondary-foreground: 222.2 47.4% 11.2%;
+
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 210 40% 98%;
+
+        --accent: 210 40% 96.1%;
+        --accent-foreground: 222.2 47.4% 11.2%;
+
+        --radius: 0.5rem;
+
+        --accent-blue: 217 91.2% 59.8%;
+        --accent-green: 142.1 76.2% 36.3%;
+        --accent-purple: 250 80% 60%;
+      }
+
+      .dark {
+        --background: 224 71.4% 4.1%;
+        --foreground: 210 40% 98%;
+
+        --muted: 215 27.9% 16.9%;
+        --muted-foreground: 217.9 10.6% 64.5%;
+
+        --popover: 224 71.4% 4.1%;
+        --popover-foreground: 210 40% 98%;
+
+        --border: 215 27.9% 16.9%;
+        --input: 215 27.9% 16.9%;
+        --ring: 216 34.1% 91.4%;
+
+        --card: 224 71.4% 4.1%;
+        --card-foreground: 210 40% 98%;
+
+        --primary: 210 40% 98%;
+        --primary-foreground: 222.2 47.4% 11.2%;
+
+        --secondary: 215 27.9% 16.9%;
+        --secondary-foreground: 210 40% 98%;
+
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 210 40% 98%;
+
+        --accent: 215 27.9% 16.9%;
+        --accent-foreground: 210 40% 98%;
+
+        --accent-blue: 217 91.2% 59.8%;
+        --accent-green: 142.1 76.2% 36.3%;
+        --accent-purple: 250 80% 60%;
+      }
+
+      * {
+        @apply border-border;
+      }
+      body {
+        @apply bg-background text-foreground;
+      }
+
+      /* --- All Tiptap styles are now in this single block --- */
+
+      /* Editor Core Styles */
+      .ProseMirror {
+        min-height: 200px; /* Adjusted min-height to match your editorProps */
+        border: 1px solid #e2e8f0; /* subtle border */
+        border-radius: 0.5rem; /* rounded-lg */
+        padding: 1rem; /* p-4 */
+        outline: none; /* Remove default browser focus outline */
+        line-height: 1.5; /* Improve readability of text */
+        word-wrap: break-word; /* Ensure long words break */
+        background-color: #ffffff; /* white background */
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* subtle shadow */
+        transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        caret-color: currentColor; /* FIX: Ensure cursor color matches text color */
+      }
+
+      .ProseMirror:focus-within {
+        border-color: #6366f1; /* indigo-500 on focus */
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2); /* ring-2 with indigo-500 opacity */
+      }
+
+      /* Headings, Lists, Blockquotes */
+      .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {
+        margin-top: 1em;
+        margin-bottom: 0.5em;
+        font-weight: bold !important;
+      }
+      .ProseMirror h1 { font-size: 2.5em !important; color: #1d4ed8 !important; }
+      .ProseMirror h2 { font-size: 2em !important; color: #2563eb !important; }
+      .ProseMirror h3 { font-size: 1.5em !important; color: #3b82f6 !important; }
+      
+      .ProseMirror ul { list-style-type: disc !important; padding-left: 2em !important; }
+      .ProseMirror ol { list-style-type: decimal !important; padding-left: 2em !important; }
+      
+      .ProseMirror blockquote {
+        border-left: 4px solid #9ca3af !important;
+        background: #f1f5f9 !important;
+        color: #334155 !important;
+        padding-left: 1em !important;
+        margin: 1em 0 !important;
+        font-style: italic !important;
+      }
+
+      /* TipTap ProseMirror Link Styles */
+      .ProseMirror a {
+        color: var(--accent-blue); /* Use your defined accent blue color */
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .ProseMirror a:hover {
+        text-decoration: none;
+      }
+
+      /* TipTap ProseMirror Highlight Styles */
+      .ProseMirror mark {
+        background-color: yellow; /* Default highlight color */
+        padding: 0.1em 0.3em;
+        border-radius: 0.2em;
+      }
+
+      /* TipTap ProseMirror Inline Code Styles */
+      .ProseMirror code {
+        background-color: rgba(99, 102, 241, 0.1); /* Light indigo background */
+        color: #6366f1; /* Indigo text */
+        padding: 0.2em 0.4em;
+        border-radius: 0.25em;
+        font-family: 'Fira Code', 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+        font-size: 0.875em;
+      }
+
+      /* TipTap ProseMirror Horizontal Rule Styles */
+      .ProseMirror hr {
+        border: none;
+        border-top: 1px solid #e2e8f0;
+        margin: 1.5em 0;
+      }
+
+      /* TipTap ProseMirror Task List Styles */
+      .ProseMirror ul[data-type="taskList"] {
+        list-style: none; /* Remove default bullet */
+        padding-left: 0; /* Remove default padding */
+      }
+
+      .ProseMirror ul[data-type="taskList"] li {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 0.5em;
+      }
+
+      .ProseMirror ul[data-type="taskList"] li > label {
+        flex-shrink: 0;
+        margin-right: 0.5em;
+        cursor: pointer;
+      }
+
+      .ProseMirror ul[data-type="taskList"] li > div {
+        flex-grow: 1;
+      }
+
+      /* TipTap ProseMirror Image Styles */
+      .ProseMirror img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 0.5rem;
+        display: block; /* Ensures proper margin/alignment */
+        margin: 1em 0;
+      }
+
+      /* TipTap ProseMirror Custom Math Node Styles */
+      .math-rendered {
+        display: inline-block;
+        vertical-align: middle;
+        cursor: pointer;
+        padding: 0.125rem 0.25rem;
+        border-radius: 0.25rem;
+        transition: background-color 0.2s ease;
+        user-select: none;
+      }
+
+      .math-rendered:hover {
+        background-color: rgba(99, 102, 241, 0.1); /* Light indigo hover */
+      }
+
+      .math-rendered[data-display-mode="true"] {
+        display: block;
+        text-align: center;
+        margin: 1em 0;
+      }
+
+      /* TipTap's default class for selected nodes (applies to any selected node, including math) */
+      .ProseMirror-selectednode {
+        outline: 2px solid #6366f1; /* Indigo-500 for selection highlight */
+        border-radius: 4px;
+      }
+
+      /* --- Highlight.js (Lowlight) Code Block Styling --- */
+      /* This targets the <pre> element that CodeBlockLowlight renders */
+      .ProseMirror pre {
+        /* Overrides default .ProseMirror pre styles for syntax highlighting */
+        background-color: #0d1117 !important; /* A dark background */
+        color: #c9d1d9 !important; /* Light text */
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        margin: 1em 0;
+        overflow-x: auto;
+        
+        /* This is the magic for line numbers */
+        counter-reset: line;
+      }
+
+      /* This targets the <code> element inside <pre> */
+      .ProseMirror pre code {
+        /* Overrides default .ProseMirror code styles for syntax highlighting */
+        display: grid;
+        /* A grid column for the line number and one for the code */
+        grid-template-columns: auto 1fr;
+        gap: 1rem;
+        
+        /* Remove conflicting styles from inline code */
+        background: none;
+        color: inherit;
+        padding: 0;
+        font-size: 0.9em;
+      }
+
+      /* Create the line number pseudo-element */
+      .ProseMirror pre code::before {
+        /* Generate the line numbers */
+        counter-increment: line;
+        content: counter(line);
+        
+        /* Style the line numbers */
+        display: inline-block;
+        text-align: right;
+        color: #484f58; /* A muted color for line numbers */
+        user-select: none; /* Prevent selecting the numbers */
+      }
+
+      /* --- FIX: Isolate KaTeX styling from Tailwind Prose interference --- */
+      /* This ensures math rendered in the editor looks as good as the modal preview. */
+      .ProseMirror .math-node {
+        /* Reset font-size and line-height that prose might be setting. */
+        /* KaTeX uses ems for sizing, so resetting to the base is crucial. */
+        font-size: 1em;
+        line-height: 1.2;
+        font-family: 'KaTeX_Main', 'Times New Roman', serif; /* Be explicit */
+        display: inline-block; /* Helps with alignment and prevents weird wrapping */
+      }
+
+      /* Target all elements within the KaTeX rendered output to reset prose styles */
+      .ProseMirror .math-node * {
+        margin: 0;
+        padding: 0;
+        line-height: inherit; /* Inherit the line-height from the parent .math-node */
+        font-size: inherit;
+        font-weight: inherit;
+        color: inherit;
+        border: 0;
+        text-align: initial;
+      }
+    }
