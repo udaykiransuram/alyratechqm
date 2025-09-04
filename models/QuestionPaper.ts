@@ -5,6 +5,11 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 // --- FORCE MODEL REGISTRATION ---
 // Import the actual models (default export) to ensure they are registered
 // with Mongoose before this model is defined. This is the key.
+import './Question'; // Ensure Question model is imported
+import './Subject'; // Ensure Subject model is imported
+import './Tag';     // Ensure Tag model is imported
+import './TagType'; // Ensure TagType model is imported
+import './Class'; 
 import Question from './Question';
 import Subject from './Subject';
 import Class from './Class';

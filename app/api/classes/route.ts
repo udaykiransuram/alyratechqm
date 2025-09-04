@@ -19,13 +19,16 @@ export async function POST(request: Request) {
     if (!name) {
       return NextResponse.json({ success: false, message: 'Class name is required.' }, { status: 400 });
     }
+    // Check if class already exists
+    let existing = await Class.findOne({ name });
+    if (existing) {
+      return NextResponse.json({ success: true, class: existing, classId: existing._id }, { status: 200 });
+    }
+    // Create new class
     const newClass = new Class({ name, description });
     await newClass.save();
-    return NextResponse.json({ success: true, class: newClass }, { status: 201 });
+    return NextResponse.json({ success: true, class: newClass, classId: newClass._id }, { status: 201 });
   } catch (error: any) {
-    if (error.code === 11000) { // Handle duplicate name error
-      return NextResponse.json({ success: false, message: 'A class with this name already exists.' }, { status: 409 });
-    }
     return NextResponse.json({ success: false, message: error.message || 'Server error' }, { status: 500 });
   }
 }

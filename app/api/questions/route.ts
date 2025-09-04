@@ -7,6 +7,7 @@ import Tag from '@/models/Tag';
 import TagType from '@/models/TagType';
 
 export async function GET(req: NextRequest) {
+  console.log('DEBUG: /api/questions route called');
   await connectDB();
   const { searchParams } = new URL(req.url);
 

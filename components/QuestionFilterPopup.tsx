@@ -134,6 +134,35 @@ export function QuestionFilterPopup({
                 {selectedQuestionIds.length} selected
               </span>
             </div>
+            <div className="flex items-center mb-2">
+              {/*
+                The Checkbox component does not support the 'indeterminate' prop directly.
+                Use a ref to set the indeterminate property on the underlying input element.
+              */}
+              <Checkbox
+                id="select-all-questions"
+                checked={selectedQuestionIds.length === allQuestionsToShow.length && allQuestionsToShow.length > 0}
+                onCheckedChange={checked => {
+                  if (checked) {
+                    setSelectedQuestionIds(allQuestionsToShow.map(q => q._id));
+                  } else {
+                    setSelectedQuestionIds([]);
+                  }
+                }}
+                className="mr-2"
+                ref={el => {
+                  if (el) {
+                    const input = el.querySelector('input[type="checkbox"]');
+                    if (input) {
+                      (input as HTMLInputElement).indeterminate = selectedQuestionIds.length > 0 && selectedQuestionIds.length < allQuestionsToShow.length;
+                    }
+                  }
+                }}
+              />
+              <label htmlFor="select-all-questions" className="text-sm cursor-pointer select-none">
+                Select All
+              </label>
+            </div>
             <div className="flex-1 overflow-y-auto pr-2 -mr-2">
               {loadingQuestions ? (
                 <div className="flex items-center justify-center h-full"><Spinner /></div>

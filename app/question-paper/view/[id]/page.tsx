@@ -1,11 +1,9 @@
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { QuestionItem } from '@/components/question-items';
 import { PaperSummary } from '@/components/PaperSummary';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { FilePenLine, Printer } from 'lucide-react';
+import { PrintEditToolbar } from '@/components/PrintEditToolbar';
+import QuestionItemClient from '@/components/QuestionItemClient';
 
 async function getQuestionPaper(id: string) {
   try {
@@ -44,16 +42,7 @@ export default async function ViewQuestionPaperPage({ params }: { params: { id: 
         <main className="flex-1 space-y-4 w-full">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold tracking-tight">{paper.title}</h1>
-            <div className="flex items-center gap-2 print:hidden">
-              <Button variant="outline" asChild>
-                <Link href={`/question-paper/edit/${paper._id}`}>
-                  <FilePenLine className="mr-2 h-4 w-4" /> Edit
-                </Link>
-              </Button>
-              <Button variant="outline" onClick={() => window.print()}>
-                <Printer className="mr-2 h-4 w-4" /> Print
-              </Button>
-            </div>
+            {/* Remove inline toolbar, use PrintEditToolbar at the bottom */}
           </div>
 
           {paper.instructions && (
@@ -66,7 +55,7 @@ export default async function ViewQuestionPaperPage({ params }: { params: { id: 
           )}
 
           {paper.sections.map((section: any, sectionIndex: number) => (
-            <Card key={section._id}>
+            <Card key={section._id || sectionIndex}>
               <CardHeader>
                 <CardTitle className="text-xl flex justify-between items-center">
                   <span>{`Section ${sectionIndex + 1}: ${section.name}`}</span>
@@ -76,17 +65,16 @@ export default async function ViewQuestionPaperPage({ params }: { params: { id: 
               </CardHeader>
               <CardContent className="space-y-4">
                 {section.questions.map((q: any, qIndex: number) => (
-                  <div key={q.question._id} className="border rounded p-3 bg-background">
+                  <div key={q.question._id || qIndex} className="border rounded p-3 bg-background">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <p className="font-semibold mb-2">Question {qIndex + 1}</p>
-                        <QuestionItem
+                        <QuestionItemClient
                           question={q.question}
                           readOnly
                           classes={[]} 
                           subjects={[]} 
                           allTags={[]} 
-                          onSave={async () => {}} 
                         />
                       </div>
                       <div className="text-right ml-4">
@@ -116,6 +104,8 @@ export default async function ViewQuestionPaperPage({ params }: { params: { id: 
           />
         </aside>
       </div>
+      {/* Place PrintEditToolbar here, outside Server Component tree */}
+      <PrintEditToolbar paperId={paper._id} />
     </div>
   );
 }

@@ -76,3 +76,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: error.message || 'Server error.' }, { status: 500 });
   }
 }
+
+export async function GET(req: NextRequest) {
+  await connectDB();
+  try {
+    const papers = await QuestionPaper.find({})
+      .select('title totalMarks sections createdAt updatedAt') // select only needed fields
+      .sort({ createdAt: -1 });
+    return NextResponse.json({ success: true, papers });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, message: error.message || 'Server error.' }, { status: 500 });
+  }
+}

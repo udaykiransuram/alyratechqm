@@ -1,7 +1,6 @@
-'use client';
-
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+
+// Remove 'use client' for static optimization and SEO, since no client-only logic is needed
 
 const benefits = [
   { icon: '🌟', title: 'Holistic STEM Assessment', description: 'Comprehensive evaluation in Maths, Physics, and Chemistry for all-round growth.' },
@@ -54,18 +53,43 @@ const importantDates = [
   { label: 'Test Week Commences', date: 'Sept 1-7', year: '2025', color: 'border-emerald-400', textColor: 'text-emerald-300', dateColor: 'text-emerald-100' },
 ];
 
-export default function TalentTestLandingPage() {
-  const [isVisible, setIsVisible] = useState(false);
+// Add metadata for SEO (Next.js app directory)
+export const metadata = {
+  title: 'Young Scholars Talent Test | Ignite Brilliance. Master Tomorrow.',
+  description: 'A national-level STEM talent assessment for Classes 1-10. Register now for holistic evaluation, AI-powered analytics, and exclusive awards.',
+  openGraph: {
+    title: 'Young Scholars Talent Test',
+    description: 'A national-level STEM talent assessment for Classes 1-10. Register now for holistic evaluation, AI-powered analytics, and exclusive awards.',
+    url: 'https://yourdomain.com/',
+    siteName: 'Young Scholars Talent Initiative',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Young Scholars Talent Test',
+      },
+    ],
+    locale: 'en_IN',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Young Scholars Talent Test',
+    description: 'A national-level STEM talent assessment for Classes 1-10. Register now for holistic evaluation, AI-powered analytics, and exclusive awards.',
+    images: ['/og-image.png'],
+  },
+};
 
-  useEffect(() => {
-    setIsVisible(true);
-  }, []);
+export default function TalentTestLandingPage() {
+  // Remove useState/useEffect for fade-in for static optimization and SEO
+  // If you want animation, use CSS only (e.g., animate-fade-in class with Tailwind or custom CSS)
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white font-inter antialiased">
       {/* Hero Section */}
       <section className="relative z-10 flex flex-col items-center justify-center min-h-[90vh] py-28 px-4 text-white bg-gradient-to-br from-blue-950 via-indigo-950 to-purple-950">
-        <div className={`max-w-7xl mx-auto text-center transition-opacity duration-1000 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+        <div className="max-w-7xl mx-auto text-center animate-fade-in">
           <h1 className="text-5xl lg:text-7xl font-extrabold mb-6 leading-tight tracking-tight">
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">Ignite Brilliance.</span>
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">Master Tomorrow.</span>
@@ -73,8 +97,8 @@ export default function TalentTestLandingPage() {
           <p className="text-xl lg:text-2xl mb-12">
             A talent assessment designed for young innovators from <strong>Class 1st to 10th</strong>
           </p>
-          <Link href="/register">
-            <button className="bg-gradient-to-r from-teal-500 to-green-600 px-10 py-4 rounded-full text-xl font-semibold shadow-lg hover:scale-105 transition-transform">
+          <Link href="/register" prefetch>
+            <button className="bg-gradient-to-r from-teal-500 to-green-600 px-10 py-4 rounded-full text-xl font-semibold shadow-lg hover:scale-105 transition-transform focus:outline-none focus:ring-2 focus:ring-green-400">
               Enroll Now ✨
             </button>
           </Link>

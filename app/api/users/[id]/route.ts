@@ -3,7 +3,6 @@ import {connectDB} from '@/lib/db';
 import User from '@/models/User';
 import mongoose from 'mongoose';
 
-// --- ADD THIS ENTIRE PUT FUNCTION ---
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
@@ -15,12 +14,15 @@ export async function PUT(
       return NextResponse.json({ success: false, message: 'Invalid user ID' }, { status: 400 });
     }
 
-    const { name, role } = await request.json();
+    const { name, role, class: classId, rollNumber, enrolledAt } = await request.json();
     if (!name || !role) {
       return NextResponse.json({ success: false, message: 'Name and role are required.' }, { status: 400 });
     }
+    if (role === 'student' && (!classId || !rollNumber)) {
+      return NextResponse.json({ success: false, message: 'class and rollNumber are required for students.' }, { status: 400 });
+    }
 
-    // Professional check: Prevent changing the role of the last admin
+    // Prevent changing the role of the last admin
     const userToUpdate = await User.findById(userId);
     if (userToUpdate && userToUpdate.role === 'admin' && role !== 'admin') {
       const adminCount = await User.countDocuments({ role: 'admin' });
@@ -29,9 +31,20 @@ export async function PUT(
       }
     }
 
+    const updateData: any = { name, role };
+    if (role === 'student') {
+      updateData.class = classId;
+      updateData.rollNumber = rollNumber;
+      if (enrolledAt) updateData.enrolledAt = enrolledAt;
+    } else {
+      updateData.class = undefined;
+      updateData.rollNumber = undefined;
+      updateData.enrolledAt = undefined;
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { name, role },
+      updateData,
       { new: true, runValidators: true }
     ).select('-passwordHash');
 

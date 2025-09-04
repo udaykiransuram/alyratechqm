@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-
-// --- FORCE MODEL REGISTRATION ---
-// By importing all models here, we ensure they are registered with Mongoose
-// before any of them are used in a query. This is the most robust way
-// to prevent "MissingSchemaError" in a Next.js development environment.
+import QuestionPaper from '@/models/QuestionPaper';
 import Question from '@/models/Question';
-import Class from '@/models/Class';
 import Subject from '@/models/Subject';
 import Tag from '@/models/Tag';
-import User from '@/models/User';
-import QuestionPaper from '@/models/QuestionPaper';
+import TagType from '@/models/TagType';
+import Class from '@/models/Class';
+
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   await connectDB();
@@ -18,23 +14,40 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   try {
     console.log('Fetching QuestionPaper with ID:', params.id);
 
-    const paper = await QuestionPaper.findById(params.id)
-      .populate({
-        path: 'sections.questions.question',
-        // Also populate the nested 'tags' within each question
-        populate: { path: 'tags' }
-      })
+    let paper = await QuestionPaper.findById(params.id)
       .populate('class')
       .populate('subject');
 
     if (!paper) {
-      console.warn('No QuestionPaper found for ID:', params.id);
       return NextResponse.json({ success: false, message: 'Paper not found.' }, { status: 404 });
     }
+
+    // Deep populate questions and tags
+    await paper.populate({
+      path: 'sections.questions.question',
+      model: 'Question',
+      populate: { path: 'tags', model: 'Tag', populate: { path: 'type', model: 'TagType', select: 'name' } }
+    });
 
     return NextResponse.json({ success: true, paper }, { status: 200 });
   } catch (error: any) {
     console.error('Server error while fetching QuestionPaper:', error);
     return NextResponse.json({ success: false, message: error.message || 'Server error.' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
+  await connectDB();
+  const id = params.id;
+  const data = await request.json();
+
+  try {
+    const updated = await QuestionPaper.findByIdAndUpdate(id, data, { new: true });
+    if (!updated) {
+      return NextResponse.json({ success: false, message: 'Question paper not found.' }, { status: 404 });
+    }
+    return NextResponse.json({ success: true, paper: updated });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
 }
