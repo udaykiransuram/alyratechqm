@@ -37,8 +37,8 @@ export interface QuestionItemProps {
   classes: Class[];
   subjects: Subject[];
   allTags: Tag[];
-  onSave: (updated: Question) => Promise<void>;
-  readOnly?: boolean; // Add readOnly prop
+  onSave?: (updated: Question) => Promise<void>; // <-- Make this optional
+  readOnly?: boolean;
 }
 
 export function QuestionItem({
@@ -129,7 +129,7 @@ export function QuestionItem({
           classes={classes}
           subjects={subjects}
           allTags={allTags}
-          onSave={onSave}
+          onSave={onSave ?? (async () => {})} // Always pass a function
           toast={showToast}
         />
       )}

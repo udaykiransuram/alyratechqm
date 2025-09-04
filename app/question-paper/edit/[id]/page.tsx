@@ -21,6 +21,7 @@ export default async function EditQuestionPaperPage({ params }: { params: { id: 
 
   // Defensive mapping for sections/questions
   const initialData = {
+    _id: rawData._id, // <-- Add this line!
     title: rawData.title ?? '',
     instructions: rawData.instructions ?? '',
     duration: rawData.duration ?? 60,

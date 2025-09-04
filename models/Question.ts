@@ -1,6 +1,10 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
 import './Class'; 
+import './Subject';
+import './Tag';
+import './TagType';
+import './User'; // Ensure User model is imported
 import { ISubject } from './Subject';
 import { ITag } from './Tag';
 import { IClass } from './Class';

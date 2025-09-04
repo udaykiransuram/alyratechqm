@@ -385,7 +385,6 @@ export default function EditQuestionPage() {
                 setSelectedTags={setSelectedTags}
                 recommendedTagIds={recommendedTagIds}
                 initialDataLoading={initialDataLoading}
-                disabled={!subjectId}
                 resetCounter={resetCounter}
                 toast={toast}
                 onCreateNewTag={async (tagName: string) => null}
