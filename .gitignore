@@ -7,7 +7,13 @@ node_modules
 dist/
 build/
 coverage/
-.vscode/
+# Allow .vscode settings for team configuration (Copilot, etc.)
+# but ignore personal workspace files
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
 .idea/
 *.swp
 *.tmp
