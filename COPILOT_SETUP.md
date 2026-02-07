@@ -11,10 +11,10 @@ GitHub Copilot is an AI-powered code completion tool that helps you write code f
 Before you can use GitHub Copilot, you need:
 
 1. **GitHub Account** with Copilot access:
-   - Individual subscription ($10/month or $100/year)
+   - Individual subscription (pricing available at the link below)
    - GitHub Copilot for Business (through your organization)
    - Free for verified students and maintainers of popular open-source projects
-   - Sign up at: https://github.com/features/copilot
+   - Check current pricing and sign up at: https://github.com/features/copilot
 
 2. **Visual Studio Code** (recommended IDE for this project)
    - Download from: https://code.visualstudio.com/
