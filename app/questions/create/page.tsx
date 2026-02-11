@@ -290,7 +290,7 @@ export default function CreateQuestionPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-7xl py-8 space-y-8 px-4">
+    <div className="container py-8 space-y-8">
       <header className="mb-6 border-b pb-4">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900">Create New Question</h1>
         <p className="text-muted-foreground mt-1 text-base">Fill out the form below to add a new question to the database.</p>

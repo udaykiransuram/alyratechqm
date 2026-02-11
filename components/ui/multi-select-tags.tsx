@@ -110,7 +110,7 @@ export function MultiSelectTags({
       const matchesTypeFilter = selectedTypeIdFilter === 'all' || (tag.type && tag.type._id === selectedTypeIdFilter);
 
       // 2. Create a single searchable string for the tag
-      const searchableText = `${tag.name} ${tag.type ? tag.type.name : ''}`.toLowerCase();
+      const searchableText = `${tag.name} ${tag.type ? tag.type?.name ?? '' : ''}`.toLowerCase();
       
       // 3. Check if the tag matches the search input
       const matchesSearch = searchInput ? searchableText.includes(searchInput) : true;
@@ -195,7 +195,7 @@ export function MultiSelectTags({
           >
             {selectedTags.map((tag) => (
               <Badge key={tag._id} variant="secondary" className="py-1 px-2.5 rounded-md">
-                {tag.type?.name ? `${tag.type.name}: ` : ''}
+                {tag.type?.name ? `${tag.type?.name ?? ''}: ` : ''}
                 {tag.name}
                 <button
                   type="button"
@@ -290,7 +290,7 @@ export function MultiSelectTags({
                         <CommandItem key={tag._id} value={tag.name} onSelect={() => handleSelect(tag)} className="cursor-pointer">
                           <TagIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                           <span>{tag.name}</span>
-                          <span className="ml-auto text-xs text-muted-foreground/80 capitalize">{tag.type.name}</span>
+                          <span className="ml-auto text-xs text-muted-foreground/80 capitalize">{tag.type?.name ?? ''}</span>
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -300,7 +300,7 @@ export function MultiSelectTags({
                       <CommandItem key={tag._id} value={tag.name} onSelect={() => handleSelect(tag)} className="cursor-pointer">
                         <TagIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                         <span>{tag.name}</span>
-                        <span className="ml-auto text-xs text-muted-foreground/80 capitalize">{tag.type.name}</span>
+                        <span className="ml-auto text-xs text-muted-foreground/80 capitalize">{tag.type?.name ?? ''}</span>
                       </CommandItem>
                     ))}
                   </CommandGroup>

@@ -1,16 +1,34 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
+import { getTenantDb } from '@/lib/db-tenant'
+import { getTenantModels } from '@/lib/db-tenant';
+import '@/models/QuestionPaperResponse';
+import '@/models/Class';
+import '@/models/Subject';
+import '@/models/TagType';
+import '@/models/Tag';
 import QuestionPaper from '@/models/QuestionPaper';
 
 export async function POST(req: NextRequest) {
   await connectDB();
 
+  const url = new URL(req.url);
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = url.searchParams.get('school');
+  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
+  const schoolKeyPost = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  if (!schoolKeyPost) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+
   try {
+
+    const { QuestionPaper: QPModel } = await getTenantModels(schoolKeyPost, ['QuestionPaper']);
+
     const {
       title,
       instructions,
-      classId,
-      subjectId,
+      class: classId, // Rename 'class' to 'classId' here
+      subject,
       totalMarks,
       sections,
     } = await req.json();
@@ -19,15 +37,15 @@ export async function POST(req: NextRequest) {
     console.log('Received payload:', {
       title,
       instructions,
-      classId,
-      subjectId,
+      classId, // Use the new variable name
+      subject,
       totalMarks,
       sections,
     });
 
-    // Basic validation
-    if (!title || !classId || !subjectId || !sections || !Array.isArray(sections) || sections.length === 0) {
-      console.error('Validation failed: Missing required fields.', { title, classId, subjectId, sections });
+    // Basic validation - now this will work correctly
+    if (!title || !classId || !subject || !sections || !Array.isArray(sections) || sections.length === 0) {
+      console.error('Validation failed: Missing required fields.', { title, classId, subject, sections });
       return NextResponse.json({ success: false, message: 'Missing required fields.' }, { status: 400 });
     }
 
@@ -59,11 +77,11 @@ export async function POST(req: NextRequest) {
 
     // Create and save the question paper
     console.log('Saving question paper...');
-    const paper = await QuestionPaper.create({
+    const paper = await QPModel.create({
       title,
       instructions,
       class: classId,
-      subject: subjectId,
+      subject,
       totalMarks,
       sections,
     });
@@ -79,10 +97,18 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   await connectDB();
+  const url = new URL(req.url);
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = url.searchParams.get('school');
+  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
+  const schoolKeyGet = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  if (!schoolKeyGet) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  const { QuestionPaper: QPModelGet } = await getTenantModels(schoolKeyGet, ['QuestionPaper']);
   try {
-    const papers = await QuestionPaper.find({})
-      .select('title totalMarks sections createdAt updatedAt') // select only needed fields
-      .sort({ createdAt: -1 });
+    const papers = await QPModelGet.find({})
+      .select('title class totalMarks sections createdAt updatedAt')
+      .populate('class', 'name') // <-- This will give you { class: { _id, name } }
+      .sort({ createdAt: -1 }).lean();
     return NextResponse.json({ success: true, papers });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message || 'Server error.' }, { status: 500 });

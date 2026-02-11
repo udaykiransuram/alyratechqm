@@ -40,7 +40,7 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
+      <div className="container p-6 space-y-6">
         <Skeleton className="h-12 w-1/2" />
         <Skeleton className="h-4 w-1/3" />
         <Skeleton className="h-64 w-full" />
@@ -61,7 +61,7 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
 
   return (
     <div className="bg-slate-50 min-h-screen">
-      <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
+      <div className="container p-4 sm:p-6 lg:p-8">
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800">Student Responses</h1>
           <p className="text-slate-500 mt-1">Review submissions for this question paper.</p>

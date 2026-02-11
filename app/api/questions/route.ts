@@ -1,5 +1,8 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
+import { getTenantDb } from '@/lib/db-tenant'
+import { getTenantModels } from '@/lib/db-tenant';
 import Question from '@/models/Question';
 import Class from '@/models/Class';
 import Subject from '@/models/Subject';
@@ -7,9 +10,21 @@ import Tag from '@/models/Tag';
 import TagType from '@/models/TagType';
 
 export async function GET(req: NextRequest) {
-  console.log('DEBUG: /api/questions route called');
-  await connectDB();
+    await connectDB();
   const { searchParams } = new URL(req.url);
+  // Resolve tenant (school) key from header, query, or cookie
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = new URL(req.url).searchParams.get('school');
+  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
+  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  if (!schoolKey || !schoolKey.toString().trim()) {
+    return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  }
+
+
+  // Default to global Question model; switch to tenant model when schoolKey provided
+  const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question','Tag','TagType','Class','Subject']);
+
 
   const query: any = {};
 
@@ -21,9 +36,15 @@ export async function GET(req: NextRequest) {
   const subjectId = searchParams.get('subject');
   if (subjectId) query.subject = subjectId;
 
-  // Filter by tags (comma-separated)
-  const tags = searchParams.get('tags');
-  if (tags) query.tags = { $in: tags.split(',') };
+  // Filter by tags (comma-separated), supports tagsMode=or|and (default: or)
+  const tagsParam = searchParams.get('tags');
+  const tagsMode = (searchParams.get('tagsMode') || 'or').toLowerCase();
+  if (tagsParam) {
+    const tagIds = tagsParam.split(',').map(s => s.trim()).filter(Boolean);
+    if (tagIds.length > 0) {
+      query.tags = tagsMode === 'and' ? { $all: tagIds } : { $in: tagIds };
+    }
+  }
 
   // Filter by marks
   const marks = searchParams.get('marks');
@@ -33,23 +54,65 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search');
   if (search) query.content = { $regex: search, $options: 'i' };
 
-  const questions = await Question.find(query)
+  const pageParam = Number(searchParams.get('page') || '');
+  const limitParam = Number(searchParams.get('limit') || '');
+  const sortField = searchParams.get('sort'); // e.g., createdAt|marks|content
+  const sortOrder = (searchParams.get('order') || 'desc').toLowerCase() === 'asc' ? 1 : -1;
+
+  // Build base query
+  let cursor = QuestionModel.find(query)
+    .select('subject class tags content marks type createdAt options answerIndexes')
     .populate('subject', 'name')
     .populate('class', 'name')
-    .populate({
-      path: 'tags',
-      populate: { path: 'type', select: 'name' }
-    });
+    .populate({ path: 'tags', populate: { path: 'type', select: 'name' } })
+    .lean();
 
-  return NextResponse.json({ success: true, questions });
+  // Apply sort only if requested or if paginated (default createdAt desc)
+  if (sortField) {
+    const sortObj: any = { [sortField]: sortOrder };
+    cursor = cursor.sort(sortObj);
+  } else if (pageParam && limitParam) {
+    cursor = cursor.sort({ createdAt: -1 });
+  }
+
+  let total: number | undefined = undefined;
+  let page: number | undefined = undefined;
+  let pages: number | undefined = undefined;
+  let limit: number | undefined = undefined;
+
+  if (pageParam && limitParam) {
+    const totalCount = await QuestionModel.countDocuments(query);
+    total = totalCount;
+    page = Math.max(1, pageParam);
+    limit = Math.max(1, limitParam);
+    pages = Math.max(1, Math.ceil(totalCount / (limit || 1)));
+    const skip = (page - 1) * limit;
+    cursor = cursor.skip(skip).limit(limit);
+  }
+
+  try { console.debug('[api/questions] GET', { schoolKey, query, page: pageParam || undefined, limit: limitParam || undefined }); } catch {}
+  const questions = await cursor;
+  return NextResponse.json({ success: true, questions, total, page, pages, limit });
 }
 
 // POST a new question (multiple correct answers)
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   await connectDB();
+  // Tenant resolution for POST
+  const url = new URL(req.url);
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = url.searchParams.get('school');
+  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
+  const schoolKeyPost = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  if (!schoolKeyPost || !schoolKeyPost.toString().trim()) {
+    return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  }
+
+  const { Question: QuestionModelPost } = await getTenantModels(schoolKeyPost, ['Question','Tag','TagType','Class','Subject']);
+
 
   try {
-    const body = await request.json();
+    const body = await req.json();
     const {
       subject,
       class: classId,
@@ -95,7 +158,7 @@ export async function POST(request: Request) {
       // Optionally, filter out completely empty options before saving
       const filteredMatrixOptions = matrixOptions.filter(opt => (opt.left && opt.left.trim()) || (opt.right && opt.right.trim()));
 
-      const newQuestion = new Question({
+      const newQuestion = new QuestionModelPost({
         subject,
         class: classId,
         tags,
@@ -109,7 +172,7 @@ export async function POST(request: Request) {
 
       await newQuestion.save();
 
-      const createdQuestion = await Question.findById(newQuestion._id)
+      const createdQuestion = await QuestionModelPost.findById(newQuestion._id)
         .populate('subject', 'name')
         .populate('class', 'name')
         .populate({
@@ -124,7 +187,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ success: true, question: createdQuestion }, { status: 201 });
     } else {
-      const newQuestion = new Question({
+      const newQuestion = new QuestionModelPost({
         subject,
         class: classId,
         tags,
@@ -138,7 +201,7 @@ export async function POST(request: Request) {
 
       await newQuestion.save();
 
-      const createdQuestion = await Question.findById(newQuestion._id)
+      const createdQuestion = await QuestionModelPost.findById(newQuestion._id)
         .populate('subject', 'name')
         .populate('class', 'name')
         .populate({
@@ -164,15 +227,17 @@ export async function POST(request: Request) {
       { success: false, message: 'An unexpected server error occurred.', error: error.message },
       { status: 500 }
     );
+  
   }
-}
 
 // PATCH - Update an existing question (multiple correct answers and matrix match)
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+
+}
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   await connectDB();
 
   try {
-    const body = await request.json();
+    const body = await req.json();
     const {
       subject,
       class: classId,

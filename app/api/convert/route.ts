@@ -1,5 +1,9 @@
 // app/api/convert/route.ts
 import * as XLSX from "xlsx";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx";
+import { NextResponse } from "next/server";
+// Note: saveAs (file-saver) is a browser-only API and is not required when running in Node.js.
+// The browser download line in generateWordDoc is already commented out, so we omit importing file-saver here.
 
 export const runtime = "nodejs";
 
@@ -84,6 +88,11 @@ export async function POST(req: Request) {
     const firstClass = String(rows[0]?.[colClass] ?? "").trim();
     const uniformViolations: number[] = [];
 
+    const fileName = file?.name || "test";
+    const baseTestId = fileName.replace(/\.[^/.]+$/, "").replace(/\s+/g, "_").toLowerCase().slice(0, 20); // limit to 20 chars
+    const shortUnique = Math.floor(Date.now() % 1e6).toString().padStart(6, "0"); // 6-digit suffix
+    const testId = `${baseTestId}_${shortUnique}`;
+
     for (let r = 0; r < rows.length; r++) {
       const row = rows[r];
       const rowNum = r + 2;
@@ -120,7 +129,19 @@ export async function POST(req: Request) {
           : "Spelling/notation variant causing plausible confusion (incorrect)"
       );
 
-      const options = [{ content: a }, { content: b }, { content: c }, { content: d }, { content: e }];
+      const options = [
+        { content: a },
+        { content: b },
+        { content: c },
+        { content: d }
+      ];
+
+      if (colOptE !== null && colOptE !== undefined) {
+        const eRaw = String(row[colOptE] ?? "").trim();
+        if (eRaw) {
+          options.push({ content: ensureOptionStrict(eRaw) });
+        }
+      }
 
       // Answers
       const lettersRaw = String(row[colCorrectLetter] ?? "").trim().toUpperCase();
@@ -150,18 +171,23 @@ export async function POST(req: Request) {
       });
 
       // 3) Append option-level rationales (ALWAYS included, not pruned)
-      const optionTagTypes = ["option a", "option b", "option c", "option d", "option e"];
+      const optionTagTypes = ["option a", "option b", "option c", "option d"];
       const rationales = [
         "option a: plausible misconception based on surface similarity",
         "option b: correct reasoning aligned to expected method",
         "option c: overgeneralization of rule/procedure",
-        "option d: magnitude/operation misapplication",
-        "option e: notation/spelling near-miss"
+        "option d: magnitude/operation misapplication"
       ];
-      const finalTagTypes = [...pruned.tagTypes, ...optionTagTypes];
-      const finalTags = [...pruned.tags, ...rationales];
 
-      const contentHTML = `<p>${escapeHtml(qText)}</p>`;
+      if (options.length === 5) {
+        optionTagTypes.push("option e");
+        rationales.push("option e: notation/spelling near-miss");
+      }
+
+      const finalTagTypes = [...pruned.tagTypes, ...optionTagTypes, "testid"];
+      const finalTags = [...pruned.tags, ...rationales, testId];
+
+      const contentHTML = escapeHtml(qText);
 
       questions.push({
         subject: subjectNorm.label.toLowerCase(),
@@ -184,13 +210,88 @@ export async function POST(req: Request) {
       });
     }
 
-    const payload: ConvertResponse = {
-      questions,
+    const payload: ConvertResponse & { testId: string } = {
+  questions,
       studentPaperHtml: renderStudentPaperHtml(questions),
-      answerKeyHtml: renderAnswerKeyHtml(questions)
-    };
+      answerKeyHtml: renderAnswerKeyHtml(questions),
+  testId
+};
 
-    return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
+    // Generate Word document
+    await generateWordDoc(questions);
+
+    const { searchParams } = new URL(req.url);
+    const isExcel = searchParams.get("excel") === "1";
+    const isWord = searchParams.get("word") === "1";
+
+    if (isWord) {
+      // Generate Word document and return as download
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              text: "Diagnostic Test",
+              heading: HeadingLevel.HEADING_1,
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({
+              text: `Subject: ${questions[0]?.subject ?? ""}    Class: ${questions[0]?.class ?? ""}`,
+              heading: HeadingLevel.HEADING_3,
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({
+              text: "Instructions: Choose the best option. Section B may have multiple correct answers.",
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              text: "Section A: Single Correct",
+              heading: HeadingLevel.HEADING_2,
+            }),
+            new Paragraph({ text: "" }), // <-- Add this line for space after section A heading
+            ...questions.filter(q => q.type === "single").flatMap((q, idx) => questionToParagraph(q, idx + 1)),
+            new Paragraph({
+              text: "Section B: Multiple Correct",
+              heading: HeadingLevel.HEADING_2,
+            }),
+            new Paragraph({ text: "" }), // <-- Add this line for space after section B heading
+            ...questions.filter(q => q.type === "multiple").flatMap((q, idx, arr) => questionToParagraph(q, idx + 1 + questions.filter(q => q.type === "single").length)),
+            new Paragraph({
+              border: { bottom: { color: "auto", space: 1, style: BorderStyle.SINGLE, size: 6 } },
+              spacing: { after: 120 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: "End of Paper", italics: true, size: 18 })],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 240 },
+            }),
+          ]
+        }]
+      });
+
+      const buffer = await Packer.toBuffer(doc);
+
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "Content-Disposition": "attachment; filename=question_paper.docx"
+        }
+      });
+    } else if (isExcel) {
+      // Generate Excel file
+      const wbout = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      return new NextResponse(wbout, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": "attachment; filename=questions.xlsx"
+        }
+      });
+    } else {
+      return NextResponse.json(payload);
+    }
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err?.message ?? "Internal error" }), {
       status: 500,
@@ -339,23 +440,72 @@ function renderStudentPaperHtml(qs: Question[]): string {
   const renderBlock = (items: Question[]) =>
     items
       .map((q) => {
-        const opts = q.options.map((o) => `<li>${escapeHtml(String(o.content))}</li>`).join("");
-        return `<div class="q">
-          <div class="qnum"><b>${idx++}.</b></div>
-          ${q.content}
-          <ol type="A">${opts}</ol>
+        const opts = q.options
+          .map(
+            (o, i) =>
+              `<div style="display: flex; align-items: flex-start; font-size:11px; margin-bottom:2px;">
+                <span style="font-weight:bold; margin-right:2px;">${String.fromCharCode(65 + i)}.</span>
+                <span>${escapeHtml(String(o.content))}</span>
+              </div>`
+          )
+          .join("");
+        return `<div class="q" style="margin-bottom:7px;">
+          <div style="display: flex; align-items: flex-start; font-size:11.5px; margin-bottom:2px;">
+            <span style="font-weight:bold; margin-right:4px;">Q${idx++}.</span>
+            <span>${q.content}</span>
+          </div>
+          ${opts}
         </div>`;
       })
       .join("");
 
   const s = qs[0]?.subject || "not specified";
   const c = qs[0]?.class || "not specified";
-  const head = `<h1>Diagnostic Test</h1><h3>Subject: ${escapeHtml(s)} | Class: ${escapeHtml(c)}</h3><p>Instructions: Choose the best option. Section B may have multiple correct answers.</p>`;
+  const head = `
+    <div style="text-align:center; margin-bottom:12px;">
+      <h1 style="margin:0; font-size:1.3em;">Diagnostic Test</h1>
+      <h3 style="margin:6px 0 0 0; font-weight:normal; font-size:1em;">Subject: <span style="font-weight:bold;">${escapeHtml(s)}</span> &nbsp;|&nbsp; Class: <span style="font-weight:bold;">${escapeHtml(c)}</span></h3>
+      <p style="margin:8px 0 0 0; font-size:10.5px;">Instructions: Choose the best option. Section B may have multiple correct answers.</p>
+    </div>
+  `;
 
-  return `<html><body>${head}
-    <h2>Section A (Single Correct)</h2>${renderBlock(singles)}
-    <h2>Section B (Multiple Correct)</h2>${renderBlock(multiples)}
-  </body></html>`;
+  return `<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Diagnostic Test</title>
+    <style>
+      @media print {
+        body { margin: 0; }
+      }
+      body {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        background: #fff;
+        color: #222;
+        margin: 14px;
+        font-size: 11.5px;
+        max-width: 700px;
+      }
+      h1, h2, h3 { text-align: center; }
+      .section-title {
+        margin: 14px 0 6px 0;
+        font-size: 1.05em;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 2px;
+      }
+      .q { margin-bottom: 7px; }
+    </style>
+  </head>
+  <body>
+    ${head}
+    <div class="section-title">Section A: Single Correct</div>
+    ${renderBlock(singles)}
+    <div class="section-title">Section B: Multiple Correct</div>
+    ${renderBlock(multiples)}
+    <div style="margin-top: 14px; font-size: 10px; color: #666; text-align: center;">
+      <em>End of Paper</em>
+    </div>
+  </body>
+</html>`;
 }
 
 function renderAnswerKeyHtml(qs: Question[]): string {
@@ -438,4 +588,98 @@ function romanToInt(r: string): number | null {
     prev = val;
   }
   return total;
+}
+
+// Generate Word document
+async function generateWordDoc(questions: Question[], fileName = "question_paper.docx") {
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({
+          text: "Diagnostic Test",
+          heading: HeadingLevel.HEADING_1,
+          alignment: AlignmentType.CENTER,
+        }),
+        new Paragraph({
+          text: `Subject: ${questions[0]?.subject ?? ""}    Class: ${questions[0]?.class ?? ""}`,
+          heading: HeadingLevel.HEADING_3,
+          alignment: AlignmentType.CENTER,
+        }),
+        new Paragraph({
+          text: "Instructions: Choose the best option. Section B may have multiple correct answers.",
+          alignment: AlignmentType.CENTER,
+        }),
+        new Paragraph({ text: "" }),
+        new Paragraph({
+          text: "Section A: Single Correct",
+          heading: HeadingLevel.HEADING_2,
+        }),
+        new Paragraph({ text: "" }), // <-- Add this line for space after section A heading
+        ...questions.filter(q => q.type === "single").flatMap((q, idx) => questionToParagraph(q, idx + 1)),
+        new Paragraph({
+          text: "Section B: Multiple Correct",
+          heading: HeadingLevel.HEADING_2,
+        }),
+        new Paragraph({ text: "" }), // <-- Add this line for space after section B heading
+        ...questions.filter(q => q.type === "multiple").flatMap((q, idx, arr) => questionToParagraph(q, idx + 1 + questions.filter(q => q.type === "single").length)),
+        new Paragraph({
+          border: { bottom: { color: "auto", space: 1, style: BorderStyle.SINGLE, size: 6 } },
+          spacing: { after: 120 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: "End of Paper", italics: true, size: 18 })],
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 240 },
+        }),
+      ]
+    }]
+  });
+
+  const buffer = await Packer.toBuffer(doc);
+
+  // For Node.js: save to disk
+  const fs = require("fs");
+  fs.writeFileSync(fileName, buffer);
+
+  // For browser: trigger download
+  // saveAs(new Blob([buffer]), fileName);
+}
+
+function questionToParagraph(q: Question, idx: number) {
+  // Question number and text side by side, inline
+  const questionPara = new Paragraph({
+    children: [
+      new TextRun({ text: `Q${idx}. `, bold: true }),
+      new TextRun({ text: q.content }),
+    ],
+    spacing: { after: 0 },
+    keepNext: true,
+    keepLines: true,
+  });
+
+  // Single blank line between question and options
+  const spacer = new Paragraph({ text: "", spacing: { after: 0, before: 0 } });
+
+  // Options: each as a single line, letter and text side by side, no indent
+  const optionParas = q.options.map((o, i) =>
+    new Paragraph({
+      children: [
+        new TextRun({ text: `${String.fromCharCode(65 + i)}. `, bold: true }),
+        new TextRun({ text: o.content }),
+      ],
+      spacing: { after: 0 },
+      keepLines: true,
+    })
+  );
+
+  // Add a small space after each question block
+  const afterSpace = new Paragraph({ text: "", spacing: { after: 120 } });
+
+  return [
+    questionPara,
+    spacer,
+    ...optionParas,
+    afterSpace,
+  ];
 }

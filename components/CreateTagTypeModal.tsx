@@ -21,31 +21,45 @@ interface CreateTagTypeModalProps {
   onTagTypeCreated: (newTagType: { _id: string; name: string }) => void;
 }
 
+// Ensure tenant context is sent from client
+const getSchoolKey = () => {
+  if (typeof document === 'undefined') return '';
+  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+};
+const getSchoolQS = () => {
+  const k = getSchoolKey();
+  return k ? `?school=${encodeURIComponent(k)}` : '';
+};
+
 export function CreateTagTypeModal({ open, onClose, onTagTypeCreated }: CreateTagTypeModalProps) {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const handleSubmit = async () => {
-    if (!name.trim()) {
+    const trimmed = name.trim();
+    if (!trimmed) {
       toast({ title: 'Validation Error', description: 'Tag type name cannot be empty.', variant: 'destructive' });
       return;
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/tag-types', {
+      const res = await fetch('/api/tag-types' + getSchoolQS(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        cache: 'no-store',
+        body: JSON.stringify({ name: trimmed })
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success) {
         toast({ title: 'Success', description: `Tag type "${data.tagType.name}" created.` });
         onTagTypeCreated(data.tagType);
         setName('');
         onClose();
       } else {
-        toast({ title: 'Error', description: data.message, variant: 'destructive' });
+        const message = data?.message || `Failed to create tag type (HTTP ${res.status}).`;
+        toast({ title: 'Error', description: message, variant: 'destructive' });
       }
     } catch (error) {
       toast({ title: 'Network Error', description: 'Failed to create tag type.', variant: 'destructive' });
@@ -70,6 +84,7 @@ export function CreateTagTypeModal({ open, onClose, onTagTypeCreated }: CreateTa
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., Difficulty"
+            disabled={loading}
           />
         </div>
         <DialogFooter>

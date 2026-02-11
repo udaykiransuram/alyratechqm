@@ -168,6 +168,11 @@ const QuestionSchema: Schema<IQuestion> = new Schema(
   }
 );
 
+// Indexes to optimize common queries and search (non-breaking)
+QuestionSchema.index({ content: 'text' });
+QuestionSchema.index({ class: 1, subject: 1, createdAt: -1 });
+QuestionSchema.index({ marks: 1 });
+
 // Create and export the Question model
 const Question: Model<IQuestion> = mongoose.models.Question || mongoose.model<IQuestion>('Question', QuestionSchema);
 

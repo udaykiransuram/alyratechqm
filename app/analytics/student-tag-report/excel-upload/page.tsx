@@ -151,21 +151,34 @@ export default function ExcelStudentResponseUploadPage() {
     });
 
     const answers: any[] = [];
-    const optionMap: { [key: string]: number } = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 };
+    // Updated optionMap for letters; numbers are handled separately
+    const optionMap: { [key: string]: number } = { 
+      'A': 0, 'B': 1, 'C': 2, 'D': 3 
+    };
 
     for (const key in rowData) {
       if (key.toUpperCase().startsWith('Q')) {
         const questionId = questionMap[key]; // Use ObjectId, not "Q1"
         const option = rowData[key];
-        if (
-          questionId &&
-          typeof option === 'string' &&
-          option &&
-          optionMap[option.toUpperCase()] !== undefined
-        ) {
+        let index: number | undefined;
+
+        if (option !== null && option !== undefined) {
+          if (typeof option === 'number') {
+            index = option; // Direct number as index (e.g., 25 -> 25)
+          } else if (typeof option === 'string') {
+            const upper = option.toUpperCase();
+            if (optionMap[upper] !== undefined) {
+              index = optionMap[upper]; // Letter to index (e.g., 'A' -> 0)
+            } else if (!isNaN(Number(upper))) {
+              index = Number(upper); // String number to index (e.g., '12' -> 12)
+            }
+          }
+        }
+
+        if (questionId && index !== undefined) {
           answers.push({
             question: questionId,
-            selectedOptions: [optionMap[option.toUpperCase()]],
+            selectedOptions: [index],
           });
         }
       }
@@ -374,7 +387,7 @@ export default function ExcelStudentResponseUploadPage() {
             <b>Excel columns required:</b> <span className="font-mono">CANDIDATE ID</span>, <span className="font-mono">CANDIDATE NAME</span>, <span className="font-mono">FATHER</span>, <span className="font-mono">GROUP</span>, <span className="font-mono">Q1</span>, <span className="font-mono">Q2</span>, ...
           </p>
           <p className="mb-1">
-            The question columns (<span className="font-mono">Q1</span>, <span className="font-mono">Q2</span>, etc.) should contain the selected option (<span className="font-mono">A</span>, <span className="font-mono">B</span>, <span className="font-mono">C</span>, or <span className="font-mono">D</span>).
+            The question columns (<span className="font-mono">Q1</span>, <span className="font-mono">Q2</span>, etc.) should contain the selected option index or letter: use <span className="font-mono">A</span>/<span className="font-mono">B</span>/<span className="font-mono">C</span>/<span className="font-mono">D</span> for the first four options, or the option number (e.g., <span className="font-mono">1</span>, <span className="font-mono">2</span>, <span className="font-mono">12</span>, <span className="font-mono">25</span>).
           </p>
           <p>
             The <b>paper</b> is taken from the URL.

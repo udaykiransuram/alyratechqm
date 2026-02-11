@@ -21,7 +21,7 @@ import { Spinner } from './ui/spinner';
 declare module '@tiptap/core' {
   interface EditorEvents {
     // Define 'editMath' as a function that receives the payload
-    editMath: (payload: EditMathPayload) => void;
+    editMath: (payload: any) => void;
   }
 }
 
@@ -93,9 +93,11 @@ const RichTextEditor = ({ initialContent, onChange, editorKey }: RichTextEditorP
       setEditingMath(payload); // Store position and latex of the clicked node
       setIsMathModalOpen(true); // Open the modal
     };
-    editor.on('editMath', handler);
+    // @ts-ignore
+    editor.on('editMath', handler as any);
     return () => {
-      editor.off('editMath', handler);
+      // @ts-ignore
+      editor.off('editMath', handler as any);
     };
   }, [editor]);
 

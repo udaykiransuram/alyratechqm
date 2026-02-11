@@ -200,8 +200,8 @@ export function QuestionFilterPopup({
                           allTags={allTags.map(tag => ({
                             ...tag,
                             type: {
-                              _id: (tag.type as any)._id ?? '',
-                              name: tag.type.name
+                              _id: (tag.type as any)?._id ?? '',
+                              name: (tag.type as any)?.name ?? ''
                             }
                           }))}
                           onSave={handleEditQuestionSave}

@@ -23,6 +23,13 @@ interface MetadataSelectorProps {
   onCreateNewTag: (tagName: string, tagTypeId: string) => Promise<any>;
 }
 
+const getSchoolKey = () => {
+  if (typeof document === 'undefined') return '';
+  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+};
+const getSchoolQS = () => { const k = getSchoolKey(); return k ? `?school=${encodeURIComponent(k)}` : ''; };
+
 export function MetadataSelector({
   classes,
   classId,
@@ -53,7 +60,7 @@ export function MetadataSelector({
       return null;
     }
     try {
-      const res = await fetch('/api/tags', {
+      const res = await fetch('/api/tags'+getSchoolQS(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

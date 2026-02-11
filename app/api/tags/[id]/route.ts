@@ -1,63 +1,78 @@
+
+export const dynamic = 'force-dynamic';
 // app/api/tags/[id]/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '../../../../lib/db';
-import Tag from '../../../../models/Tag';
-import Subject, { ISubject } from '../../../../models/Subject'; // Import ISubject for typing
-import mongoose, { UpdateQuery } from 'mongoose'; // Import mongoose and UpdateQuery
-import TagType from '../../../../models/TagType'; // Import the TagType model
+import { connectDB } from '@/lib/db';
+import { getTenantModels } from '@/lib/db-tenant';
+import mongoose from 'mongoose';
+import '@/models/Tag';
+import '@/models/Subject';
+import '@/models/TagType';
 
 // Helper function to validate ObjectId
 const isValidObjectId = (id: string): boolean => {
   return mongoose.Types.ObjectId.isValid(id);
 };
 
-// GET handler: Fetch a single tag, now populating its type
+// GET handler: Fetch a single tag, populating its type, and include associated subjects
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   await connectDB();
-  const { id } = params;
+  const url = new URL(req.url);
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = url.searchParams.get('school');
+  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
+  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
 
+  const { id } = params;
   if (!isValidObjectId(id)) {
     return NextResponse.json({ success: false, message: 'Invalid Tag ID' }, { status: 400 });
   }
 
   try {
-    // Populate the 'type' field to get the full TagType object
+    // Ensure TagType is compiled for populate('type') on tenant connection
+    const { Tag, Subject, TagType } = await getTenantModels(schoolKey, ['Tag','Subject','TagType'] as const);
     const tag = await Tag.findById(id).populate('type');
 
     if (!tag) {
       return NextResponse.json({ success: false, message: 'Tag not found' }, { status: 404 });
     }
 
-    // This logic for finding associated subjects is correct and can remain
     const subjects = await Subject.find({ tags: id }, 'name code');
-    const associatedSubjects = subjects.map(subject => ({
+    const associatedSubjects = subjects.map((subject: any) => ({
       _id: subject._id,
       name: subject.name,
-      code: (subject as any).code,
+      code: subject.code,
     }));
 
+    try { console.debug('[api/tags/[id]] GET', { id, schoolKey, found: !!tag, subjects: associatedSubjects.length }); } catch {}
     return NextResponse.json({ success: true, tag: { ...tag.toObject(), subjects: associatedSubjects } }, { status: 200 });
 
   } catch (error: any) {
-    console.error(`Error fetching tag ${id}:`, error);
+    try { console.error('[api/tags/[id]] GET error', { id, message: error?.message, stack: error?.stack }); } catch {}
     return NextResponse.json({ success: false, message: 'Failed to fetch tag.', error: error.message }, { status: 500 });
   }
 }
 
-// PATCH handler: Update an existing tag, expecting a type ID
+// PATCH handler: Update an existing tag (expects TagType ObjectId in `type`), and update subject associations
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   await connectDB();
-  const { id } = params;
+  const url = new URL(req.url);
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = url.searchParams.get('school');
+  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
+  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
 
+  const { id } = params;
   if (!isValidObjectId(id)) {
     return NextResponse.json({ success: false, message: 'Invalid Tag ID' }, { status: 400 });
   }
 
   try {
-    // 'type' is now expected to be the ObjectId of the TagType
     const { name, type, selectedSubjectIds = [] } = await req.json();
-
+    try { console.debug('[api/tags/[id]] PATCH payload', { id, name, type, selectedSubjectIdsCount: Array.isArray(selectedSubjectIds) ? selectedSubjectIds.length : 0, schoolKey }); } catch {}
     if (!name || !type) {
       return NextResponse.json({ success: false, message: 'Tag name and type ID are required.' }, { status: 400 });
     }
@@ -65,51 +80,68 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ success: false, message: 'Invalid Tag Type ID.' }, { status: 400 });
     }
 
-    // 1. Update the Tag document itself
+    // Ensure TagType is compiled for populate('type') on tenant connection
+    const { Tag, Subject, TagType } = await getTenantModels(schoolKey, ['Tag','Subject','TagType'] as const);
+
     const updatedTag = await Tag.findByIdAndUpdate(
       id,
-      { name, type }, // The 'type' field is updated with the new ObjectId
+      { name, type },
       { new: true, runValidators: true }
-    ).populate('type'); // Populate the type for the response
+    ).populate('type');
 
     if (!updatedTag) {
       return NextResponse.json({ success: false, message: 'Tag not found for update.' }, { status: 404 });
     }
 
-    // 2. Update Subject associations (this logic is correct and can remain)
     await Subject.updateMany({ tags: id }, { $pull: { tags: id } });
-    if (selectedSubjectIds.length > 0) {
+    if (Array.isArray(selectedSubjectIds) && selectedSubjectIds.length > 0) {
       await Subject.updateMany({ _id: { $in: selectedSubjectIds } }, { $addToSet: { tags: id } });
     }
 
+    try { console.debug('[api/tags/[id]] PATCH success', { id, type: updatedTag?.type, subjectsUpdated: Array.isArray(selectedSubjectIds) ? selectedSubjectIds.length : 0 }); } catch {}
     return NextResponse.json({ success: true, message: 'Tag and associations updated successfully.', tag: updatedTag }, { status: 200 });
 
   } catch (error: any) {
-    console.error(`Error updating tag ${id}:`, error);
+    try { console.error('[api/tags/[id]] PATCH error', { id, message: error?.message, code: error?.code, stack: error?.stack }); } catch {}
     if (error.code === 11000) {
-        return NextResponse.json({ success: false, message: 'This tag name already exists for the selected type.' }, { status: 409 });
+      return NextResponse.json({ success: false, message: 'This tag name already exists for the selected type.' }, { status: 409 });
     }
     return NextResponse.json({ success: false, message: 'Failed to update tag.', error: error.message }, { status: 500 });
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
-  try {
-    await connectDB();
+// DELETE handler: Delete a tag and remove it from subjects (tenant-aware)
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  await connectDB();
+  const url = new URL(req.url);
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = url.searchParams.get('school');
+  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
+  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
 
-    const deletedTag = await Tag.findByIdAndDelete(params.id);
+  const { id } = params;
+  if (!isValidObjectId(id)) {
+    return NextResponse.json({ success: false, message: 'Invalid Tag ID' }, { status: 400 });
+  }
+
+  try {
+    const { Tag, Subject } = await getTenantModels(schoolKey, ['Tag','Subject']);
+
+    const deletedTag = await Tag.findByIdAndDelete(id);
     if (!deletedTag) {
-      return NextResponse.json({ success: false, error: 'Tag not found' }, { status: 404 });
+      return NextResponse.json({ success: false, message: 'Tag not found' }, { status: 404 });
     }
 
-    // Remove tag from all subjects that reference it
     await Subject.updateMany(
-      { tags: params.id },
-      { $pull: { tags: params.id } }
+      { tags: id },
+      { $pull: { tags: id } }
     );
 
+    try { console.debug('[api/tags/[id]] DELETE success', { id }); } catch {}
     return NextResponse.json({ success: true, message: 'Tag deleted and removed from subjects' });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    try { console.error('[api/tags/[id]] DELETE error', { id, message: err?.message, stack: err?.stack }); } catch {}
+    return NextResponse.json({ success: false, message: err.message || 'Server error' }, { status: 500 });
   }
 }

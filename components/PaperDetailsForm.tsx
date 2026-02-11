@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { BookOpen } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 
 export interface PaperDetailsFormProps {
   paperTitle: string;
@@ -23,6 +24,7 @@ export interface PaperDetailsFormProps {
   classes: any[];
   subjects: any[];
   compact?: boolean;
+  initialDataLoading?: boolean;
 }
 
 export function PaperDetailsForm({
@@ -34,7 +36,10 @@ export function PaperDetailsForm({
   classId, setClassId,
   subjectId, setSubjectId,
   classes, subjects,
+  initialDataLoading,
 }: PaperDetailsFormProps) {
+  if (initialDataLoading) return <Spinner />;
+  
   return (
     <Card>
       <CardHeader>
@@ -57,14 +62,18 @@ export function PaperDetailsForm({
             <Label htmlFor="class" className="text-sm font-medium">Class</Label>
             <Select value={classId} onValueChange={setClassId}>
               <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
-              <SelectContent>{classes.map(cls => <SelectItem key={cls._id} value={cls._id}>{cls.name}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {classes.map(cls => <SelectItem key={cls._id} value={cls._id}>{cls.name}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
             <Label htmlFor="subject" className="text-sm font-medium">Subject</Label>
-            <Select value={subjectId} onValueChange={setSubjectId} disabled={!classId || subjects.length === 0}>
+            <Select value={subjectId} onValueChange={setSubjectId}>
               <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
-              <SelectContent>{subjects.map(sub => <SelectItem key={sub._id} value={sub._id}>{sub.name}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {subjects.map(sub => <SelectItem key={sub._id} value={sub._id}>{sub.name}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">

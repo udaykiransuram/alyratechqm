@@ -69,7 +69,7 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
 
   return (
     <div className="bg-muted/20 min-h-screen">
-      <div className="container mx-auto max-w-7xl py-8">
+      <div className="container py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>

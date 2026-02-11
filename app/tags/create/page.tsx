@@ -48,6 +48,13 @@ interface Subject {
   tags: TagItem[];
 }
 
+const getSchoolKey = () => {
+  if (typeof document === 'undefined') return '';
+  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+};
+const schoolQS = (() => { const k = getSchoolKey(); return k ? `?school=${encodeURIComponent(k)}` : ''; })();
+
 export default function CreateTagPage() {
   const router = useRouter();
   const [newTagName, setNewTagName] = useState('');
@@ -70,14 +77,18 @@ export default function CreateTagPage() {
   const fetchTagTypes = useCallback(async () => {
     setTagTypesLoading(true);
     try {
-      const res = await fetch('/api/tag-types');
+      const endpoint = '/api/tag-types'+schoolQS;
+      console.debug('[tags/create] fetchTagTypes ->', { endpoint });
+      const res = await fetch(endpoint);
       const data = await res.json();
+      console.debug('[tags/create] fetchTagTypes <-', { ok: res.ok, status: res.status, count: Array.isArray(data?.tagTypes) ? data.tagTypes.length : undefined });
       if (data.success) {
         setTagTypes(data.tagTypes);
       } else {
         toast({ title: "Error", description: "Failed to load tag types.", variant: "destructive" });
       }
-    } catch {
+    } catch (err) {
+      console.error('[tags/create] fetchTagTypes error', err);
       toast({ title: "Network Error", description: "Could not load tag types.", variant: "destructive" });
     } finally {
       setTagTypesLoading(false);
@@ -87,8 +98,11 @@ export default function CreateTagPage() {
   const fetchSubjects = useCallback(async () => {
     setSubjectsLoading(true);
     try {
-      const res = await fetch('/api/subjects');
+      const endpoint = '/api/subjects'+schoolQS;
+      console.debug('[tags/create] fetchSubjects ->', { endpoint });
+      const res = await fetch(endpoint);
       const data = await res.json();
+      console.debug('[tags/create] fetchSubjects <-', { ok: res.ok, status: res.status, count: Array.isArray(data?.subjects) ? data.subjects.length : undefined });
       if (data.success) {
         setAllSubjects(data.subjects);
       } else {
@@ -98,7 +112,8 @@ export default function CreateTagPage() {
           variant: "destructive",
         });
       }
-    } catch {
+    } catch (err) {
+      console.error('[tags/create] fetchSubjects error', err);
       toast({
         title: "Network Error",
         description: "Could not load subjects due to a network issue.",
@@ -117,16 +132,16 @@ export default function CreateTagPage() {
   const handleCreateNewTag = useCallback(
     async (tagName: string, typeId: string, subjectIds: string[]): Promise<TagItem | null> => {
       try {
-        const res = await fetch('/api/tags', {
+        const endpoint = '/api/tags'+schoolQS+'';
+        const payload = { name: tagName, type: typeId, subjectIds };
+        console.debug('[tags/create] POST /api/tags ->', { endpoint, payload });
+        const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: tagName,
-            type: typeId,
-            subjectIds,
-          }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
+        console.debug('[tags/create] POST /api/tags <-', { ok: res.ok, status: res.status, data });
         if (data.success) {
           toast({
             title: "Tag Created",
@@ -134,10 +149,12 @@ export default function CreateTagPage() {
           });
           return data.tag;
         } else {
+          console.warn('[tags/create] tag create responded with error', data);
           toast({ title: "Creation Failed", description: data.message, variant: "destructive" });
           return null;
         }
-      } catch {
+      } catch (err) {
+        console.error('[tags/create] POST /api/tags network error', err);
         toast({ title: "Network Error", description: "Failed to create tag.", variant: "destructive" });
         return null;
       }
@@ -168,6 +185,11 @@ export default function CreateTagPage() {
 
     setIsCreatingTag(true);
     try {
+      console.debug('[tags/create] handleCreateAndAssignTag start', {
+        newTagName,
+        selectedTagTypeId,
+        selectedSubjects: selectedSubjects.map(s => s._id)
+      });
       const createdTag = await handleCreateNewTag(
         newTagName,
         selectedTagTypeId,
@@ -180,8 +202,9 @@ export default function CreateTagPage() {
         let successCount = 0;
         let failCount = 0;
 
-        const currentSubjectsRes = await fetch('/api/subjects');
+        const currentSubjectsRes = await fetch('/api/subjects'+schoolQS);
         const currentSubjectsData = await currentSubjectsRes.json();
+        console.debug('[tags/create] refresh subjects after create', { ok: currentSubjectsRes.ok, status: currentSubjectsRes.status, count: currentSubjectsData?.subjects?.length });
 
         if (!currentSubjectsData.success) {
             toast({
@@ -206,22 +229,27 @@ export default function CreateTagPage() {
             : [...currentTagIds, createdTag._id];
 
           try {
-            const res = await fetch(`/api/subjects/${currentSubject._id}`, {
+            const endpoint = `/api/subjects/${currentSubject._id}`;
+            console.debug('[tags/create] PATCH subject assign ->', { endpoint, tagIds: updatedTagIds.length });
+            const res = await fetch(endpoint, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ tags: updatedTagIds }),
             });
             const data = await res.json();
+            console.debug('[tags/create] PATCH subject assign <-', { ok: res.ok, status: res.status, subjectId: currentSubject._id, success: data?.success });
             if (data.success) {
               successCount++;
             } else {
               failCount++;
             }
-          } catch {
+          } catch (err) {
+            console.error('[tags/create] PATCH subject assign error', { subjectId: currentSubject._id, err });
             failCount++;
           }
         }
 
+        console.debug('[tags/create] assignment finished', { successCount, failCount });
         if (successCount > 0) {
           toast({
             title: "Tag Assignment Complete",
@@ -240,13 +268,15 @@ export default function CreateTagPage() {
           description: `Tag "${createdTag.name}" created successfully (no subjects were assigned).`,
         });
       }
-    } catch {
+    } catch (err) {
+        console.error('[tags/create] handleCreateAndAssignTag error', err);
         toast({
             title: "Operation Failed",
             description: "An unexpected error occurred.",
             variant: "destructive",
         });
     } finally {
+      console.debug('[tags/create] handleCreateAndAssignTag cleanup');
       setIsCreatingTag(false);
       setNewTagName('');
       setSelectedTagTypeId('');

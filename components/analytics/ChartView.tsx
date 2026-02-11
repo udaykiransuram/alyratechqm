@@ -1,8 +1,9 @@
-import React, { useRef } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { getStatsSum, getStatsStudents } from "./helpers";
+import { getStatsSum, getStatsStudents, buildStudentAreaMetrics } from "./helpers";
+import { toPng } from 'html-to-image';
 
 const COLORS = {
   correct: "#22c55e",
@@ -144,8 +145,20 @@ const GroupedPerformanceBarChart = ({ stats, groupBy }: { stats: Record<string, 
   );
 };
 
-const ChartView = ({ stats, groupBy }: { stats: any; groupBy: string[] }) => {
+type ChartViewProps = {
+  stats: any;
+  groupBy: string[];
+  groupFields?: { value: string; label: string }[];
+  paperTitle?: string;
+  mode?: 'class' | 'student';
+  studentName?: string;
+  rollNumber?: string;
+};
+
+const ChartView = ({ stats, groupBy, groupFields = [], paperTitle = '', mode = 'class', studentName, rollNumber }: ChartViewProps) => {
+  const chartContainerRef = useRef<HTMLDivElement>(null);
   const allPieChartsRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
 
   if (!stats || Object.keys(stats).length === 0) {
     return (
@@ -196,55 +209,111 @@ const ChartView = ({ stats, groupBy }: { stats: any; groupBy: string[] }) => {
     }
   });
 
-  function handleDownloadStudentWeaknessPDFs(event: React.MouseEvent<HTMLButtonElement, MouseEvent>): void {
-    event.preventDefault();
-    const studentMap = new Map<string, { name: string; roll: string; tags: Set<string> }>();
-    function getFirstLevelGroups(statsObj: any) {
-      return Object.entries(statsObj).filter(
-        ([, value]) =>
-          typeof value === "object" &&
-          value !== null &&
-          ("correct" in value || Object.values(value).some((v: any) => v && typeof v === "object" && "correct" in v))
-      );
+  // Download chart view as image (the visible chart container only)
+  async function handleDownloadChartImage() {
+    if (!chartContainerRef.current) return;
+    try {
+      setDownloading(true);
+      const dataUrl = await toPng(chartContainerRef.current, {
+        cacheBust: true,
+        background: '#ffffff',
+        pixelRatio: 2,
+      });
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const base = mode === 'student' && studentName ? `student-${studentName}` : 'class';
+      const paper = paperTitle ? `-${paperTitle}` : '';
+      a.download = `${base}${paper}-chart-${ts}.png`;
+      a.href = dataUrl;
+      a.click();
+    } catch (e) {
+      console.error('Failed to download chart image', e);
+    } finally {
+      setDownloading(false);
     }
-    getFirstLevelGroups(stats).forEach(([tag, value]) => {
-      getStatsStudents(value, "incorrectStudents").forEach((s: { name: string; rollNumber: string }) => {
-        if (!studentMap.has(s.rollNumber)) studentMap.set(s.rollNumber, { name: s.name, roll: s.rollNumber, tags: new Set() });
-        studentMap.get(s.rollNumber)!.tags.add(tag);
-      });
-      getStatsStudents(value, "unattemptedStudents").forEach((s: { name: string; rollNumber: string }) => {
-        if (!studentMap.has(s.rollNumber)) studentMap.set(s.rollNumber, { name: s.name, roll: s.rollNumber, tags: new Set() });
-        studentMap.get(s.rollNumber)!.tags.add(tag);
-      });
+  }
+
+  // Generate remedial PDF rows using helper
+  function generateRemedialDocForStudent(name: string, roll: string, rows: { area: string; correct: number; total: number; percent: number }[]) {
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text(`${paperTitle ? `Paper: ${paperTitle}` : ''}`, 14, 16);
+    doc.setFontSize(16);
+    doc.text(`Remedial Sheet - ${name} (${roll})`, 14, 26);
+    autoTable(doc, {
+      head: [["Area", "Correct", "Total", "% Correct"]],
+      body: rows.map(r => [r.area || 'Overall', String(r.correct), String(r.total), `${r.percent}%`]),
+      startY: 34,
+      styles: { fontSize: 11 },
+      headStyles: { fillColor: [34, 197, 94] },
+      columnStyles: { 0: { cellWidth: 120 } },
     });
-    studentMap.forEach((student) => {
-      const doc = new jsPDF();
-      doc.setFontSize(16);
-      doc.text(`Remedial Sheet for ${student.name} (${student.roll})`, 14, 18);
-      autoTable(doc, {
-        head: [["Tag/Group", "Tick"]],
-        body: Array.from(student.tags).map((tag) => [tag, ""]) as any[][],
-        startY: 28,
-        styles: { fontSize: 13 },
-        headStyles: { fillColor: [34, 197, 94] },
-        columnStyles: { 1: { cellWidth: 20 } },
-      });
-      doc.save(`remedial_${student.roll}.pdf`);
-    });
+    return doc;
+  }
+
+  async function handleDownloadRemedials() {
+    try {
+      setDownloading(true);
+      const metrics = buildStudentAreaMetrics(stats, groupBy, groupFields, { key: '', direction: 'desc' });
+      if (mode === 'student') {
+        // Single student expected
+        const key = `${rollNumber || ''}|${studentName || ''}`;
+        const entry = metrics.get(key);
+        const rows = entry?.rows || [];
+        const doc = generateRemedialDocForStudent(studentName || 'Student', rollNumber || '', rows);
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const paper = paperTitle ? `${paperTitle}-` : '';
+        doc.save(`${paper}${studentName || 'student'}-remedial-${ts}.pdf`);
+      } else {
+        // Class-level: ZIP multiple PDFs
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const base = paperTitle ? `${paperTitle}-` : '';
+        for (const [, v] of metrics.entries()) {
+          const doc = generateRemedialDocForStudent(v.name, v.roll, v.rows);
+          const blob = doc.output('blob');
+          const filename = `${base}${v.name}-remedial-${ts}.pdf`;
+          zip.file(filename, blob as any);
+        }
+        const content = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${base}remedials-${ts}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      console.error('Failed to generate remedials', e);
+    } finally {
+      setDownloading(false);
+    }
   }
 
   return (
-    <div className="space-y-12 mt-6">
+    <div className="space-y-12 mt-6" ref={chartContainerRef}>
       <GroupedPerformanceBarChart stats={barChartStats} groupBy={groupBy[0]} />
       <div>
         <h2 className="text-2xl font-bold text-slate-800 mb-6">Detailed Breakdown by {groupBy[0]}</h2>
-        <div className="flex justify-end mb-4">
+        <div className="flex flex-wrap gap-2 justify-end mb-4">
           <button
-            onClick={handleDownloadStudentWeaknessPDFs}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-semibold shadow transition"
-            title="Download Weakness Sheets (PDFs)"
+            onClick={handleDownloadChartImage}
+            disabled={downloading}
+            className="px-4 py-2 bg-blue-600 disabled:opacity-60 text-white rounded hover:bg-blue-700 text-sm font-semibold shadow transition"
+            title="Download Chart Image"
           >
-            Download Weakness Sheets (PDFs)
+            {downloading ? 'Preparing...' : 'Download Chart Image'}
+          </button>
+          <button
+            onClick={handleDownloadRemedials}
+            disabled={downloading}
+            className="px-4 py-2 bg-green-600 disabled:opacity-60 text-white rounded hover:bg-green-700 text-sm font-semibold shadow transition"
+            title={mode === 'student' ? 'Download Remedial PDF' : 'Download All Remedials (ZIP)'}
+          >
+            {mode === 'student' ? (downloading ? 'Preparing...' : 'Download Remedial PDF') : (downloading ? 'Preparing...' : 'Download All Remedials (ZIP)')}
           </button>
         </div>
         <div ref={allPieChartsRef}>

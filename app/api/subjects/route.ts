@@ -1,15 +1,33 @@
+export const dynamic = 'force-dynamic';
 // app/api/subjects/route.ts
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Subject from '@/models/Subject';
 import Tag from '@/models/Tag'; // Import Tag model to validate tag IDs if provided
 import mongoose from 'mongoose';
+import { getTenantDb } from '@/lib/db-tenant'
+import { getTenantModels } from '@/lib/db-tenant';
+import '@/models/Subject';
+import '@/models/Tag';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await connectDB();
+  // Tenant resolution: header -> query -> cookie
+  const url = new URL(req.url);
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = url.searchParams.get('school');
+  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
+  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  if (!schoolKey || !schoolKey.toString().trim()) {
+    return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  }
+
+
+  const { Subject: SubjectModel } = await getTenantModels(schoolKey, ['Subject','Tag']);
+
     // Populate the 'tags' field to get the actual tag documents
-    const subjects = await Subject.find({}).populate('tags');
+    const subjects = await SubjectModel.find({}).populate('tags').lean();
     return NextResponse.json({ success: true, subjects });
   } catch (err: any) {
     console.error('Error fetching subjects:', err);
@@ -17,19 +35,27 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     await connectDB();
+    // Tenant resolution: header -> query -> cookie
+    const urlPost = new URL(req.url);
+    const schoolFromHeaderPost = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+    const schoolFromQueryPost = urlPost.searchParams.get('school');
+    const schoolFromCookiePost = req.cookies?.get?.('schoolKey')?.value;
+    const schoolKeyPost = (schoolFromHeaderPost || schoolFromQueryPost || schoolFromCookiePost || '').toString().trim();
+  if (!schoolKeyPost || !schoolKeyPost.toString().trim()) {
+    return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  }
+
+
+    const { Subject: SubjectModel, Tag: TagModel } = await getTenantModels(schoolKeyPost, ['Subject','Tag']);
+
     const body = await req.json();
-    // ADDED 'code' to destructuring
     const { name, code, description, tags } = body;
 
-    if (!name || name.trim() === '') { // Added trim check for name
-      return NextResponse.json({ success: false, message: 'Subject name is required.' }, { status: 400 });
-    }
-
     // Check if subject name already exists (case-insensitive)
-    const existingSubjectByName = await Subject.findOne({ name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } });
+    const existingSubjectByName = await SubjectModel.findOne({ name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } });
     if (existingSubjectByName) {
       return NextResponse.json({ success: false, message: 'A subject with this name already exists.' }, { status: 409 });
     }
@@ -38,7 +64,7 @@ export async function POST(req: Request) {
     let subjectCodeToSave = null;
     if (code !== undefined && code !== null && code.trim() !== '') {
       subjectCodeToSave = code.trim();
-      const existingSubjectByCode = await Subject.findOne({ code: { $regex: new RegExp(`^${subjectCodeToSave}$`, 'i') } });
+      const existingSubjectByCode = await SubjectModel.findOne({ code: { $regex: new RegExp(`^${subjectCodeToSave}$`, 'i') } });
       if (existingSubjectByCode) {
         return NextResponse.json({ success: false, message: 'A subject with this code already exists.' }, { status: 409 });
       }
@@ -47,14 +73,14 @@ export async function POST(req: Request) {
     let validTagIds: mongoose.Types.ObjectId[] = [];
     if (tags && Array.isArray(tags) && tags.length > 0) {
       // Validate if the provided tag IDs actually exist in the Tag collection
-      const foundTags = await Tag.find({ _id: { $in: tags } }) as { _id: mongoose.Types.ObjectId }[];
+      const foundTags = await TagModel.find({ _id: { $in: tags } }) as { _id: mongoose.Types.ObjectId }[];
       if (foundTags.length !== tags.length) {
         return NextResponse.json({ success: false, message: 'One or more provided tag IDs are invalid.' }, { status: 400 });
       }
       validTagIds = foundTags.map((tag: { _id: mongoose.Types.ObjectId }) => tag._id);
     }
 
-    const newSubject = new Subject({
+    const newSubject = new SubjectModel({
       name: name.trim(), // Ensure name is trimmed
       code: subjectCodeToSave, // Use the validated/trimmed code
       description: description ? description.trim() : undefined, // Trim description, or set to undefined if empty

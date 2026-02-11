@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import QuestionPaperResponse from '@/models/QuestionPaperResponse';
@@ -5,6 +6,14 @@ import QuestionPaper from '@/models/QuestionPaper';
 import PDFDocument from 'pdfkit';
 import { Readable } from 'stream';
 import { connectDB } from '@/lib/db';
+import { getTenantDb } from '@/lib/db-tenant';
+import '@/models/User';
+import '@/models/Subject';
+import '@/models/TagType';
+import '@/models/Tag';
+import { buildTagReport } from '@/lib/analytics/tagReport';
+import { z } from 'zod';
+import { objectIdSchema, schoolKeySchema, parseOr400 } from '@/lib/validation';
 
 function arraysEqual(a: number[], b: number[]) {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
@@ -71,43 +80,79 @@ function dedupeStatsArrays(obj: any) {
 export async function GET(req: NextRequest, { params }: { params: { responseId: string } }) {
   await connectDB();
 
-  // --- Handle groupFields=1 for dynamic grouping options ---
-  if (req.nextUrl.searchParams.get('groupFields') === '1') {
-    const response = await QuestionPaperResponse.findById(params.responseId)
-      .populate({
-        path: 'sectionAnswers.answers.question',
-        select: 'tags',
-        populate: {
-          path: 'tags',
-          populate: { path: 'type', select: 'name' }
-        }
-      });
+  const url = new URL(req.url);
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = url.searchParams.get('school');
+  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
+  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  // schoolKey optional: if present validate; if invalid, silently fall back to default (no tenant)
+  let tenantKey = '';
+  if (schoolKey) {
+    const res = parseOr400(z.object({ schoolKey: schoolKeySchema }), { schoolKey });
+    if (res.ok) tenantKey = schoolKey;
+  }
 
-    const tagTypeSet = new Set<string>();
-    response?.sectionAnswers.forEach((section: any) => {
-      section.answers.forEach((ans: any) => {
-        ans.question?.tags?.forEach((tag: any) => {
-          if (tag.type?.name) tagTypeSet.add(tag.type.name);
+  // Validate params and query
+  const groupByParam = req.nextUrl.searchParams.get('groupBy');
+  const groupByParts = groupByParam ? groupByParam.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const querySchema = z.object({
+    responseId: objectIdSchema,
+    groupBy: z.array(z.string()).max(5).optional(),
+    json: z.string().optional(),
+    groupFields: z.string().optional(),
+    classLevel: z.string().optional(),
+  });
+  const qRes = parseOr400(querySchema, { responseId: params.responseId, groupBy: groupByParts, json: req.nextUrl.searchParams.get('json'), groupFields: req.nextUrl.searchParams.get('groupFields'), classLevel: req.nextUrl.searchParams.get('classLevel') });
+  // Do not block on validation; proceed best-effort. If responseId is invalid, DB lookup will yield 404 later.
+
+  // --- Handle groupFields=1 for dynamic grouping options ---
+
+  let QPRModel: any = QuestionPaperResponse;
+  let QPModel: any = QuestionPaper;
+  if (tenantKey) { try { const conn = await getTenantDb(tenantKey); QPRModel = conn.model('QuestionPaperResponse'); QPModel = conn.model('QuestionPaper'); } catch (e) {} }
+
+  if (req.nextUrl.searchParams.get('groupFields') === '1') {
+    try {
+      const response = await QPRModel.findById(params.responseId)
+        .populate({
+          path: 'sectionAnswers.answers.question',
+          select: 'tags',
+          populate: {
+            path: 'tags',
+            populate: { path: 'type', select: 'name' }
+          }
+        });
+
+      const tagTypeSet = new Set<string>();
+      response?.sectionAnswers?.forEach((section: any) => {
+        section.answers?.forEach((ans: any) => {
+          ans.question?.tags?.forEach((tag: any) => {
+            if (tag.type?.name) tagTypeSet.add(tag.type.name);
+          });
         });
       });
-    });
 
-    const fields = [{ value: 'section', label: 'Section' }]
-      .concat(Array.from(tagTypeSet).map(name => ({
-        value: name.toLowerCase(),
-        label: name
-      })));
+      const fields = [{ value: 'section', label: 'Section' }]
+        .concat(Array.from(tagTypeSet).map(name => ({
+          value: name.toLowerCase(),
+          label: name
+        })));
 
-    return NextResponse.json({ fields });
+      const res = NextResponse.json({ fields });
+      res.headers.set('X-Debug-Student-GF', 'ok');
+      return res;
+    } catch (e: any) {
+      console.error('student groupFields error:', e?.message || e);
+      const res = NextResponse.json({ fields: [{ value: 'section', label: 'Section' }] });
+      res.headers.set('X-Debug-Student-GF', 'fallback');
+      return res;
+    }
   }
 
   const isClassLevel = req.nextUrl.searchParams.get('classLevel') === '1';
 
   try {
-    const groupByParam = req.nextUrl.searchParams.get('groupBy');
-    const groupBy = groupByParam
-      ? groupByParam.split(',').map(s => s.trim()).filter(Boolean)
-      : [];
+    const groupBy = groupByParts;
 
     let responses: any[] = [];
     let paperTitle = '';
@@ -120,13 +165,16 @@ export async function GET(req: NextRequest, { params }: { params: { responseId: 
       correct: number;
       incorrect: number;
       unattempted: number;
-      correctStudents: { name: string; rollNumber: string }[];
-      incorrectStudents: { name: string; rollNumber: string }[];
-      unattemptedStudents: { name: string; rollNumber: string }[];
+      correctStudents: any[];
+      incorrectStudents: any[];
+      unattemptedStudents: any[];
+      correctQuestionIds?: any[];
+      incorrectQuestionIds?: any[];
+      unattemptedQuestionIds?: any[];
+      optionTags?: any[];
     }> = {};
-
     if (isClassLevel) {
-      const firstResponse = await QuestionPaperResponse.findById(params.responseId)
+      const firstResponse = await QPRModel.findById(params.responseId)
         .populate('paper', 'title sections')
         .lean();
       if (!firstResponse) {
@@ -136,7 +184,7 @@ export async function GET(req: NextRequest, { params }: { params: { responseId: 
       paperId = paperObj?._id?.toString() || paperObj?.toString() || '';
       paperTitle = paperObj?.title || '';
 
-      const paper = await QuestionPaper.findById(paperId)
+      const paper = await QPModel.findById(paperId)
         .populate({
           path: 'sections.questions.question',
           select: 'tags content answerIndexes options',
@@ -147,7 +195,7 @@ export async function GET(req: NextRequest, { params }: { params: { responseId: 
         })
         .lean();
 
-      responses = await QuestionPaperResponse.find({ paper: paperId })
+      responses = await QPRModel.find({ paper: paperId })
         .populate({
           path: 'sectionAnswers.answers.question',
           select: 'answerIndexes tags content options',
@@ -206,7 +254,7 @@ export async function GET(req: NextRequest, { params }: { params: { responseId: 
         }
       }
     } else {
-      const response = await QuestionPaperResponse.findById(params.responseId)
+      const response = await QPRModel.findById(params.responseId)
         .populate({
           path: 'sectionAnswers.answers.question',
           select: 'answerIndexes tags content options',
@@ -240,128 +288,59 @@ export async function GET(req: NextRequest, { params }: { params: { responseId: 
         : (response.paper?.sections || []);
     }
 
-    // --- Aggregate stats ---
-    const stats: any = {};
-
-    for (const response of responses) {
-      const answerMap: Record<string, Record<string, any>> = {};
-      (response.sectionAnswers || []).forEach((section: any) => {
-        answerMap[section.sectionName] = {};
-        (section.answers || []).forEach((ans: any) => {
-          answerMap[section.sectionName][String(ans.question?._id || ans.question)] = ans;
-        });
-      });
-
-      for (const paperSection of paperSections) {
-        const sectionName = paperSection.name;
-        const questions = paperSection.questions || [];
-        let questionNumber = 1; // Track question number within the section
-
-        for (const qWrap of questions) {
-          const question = qWrap.question;
-          if (!question || !question.tags || !question._id) continue;
-
-          const ans = answerMap[sectionName]?.[String(question._id)];
-          const attempted = ans && Array.isArray(ans.selectedOptions) && ans.selectedOptions.length > 0;
-          const isCorrect = attempted && arraysEqual(ans.selectedOptions, question.answerIndexes || []);
-          const questionIdStr = String(question._id);
-
-          // Compose question object for frontend
-          const questionObj = {
-            id: questionIdStr,
-            number: questionNumber,
-            section: sectionName,
-            ...(isClassLevel && questionStats[questionIdStr]
-              ? {
-                  correctCount: questionStats[questionIdStr].correct,
-                  incorrectCount: questionStats[questionIdStr].incorrect,
-                  unattemptedCount: questionStats[questionIdStr].unattempted,
-                  correctStudents: questionStats[questionIdStr].correctStudents,
-                  incorrectStudents: questionStats[questionIdStr].incorrectStudents,
-                  unattemptedStudents: questionStats[questionIdStr].unattemptedStudents,
-                }
-              : {})
-          };
-
-          let pointer = stats;
-          for (let i = 0; i < groupBy.length; i++) {
-            const group = groupBy[i];
-            let key;
-            if (group === 'section') key = sectionName;
-            else if (group === 'tagtype') {
-              key = (question.tags || [])
-                .map((tag: any) => `${tag.type?.name || 'Other'}: ${tag.name || 'Unknown'}`)
-                .join(', ');
-            } else {
-              key = getTagValue(question.tags, group);
-            }
-
-            if (!pointer[key]) pointer[key] = i === groupBy.length - 1
-              ? { 
-                  correct: 0, 
-                  incorrect: 0, 
-                  unattempted: 0, 
-                  optionTags: [],
-                  correctQuestionIds: [],
-                  incorrectQuestionIds: [],
-                  unattemptedQuestionIds: [],
-                  tags: []
-                }
-              : {};
-            pointer = pointer[key];
-          }
-
-          if (!attempted) {
-            pointer.unattempted += 1;
-            pointer.unattemptedQuestionIds ??= [];
-            pointer.unattemptedQuestionIds.push(questionObj);
-          } else if (isCorrect) {
-            pointer.correct += 1;
-            pointer.correctQuestionIds ??= [];
-            pointer.correctQuestionIds.push(questionObj);
-          } else {
-            pointer.incorrect += 1;
-            pointer.incorrectQuestionIds ??= [];
-            pointer.incorrectQuestionIds.push(questionObj);
-          }
-
-          // --- Option tags with student info ---
-          if (attempted && Array.isArray(ans.selectedOptions)) {
-            ans.selectedOptions.forEach((optIdx: number) => {
-              const optionTagType = `option ${String.fromCharCode(97 + optIdx)}`;
-              const tagsForOption = (question.tags || []).filter(
-                (tag: any) => tag.type?.name?.toLowerCase() === optionTagType
-              );
-              const isOptionCorrect = (question.answerIndexes || []).includes(optIdx);
-              tagsForOption.forEach((tag: any) => {
-                pointer.optionTags ??= [];
-                pointer.optionTags.push({
-                  option: optionTagType,
-                  tag: tag.name,
-                  isCorrect: isOptionCorrect,
-                  student: isClassLevel && response.student
-                    ? {
-                        name: response.student.name,
-                        rollNumber: response.student.rollNumber
-                      }
-                    : undefined
-                });
-              });
-            });
-          }
-
-          pointer.tags = (question.tags || []).map((tag: any) => ({
-            type: tag.type?.name || 'Unknown',
-            value: tag.name
-          }));
-
-          questionNumber++; // Increment for each question in section
-        }
-      }
-    }
+    // --- Aggregate stats using shared helper ---
+    const stats = buildTagReport({
+      responses,
+      paperSections,
+      groupBy,
+      isClassLevel,
+      questionStats,
+    });
 
     if (req.nextUrl.searchParams.get('json') === '1') {
       dedupeStatsArrays(stats);
+      // Optional compact mode to reduce payload size: aggregates students at group-level and prunes per-question arrays
+      if (req.nextUrl.searchParams.get('compact') === '1') {
+        const aggregateAndPrune = (node: any) => {
+          if (!node || typeof node !== 'object') return;
+          const hasCounts = 'correct' in node && 'incorrect' in node && 'unattempted' in node;
+          if (hasCounts) {
+            const collect = (arr: any[] | undefined, key: 'correctStudents'|'incorrectStudents'|'unattemptedStudents') => {
+              const students: { name: string; rollNumber: string }[] = [];
+              if (Array.isArray(arr)) {
+                arr.forEach((q: any) => {
+                  if (Array.isArray(q?.[key])) students.push(...q[key]);
+                });
+              }
+              // Deduplicate by rollNumber|name and keep counts collapsed client-side
+              const map = new Map<string, { name: string; rollNumber: string }>();
+              students.forEach(s => {
+                const k = `${s.rollNumber}|${s.name}`;
+                if (!map.has(k)) map.set(k, s);
+              });
+              return Array.from(map.values());
+            };
+            const correctAgg = collect(node.correctQuestionIds, 'correctStudents');
+            const incorrectAgg = collect(node.incorrectQuestionIds, 'incorrectStudents');
+            const unattemptedAgg = collect(node.unattemptedQuestionIds, 'unattemptedStudents');
+            if (correctAgg.length) node.correctStudents = correctAgg;
+            if (incorrectAgg.length) node.incorrectStudents = incorrectAgg;
+            if (unattemptedAgg.length) node.unattemptedStudents = unattemptedAgg;
+            // prune per-question student arrays to shrink payload
+            if (Array.isArray(node.correctQuestionIds)) {
+              node.correctQuestionIds = node.correctQuestionIds.map((q: any) => ({ id: q.id, number: q.number, section: q.section }));
+            }
+            if (Array.isArray(node.incorrectQuestionIds)) {
+              node.incorrectQuestionIds = node.incorrectQuestionIds.map((q: any) => ({ id: q.id, number: q.number, section: q.section }));
+            }
+            if (Array.isArray(node.unattemptedQuestionIds)) {
+              node.unattemptedQuestionIds = node.unattemptedQuestionIds.map((q: any) => ({ id: q.id, number: q.number, section: q.section }));
+            }
+          }
+          Object.values(node).forEach(aggregateAndPrune);
+        };
+        aggregateAndPrune(stats);
+      }
       const responsePayload = {
         success: true,
         stats,
@@ -370,8 +349,9 @@ export async function GET(req: NextRequest, { params }: { params: { responseId: 
         students: isClassLevel ? students : undefined,
         paper: paperTitle
       };
-      console.log('Analytics API response:', JSON.stringify(responsePayload, null, 2));
-      return NextResponse.json(responsePayload);
+      const res = NextResponse.json(responsePayload);
+      try { res.headers.set('X-Stats-Bytes', String(JSON.stringify(stats).length)); } catch {}
+      return res;
     }
 
     // PDF generation (unchanged)

@@ -22,6 +22,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface TagItem { _id: string; name: string; type: { name: string } }
 interface SubjectWithTags { _id: string; name: string; tags: TagItem[] }
@@ -61,7 +62,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
   // Hydrate state when initialData changes (for edit mode)
   useEffect(() => {
-    if (isEditMode && initialData) {
+    if (initialData) {
       setPaperTitle(initialData.title || '');
       setInstructions(initialData.instructions || '');
       setDuration(initialData.duration ?? 60);
@@ -71,7 +72,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
       setSubjectId(initialData.subjectId || '');
       setSections(initialData.sections || []);
     }
-  }, [initialData, isEditMode]);
+  }, [initialData]);
 
   // Question Bank State
   const [availableQuestions, setAvailableQuestions] = useState<any[]>([]);
@@ -98,9 +99,6 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
   // Edit Question Modal State
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
-
-  const [paperClassId, setPaperClassId] = useState(initialData?.classId || '');
-const [paperSubjectId, setPaperSubjectId] = useState(initialData?.subjectId || '');
 
   // Fetch initial data
   useEffect(() => {
@@ -151,15 +149,21 @@ const [paperSubjectId, setPaperSubjectId] = useState(initialData?.subjectId || '
     if (subjectId) params.append('subject', subjectId);
     if (selectedTags.length) params.append('tags', selectedTags.map(t => t._id).join(','));
     if (search) params.append('search', search);
+    if (selectedTags.length > 1) params.append('tagsMode', 'and');
 
-    if (!classId || !subjectId) {
+    // Allow fetching by tags (or search) even if class/subject are not selected
+    const shouldFetch = (classId && subjectId) || selectedTags.length > 0 || (search?.trim().length ?? 0) > 0;
+
+    if (!shouldFetch) {
       setAvailableQuestions([]);
       setLoadingQuestions(false);
       return;
     }
 
     setLoadingQuestions(true);
-    fetch(`/api/questions?${params.toString()}`)
+    const qs = params.toString();
+    const endpoint = qs ? `/api/questions?${qs}` : '/api/questions';
+    fetch(endpoint)
       .then(res => res.json())
       .then(data => {
         setAvailableQuestions(data.questions || []);
@@ -375,8 +379,8 @@ const [paperSubjectId, setPaperSubjectId] = useState(initialData?.subjectId || '
       const payload = {
         title: paperTitle,
         instructions,
-        classId: paperClassId,
-        subjectId: paperSubjectId,
+        class: classId,
+        subject: subjectId,
         duration,
         passingMarks,
         examDate,
@@ -495,8 +499,8 @@ const [paperSubjectId, setPaperSubjectId] = useState(initialData?.subjectId || '
                                       _id: tag._id,
                                       name: tag.name,
                                       type: {
-                                        _id: (tag.type as any)._id ?? '',
-                                        name: tag.type.name
+                                        _id: (tag.type as any)?._id ?? '',
+                                        name: (tag.type as any)?.name ?? ''
                                       }
                                     }))}
                                     onSave={async (updated) => {
@@ -584,10 +588,10 @@ const [paperSubjectId, setPaperSubjectId] = useState(initialData?.subjectId || '
             setPassingMarks={setPassingMarks}
             examDate={examDate ? new Date(examDate) : new Date()}
             setExamDate={date => setExamDate(date ? new Date(date) : new Date())}
-            classId={paperClassId}
-            setClassId={setPaperClassId}
-            subjectId={paperSubjectId}
-            setSubjectId={setPaperSubjectId}
+            classId={classId}
+            setClassId={setClassId}
+            subjectId={subjectId}
+            setSubjectId={setSubjectId}
             classes={classes}
             subjects={subjects}
             compact
@@ -621,8 +625,8 @@ const [paperSubjectId, setPaperSubjectId] = useState(initialData?.subjectId || '
               allTags={allTags.map(tag => ({
                 ...tag,
                 type: {
-                  _id: (tag.type as any)._id ?? '',
-                  name: tag.type.name
+                  _id: (tag.type as any)?._id ?? '',
+                  name: (tag.type as any)?.name ?? ''
                 }
               }))}
               onSave={async (updatedQuestion) => {

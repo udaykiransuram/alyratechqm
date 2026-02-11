@@ -89,7 +89,7 @@ export default function ViewSubjectsPage() {
   }, [subjectToDeleteId, toast]);
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 space-y-8">
+    <div className="container py-8 space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold tracking-tight">All Subjects</h1>
         <Link href="/subjects/create" passHref>
