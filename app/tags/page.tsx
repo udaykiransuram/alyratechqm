@@ -134,8 +134,8 @@ export default function TagsListPage() {
               <CardHeader>
                 <CardTitle>{tag.name}</CardTitle>
                 <CardDescription>
-                  {/* Access tag.type.name to display the type */}
-                  Type: <span className="font-medium text-foreground capitalize">{tag.type.name}</span>
+                  {/* Access tag.type?.name ?? '' to display the type */}
+                  Type: <span className="font-medium text-foreground capitalize">{tag.type?.name ?? ''}</span>
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-grow">

@@ -20,6 +20,14 @@ import { Plus } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 import { MetadataSelector } from '@/components/MetadataSelector';
 
+
+function getSchoolKey() {
+  try {
+    const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
+    return m && m[1] ? m[1] : '';
+  } catch { return ''; }
+}
+
 export default function ViewQuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,10 +48,10 @@ export default function ViewQuestionsPage() {
 
   // Fetch classes and tags on mount
   useEffect(() => {
-    fetch('/api/classes')
+    fetch('/api/classes', { cache: 'no-store', headers: { 'X-School-Key': getSchoolKey() } })
       .then(res => res.json())
       .then(data => setClasses(data.classes || []));
-    fetch('/api/tags')
+    fetch('/api/tags', { cache: 'no-store', headers: { 'X-School-Key': getSchoolKey() } })
       .then(res => res.json())
       .then(data => setAllTags(data.tags || []));
   }, []);
@@ -55,7 +63,7 @@ export default function ViewQuestionsPage() {
       setSubjectId('');
       return;
     }
-    fetch(`/api/subjects?classId=${classId}`)
+    fetch(`/api/subjects?classId=${classId}`, { cache: 'no-store', headers: { 'X-School-Key': getSchoolKey() } })
       .then(res => res.json())
       .then(data => setSubjects(data.subjects || []));
   }, [classId]);
@@ -64,7 +72,17 @@ export default function ViewQuestionsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/questions');
+      const params = new URLSearchParams();
+      if (classId) params.set('class', classId);
+      if (subjectId) params.set('subject', subjectId);
+      if (selectedTags.length > 0) params.set('tags', selectedTags.map(t => t._id).join(','));
+      if (modalSearch.trim()) params.set('search', modalSearch.trim());
+      // Use AND semantics when multiple tags are selected
+      if (selectedTags.length > 1) params.set('tagsMode', 'and');
+
+      const qs = params.toString();
+      const endpoint = qs ? `/api/questions?${qs}` : '/api/questions';
+      const res = await fetch(endpoint, { cache: 'no-store', headers: { 'X-School-Key': getSchoolKey() } });
       const data = await res.json();
       if (data.success) {
         setQuestions(data.questions);
@@ -76,7 +94,7 @@ export default function ViewQuestionsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [classId, subjectId, selectedTags, modalSearch]);
 
   useEffect(() => {
     fetchQuestions();
@@ -109,23 +127,11 @@ export default function ViewQuestionsPage() {
   };
 
   // --- Filtering logic ---
-  const filteredQuestions = questions.filter(q => {
-    // Filter by class
-    if (classId && q.class?._id !== classId) return false;
-    // Filter by subject
-    if (subjectId && q.subject?._id !== subjectId) return false;
-    // Filter by tags (at least one tag matches)
-    if (selectedTags.length > 0) {
-      const tagIds = selectedTags.map(t => t._id);
-      if (!q.tags?.some((tag: any) => tagIds.includes(tag._id))) return false;
-    }
-    // Filter by search (content)
-    if (modalSearch && !q.content?.toLowerCase().includes(modalSearch.toLowerCase())) return false;
-    return true;
-  });
+  // Server-side filtering is applied via /api/questions query params; use the result as-is
+  const filteredQuestions = questions;
 
   return (
-    <div className="container mx-auto max-w-5xl py-8 space-y-8">
+    <div className="container py-8 space-y-8">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">All Questions</h1>
@@ -142,32 +148,36 @@ export default function ViewQuestionsPage() {
       {/* --- Filter Controls --- */}
       <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6 mb-8">
         <h2 className="text-xl font-semibold mb-4">Filter Questions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <MetadataSelector
-            classes={classes}
-            classId={classId}
-            setClassId={setClassId}
-            subjects={subjects}
-            subjectId={subjectId}
-            setSubjectId={setSubjectId}
-            subjectsLoading={false}
-            allTags={allTags}
-            selectedTags={selectedTags}
-            setSelectedTags={setSelectedTags}
-            recommendedTagIds={[]}
-            initialDataLoading={false}
-            resetCounter={0}
-            toast={toast}
-            onCreateNewTag={async () => null}
-            disableClassSubject={false}
-          />
-          <input
-            type="text"
-            value={modalSearch}
-            onChange={e => setModalSearch(e.target.value)}
-            placeholder="Search by content..."
-            className="border rounded px-3 py-2"
-          />
+        <div className="flex flex-col md:flex-row md:items-end gap-6">
+          <div className="flex-1">
+            <MetadataSelector
+              classes={classes}
+              classId={classId}
+              setClassId={setClassId}
+              subjects={subjects}
+              subjectId={subjectId}
+              setSubjectId={setSubjectId}
+              subjectsLoading={false}
+              allTags={allTags}
+              selectedTags={selectedTags}
+              setSelectedTags={setSelectedTags}
+              recommendedTagIds={[]}
+              initialDataLoading={false}
+              resetCounter={0}
+              toast={toast}
+              onCreateNewTag={async () => null}
+              disableClassSubject={false}
+            />
+          </div>
+          <div className="w-full md:w-64">
+            <input
+              type="text"
+              value={modalSearch}
+              onChange={e => setModalSearch(e.target.value)}
+              placeholder="Search by content..."
+              className="border rounded px-3 py-2 w-full"
+            />
+          </div>
         </div>
       </div>
 

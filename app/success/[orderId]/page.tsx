@@ -1,9 +1,16 @@
+export const dynamic = 'force-dynamic';
+import { cookies } from 'next/headers';
 import { connectDB } from '@/lib/db';
-import Registration from '@/models/Registration';
+import { getTenantDb } from '@/lib/db-tenant';
+import '@/models/Registration';
 
 export default async function SuccessPage({ params }: any) {
   await connectDB();
-  const registration = await Registration.findOne({ orderId: params.orderId });
+  const schoolKey = cookies().get('schoolKey')?.value || '';
+  if (!schoolKey) return <div>Select a school first.</div>;
+  const conn = await getTenantDb(schoolKey);
+  const RegistrationModel = conn.model('Registration');
+  const registration = await RegistrationModel.findOne({ orderId: params.orderId });
 
   if (!registration) return <div>Invalid Order ID</div>;
 

@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Question from "@/models/Question";
+import { getTenantModels } from '@/lib/db-tenant';
 import Tag from "@/models/Tag";
 import TagType from "@/models/TagType";
 import Subject from "@/models/Subject";
@@ -35,6 +36,19 @@ function zipPairs(tagTypes: any[], tags: any[]): Pair[] {
 /* ---------------- route ---------------- */
 export async function POST(req: NextRequest) {
   await connectDB();
+
+  // Tenant resolution
+  const urlTenant = new URL(req.url);
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = urlTenant.searchParams.get('school');
+  const schoolFromCookie = (req as any).cookies?.get?.('schoolKey')?.value;
+  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  if (!schoolKey) {
+    return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  }
+
+  // Bind tenant models (shadow globals below)
+  const { Class: ClassModel, Subject: SubjectModel, TagType: TagTypeModel, Tag: TagModel, Question: QuestionModel } = await getTenantModels(schoolKey, ['Class','Subject','TagType','Tag','Question']);
 
   try {
     const body = await req.json();
@@ -82,10 +96,10 @@ export async function POST(req: NextRequest) {
     const tagNameList = Array.from(tagNameTypePairs).map((s) => s.split("|||")[0]); // fetch by name only
 
     const [classDocs, subjectDocs, tagTypeDocs, tagDocs] = await Promise.all([
-      Class.find({ name: { $in: classList } }),
-      Subject.find({ name: { $in: subjectList } }),
-      TagType.find({ name: { $in: tagTypeList } }),     // stored lowercased
-      Tag.find({ name: { $in: tagNameList } }),         // may return multiple types per name
+      ClassModel.find({ name: { $in: classList } }),
+      SubjectModel.find({ name: { $in: subjectList } }),
+      TagTypeModel.find({ name: { $in: tagTypeList } }),     // stored lowercased
+      TagModel.find({ name: { $in: tagNameList } }),         // may return multiple types per name
     ]);
 
     // 3) Build lookup maps
@@ -102,7 +116,7 @@ export async function POST(req: NextRequest) {
     const missingClasses = classList.filter((name) => !classMap.has(name));
     let createdClasses: any[] = [];
     if (missingClasses.length) {
-      createdClasses = await Class.insertMany(missingClasses.map((name) => ({ name })));
+      createdClasses = await ClassModel.insertMany(missingClasses.map((name) => ({ name })));
       createdClasses.forEach((c: any) => classMap.set(c.name, c));
     }
 
@@ -114,7 +128,7 @@ export async function POST(req: NextRequest) {
     if (createTT.length) {
       const results = await Promise.all(
         createTT.map((name) =>
-          TagType.findOneAndUpdate(
+          TagTypeModel.findOneAndUpdate(
             { name },                        // lowercase
             { $setOnInsert: { name } },
             { upsert: true, new: true }
@@ -142,7 +156,7 @@ export async function POST(req: NextRequest) {
     if (missingTags.length) {
       const results = await Promise.all(
         missingTags.map(({ name, type }) =>
-          Tag.findOneAndUpdate(
+          TagModel.findOneAndUpdate(
             { name, type },
             { $setOnInsert: { name, type } },
             { upsert: true, new: true }
@@ -180,7 +194,7 @@ export async function POST(req: NextRequest) {
       const tagIds = Array.from(tagIdsSet);
 
       if (!subjectDoc) {
-        subjectDoc = await Subject.create({
+        subjectDoc = await SubjectModel.create({
           name: subjectName,
           code: subjectCodes.get(subjectName) || "",
           tags: tagIds,
@@ -240,7 +254,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 9) Insert all Questions
-    const createdQuestions = await Question.insertMany(questionDataArray);
+    const createdQuestions = await QuestionModel.insertMany(questionDataArray);
 
     return NextResponse.json(
       {

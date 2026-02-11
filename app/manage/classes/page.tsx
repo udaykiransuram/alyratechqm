@@ -102,7 +102,7 @@ export default function ManageClassesPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-2xl py-8">
+    <div className="container py-8">
       <header className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Manage Classes</h1>
         <p className="text-muted-foreground mt-1">Add, view, or remove classes from the system.</p>

@@ -14,6 +14,17 @@ import { Spinner } from '@/components/ui/spinner';
 import { CreateTagTypeModal } from '@/components/CreateTagTypeModal'; // Import the modal
 import { PlusCircle } from 'lucide-react';
 
+// Helper to always include current tenant in client fetches
+const getSchoolKey = () => {
+  if (typeof document === 'undefined') return '';
+  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+};
+const getSchoolQS = () => {
+  const k = getSchoolKey();
+  return k ? `?school=${encodeURIComponent(k)}` : '';
+};
+
 // Updated interfaces to reflect the new data structure
 interface TagType {
   _id: string;
@@ -51,15 +62,24 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
   const fetchPageData = useCallback(async () => {
     setPageLoading(true);
     try {
+      const tagEndpoint = `/api/tags/${tagId}` + getSchoolQS();
+      const subjectsEndpoint = '/api/subjects' + getSchoolQS();
+      const tagTypesEndpoint = '/api/tag-types' + getSchoolQS();
+      console.debug('[tags/edit] fetchPageData ->', { tagEndpoint, subjectsEndpoint, tagTypesEndpoint });
       const [tagRes, allSubjectsRes, tagTypesRes] = await Promise.all([
-        fetch(`/api/tags/${tagId}`),
-        fetch('/api/subjects'),
-        fetch('/api/tag-types')
+        fetch(tagEndpoint),
+        fetch(subjectsEndpoint),
+        fetch(tagTypesEndpoint)
       ]);
 
       const tagData = await tagRes.json();
       const allSubjectsData = await allSubjectsRes.json();
       const tagTypesData = await tagTypesRes.json();
+      console.debug('[tags/edit] fetchPageData <-', {
+        tagOk: tagRes.ok, tagStatus: tagRes.status, tagSuccess: tagData?.success,
+        subjectsOk: allSubjectsRes.ok, subjectsStatus: allSubjectsRes.status, subjectsCount: allSubjectsData?.subjects?.length,
+        tagTypesOk: tagTypesRes.ok, tagTypesStatus: tagTypesRes.status, tagTypesCount: tagTypesData?.tagTypes?.length
+      });
 
       if (tagData.success && allSubjectsData.success && tagTypesData.success) {
         const tag = tagData.tag as TagItem;
@@ -79,6 +99,7 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
         router.push('/tags');
       }
     } catch (error) {
+      console.error('[tags/edit] fetchPageData error', error);
       toast({ title: "Network Error", description: "Failed to load page data.", variant: "destructive" });
       router.push('/tags');
     } finally {
@@ -97,23 +118,29 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
     }
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/tags/${tagId}`, {
+      const endpoint = `/api/tags/${tagId}` + getSchoolQS();
+      const payload = {
+        name: tagName,
+        type: selectedTagTypeId, // Send the selected type ID
+        selectedSubjectIds: selectedSubjects,
+      };
+      console.debug('[tags/edit] PATCH tag ->', { endpoint, payload });
+      const res = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: tagName,
-          type: selectedTagTypeId, // Send the selected type ID
-          selectedSubjectIds: selectedSubjects,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
+      console.debug('[tags/edit] PATCH tag <-', { ok: res.ok, status: res.status, data });
       if (data.success) {
         toast({ title: "Success", description: `Tag "${data.tag.name}" updated successfully.` });
         router.push('/tags');
       } else {
+        console.warn('[tags/edit] update responded with error', data);
         toast({ title: "Error Updating Tag", description: data.message, variant: "destructive" });
       }
     } catch (error) {
+      console.error('[tags/edit] PATCH tag error', error);
       toast({ title: "Network Error", description: "Failed to update tag.", variant: "destructive" });
     } finally {
       setIsSaving(false);

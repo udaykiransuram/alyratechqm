@@ -1,4 +1,6 @@
-const OptionTagModal = ({
+import React from "react";
+
+export default function OptionTagModal({
   isOpen,
   onClose,
   option,
@@ -12,14 +14,14 @@ const OptionTagModal = ({
   tag: string;
   isCorrect: boolean;
   students: { name: string; rollNumber: string }[];
-}) => {
+}) {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center" onClick={onClose}>
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center border-b border-slate-200 p-4">
           <h3 className="text-lg font-semibold text-slate-800">
-            {option}: {tag} <span className={isCorrect ? "text-green-700" : "text-red-700"}>({isCorrect ? "Correct" : "Incorrect"})</span>
+            Option: {option} | Tag: {tag} | {isCorrect ? "Correct" : "Incorrect"}
           </h3>
           <button
             onClick={onClose}
@@ -32,11 +34,13 @@ const OptionTagModal = ({
           </button>
         </div>
         <div className="p-4">
-          <div className="font-semibold mb-2">Students who selected this option:</div>
-          <ul className="list-disc list-inside text-slate-700 text-sm">
-            {students.length > 0
+          <div className="font-semibold mb-2">Students:</div>
+          <ul className="list-disc list-inside text-sm">
+            {students.length
               ? students.map((s, i) => (
-                  <li key={i}>{s.name} ({s.rollNumber})</li>
+                  <li key={i}>
+                    {s.name} ({s.rollNumber})
+                  </li>
                 ))
               : <li className="text-slate-400 italic">None</li>}
           </ul>
@@ -44,6 +48,4 @@ const OptionTagModal = ({
       </div>
     </div>
   );
-};
-
-export default OptionTagModal;
+}

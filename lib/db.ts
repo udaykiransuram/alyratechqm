@@ -9,6 +9,9 @@ import './../models/TagType';
 
 const MONGODB_URI = process.env.MONGODB_URI!;
 
+// Disable automatic index creation to avoid startup stalls/timeouts on remote clusters
+mongoose.set('autoIndex', true);
+
 if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
 }
@@ -32,6 +35,9 @@ export async function connectDB() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 20000,
+      family: 4
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {

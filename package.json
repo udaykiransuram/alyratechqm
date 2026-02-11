@@ -7,7 +7,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "build-indexes": "ts-node scripts/build-indexes.ts",
+    "build-tenant-indexes": "ts-node scripts/build-tenant-indexes.ts",
+    "predev": "node scripts/build-tenant-indexes.js || echo \"[predev] Skipping index build (DB unreachable)\""
   },
   "keywords": [
     "nextjs",
@@ -62,6 +65,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "docx": "^9.5.1",
     "express": "^5.1.0",
     "formidable": "^3.5.4",
     "highlight.js": "^11.11.1",
@@ -84,9 +88,11 @@
     "recharts": "^3.1.2",
     "sonner": "^2.0.6",
     "stream-browserify": "^3.0.0",
+    "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "framer-motion": "^11.0.0"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",
@@ -100,10 +106,12 @@
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "autoprefixer": "^10.4.19",
+    "dotenv": "^17.2.3",
     "eslint": "^8",
     "eslint-config-next": "^14.2.5",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
+    "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }
 }

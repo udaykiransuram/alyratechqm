@@ -3,12 +3,11 @@ import QuestionPaperForm from '@/components/QuestionPaperForm';
 
 // Helper function to fetch data
 async function getQuestionPaper(id: string) {
-  const res = await fetch(`http://localhost:3000/api/question-papers/${id}`);
+  const res = await fetch(`http://localhost:3000/api/question-papers/${id}`, { cache: 'no-store' });
   if (!res.ok) {
     return null;
   }
   const data = await res.json();
-  console.log('Fetched question paper data:', data.paper);
   return data.paper;
 }
 

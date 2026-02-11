@@ -1,78 +1,51 @@
-import { NextResponse } from 'next/server';
+
+import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import User from '@/models/User';
+import { getTenantModels } from '@/lib/db-tenant';
 import bcrypt from 'bcryptjs';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   await connectDB();
   try {
+    const url = new URL(request.url);
+    const schoolFromHeader = request.headers.get('x-school-key') || request.headers.get('X-School-Key');
+    const schoolFromQuery = url.searchParams.get('school');
+    const schoolFromCookie = request.cookies?.get?.('schoolKey')?.value;
+    const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+    if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+
+    const { User } = await getTenantModels(schoolKey, ['User']);
+
     const { students } = await request.json();
     if (!Array.isArray(students) || students.length === 0) {
       return NextResponse.json({ success: false, message: 'No students provided.' }, { status: 400 });
     }
 
-    const results = [];
+    const results: any[] = [];
     for (const student of students) {
-      // Normalize all keys to lowercase for comparison
       const normalizedStudent: any = {};
-      Object.keys(student).forEach(key => {
-        normalizedStudent[key.toLowerCase()] = student[key];
-      });
+      Object.keys(student || {}).forEach(key => { normalizedStudent[key.toLowerCase()] = (student as any)[key]; });
 
-      const {
-        name,
-        email,
-        password,
-        role,
-        class: classId,
-        enrolledat,
-        rollnumber,
-        rollNumber,
-      } = normalizedStudent;
+      const { name, email, password, role, class: classId, enrolledat, rollnumber, rollnumber: rn1, rollNumber: rn2 } = normalizedStudent;
+      const finalRollNumber = rn2 || rn1 || rollnumber;
 
-      // Use rollNumber if present, else fallback to rollnumber
-      const finalRollNumber = rollNumber || rollnumber;
+      if (!name || !role) { results.push({ success: false, message: 'Name and role are required.', student }); continue; }
+      if (role === 'student' && !finalRollNumber) { results.push({ success: false, message: 'rollNumber is required for students.', student }); continue; }
 
-      // Only name and role are always required
-      if (!name || !role) {
-        results.push({ success: false, message: 'Name and role are required.', student });
-        continue;
-      }
-      // For students, rollNumber is required
-      if (role === 'student' && !finalRollNumber) {
-        results.push({ success: false, message: 'rollNumber is required for students.', student });
-        continue;
-      }
-
-      // Check for existing student by rollNumber and class
       if (role === 'student' && finalRollNumber && classId) {
-        const existingStudent = await User.findOne({
-          role: 'student',
-          rollNumber: finalRollNumber,
-          class: classId,
-        });
-        if (existingStudent) {
-          results.push({ success: true, user: existingStudent, existed: true });
-          continue;
-        }
+        const existingStudent = await User.findOne({ role: 'student', rollNumber: finalRollNumber, class: classId });
+        if (existingStudent) { results.push({ success: true, user: existingStudent, existed: true }); continue; }
       }
 
-      // Email and password are optional, but check for duplicates if email is provided
       if (email) {
         const existingUser = await User.findOne({ email });
-        if (existingUser) {
-          results.push({ success: false, message: 'A user with this email already exists.', student });
-          continue;
-        }
+        if (existingUser) { results.push({ success: false, message: 'A user with this email already exists.', student }); continue; }
       }
 
-      let passwordHash = undefined;
+      let passwordHash: string | undefined = undefined;
       if (password) {
-        if (password.length < 6) {
-          results.push({ success: false, message: 'Password must be at least 6 characters long.', student });
-          continue;
-        }
-        passwordHash = await bcrypt.hash(password, 10);
+        if (String(password).length < 6) { results.push({ success: false, message: 'Password must be at least 6 characters long.', student }); continue; }
+        passwordHash = await bcrypt.hash(String(password), 10);
       }
 
       const newUser = new User({
@@ -82,9 +55,7 @@ export async function POST(request: Request) {
         role,
         class: role === 'student' ? classId : undefined,
         rollNumber: role === 'student' ? finalRollNumber : undefined,
-        enrolledAt: role === 'student'
-          ? (enrolledat || Date.now())
-          : undefined,
+        enrolledAt: role === 'student' ? (enrolledat || Date.now()) : undefined,
       });
       await newUser.save();
       results.push({ success: true, user: newUser });

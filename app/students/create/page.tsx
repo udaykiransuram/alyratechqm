@@ -3,7 +3,15 @@
 import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 
+
+function getSchoolKeyFromCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 export default function CreateStudentPage() {
+    
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -19,7 +27,7 @@ export default function CreateStudentPage() {
 
   // Fetch classes on mount
   useEffect(() => {
-    fetch('/api/classes')
+    fetch('/api/classes' + (getSchoolKeyFromCookie() ? `?school=${getSchoolKeyFromCookie()}` : ''))
       .then(res => res.json())
       .then(data => {
         if (data.success) setClasses(data.classes);
@@ -35,7 +43,7 @@ export default function CreateStudentPage() {
     setLoading(true);
     setMessage(null);
 
-    const res = await fetch('/api/users', {
+    const res = await fetch('/api/users' + (getSchoolKeyFromCookie() ? `?school=${getSchoolKeyFromCookie()}` : ''), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -155,7 +163,7 @@ export default function CreateStudentPage() {
 
     console.log('Sending students to backend:', students);
 
-    const res = await fetch('/api/users/bulk', {
+    const res = await fetch('/api/users/bulk' + (getSchoolKeyFromCookie() ? `?school=${getSchoolKeyFromCookie()}` : ''), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ students }),

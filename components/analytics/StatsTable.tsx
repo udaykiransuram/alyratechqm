@@ -59,40 +59,40 @@ export default function StatsTable({
     key: "correctStudents" | "incorrectStudents" | "unattemptedStudents"
   ) => {
     const groupNode = getGroupNode(row);
-    if (!questionIds || questionIds.length === 0) return <span>{count}</span>;
-    const allStudents: { name: string; rollNumber: string }[] = [];
-    questionIds.forEach(q => {
-      if (q[key]) allStudents.push(...q[key]);
-    });
-    const studentMap = new Map<string, { name: string; rollNumber: string; count: number }>();
-    allStudents.forEach(s => {
-      const k = `${s.rollNumber}|${s.name}`;
-      if (!studentMap.has(k)) studentMap.set(k, { ...s, count: 1 });
-      else studentMap.get(k)!.count += 1;
-    });
-    const consolidatedStudents = Array.from(studentMap.values());
+    // Build consolidated student list from per-question arrays; fallback to group-level aggregated arrays in compact mode
+    let consolidatedStudents: { name: string; rollNumber: string; count: number }[] = [];
+    if (Array.isArray(questionIds) && questionIds.length > 0) {
+      const all: { name: string; rollNumber: string }[] = [];
+      questionIds.forEach(q => {
+        if (q[key]) all.push(...q[key]);
+      });
+      const sm = new Map<string, { name: string; rollNumber: string; count: number }>();
+      all.forEach(s => {
+        const k = `${s.rollNumber}|${s.name}`;
+        if (!sm.has(k)) sm.set(k, { ...s, count: 1 }); else sm.get(k)!.count += 1;
+      });
+      consolidatedStudents = Array.from(sm.values());
+    }
+    // Fallback if per-question arrays were pruned (compact mode)
+    if (consolidatedStudents.length === 0 && groupNode && Array.isArray(groupNode[key])) {
+      const sm = new Map<string, { name: string; rollNumber: string; count: number }>();
+      (groupNode[key] as { name: string; rollNumber: string }[]).forEach(s => {
+        const k = `${s.rollNumber}|${s.name}`;
+        if (!sm.has(k)) sm.set(k, { ...s, count: 1 }); else sm.get(k)!.count += 1;
+      });
+      consolidatedStudents = Array.from(sm.values());
+    }
+    if (!Array.isArray(questionIds) || questionIds.length === 0) return <span>{count}</span>;
     return (
       <span className="group relative">
         <button
           type="button"
           onClick={() => handleOpenModal(title, questionIds, groupNode)}
           className="underline decoration-dotted hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          title="View students"
         >
           {count}
         </button>
-        {consolidatedStudents.length > 0 && (
-          <div className="absolute left-1/2 z-10 hidden group-hover:block bg-white border border-slate-300 shadow-lg rounded-lg p-3 min-w-[200px] -translate-x-1/2 mt-2">
-            <div className="font-semibold mb-1">{title.replace("Questions", "Students")}:</div>
-            <ul className="max-h-32 overflow-y-auto text-xs">
-              {consolidatedStudents.map((s, i) => (
-                <li key={i}>
-                  {s.name} <span className="text-slate-400">({s.rollNumber})</span>
-                  <span className="ml-2 text-slate-500">×{s.count}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </span>
     );
   };
@@ -108,8 +108,23 @@ export default function StatsTable({
     return null;
   }
 
+  const nonGroupKeys = new Set([
+    'correct',
+    'incorrect',
+    'unattempted',
+    'correctQuestionIds',
+    'incorrectQuestionIds',
+    'unattemptedQuestionIds',
+    'tags',
+    'optionTags',
+    // aggregated arrays should not render as child rows
+    'correctStudents',
+    'incorrectStudents',
+    'unattemptedStudents',
+  ]);
+
   const rows = Object.entries(stats)
-    .filter(([key, value]) => typeof value === "object" && value !== null)
+    .filter(([key, value]) => typeof value === "object" && value !== null && !nonGroupKeys.has(key))
     .map(([key, value]) => ({ key, ...value }));
 
   if (rows.length === 0) return null;

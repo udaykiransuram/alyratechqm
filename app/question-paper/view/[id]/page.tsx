@@ -1,14 +1,27 @@
 import { notFound } from 'next/navigation';
+import { cookies, headers } from 'next/headers';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PaperSummary } from '@/components/PaperSummary';
 import { PrintEditToolbar } from '@/components/PrintEditToolbar';
 import QuestionItemClient from '@/components/QuestionItemClient';
+import { Button } from '@/components/ui/button';
+import { QuestionPaperToolbar } from "@/components/QuestionPaperToolbar";
 
 async function getQuestionPaper(id: string) {
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-    const res = await fetch(`${apiUrl}/api/question-papers/${id}`, { cache: 'no-store' });
+    // Build absolute URL for server-side fetch and forward tenant key
+    const schoolKey = cookies().get('schoolKey')?.value || '';
+    const qs = schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : '';
+    const hdrs = headers();
+    const proto = hdrs.get('x-forwarded-proto') ?? 'http';
+    const host = hdrs.get('host') ?? 'localhost:3000';
+    const baseUrl = `${proto}://${host}`;
+    const res = await fetch(`${baseUrl}/api/question-papers/${id}${qs}`, {
+      cache: 'no-store',
+      headers: schoolKey ? { 'x-school-key': schoolKey } : {}
+    });
     if (!res.ok) return null;
     const data = await res.json();
     return data.paper;
@@ -36,14 +49,16 @@ export default async function ViewQuestionPaperPage({ params }: { params: { id: 
   }));
 
   return (
-    <div className="container mx-auto max-w-full p-4 lg:p-6 bg-muted/20 min-h-screen">
+    <div className="container p-4 lg:p-6 bg-muted/20 min-h-screen">
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* --- Main Content (Left Side) --- */}
         <main className="flex-1 space-y-4 w-full">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold tracking-tight">{paper.title}</h1>
-            {/* Remove inline toolbar, use PrintEditToolbar at the bottom */}
           </div>
+
+          {/* Toolbar: Edit & Make a Copy */}
+          <QuestionPaperToolbar paper={paper} />
 
           {paper.instructions && (
             <Card>
@@ -72,9 +87,9 @@ export default async function ViewQuestionPaperPage({ params }: { params: { id: 
                         <QuestionItemClient
                           question={q.question}
                           readOnly
-                          classes={[]} 
-                          subjects={[]} 
-                          allTags={[]} 
+                          classes={[]}
+                          subjects={[]}
+                          allTags={[]}
                         />
                       </div>
                       <div className="text-right ml-4">
