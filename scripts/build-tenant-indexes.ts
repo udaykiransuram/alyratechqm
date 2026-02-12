@@ -9,9 +9,11 @@ import { getTenantDb } from '../lib/db-tenant';
 import School from '../models/School';
 
 async function ensureIndexesForTenant(dbName: string) {
-  const db = mongoose.connection.useDb(dbName, { useCache: false }).db!;
+  const db = mongoose.connection.useDb(dbName, { useCache: false }).db;
+  if (!db) throw new Error('Tenant database not available');
   const res: Record<string, any> = {};
   async function ix(col: string, spec: any, opts: any = {}) {
+    if (!db) throw new Error('Tenant database not available');
     try { res[col] = res[col] || []; res[col].push(await db.collection(col).createIndex(spec, opts)); }
     catch (e: any) { res[col] = res[col] || []; res[col].push(`ERR: ${e.message}`); }
   }
