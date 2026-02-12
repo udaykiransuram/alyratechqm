@@ -119,10 +119,10 @@ export async function POST(req: NextRequest) {
     const tagNameList = Array.from(tagNameTypePairs).map((s) => s.split("|||")[0]); // fetch by name only
 
     const [classDocs, subjectDocs, tagTypeDocs, tagDocs] = await Promise.all([
-      ClassModel.find({ name: { $in: classList } }),
-      SubjectModel.find({ name: { $in: subjectList } }),
-      TagTypeModel.find({ name: { $in: tagTypeList } }),     // stored lowercased
-      TagModel.find({ name: { $in: tagNameList } }),         // may return multiple types per name
+      ClassModel.find({ name: { $in: classList } }) as Promise<ClassDoc[]>,
+      SubjectModel.find({ name: { $in: subjectList } }) as Promise<SubjectDoc[]>,
+      TagTypeModel.find({ name: { $in: tagTypeList } }) as Promise<TagTypeDoc[]>,     // stored lowercased
+      TagModel.find({ name: { $in: tagNameList } }) as Promise<TagDoc[]>,         // may return multiple types per name
     ]);
 
     // 3) Build lookup maps
@@ -144,14 +144,14 @@ export async function POST(req: NextRequest) {
     }
 
     // 5) Upsert TagTypes (idempotent, lowercase)
-    const existingTT = new Set(tagTypeDocs.map((tt: any) => lc(tt.name)));
+    const existingTT = new Set(tagTypeDocs.map((tt: TagTypeDoc) => lc(tt.name)));
     const createTT = tagTypeList.filter((n) => !existingTT.has(n)); // already lowercase
 
     let createdTagTypes: any[] = [];
     if (createTT.length) {
       const results = await Promise.all(
         createTT.map((name) =>
-          TagTypeModel.findOneAndUpdate(
+          TagTypeModel.findOneAndUpdate<TagTypeDoc>(
             { name },                        // lowercase
             { $setOnInsert: { name } },
             { upsert: true, new: true }
@@ -174,12 +174,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const existingTagKeys = new Set(tagDocs.map((t: any) => `${t.name}|||${String(t.type)}`));
+    const existingTagKeys = new Set(tagDocs.map((t: TagDoc) => `${t.name}|||${String(t.type)}`));
     let createdTags: any[] = [];
     if (missingTags.length) {
       const results = await Promise.all(
         missingTags.map(({ name, type }) =>
-          TagModel.findOneAndUpdate(
+          TagModel.findOneAndUpdate<TagDoc>(
             { name, type },
             { $setOnInsert: { name, type } },
             { upsert: true, new: true }
