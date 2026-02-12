@@ -216,7 +216,7 @@ const ChartView = ({ stats, groupBy, groupFields = [], paperTitle = '', mode = '
       setDownloading(true);
       const dataUrl = await toPng(chartContainerRef.current, {
         cacheBust: true,
-        background: '#ffffff',
+        backgroundColor: '#ffffff',
         pixelRatio: 2,
       });
       const a = document.createElement('a');

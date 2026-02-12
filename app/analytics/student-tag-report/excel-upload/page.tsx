@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import * as XLSX from 'xlsx';
 import { useSearchParams } from 'next/navigation';
 import pLimit from 'p-limit';
@@ -39,7 +39,7 @@ const AlertCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 const limit = pLimit(10);
 
-export default function ExcelStudentResponseUploadPage() {
+function ExcelStudentResponseUploadPageContent() {
   const [excelRows, setExcelRows] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -395,5 +395,13 @@ export default function ExcelStudentResponseUploadPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ExcelStudentResponseUploadPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+      <ExcelStudentResponseUploadPageContent />
+    </Suspense>
   );
 }
