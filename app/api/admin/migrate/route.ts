@@ -18,6 +18,8 @@ const COLLECTIONS: Record<string, string> = {
 };
 
 async function migrateCollection(globalConn: mongoose.Connection, tenantConn: mongoose.Connection, collName: string) {
+  if (!globalConn.db) throw new Error('Global database not available');
+  if (!tenantConn.db) throw new Error('Tenant database not available');
   const gcol = globalConn.db.collection(collName);
   const tcol = tenantConn.db.collection(collName);
   const total = await gcol.countDocuments();
@@ -60,6 +62,7 @@ export async function POST(req: NextRequest) {
     const results: Record<string, any> = {};
 
     if (wipe) {
+      if (!tenantConn.db) throw new Error('Tenant database not available');
       for (const key of collections) {
         const collName = COLLECTIONS[key.toLowerCase()];
         if (!collName) continue;
