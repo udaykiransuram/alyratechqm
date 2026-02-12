@@ -6,6 +6,7 @@ import { getTenantModels } from '@/lib/db-tenant';
 import Tag from "@/models/Tag";
 import TagType from "@/models/TagType";
 import Subject from "@/models/Subject";
+import { Model } from 'mongoose';
 import Class from "@/models/Class";
 
 interface ClassDoc {
@@ -149,9 +150,10 @@ export async function POST(req: NextRequest) {
 
     let createdTagTypes: any[] = [];
     if (createTT.length) {
+      const TagTypeModelTyped = TagTypeModel as Model<TagTypeDoc>;
       const results = await Promise.all(
-        createTT.map((name) =>
-          TagTypeModel.findOneAndUpdate<TagTypeDoc>(
+        createTT.map(async (name) =>
+          await TagTypeModelTyped.findOneAndUpdate(
             { name },                        // lowercase
             { $setOnInsert: { name } },
             { upsert: true, new: true }
@@ -177,9 +179,10 @@ export async function POST(req: NextRequest) {
     const existingTagKeys = new Set(tagDocs.map((t: TagDoc) => `${t.name}|||${String(t.type)}`));
     let createdTags: any[] = [];
     if (missingTags.length) {
+      const TagModelTyped = TagModel as Model<TagDoc>;
       const results = await Promise.all(
-        missingTags.map(({ name, type }) =>
-          TagModel.findOneAndUpdate<TagDoc>(
+        missingTags.map(async ({ name, type }) =>
+          await TagModelTyped.findOneAndUpdate(
             { name, type },
             { $setOnInsert: { name, type } },
             { upsert: true, new: true }
@@ -300,3 +303,65 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+</final_file_content>
+
+IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
+
+<environment_details>
+# Visual Studio Code Visible Files
+app/api/questions/bulk/route.ts
+
+# Visual Studio Code Open Tabs
+../questions (6).json
+app/students/create/page.tsx
+app/api/users/[id]/route.ts
+app/question-paper/page.tsx
+app/analytics/student-tag-report/excel-upload/page.tsx
+app/question-paper/edit/[id]/page.tsx
+app/api/question-papers/[id]/route.ts
+lib/db-tenant.ts
+app/api/tags/route.ts
+app/api/tags/[id]/route.ts
+app/api/tag-types/route.ts
+app/api/tag-types/[id]/route.ts
+app/tags/create/page.tsx
+app/tags/edit/[id]/page.tsx
+app/api/questions/route.ts
+app/questions/page.tsx
+components/QuestionFilterPopup.tsx
+components/QuestionPaperForm.tsx
+components/analytics/ChartView.tsx
+components/analytics/helpers.tsx
+components/analytics/AnalyticsExportControls.tsx
+lib/validation.ts
+middleware.ts
+app/api/analytics/class-tag-report/[paperId]/route.ts
+app/api/analytics/student-tag-report/[responseId]/route.ts
+app/analytics/student-tag-report/[responseId]/page.tsx
+app/analytics/class-tag-report/[paperId]/page.tsx
+components/analytics/StatsTable.tsx
+components/analytics/QuestionListModal.tsx
+app/api/admin/migrate/route.ts
+app/api/admin/reindex/route.ts
+app/api/debug/db/route.ts
+app/api/schools/route.ts
+scripts/build-tenant-indexes.ts
+app/api/questions/bulk/route.ts
+app/api/question-papers/route.ts
+components/PaperDetailsForm.tsx
+components/analytics/OptionTagModal.tsx
+
+# Recently Modified Files
+These files have been modified since you last accessed them (file was just edited so you may need to re-read it before editing):
+app/api/questions/bulk/route.ts
+
+# Current Time
+2/13/2026, 2:29:43 AM (Asia/Calcutta, UTC+5.5:00)
+
+# Context Window Usage
+65,133 / 128K tokens used (51%)
+
+# Current Mode
+ACT MODE
+</environment_details>
