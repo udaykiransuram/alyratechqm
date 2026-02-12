@@ -45,6 +45,7 @@ async function ensureTenantIndexesForKey(schoolKey: string) {
   const dbn = `school_db_${String(schoolKey).replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()}`;
   // Reuse minimal set to keep it fast
   const db = (await import('mongoose')).default.connection.useDb(dbn, { useCache: false }).db;
+  if (!db) throw new Error('Tenant database not available');
   await db.collection('questions').createIndex({ class: 1, subject: 1, createdAt: -1 }, { name: 'class_subject_createdAt' });
   await db.collection('questionpapers').createIndex({ createdAt: -1 }, { name: 'qp_createdAt_desc' });
   await db.collection('users').createIndex({ class: 1, rollNumber: 1 }, { name: 'user_class_roll_1' });
