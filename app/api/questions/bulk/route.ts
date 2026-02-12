@@ -8,6 +8,29 @@ import TagType from "@/models/TagType";
 import Subject from "@/models/Subject";
 import Class from "@/models/Class";
 
+interface ClassDoc {
+  _id: string;
+  name: string;
+}
+
+interface SubjectDoc {
+  _id: string;
+  name: string;
+  tags: string[];
+  save: () => Promise<void>;
+}
+
+interface TagTypeDoc {
+  _id: string;
+  name: string;
+}
+
+interface TagDoc {
+  _id: string;
+  name: string;
+  type: string;
+}
+
 export const runtime = "nodejs";
 
 /* ---------------- helpers ---------------- */
@@ -103,13 +126,13 @@ export async function POST(req: NextRequest) {
     ]);
 
     // 3) Build lookup maps
-    const classMap   = new Map(classDocs.map((c: any) => [c.name, c]));
-    const subjectMap = new Map(subjectDocs.map((s: any) => [s.name, s]));
-    const tagTypeMap = new Map(tagTypeDocs.map((tt: any) => [lc(tt.name), tt])); // KEYS LOWERCASED
+    const classMap   = new Map<string, ClassDoc>(classDocs.map((c: ClassDoc) => [c.name, c]));
+    const subjectMap = new Map<string, SubjectDoc>(subjectDocs.map((s: SubjectDoc) => [s.name, s]));
+    const tagTypeMap = new Map<string, TagTypeDoc>(tagTypeDocs.map((tt: TagTypeDoc) => [lc(tt.name), tt])); // KEYS LOWERCASED
 
     // Tag map key: `${tagName}|||${tagTypeId}`
-    const tagMap = new Map(
-      tagDocs.map((t: any) => [`${t.name}|||${String(t.type)}`, t])
+    const tagMap = new Map<string, TagDoc>(
+      tagDocs.map((t: TagDoc) => [`${t.name}|||${String(t.type)}`, t])
     );
 
     // 4) Create missing Classes
@@ -176,7 +199,7 @@ export async function POST(req: NextRequest) {
     // 7) Create/update Subjects and attach union of tagIds used with that subject
     let createdSubjects: any[] = [];
     for (const subjectName of subjectList) {
-      let subjectDoc = subjectMap.get(subjectName);
+      let subjectDoc: SubjectDoc | undefined = subjectMap.get(subjectName);
 
       // Collect unique tagIds across all questions for this subject
       const tagIdsSet = new Set<string>();
@@ -194,11 +217,12 @@ export async function POST(req: NextRequest) {
       const tagIds = Array.from(tagIdsSet);
 
       if (!subjectDoc) {
-        subjectDoc = await SubjectModel.create({
+        const newSubject = await SubjectModel.create({
           name: subjectName,
           code: subjectCodes.get(subjectName) || "",
           tags: tagIds,
         });
+        subjectDoc = newSubject as SubjectDoc;
         createdSubjects.push(subjectDoc);
         subjectMap.set(subjectName, subjectDoc);
       } else {
