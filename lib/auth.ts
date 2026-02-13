@@ -21,12 +21,16 @@ export const authOptions = {
         try {
           await connectDB();
           const { User } = await getTenantModels(credentials.schoolKey, ['User']);
+          console.log('Fetched User model for tenant:', credentials.schoolKey);
           const user = await User.findOne({ email: credentials.email });
+          console.log('Found user:', !!user, 'with passwordHash:', user ? !!user.passwordHash : 'no user');
           if (!user) {
             console.log('User not found for email:', credentials.email);
             return null;
           }
+          console.log('Comparing passwords...');
           const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
+          console.log('Password valid:', isValid);
           if (!isValid) {
             console.log('Invalid password for user:', credentials.email);
             return null;
@@ -48,6 +52,7 @@ export const authOptions = {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        console.log('JWT callback: Added id and role to token', { id: user.id, role: user.role });
       }
       return token;
     },
@@ -55,6 +60,7 @@ export const authOptions = {
       if (session.user) {
         session.user.id = token.id;
         session.user.role = token.role;
+        console.log('Session callback: Added id and role to session', { id: token.id, role: token.role });
       }
       return session;
     },
