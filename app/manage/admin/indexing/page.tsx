@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import IndexingClient from './IndexingClient'; // We'll create this client component
+import { Suspense } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,5 +14,9 @@ export default async function IndexingPage() {
     redirect('/');
   }
 
-  return <IndexingClient />;
+  return (
+    <Suspense fallback={<Skeleton className="h-32 w-full" />}>
+      <IndexingClient />
+    </Suspense>
+  );
 }
