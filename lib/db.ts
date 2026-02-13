@@ -2,9 +2,9 @@
 import mongoose from 'mongoose';
 
 // Import all your models here to register them with Mongoose
-import './../models/Subject';
-import './../models/Tag';
-import './../models/TagType';
+import './../models/Subject.ts';
+import './../models/Tag.ts';
+import './../models/TagType.ts';
 // Assuming you have this model as well
 
 const MONGODB_URI = process.env.MONGODB_URI!;

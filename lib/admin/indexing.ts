@@ -1,19 +1,14 @@
-/*
-  Build indexes for all tenant databases.
-  Run: npx ts-node --esm scripts/build-tenant-indexes.ts
-*/
+// lib/admin/indexing.ts
 import mongoose from 'mongoose';
-import { connectDB } from '../lib/db.ts';
-import School from '../models/School.ts';
 
-async function ensureIndexesForTenantDbName(dbName: string) {
+export async function ensureIndexesForTenantDbName(dbName: string) {
   const db = mongoose.connection.useDb(dbName, { useCache: false }).db;
   const res: Record<string, any> = {};
-    async function ix(col: string, spec: any, opts: any = {}) {
-      if (!db) throw new Error('Database not available');
-      try { res[col] = res[col] || []; res[col].push(await db.collection(col).createIndex(spec, opts)); }
-      catch (e: any) { res[col] = res[col] || []; res[col].push(`ERR: ${e.message}`); }
-    }
+  async function ix(col: string, spec: any, opts: any = {}) {
+    if (!db) throw new Error('Database not available');
+    try { res[col] = res[col] || []; res[col].push(await db.collection(col).createIndex(spec, opts)); }
+    catch (e: any) { res[col] = res[col] || []; res[col].push(`ERR: ${e.message}`); }
+  }
   // Questions
   await ix('questions', { content: 'text' }, { name: 'content_text' });
   await ix('questions', { class: 1, subject: 1, createdAt: -1 }, { name: 'class_subject_createdAt' });
@@ -44,22 +39,6 @@ async function ensureIndexesForTenantDbName(dbName: string) {
   return res;
 }
 
-function dbNameForSchool(key: string) {
+export function dbNameForSchool(key: string) {
   return `school_db_${String(key).replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()}`;
 }
-
-async function main() {
-  await connectDB();
-  const schools = await School.find({}).lean();
-  const results: Record<string, any> = {};
-  for (const s of schools) {
-    const key = (s as any).key || String((s as any)._id);
-    const dbn = dbNameForSchool(key);
-    results[key] = await ensureIndexesForTenantDbName(dbn);
-    console.log(`[indexes] ensured for tenant ${key}`);
-  }
-  await mongoose.disconnect();
-  console.log('Done building tenant indexes');
-}
-
-main().catch(err => { console.error(err); process.exit(1); });

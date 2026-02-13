@@ -24,6 +24,7 @@
         "name": "next"
       }
     ],
+    "allowImportingTsExtensions": true,
     "sourceMap": true
   },
   "include": [
