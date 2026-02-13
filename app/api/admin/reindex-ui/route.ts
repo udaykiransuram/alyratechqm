@@ -1,27 +1,28 @@
-
-export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path if needed
 import { connectDB } from '@/lib/db';
 import School from '@/models/School';
-import { getTenantDb } from '@/lib/db-tenant';
 import { ensureIndexesForTenantDbName, dbNameForSchool } from '@/lib/admin/indexing';
+
 export async function POST(req: NextRequest) {
-  await connectDB();
-  const adminSecret = process.env.ADMIN_INDEX_SECRET || process.env.ADMIN_SECRET || '';
-  const hdr = req.headers.get('x-admin-secret') || '';
-  if (!adminSecret || hdr !== adminSecret) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== 'admin') {
     return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
   }
+
+  await connectDB();
+
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json();
     const schoolKey = body?.schoolKey ? String(body.schoolKey) : '';
     const all = !!body?.all;
     const out: Record<string, any> = {};
+
     if (all) {
       const schools = await School.find({}).lean();
       for (const s of schools) {
-        const key = (s as any).key || String((s as any)._id);
+        const key = s.key || String(s._id);
         const dbn = dbNameForSchool(key);
         out[key] = await ensureIndexesForTenantDbName(dbn);
       }
@@ -31,8 +32,9 @@ export async function POST(req: NextRequest) {
     } else {
       return NextResponse.json({ success: false, message: 'Provide schoolKey or set all=true' }, { status: 400 });
     }
+
     return NextResponse.json({ success: true, results: out });
   } catch (e: any) {
-    return NextResponse.json({ success: false, message: e?.message || 'failed' }, { status: 500 });
+    return NextResponse.json({ success: false, message: e.message || 'failed' }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 // models/Subject.ts
 import mongoose, { Schema, Document, Model } from 'mongoose';
-import { ITag } from './Tag';
+import { ITag } from './Tag.ts';
 
 export interface ISubject extends Document {
   name: string;

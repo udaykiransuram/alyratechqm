@@ -1,6 +1,7 @@
 {
   "name": "talent-test-registration",
   "version": "1.0.0",
+  "type": "module",
   "description": "Talent test registration with Cashfree Payments in Next.js",
   "main": "index.js",
   "scripts": {
@@ -10,7 +11,7 @@
     "lint": "next lint",
     "build-indexes": "ts-node scripts/build-indexes.ts",
     "build-tenant-indexes": "ts-node scripts/build-tenant-indexes.ts",
-    "predev": "node scripts/build-tenant-indexes.js || echo \"[predev] Skipping index build (DB unreachable)\""
+    "predev": "node scripts/build-tenant-indexes.cjs || echo \"[predev] Skipping index build (DB unreachable)\""
   },
   "keywords": [
     "nextjs",
@@ -68,6 +69,7 @@
     "docx": "^9.5.1",
     "express": "^5.1.0",
     "formidable": "^3.5.4",
+    "framer-motion": "^11.0.0",
     "highlight.js": "^11.11.1",
     "html-to-image": "^1.11.13",
     "jspdf": "^3.0.1",
@@ -78,6 +80,7 @@
     "mathlive": "^0.105.3",
     "mongoose": "^8.4.5",
     "next": "^14.2.5",
+    "next-auth": "^4.24.13",
     "pdf-parse": "^1.1.1",
     "pdf.js-extract": "^0.2.1",
     "pdfjs-dist": "^5.3.93",
@@ -91,8 +94,7 @@
     "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-    "xlsx": "^0.18.5",
-    "framer-motion": "^11.0.0"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",
@@ -112,6 +114,7 @@
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.8.3"
   }
 }
