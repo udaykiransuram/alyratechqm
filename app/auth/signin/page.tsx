@@ -20,10 +20,11 @@ export default function SignIn() {
     setIsLoading(true);
     console.log('Attempting signIn with:', { email, schoolKey }); // Debug log
     const result = await signIn('credentials', {
-      redirect: false,
+      redirect: true,
       email,
       password,
       schoolKey,
+      callbackUrl: '/manage/admin/indexing',
     });
     console.log('signIn result:', result); // Debug log
     setIsLoading(false);
@@ -33,8 +34,6 @@ export default function SignIn() {
       toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
       return;
     }
-    console.log('Login successful, redirecting to:', result.url || '/manage/admin/indexing'); // Debug log
-    router.push(result.url || '/manage/admin/indexing');
   };
 
   return (
