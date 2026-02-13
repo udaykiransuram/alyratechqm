@@ -17,6 +17,8 @@ async function fetcher(url: string) {
   return res.json();
 }
 
+export const dynamic = 'force-dynamic';
+
 export default function IndexingPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
