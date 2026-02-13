@@ -18,6 +18,7 @@ export default function SignIn() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    console.log('Attempting signIn with:', { email, schoolKey }); // Debug log
     const result = await signIn('credentials', {
       redirect: false,
       email,
@@ -28,10 +29,11 @@ export default function SignIn() {
     setIsLoading(false);
     if (!result || !result.ok) {
       const errorMessage = result?.error || 'Login failed. Please check your credentials and try again.';
-      console.log('Toast description:', errorMessage); // Debug log
+      console.log('Login error:', errorMessage); // Debug log
       toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
       return;
     }
+    console.log('Login successful, redirecting to:', result.url || '/manage/admin/indexing'); // Debug log
     router.push(result.url || '/manage/admin/indexing');
   };
 

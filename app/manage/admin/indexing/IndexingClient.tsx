@@ -85,9 +85,9 @@ export default function IndexingClient() {
                 <SelectValue placeholder="Select School" />
               </SelectTrigger>
               <SelectContent>
-                {schools?.map((school: any) => (
+                {schools?.schools?.map((school: any) => (
                   <SelectItem key={school.key} value={school.key}>
-                    {school.name || school.key}
+                    {school.displayName || school.key}
                   </SelectItem>
                 ))}
               </SelectContent>
