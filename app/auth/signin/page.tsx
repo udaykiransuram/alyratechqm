@@ -24,9 +24,12 @@ export default function SignIn() {
       password,
       schoolKey,
     });
+    console.log('signIn result:', result); // Debug log
     setIsLoading(false);
     if (!result || !result.ok) {
-      toast({ title: 'Error', description: result?.error || 'Login failed. Please check your credentials and try again.', variant: 'destructive' });
+      const errorMessage = result?.error || 'Login failed. Please check your credentials and try again.';
+      console.log('Toast description:', errorMessage); // Debug log
+      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
       return;
     }
     router.push(result.url || '/manage/admin/indexing');

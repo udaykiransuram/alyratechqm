@@ -15,15 +15,28 @@ export const authOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password || !credentials?.schoolKey) {
+          console.log('Missing credentials');
           return null;
         }
-        await connectDB();
-        const { User } = await getTenantModels(credentials.schoolKey, ['User']);
-        const user = await User.findOne({ email: credentials.email });
-        if (!user) return null;
-        const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!isValid) return null;
-        return { id: user._id, name: user.name, email: user.email, role: user.role };
+        try {
+          await connectDB();
+          const { User } = await getTenantModels(credentials.schoolKey, ['User']);
+          const user = await User.findOne({ email: credentials.email });
+          if (!user) {
+            console.log('User not found for email:', credentials.email);
+            return null;
+          }
+          const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
+          if (!isValid) {
+            console.log('Invalid password for user:', credentials.email);
+            return null;
+          }
+          console.log('Successful login for user:', credentials.email);
+          return { id: user._id, name: user.name, email: user.email, role: user.role };
+        } catch (error) {
+          console.error('Error in authorize:', error);
+          return null;
+        }
       },
     }),
   ],

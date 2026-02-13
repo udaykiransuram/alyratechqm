@@ -142,14 +142,22 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
-function toast({ description = '', ...props }: Toast) {
+function toast(arg: string | Toast) {
   const id = genId()
-  const effectiveDescription = description ?? '';
 
-  const update = (props: ToasterToast) =>
+  let props: Toast;
+  if (typeof arg === 'string') {
+    props = { description: arg };
+  } else {
+    props = arg;
+  }
+
+  const effectiveDescription = props.description ?? '';
+
+  const update = (updateProps: ToasterToast) =>
     dispatch({
       type: "UPDATE_TOAST",
-      toast: { ...props, id },
+      toast: { ...updateProps, id },
     })
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 

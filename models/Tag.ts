@@ -1,6 +1,6 @@
 // models/Tag.ts
 import mongoose, { Schema, Document, Model } from 'mongoose';
-import { ITagType } from './TagType.ts';
+import { ITagType } from './TagType';
 
 export interface ITag extends Document {
   name: string;
