@@ -25,11 +25,11 @@ export default function SignIn() {
       schoolKey,
     });
     setIsLoading(false);
-    if (result?.error) {
-      toast({ title: 'Error', description: result.error, variant: 'destructive' });
-    } else {
-      router.push('/manage/admin/indexing'); // Or your desired redirect
+    if (!result || !result.ok) {
+      toast({ title: 'Error', description: result?.error || 'Login failed. Please check your credentials and try again.', variant: 'destructive' });
+      return;
     }
+    router.push(result.url || '/manage/admin/indexing');
   };
 
   return (
