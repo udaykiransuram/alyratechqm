@@ -144,6 +144,7 @@ type Toast = Omit<ToasterToast, "id">
 
 function toast({ description = '', ...props }: Toast) {
   const id = genId()
+  const effectiveDescription = description ?? '';
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -156,7 +157,7 @@ function toast({ description = '', ...props }: Toast) {
     type: "ADD_TOAST",
     toast: {
       ...props,
-      description,
+      description: effectiveDescription,
       id,
       open: true,
       onOpenChange: (open) => {
