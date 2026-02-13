@@ -10,12 +10,16 @@ export async function POST(request: Request) {
   }
   await connectDB();
   const { User } = await getTenantModels(schoolKey, ['User']);
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    return NextResponse.json({ error: 'User already exists' }, { status: 409 });
-  }
   const passwordHash = await bcrypt.hash(password, 10);
-  const adminUser = new User({ name, email, passwordHash, role: 'admin' });
-  await adminUser.save();
-  return NextResponse.json({ message: 'Admin user created successfully' });
+  let adminUser = await User.findOne({ email });
+  if (adminUser) {
+    adminUser.name = name;
+    adminUser.passwordHash = passwordHash;
+    adminUser.role = 'admin';
+    await adminUser.save();
+  } else {
+    adminUser = new User({ name, email, passwordHash, role: 'admin' });
+    await adminUser.save();
+  }
+  return NextResponse.json({ message: 'Admin user created/updated successfully' });
 }

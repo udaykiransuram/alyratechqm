@@ -1,7 +1,7 @@
 
 // lib/db-tenant.ts
 import mongoose from 'mongoose';
-import { connectDB } from '@/lib/db';
+import { connectDB } from './db.ts';
 
 // Ensure base connection has schemas registered
 import '@/models/TagType';
