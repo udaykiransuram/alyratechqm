@@ -89,7 +89,7 @@ export default function SiteHeader() {
         </div>
 
         {/* Center: Desktop nav */}
-        <nav className="hidden md:flex items-center gap-2 text-sm font-medium mx-3 flex-1 justify-center">
+        <nav className="hidden md:flex items-center gap-1 lg:gap-2 text-sm font-medium mx-2 lg:mx-3 flex-1 justify-center max-w-[60%] overflow-x-auto whitespace-nowrap">
           <NavLink href="/" label="Home" />
           <NavLink href="/register" label="Register" />
           <NavLink href="/marketing" label="Product" />
