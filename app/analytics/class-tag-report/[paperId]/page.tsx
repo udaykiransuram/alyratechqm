@@ -1,29 +1,41 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, useRef } from 'react';
-import LoadingState from '@/components/analytics/LoadingState';
-import ErrorState from '@/components/analytics/ErrorState';
-import ReportHeader from '@/components/analytics/ReportHeader';
-import OptionTagModal from '@/components/analytics/OptionTagModal';
-import StatsTable from '@/components/analytics/StatsTable';
-import ChartView from '@/components/analytics/ChartView';
-import { sortStatsRows } from '@/components/analytics/helpers';
-import QuestionListModal from '@/components/analytics/QuestionListModal';
-import AnalyticsExportControls from '@/components/analytics/AnalyticsExportControls';
+import React, { useEffect, useState, useRef } from "react";
+import LoadingState from "@/components/analytics/LoadingState";
+import ErrorState from "@/components/analytics/ErrorState";
+import ReportHeader from "@/components/analytics/ReportHeader";
+import OptionTagModal from "@/components/analytics/OptionTagModal";
+import StatsTable from "@/components/analytics/StatsTable";
+import ChartView from "@/components/analytics/ChartView";
+import { sortStatsRows } from "@/components/analytics/helpers";
+import QuestionListModal from "@/components/analytics/QuestionListModal";
+import AnalyticsExportControls from "@/components/analytics/AnalyticsExportControls";
 
-export default function ClassTagReportPage({ params }: { params: { paperId: string } }) {
+export default function ClassTagReportPage({
+  params,
+}: {
+  params: { paperId: string };
+}) {
   const [stats, setStats] = useState<any>({});
-  const [paper, setPaper] = useState<string>('');
+  const [paper, setPaper] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [groupFields, setGroupFields] = useState<{ value: string; label: string }[]>([]);
+  const [groupFields, setGroupFields] = useState<
+    { value: string; label: string }[]
+  >([]);
   const [groupBy, setGroupBy] = useState<string[]>([]);
-  const [selectedTags, setSelectedTags] = useState<{ type: string; value: string }[]>([]);
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: '', direction: 'desc' });
+  const [selectedTags, setSelectedTags] = useState<
+    { type: string; value: string }[]
+  >([]);
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  }>({ key: "", direction: "desc" });
   const [showTagsColumn, setShowTagsColumn] = useState<boolean>(false);
-  const [showOptionTagsColumn, setShowOptionTagsColumn] = useState<boolean>(false);
-  const [view, setView] = useState<'table' | 'charts'>('table');
+  const [showOptionTagsColumn, setShowOptionTagsColumn] =
+    useState<boolean>(false);
+  const [view, setView] = useState<"table" | "charts">("table");
   const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
 
   const [modalData, setModalData] = useState<{
@@ -33,7 +45,7 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
     groupNode?: any; // <-- add this line
   }>({
     isOpen: false,
-    title: '',
+    title: "",
     questionIds: [],
     groupNode: undefined, // <-- add this line
   });
@@ -48,13 +60,35 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
 
   const tableRef = useRef<HTMLDivElement>(null);
 
+  // Explicit tenant handling
+  const [schoolKey, setSchoolKey] = useState<string>("");
+  function getSchoolFromCookie() {
+    try {
+      const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
+      return m && m[1] ? decodeURIComponent(m[1]) : "";
+    } catch {
+      return "";
+    }
+  }
+
   useEffect(() => {
-    fetch(`/api/analytics/class-tag-report/${params.paperId}?groupFields=1`)
-      .then(res => res.json())
+    const sk = getSchoolFromCookie();
+    setSchoolKey(sk);
+    if (!sk) {
+      setLoading(false);
+      setError("Please select a school in the navbar to load analytics.");
+      return;
+    }
+    fetch(
+      `/api/analytics/class-tag-report/${params.paperId}?groupFields=1&school=${encodeURIComponent(sk)}`,
+    )
+      .then((res) => res.json())
       .then((data: any) => {
         setGroupFields(data.fields || []);
         if (data.fields?.some((f: any) => f.value === "section")) {
-          const sectionIdx = data.fields.findIndex((f: any) => f.value === "section");
+          const sectionIdx = data.fields.findIndex(
+            (f: any) => f.value === "section",
+          );
           const selected = [
             data.fields[sectionIdx]?.value,
             data.fields[sectionIdx + 1]?.value,
@@ -77,12 +111,23 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
   const handleOpenModal = (
     title: string,
     questionIds: any[],
-    groupNode?: any
+    groupNode?: any,
   ) => setModalData({ isOpen: true, title, questionIds, groupNode });
 
-  const handleCloseModal = () => setModalData({ isOpen: false, title: '', questionIds: [], groupNode: undefined });
+  const handleCloseModal = () =>
+    setModalData({
+      isOpen: false,
+      title: "",
+      questionIds: [],
+      groupNode: undefined,
+    });
 
-  const handleOptionTagClick = (option: string, tag: string, isCorrect: boolean, students: { name: string; rollNumber: string }[]) => {
+  const handleOptionTagClick = (
+    option: string,
+    tag: string,
+    isCorrect: boolean,
+    students: { name: string; rollNumber: string }[],
+  ) => {
     setOptionTagModal({ isOpen: true, option, tag, isCorrect, students });
   };
 
@@ -92,19 +137,28 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
     setLoading(true);
     setError(null);
     const searchParams = new URLSearchParams();
-    searchParams.set('json', '1');
-    if (groupBy.length) searchParams.set('groupBy', groupBy.join(','));
-    fetch(`/api/analytics/class-tag-report/${params.paperId}?${searchParams.toString()}`)
-      .then(res => res.json())
-      .then(data => {
+    searchParams.set("json", "1");
+    if (groupBy.length) searchParams.set("groupBy", groupBy.join(","));
+    const sk = schoolKey || getSchoolFromCookie();
+    if (!sk) {
+      setLoading(false);
+      setError("Please select a school in the navbar to load analytics.");
+      return;
+    }
+    searchParams.set("school", sk);
+    fetch(
+      `/api/analytics/class-tag-report/${params.paperId}?${searchParams.toString()}`,
+    )
+      .then((res) => res.json())
+      .then((data) => {
         if (data.success) {
           setStats(data.stats || {});
-          setPaper(data.paper || '');
+          setPaper(data.paper || "");
         } else {
-          setError(data.message || 'Failed to fetch tag report');
+          setError(data.message || "Failed to fetch tag report");
         }
       })
-      .catch(() => setError('An unexpected network error occurred.'))
+      .catch(() => setError("An unexpected network error occurred."))
       .finally(() => setLoading(false));
   };
 
@@ -116,25 +170,31 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
       <div className="container space-y-8">
         <ReportHeader paper={paper} student="" rollNumber="" />
         <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6">
-          <h2 className="text-xl font-semibold text-slate-800 mb-4">Report Controls</h2>
+          <h2 className="text-xl font-semibold text-slate-800 mb-4">
+            Report Controls
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Group By */}
             <div>
-              <label className="font-semibold text-slate-700 block mb-2">Group By (in order)</label>
-              <p className="text-sm text-slate-500 mb-3">Select and drag fields to create a nested report.</p>
+              <label className="font-semibold text-slate-700 block mb-2">
+                Group By (in order)
+              </label>
+              <p className="text-sm text-slate-500 mb-3">
+                Select and drag fields to create a nested report.
+              </p>
               <div className="p-4 border rounded-lg bg-slate-50/50 space-y-4">
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {groupFields.map(field => (
+                  {groupFields.map((field) => (
                     <div key={field.value}>
                       <input
                         type="checkbox"
                         id={`field-${field.value}`}
                         checked={groupBy.includes(field.value)}
                         onChange={() =>
-                          setGroupBy(prev =>
+                          setGroupBy((prev) =>
                             prev.includes(field.value)
-                              ? prev.filter(f => f !== field.value)
-                              : [...prev, field.value]
+                              ? prev.filter((f) => f !== field.value)
+                              : [...prev, field.value],
                           )
                         }
                         className="hidden peer"
@@ -151,7 +211,9 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
                 {groupBy.length > 0 && (
                   <ul className="space-y-2">
                     {groupBy.map((fieldValue, idx) => {
-                      const field = groupFields.find(f => f.value === fieldValue);
+                      const field = groupFields.find(
+                        (f) => f.value === fieldValue,
+                      );
                       if (!field) return null;
                       return (
                         <li
@@ -167,9 +229,12 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
                               className="p-1 rounded-full text-slate-500 hover:bg-slate-200"
                               disabled={idx === 0}
                               onClick={() => {
-                                setGroupBy(prev => {
+                                setGroupBy((prev) => {
                                   const arr = [...prev];
-                                  [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+                                  [arr[idx - 1], arr[idx]] = [
+                                    arr[idx],
+                                    arr[idx - 1],
+                                  ];
                                   return arr;
                                 });
                               }}
@@ -182,9 +247,12 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
                               className="p-1 rounded-full text-slate-500 hover:bg-slate-200"
                               disabled={idx === groupBy.length - 1}
                               onClick={() => {
-                                setGroupBy(prev => {
+                                setGroupBy((prev) => {
                                   const arr = [...prev];
-                                  [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+                                  [arr[idx], arr[idx + 1]] = [
+                                    arr[idx + 1],
+                                    arr[idx],
+                                  ];
                                   return arr;
                                 });
                               }}
@@ -208,19 +276,23 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
               <input
                 type="checkbox"
                 checked={showTagsColumn}
-                onChange={() => setShowTagsColumn(v => !v)}
+                onChange={() => setShowTagsColumn((v) => !v)}
                 className="form-checkbox"
               />
-              <span className="ml-2 text-slate-700 font-medium">Show Tags Column</span>
+              <span className="ml-2 text-slate-700 font-medium">
+                Show Tags Column
+              </span>
             </label>
             <label className="inline-flex items-center">
               <input
                 type="checkbox"
                 checked={showOptionTagsColumn}
-                onChange={() => setShowOptionTagsColumn(v => !v)}
+                onChange={() => setShowOptionTagsColumn((v) => !v)}
                 className="form-checkbox"
               />
-              <span className="ml-2 text-slate-700 font-medium">Show Selected Option Tags Column</span>
+              <span className="ml-2 text-slate-700 font-medium">
+                Show Selected Option Tags Column
+              </span>
             </label>
             <button
               onClick={fetchAnalytics}
@@ -233,26 +305,32 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
         </div>
         <div className="flex justify-center bg-slate-200 p-1 rounded-lg max-w-xs mx-auto">
           <button
-            onClick={() => setView('table')}
+            onClick={() => setView("table")}
             className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-              view === 'table' ? 'bg-white text-blue-700 shadow' : 'text-slate-600 hover:bg-slate-300/50'
+              view === "table"
+                ? "bg-white text-blue-700 shadow"
+                : "text-slate-600 hover:bg-slate-300/50"
             }`}
           >
             Table View
           </button>
           <button
-            onClick={() => setView('charts')}
+            onClick={() => setView("charts")}
             className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-              view === 'charts' ? 'bg-white text-blue-700 shadow' : 'text-slate-600 hover:bg-slate-300/50'
+              view === "charts"
+                ? "bg-white text-blue-700 shadow"
+                : "text-slate-600 hover:bg-slate-300/50"
             }`}
           >
             Chart View
           </button>
         </div>
-        {view === 'table' ? (
+        {view === "table" ? (
           <div className="bg-white rounded-lg shadow-md border border-slate-200/80 overflow-hidden">
             <div className="p-6 flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-slate-800">Grouped Analytics</h2>
+              <h2 className="text-xl font-semibold text-slate-800">
+                Grouped Analytics
+              </h2>
               {/* Use the new export controls component here */}
               <AnalyticsExportControls
                 stats={stats}
@@ -265,30 +343,86 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
               />
             </div>
             {Object.keys(stats).length === 0 ? (
-              <div className="text-slate-500 p-6 text-center">No tag data found for the selected criteria.</div>
+              <div className="text-slate-500 p-6 text-center">
+                No tag data found for the selected criteria.
+              </div>
             ) : (
               <div className="overflow-x-auto" ref={tableRef}>
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-100">
                     <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">Group / Tag</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                        Group / Tag
+                      </th>
                       {showTagsColumn && (
-                        <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">Tags</th>
+                        <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                          Tags
+                        </th>
                       )}
-                      <th className="px-4 py-3 text-center font-semibold text-green-700 uppercase tracking-wider cursor-pointer select-none"
-                        onClick={() => setSortConfig({ key: 'correct', direction: sortConfig.key === 'correct' && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
-                        Correct {sortConfig.key === 'correct' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      <th
+                        className="px-4 py-3 text-center font-semibold text-green-700 uppercase tracking-wider cursor-pointer select-none"
+                        onClick={() =>
+                          setSortConfig({
+                            key: "correct",
+                            direction:
+                              sortConfig.key === "correct" &&
+                              sortConfig.direction === "asc"
+                                ? "desc"
+                                : "asc",
+                          })
+                        }
+                      >
+                        Correct{" "}
+                        {sortConfig.key === "correct"
+                          ? sortConfig.direction === "asc"
+                            ? "▲"
+                            : "▼"
+                          : ""}
                       </th>
-                      <th className="px-4 py-3 text-center font-semibold text-red-700 uppercase tracking-wider cursor-pointer select-none"
-                        onClick={() => setSortConfig({ key: 'incorrect', direction: sortConfig.key === 'incorrect' && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
-                        Incorrect {sortConfig.key === 'incorrect' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      <th
+                        className="px-4 py-3 text-center font-semibold text-red-700 uppercase tracking-wider cursor-pointer select-none"
+                        onClick={() =>
+                          setSortConfig({
+                            key: "incorrect",
+                            direction:
+                              sortConfig.key === "incorrect" &&
+                              sortConfig.direction === "asc"
+                                ? "desc"
+                                : "asc",
+                          })
+                        }
+                      >
+                        Incorrect{" "}
+                        {sortConfig.key === "incorrect"
+                          ? sortConfig.direction === "asc"
+                            ? "▲"
+                            : "▼"
+                          : ""}
                       </th>
-                      <th className="px-4 py-3 text-center font-semibold text-yellow-700 uppercase tracking-wider cursor-pointer select-none"
-                        onClick={() => setSortConfig({ key: 'unattempted', direction: sortConfig.key === 'unattempted' && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
-                        Unattempted {sortConfig.key === 'unattempted' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      <th
+                        className="px-4 py-3 text-center font-semibold text-yellow-700 uppercase tracking-wider cursor-pointer select-none"
+                        onClick={() =>
+                          setSortConfig({
+                            key: "unattempted",
+                            direction:
+                              sortConfig.key === "unattempted" &&
+                              sortConfig.direction === "asc"
+                                ? "desc"
+                                : "asc",
+                          })
+                        }
+                      >
+                        Unattempted{" "}
+                        {sortConfig.key === "unattempted"
+                          ? sortConfig.direction === "asc"
+                            ? "▲"
+                            : "▼"
+                          : ""}
                       </th>
                       {showOptionTagsColumn && (
-                        <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">Selected Option Tags</th>
+                        <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                          Selected Option Tags
+                        </th>
                       )}
                     </tr>
                   </thead>
@@ -299,10 +433,17 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
                       handleOptionTagClick={handleOptionTagClick}
                       selectedTags={selectedTags}
                       handleTagSelect={(tag: { type: string; value: string }) =>
-                        setSelectedTags(prev =>
-                          prev.some(t => t.type === tag.type && t.value === tag.value)
-                            ? prev.filter(t => !(t.type === tag.type && t.value === tag.value))
-                            : [...prev, tag]
+                        setSelectedTags((prev) =>
+                          prev.some(
+                            (t) => t.type === tag.type && t.value === tag.value,
+                          )
+                            ? prev.filter(
+                                (t) =>
+                                  !(
+                                    t.type === tag.type && t.value === tag.value
+                                  ),
+                              )
+                            : [...prev, tag],
                         )
                       }
                       sortConfig={sortConfig}
@@ -317,7 +458,13 @@ export default function ClassTagReportPage({ params }: { params: { paperId: stri
             )}
           </div>
         ) : (
-          <ChartView stats={stats} groupBy={groupBy} groupFields={groupFields} paperTitle={paper} mode="class" />
+          <ChartView
+            stats={stats}
+            groupBy={groupBy}
+            groupFields={groupFields}
+            paperTitle={paper}
+            mode="class"
+          />
         )}
         <QuestionListModal
           isOpen={modalData.isOpen}
