@@ -75,10 +75,11 @@ export default function ViewQuestionsPage() {
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
       if (subjectId) params.set('subject', subjectId);
-      if (selectedTags.length > 0) params.set('tags', selectedTags.map(t => t._id).join(','));
+      const tagIds = selectedTags.map(t => t._id || t.id || t.value).filter(Boolean);
+      if (tagIds.length > 0) params.set('tags', tagIds.join(','));
       if (modalSearch.trim()) params.set('search', modalSearch.trim());
       // Use AND semantics when multiple tags are selected
-      if (selectedTags.length > 1) params.set('tagsMode', 'and');
+      if (tagIds.length > 1) params.set('tagsMode', 'and');
 
       const qs = params.toString();
       const endpoint = qs ? `/api/questions?${qs}` : '/api/questions';
@@ -174,7 +175,12 @@ export default function ViewQuestionsPage() {
               type="text"
               value={modalSearch}
               onChange={e => setModalSearch(e.target.value)}
-              placeholder="Search by content..."
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  fetchQuestions();
+                }
+              }}
+              placeholder="Search by content... (press Enter)"
               className="border rounded px-3 py-2 w-full"
             />
           </div>

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { getTenantDb } from '@/lib/db-tenant'
 import { getTenantModels } from '@/lib/db-tenant';
+import mongoose from 'mongoose';
 import Question from '@/models/Question';
 import Class from '@/models/Class';
 import Subject from '@/models/Subject';
@@ -26,6 +27,8 @@ export async function GET(req: NextRequest) {
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question','Tag','TagType','Class','Subject']);
 
 
+  const start = Date.now();
+
   const query: any = {};
 
   // Filter by class
@@ -39,10 +42,12 @@ export async function GET(req: NextRequest) {
   // Filter by tags (comma-separated), supports tagsMode=or|and (default: or)
   const tagsParam = searchParams.get('tags');
   const tagsMode = (searchParams.get('tagsMode') || 'or').toLowerCase();
+  let objIds: mongoose.Types.ObjectId[] = [];
   if (tagsParam) {
     const tagIds = tagsParam.split(',').map(s => s.trim()).filter(Boolean);
-    if (tagIds.length > 0) {
-      query.tags = tagsMode === 'and' ? { $all: tagIds } : { $in: tagIds };
+    objIds = tagIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
+    if (objIds.length > 0) {
+      query.tags = tagsMode === 'and' ? { $all: objIds } : { $in: objIds };
     }
   }
 
@@ -51,8 +56,10 @@ export async function GET(req: NextRequest) {
   if (marks) query.marks = Number(marks);
 
   // Search by content
-  const search = searchParams.get('search');
-  if (search) query.content = { $regex: search, $options: 'i' };
+  const search = searchParams.get('search')?.trim() || '';
+  if (search.length >= 3) {
+    query.$text = { $search: search };
+  }
 
   const pageParam = Number(searchParams.get('page') || '');
   const limitParam = Number(searchParams.get('limit') || '');
@@ -71,27 +78,26 @@ export async function GET(req: NextRequest) {
   if (sortField) {
     const sortObj: any = { [sortField]: sortOrder };
     cursor = cursor.sort(sortObj);
-  } else if (pageParam && limitParam) {
+  } else {
     cursor = cursor.sort({ createdAt: -1 });
   }
 
-  let total: number | undefined = undefined;
-  let page: number | undefined = undefined;
-  let pages: number | undefined = undefined;
-  let limit: number | undefined = undefined;
+  let total = 0;
+  let page = pageParam ? Math.max(1, pageParam) : 1;
+  let pages = 1;
+  let limit = limitParam ? Math.max(1, limitParam) : 20;
+  const skip = (page - 1) * limit;
 
-  if (pageParam && limitParam) {
-    const totalCount = await QuestionModel.countDocuments(query);
-    total = totalCount;
-    page = Math.max(1, pageParam);
-    limit = Math.max(1, limitParam);
-    pages = Math.max(1, Math.ceil(totalCount / (limit || 1)));
-    const skip = (page - 1) * limit;
-    cursor = cursor.skip(skip).limit(limit);
-  }
+  total = await QuestionModel.countDocuments(query);
+  pages = Math.ceil(total / limit);
 
-  try { console.debug('[api/questions] GET', { schoolKey, query, page: pageParam || undefined, limit: limitParam || undefined }); } catch {}
+  cursor = cursor.skip(skip).limit(limit);
+
   const questions = await cursor;
+
+  const elapsed = Date.now() - start;
+  console.log(`[api/questions] GET took ${elapsed}ms`, { schoolKey, query, page, limit, tagsMode, tagIdsLength: objIds?.length || 0, total, pages });
+
   return NextResponse.json({ success: true, questions, total, page, pages, limit });
 }
 
