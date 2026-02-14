@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Menu, BarChart2, Users2, Upload, Layers } from "lucide-react";
@@ -42,8 +43,10 @@ function NavLink({ href, label }: { href: string; label: string }) {
 function getSchoolKey() {
   try {
     const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-    return m && m[1] ? m[1] : '';
-  } catch { return ''; }
+    return m && m[1] ? m[1] : "";
+  } catch {
+    return "";
+  }
 }
 
 export default function SiteHeader() {
@@ -54,7 +57,7 @@ export default function SiteHeader() {
   // Controls which nav popover is open; null means none is open
   const [openKey, setOpenKey] = useState<string | null>(null);
 
-  const [schoolKey, setSchoolKey] = useState('');
+  const [schoolKey, setSchoolKey] = useState("");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -67,8 +70,8 @@ export default function SiteHeader() {
       setSchoolKey(newSchoolKey);
     };
 
-    window.addEventListener('storage', handleCookieChange);
-    return () => window.removeEventListener('storage', handleCookieChange);
+    window.addEventListener("storage", handleCookieChange);
+    return () => window.removeEventListener("storage", handleCookieChange);
   }, []);
 
   return (
@@ -416,10 +419,13 @@ export default function SiteHeader() {
 
         {/* Right side */}
         <div className="flex flex-1 items-center justify-end gap-2">
-          <SchoolSwitcher />
-          <Button asChild>
-            <Link href="/register">Register</Link>
-          </Button>
+          {/* Hide wide controls on mobile to prevent crowding; available inside menu */}
+          <div className="hidden md:flex items-center gap-2">
+            <SchoolSwitcher />
+            <Button asChild>
+              <Link href="/register">Register</Link>
+            </Button>
+          </div>
 
           {/* Mobile menu */}
           <Dialog>
@@ -427,127 +433,162 @@ export default function SiteHeader() {
               <Menu className="h-5 w-5" />
               <span className="sr-only">Open menu</span>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md p-0">
+            {/* Make mobile menu full-screen on small screens for better layout */}
+            <DialogContent className="p-0 inset-0 h-[100dvh] w-screen rounded-none translate-x-0 translate-y-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:w-full sm:max-w-md sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg">
               <DialogHeader className="px-6 pt-6">
                 <DialogTitle>Menu</DialogTitle>
               </DialogHeader>
               <div className="px-6 pb-6">
                 <div className="flex flex-col gap-3 text-sm">
-                  <Link
-                    href="/"
-                    className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                  >
-                    Home
-                  </Link>
-                  <Link
-                    href="/register"
-                    className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                  >
-                    Register
-                  </Link>
+                  {/* School switcher for mobile view */}
+                  <div className="pt-1">
+                    <p className="text-xs text-muted-foreground mb-2">School</p>
+                    <SchoolSwitcher />
+                  </div>
+                  <Separator className="my-2" />
+                  <DialogClose asChild>
+                    <Link
+                      href="/"
+                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                    >
+                      Home
+                    </Link>
+                  </DialogClose>
+                  <DialogClose asChild>
+                    <Link
+                      href="/register"
+                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                    >
+                      Register
+                    </Link>
+                  </DialogClose>
 
                   <div className="pt-4">
                     <p className="text-xs text-muted-foreground mb-2">Papers</p>
-                    <Link
-                      href="/question-paper"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      All Papers
-                    </Link>
-                    <Link
-                      href="/question-paper/create"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Create Paper
-                    </Link>
+                    <DialogClose asChild>
+                      <Link
+                        href="/question-paper"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        All Papers
+                      </Link>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Link
+                        href="/question-paper/create"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Create Paper
+                      </Link>
+                    </DialogClose>
                   </div>
 
                   <div className="pt-4">
                     <p className="text-xs text-muted-foreground mb-2">
                       Questions
                     </p>
-                    <Link
-                      href="/questions"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      All Questions
-                    </Link>
-                    <Link
-                      href="/questions/create"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Create Question
-                    </Link>
-                    <Link
-                      href="/questions/bulk-upload"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Bulk Upload
-                    </Link>
+                    <DialogClose asChild>
+                      <Link
+                        href="/questions"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        All Questions
+                      </Link>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Link
+                        href="/questions/create"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Create Question
+                      </Link>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Link
+                        href="/questions/bulk-upload"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Bulk Upload
+                      </Link>
+                    </DialogClose>
                   </div>
 
                   <div className="pt-4">
                     <p className="text-xs text-muted-foreground mb-2">
                       Subjects
                     </p>
-                    <Link
-                      href="/subjects"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      All Subjects
-                    </Link>
-                    <Link
-                      href="/subjects/create"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Create Subject
-                    </Link>
+                    <DialogClose asChild>
+                      <Link
+                        href="/subjects"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        All Subjects
+                      </Link>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Link
+                        href="/subjects/create"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Create Subject
+                      </Link>
+                    </DialogClose>
                   </div>
 
                   <div className="pt-4">
                     <p className="text-xs text-muted-foreground mb-2">Tags</p>
-                    <Link
-                      href="/tags"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      All Tags
-                    </Link>
-                    <Link
-                      href="/tags/create"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Create Tag
-                    </Link>
+                    <DialogClose asChild>
+                      <Link
+                        href="/tags"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        All Tags
+                      </Link>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Link
+                        href="/tags/create"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Create Tag
+                      </Link>
+                    </DialogClose>
                   </div>
 
                   <div className="pt-4">
                     <p className="text-xs text-muted-foreground mb-2">
                       Students
                     </p>
-                    <Link
-                      href="/students"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      All Students
-                    </Link>
-                    <Link
-                      href="/students/create"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Create Student
-                    </Link>
+                    <DialogClose asChild>
+                      <Link
+                        href="/students"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        All Students
+                      </Link>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Link
+                        href="/students/create"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Create Student
+                      </Link>
+                    </DialogClose>
                   </div>
 
                   <div className="pt-4">
                     <p className="text-xs text-muted-foreground mb-2 inline-flex items-center gap-1">
                       <BarChart2 className="h-4 w-4" /> Analytics
                     </p>
-                    <Link
-                      href="/analytics/student-tag-report/excel-upload"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Upload Student Tag Excel
-                    </Link>
+                    <DialogClose asChild>
+                      <Link
+                        href="/analytics/student-tag-report/excel-upload"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Upload Student Tag Excel
+                      </Link>
+                    </DialogClose>
                     <div className="mt-3 space-y-2">
                       <p className="text-xs text-muted-foreground">
                         Student Tag Report
@@ -569,9 +610,11 @@ export default function SiteHeader() {
                           placeholder="responseId"
                           className="h-9"
                         />
-                        <Button type="submit" size="sm">
-                          Go
-                        </Button>
+                        <DialogClose asChild>
+                          <Button type="submit" size="sm">
+                            Go
+                          </Button>
+                        </DialogClose>
                       </form>
                     </div>
                     <div className="mt-3 space-y-2">
@@ -595,9 +638,11 @@ export default function SiteHeader() {
                           placeholder="paperId"
                           className="h-9"
                         />
-                        <Button type="submit" size="sm">
-                          Go
-                        </Button>
+                        <DialogClose asChild>
+                          <Button type="submit" size="sm">
+                            Go
+                          </Button>
+                        </DialogClose>
                       </form>
                     </div>
                   </div>
@@ -607,49 +652,61 @@ export default function SiteHeader() {
                       <Users2 className="h-4 w-4" /> Manage
                     </p>
                     <p className="text-xs text-muted-foreground">Classes</p>
-                    <Link
-                      href="/manage/classes"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      All Classes
-                    </Link>
-                    <Link
-                      href="/manage/classes/create"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Create Class
-                    </Link>
+                    <DialogClose asChild>
+                      <Link
+                        href="/manage/classes"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        All Classes
+                      </Link>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Link
+                        href="/manage/classes/create"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Create Class
+                      </Link>
+                    </DialogClose>
                     <p className="text-xs text-muted-foreground mt-3">Users</p>
-                    <Link
-                      href="/manage/users"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      All Users
-                    </Link>
-                    <Link
-                      href="/manage/users/create"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Create User
-                    </Link>
+                    <DialogClose asChild>
+                      <Link
+                        href="/manage/users"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        All Users
+                      </Link>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Link
+                        href="/manage/users/create"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Create User
+                      </Link>
+                    </DialogClose>
                   </div>
 
                   <div className="pt-4">
                     <p className="text-xs text-muted-foreground mb-2 inline-flex items-center gap-1">
                       <Upload className="h-4 w-4" /> Tools
                     </p>
-                    <Link
-                      href="/upload"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Upload
-                    </Link>
-                    <Link
-                      href="/upload/getjson"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Get JSON
-                    </Link>
+                    <DialogClose asChild>
+                      <Link
+                        href="/upload"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Upload
+                      </Link>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Link
+                        href="/upload/getjson"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Get JSON
+                      </Link>
+                    </DialogClose>
                   </div>
                 </div>
               </div>
@@ -658,8 +715,12 @@ export default function SiteHeader() {
         </div>
       </div>
       {mounted && !schoolKey && (
-        <div suppressHydrationWarning className="bg-yellow-100 p-2 text-center text-sm">
-          Please select a school in the navbar to access tenant-specific content.
+        <div
+          suppressHydrationWarning
+          className="bg-yellow-100 p-2 text-center text-sm"
+        >
+          Please select a school in the navbar to access tenant-specific
+          content.
         </div>
       )}
     </header>
