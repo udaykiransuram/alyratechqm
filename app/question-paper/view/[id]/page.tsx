@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { notFound } from 'next/navigation';
 import { cookies, headers } from 'next/headers';
 import Link from 'next/link';
@@ -9,10 +10,10 @@ import QuestionItemClient from '@/components/QuestionItemClient';
 import { Button } from '@/components/ui/button';
 import { QuestionPaperToolbar } from "@/components/QuestionPaperToolbar";
 
-async function getQuestionPaper(id: string) {
+async function getQuestionPaper(id: string, searchSchool?: string) {
   try {
     // Build absolute URL for server-side fetch and forward tenant key
-    const schoolKey = cookies().get('schoolKey')?.value || '';
+    const schoolKey = searchSchool || cookies().get('schoolKey')?.value || '';
     const qs = schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : '';
     const hdrs = headers();
     const proto = hdrs.get('x-forwarded-proto') ?? 'http';
@@ -31,12 +32,24 @@ async function getQuestionPaper(id: string) {
   }
 }
 
-export default async function ViewQuestionPaperPage({ params }: { params: { id: string } }) {
-  const paper = await getQuestionPaper(params.id);
+export default async function ViewQuestionPaperPage({ params, searchParams }: { params: { id: string }; searchParams: { school?: string } }) {
+  const schoolKey = searchParams.school || cookies().get('schoolKey')?.value || '';
+  const paper = await getQuestionPaper(params.id, searchParams.school);
 
-  if (!paper) {
-    notFound();
-  }
+    if (!schoolKey) {
+      return (
+        <div className="container p-8 text-center">
+          <h1 className="text-2xl font-bold mb-4">No School Selected</h1>
+          <p>Please select a school first to view question papers.</p>
+          <Link href="/">
+            <Button className="mt-4">Go to Home</Button>
+          </Link>
+        </div>
+      );
+    }
+    if (!paper) {
+      notFound();
+    }
 
   const summarySections = paper.sections.map((s: any) => ({
     id: s._id,
