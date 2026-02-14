@@ -87,6 +87,17 @@
         @apply bg-background text-foreground;
       }
 
+      /* Global responsive media defaults */
+      img, video, canvas, svg {
+        max-width: 100%;
+        height: auto;
+      }
+
+      /* Prevent accidental horizontal scroll on small screens */
+      html, body {
+        overflow-x: hidden;
+      }
+
       /* --- All Tiptap styles are now in this single block --- */
 
       /* Editor Core Styles */

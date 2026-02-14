@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
+import React, { useState } from "react";
 
 export default function BulkQuestionUploadPage() {
-  const [jsonText, setJsonText] = useState('');
+  const [jsonText, setJsonText] = useState("");
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export default function BulkQuestionUploadPage() {
       const text = await file.text();
       setJsonText(text);
     } catch (err) {
-      setError('Failed to read file');
+      setError("Failed to read file");
     }
   };
 
@@ -31,22 +31,22 @@ export default function BulkQuestionUploadPage() {
     try {
       json = JSON.parse(jsonText);
     } catch {
-      setError('Invalid JSON');
+      setError("Invalid JSON");
       setUploading(false);
       return;
     }
 
     try {
-      const res = await fetch('/api/questions/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/questions/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(json),
       });
       const data = await res.json();
       setResult(data);
-      if (!res.ok) setError(data.message || 'Upload failed');
+      if (!res.ok) setError(data.message || "Upload failed");
     } catch (err) {
-      setError('Network or server error');
+      setError("Network or server error");
     } finally {
       setUploading(false);
     }
@@ -54,8 +54,13 @@ export default function BulkQuestionUploadPage() {
 
   return (
     <div className="max-w-2xl mx-auto mt-12 bg-white shadow-lg rounded-xl p-8">
-      <h1 className="text-2xl font-bold mb-2 text-gray-800">Bulk Question Upload</h1>
-      <p className="mb-6 text-gray-500">Upload a JSON file or paste your JSON below to create multiple questions at once.</p>
+      <h1 className="text-2xl font-bold mb-2 text-gray-800">
+        Bulk Question Upload
+      </h1>
+      <p className="mb-6 text-gray-500">
+        Upload a JSON file or paste your JSON below to create multiple questions
+        at once.
+      </p>
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label className="block font-medium text-gray-700 mb-1">
@@ -75,8 +80,8 @@ export default function BulkQuestionUploadPage() {
               rows={10}
               className="w-full mt-2 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono text-sm"
               value={jsonText}
-              onChange={e => setJsonText(e.target.value)}
-              placeholder='Paste or edit your JSON here'
+              onChange={(e) => setJsonText(e.target.value)}
+              placeholder="Paste or edit your JSON here"
             />
           </label>
         </div>
@@ -85,7 +90,7 @@ export default function BulkQuestionUploadPage() {
           disabled={uploading}
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow disabled:opacity-60"
         >
-          {uploading ? 'Uploading...' : 'Upload'}
+          {uploading ? "Uploading..." : "Upload"}
         </button>
       </form>
       {error && (
@@ -97,33 +102,37 @@ export default function BulkQuestionUploadPage() {
         <div className="mt-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
           <strong>Bulk creation completed!</strong>
           <div className="mt-2">
-            <table className="min-w-full text-sm">
-              <tbody>
-                <tr>
-                  <td className="pr-4 font-medium">Questions created:</td>
-                  <td>{result.createdQuestions?.length ?? 0}</td>
-                </tr>
-                <tr>
-                  <td className="pr-4 font-medium">Tags created:</td>
-                  <td>{result.createdTags?.length ?? 0}</td>
-                </tr>
-                <tr>
-                  <td className="pr-4 font-medium">Tag Types created:</td>
-                  <td>{result.createdTagTypes?.length ?? 0}</td>
-                </tr>
-                <tr>
-                  <td className="pr-4 font-medium">Subjects created:</td>
-                  <td>{result.createdSubjects?.length ?? 0}</td>
-                </tr>
-                <tr>
-                  <td className="pr-4 font-medium">Classes created:</td>
-                  <td>{result.createdClasses?.length ?? 0}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="overflow-x-auto rounded-md">
+              <table className="min-w-[360px] w-full text-sm">
+                <tbody>
+                  <tr>
+                    <td className="pr-4 font-medium">Questions created:</td>
+                    <td>{result.createdQuestions?.length ?? 0}</td>
+                  </tr>
+                  <tr>
+                    <td className="pr-4 font-medium">Tags created:</td>
+                    <td>{result.createdTags?.length ?? 0}</td>
+                  </tr>
+                  <tr>
+                    <td className="pr-4 font-medium">Tag Types created:</td>
+                    <td>{result.createdTagTypes?.length ?? 0}</td>
+                  </tr>
+                  <tr>
+                    <td className="pr-4 font-medium">Subjects created:</td>
+                    <td>{result.createdSubjects?.length ?? 0}</td>
+                  </tr>
+                  <tr>
+                    <td className="pr-4 font-medium">Classes created:</td>
+                    <td>{result.createdClasses?.length ?? 0}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
           <details className="mt-4">
-            <summary className="cursor-pointer text-blue-700 underline">Show raw response</summary>
+            <summary className="cursor-pointer text-blue-700 underline">
+              Show raw response
+            </summary>
             <pre className="mt-2 bg-gray-100 rounded p-3 text-xs overflow-x-auto">
               {JSON.stringify(result, null, 2)}
             </pre>
