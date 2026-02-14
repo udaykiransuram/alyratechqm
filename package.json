@@ -11,7 +11,11 @@
     "lint": "next lint",
     "build-indexes": "ts-node scripts/build-indexes.ts",
     "build-tenant-indexes": "ts-node scripts/build-tenant-indexes.ts",
-    "predev": "node scripts/build-tenant-indexes.cjs || echo \"[predev] Skipping index build (DB unreachable)\""
+    "predev": "node scripts/build-tenant-indexes.cjs || echo \"[predev] Skipping index build (DB unreachable)\"",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:seed": "ts-node scripts/seed-test-data.ts"
   },
   "keywords": [
     "nextjs",
@@ -97,6 +101,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.45.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/bcryptjs": "^2.4.6",
     "@types/date-fns": "^2.5.3",
