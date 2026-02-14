@@ -25,7 +25,11 @@ export default function QuestionPapersListPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    fetch('/api/question-papers', { cache: 'no-store' })
+    const schoolKey = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/)?.[1] || '';
+    fetch('/api/question-papers' + (schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : ''), {
+      cache: 'no-store',
+      headers: schoolKey ? { 'x-school-key': schoolKey } : {}
+    })
       .then(res => res.json())
       .then(data => {
         if (data.success) {
