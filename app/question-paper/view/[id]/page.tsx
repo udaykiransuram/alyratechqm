@@ -1,6 +1,5 @@
 "use client";
 import { notFound } from 'next/navigation';
-import { cookies, headers } from 'next/headers';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +22,6 @@ async function getQuestionPaper(id: string, searchSchool?: string) {
     // Build absolute URL for server-side fetch and forward tenant key
     const schoolKey = searchSchool || getSchoolKey();
     const qs = schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : '';
-    const hdrs = headers();
     const baseUrl = window.location.origin;
     const res = await fetch(`${baseUrl}/api/question-papers/${id}${qs}`, {
       cache: 'no-store',
