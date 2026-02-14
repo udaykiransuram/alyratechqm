@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic';
+"use client";
 import { notFound } from 'next/navigation';
 import { cookies, headers } from 'next/headers';
 import Link from 'next/link';
@@ -9,48 +9,58 @@ import { PrintEditToolbar } from '@/components/PrintEditToolbar';
 import QuestionItemClient from '@/components/QuestionItemClient';
 import { Button } from '@/components/ui/button';
 import { QuestionPaperToolbar } from "@/components/QuestionPaperToolbar";
+import { useEffect, useState } from 'react';
+
+function getSchoolKey() {
+  try {
+    const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
+    return m && m[1] ? m[1] : '';
+  } catch { return ''; }
+}
 
 async function getQuestionPaper(id: string, searchSchool?: string) {
   try {
     // Build absolute URL for server-side fetch and forward tenant key
-    const schoolKey = searchSchool || cookies().get('schoolKey')?.value || '';
+    const schoolKey = searchSchool || getSchoolKey();
     const qs = schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : '';
     const hdrs = headers();
-    const proto = hdrs.get('x-forwarded-proto') ?? 'http';
-    const host = hdrs.get('host') ?? 'localhost:3000';
-    const baseUrl = `${proto}://${host}`;
+    const baseUrl = window.location.origin;
     const res = await fetch(`${baseUrl}/api/question-papers/${id}${qs}`, {
       cache: 'no-store',
       headers: schoolKey ? { 'x-school-key': schoolKey } : {}
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.paper;
+    return data.success ? data.paper : null;
   } catch (error) {
     console.error("Failed to fetch question paper:", error);
     return null;
   }
 }
 
-export default async function ViewQuestionPaperPage({ params, searchParams }: { params: { id: string }; searchParams: { school?: string } }) {
-  const schoolKey = searchParams.school || cookies().get('schoolKey')?.value || '';
-  const paper = await getQuestionPaper(params.id, searchParams.school);
+export default function ViewQuestionPaperPage({ params, searchParams }: { params: { id: string }; searchParams: { school?: string } }) {
+  const [paper, setPaper] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    if (!schoolKey) {
-      return (
-        <div className="container p-8 text-center">
-          <h1 className="text-2xl font-bold mb-4">No School Selected</h1>
-          <p>Please select a school first to view question papers.</p>
-          <Link href="/">
-            <Button className="mt-4">Go to Home</Button>
-          </Link>
-        </div>
-      );
-    }
-    if (!paper) {
-      notFound();
-    }
+  useEffect(() => {
+    const fetchPaper = async () => {
+      setLoading(true);
+      try {
+        const fetchedPaper = await getQuestionPaper(params.id, searchParams.school);
+        setPaper(fetchedPaper);
+      } catch (err) {
+        setError('Failed to load question paper.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPaper();
+  }, [params.id, searchParams.school]);
 
+  if (loading) return <div className="container p-8 text-center">Loading...</div>;
+  if (error) return <div className="container p-8 text-center text-destructive">{error}</div>;
+  if (!paper) return notFound();
   const summarySections = paper.sections.map((s: any) => ({
     id: s._id,
     name: s.name,
