@@ -23,6 +23,7 @@ export default function QuestionPapersListPage() {
   const [zipLoading, setZipLoading] = useState(false);
   const [excelLoadingId, setExcelLoadingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [schoolKey, setSchoolKey] = useState('');
 
   useEffect(() => {
     const schoolKey = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/)?.[1] || '';
@@ -43,6 +44,10 @@ export default function QuestionPapersListPage() {
         setError('An unexpected error occurred while fetching data.');
         setLoading(false);
       });
+  }, []);
+  useEffect(() => {
+    const cookieSchoolKey = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/)?.[1] || '';
+    setSchoolKey(cookieSchoolKey);
   }, []);
 
   const handleDelete = async (id: string) => {
@@ -249,7 +254,7 @@ export default function QuestionPapersListPage() {
                     <TableCell>{paper.createdAt ? new Date(paper.createdAt).toLocaleDateString() : '-'}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
-                        <Link href={`/question-paper/view/${paper._id}`}><Button variant="outline" size="sm">View</Button></Link>
+                        <Link href={`/question-paper/view/${paper._id}${schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : ''}`}><Button variant="outline" size="sm">View</Button></Link>
                         <Link href={`/question-paper/${paper._id}/responses`}><Button variant="outline" size="sm">Responses</Button></Link>
                         <Link href={`/analytics/student-tag-report/excel-upload?paperId=${paper._id}`}><Button variant="outline" size="sm">Upload Excel</Button></Link>
                         <Link href={`/analytics/class-tag-report/${paper._id}`} prefetch={false}><Button size="sm">Class Analytics</Button></Link>
