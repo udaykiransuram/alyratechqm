@@ -27,7 +27,7 @@ export default function QuestionPapersListPage() {
 
   useEffect(() => {
     const schoolKey = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/)?.[1] || '';
-    fetch('/api/question-papers' + (schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : ''), {
+    fetch('/api/question-papers', {
       cache: 'no-store',
       headers: schoolKey ? { 'x-school-key': schoolKey } : {}
     })
@@ -254,7 +254,7 @@ export default function QuestionPapersListPage() {
                     <TableCell>{paper.createdAt ? new Date(paper.createdAt).toLocaleDateString() : '-'}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
-                        <Link href={`/question-paper/view/${paper._id}${schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : ''}`}><Button variant="outline" size="sm">View</Button></Link>
+                        <Link href={`/question-paper/view/${paper._id}`}><Button variant="outline" size="sm">View</Button></Link>
                         <Link href={`/question-paper/${paper._id}/responses`}><Button variant="outline" size="sm">Responses</Button></Link>
                         <Link href={`/analytics/student-tag-report/excel-upload?paperId=${paper._id}`}><Button variant="outline" size="sm">Upload Excel</Button></Link>
                         <Link href={`/analytics/class-tag-report/${paper._id}`} prefetch={false}><Button size="sm">Class Analytics</Button></Link>

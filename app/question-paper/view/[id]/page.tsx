@@ -17,13 +17,11 @@ function getSchoolKey() {
   } catch { return ''; }
 }
 
-async function getQuestionPaper(id: string, searchSchool?: string) {
+async function getQuestionPaper(id: string) {
   try {
-    // Build absolute URL for server-side fetch and forward tenant key
-    const schoolKey = searchSchool || getSchoolKey();
-    const qs = schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : '';
+    const schoolKey = getSchoolKey();
     const baseUrl = window.location.origin;
-    const res = await fetch(`${baseUrl}/api/question-papers/${id}${qs}`, {
+    const res = await fetch(`${baseUrl}/api/question-papers/${id}`, {
       cache: 'no-store',
       headers: schoolKey ? { 'x-school-key': schoolKey } : {}
     });
@@ -36,16 +34,21 @@ async function getQuestionPaper(id: string, searchSchool?: string) {
   }
 }
 
-export default function ViewQuestionPaperPage({ params, searchParams }: { params: { id: string }; searchParams: { school?: string } }) {
+export default function ViewQuestionPaperPage({ params }: { params: { id: string } }) {
   const [paper, setPaper] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [schoolKey, setSchoolKey] = useState(getSchoolKey());
 
   useEffect(() => {
     const fetchPaper = async () => {
+      if (!schoolKey) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
-        const fetchedPaper = await getQuestionPaper(params.id, searchParams.school);
+        const fetchedPaper = await getQuestionPaper(params.id);
         setPaper(fetchedPaper);
       } catch (err) {
         setError('Failed to load question paper.');
@@ -54,7 +57,16 @@ export default function ViewQuestionPaperPage({ params, searchParams }: { params
       }
     };
     fetchPaper();
-  }, [params.id, searchParams.school]);
+  }, [params.id, schoolKey]);
+
+  if (!schoolKey) {
+    return (
+      <div className="container p-8 text-center">
+        <h1 className="text-2xl font-bold mb-4">No School Selected</h1>
+        <p>Please select a school using the navbar to view this question paper.</p>
+      </div>
+    );
+  }
 
   if (loading) return <div className="container p-8 text-center">Loading...</div>;
   if (error) return <div className="container p-8 text-center text-destructive">{error}</div>;
