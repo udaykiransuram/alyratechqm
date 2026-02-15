@@ -25,14 +25,20 @@
       }
     ],
     "allowImportingTsExtensions": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "types": []
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "global.d.ts"
-, "postcss.config.js", "app/utils/extractQuestionsFromText.js"  ],
-  "exclude": ["node_modules"]
+    "global.d.ts",
+    "postcss.config.js",
+    "app/utils/extractQuestionsFromText.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "local-tests"
+  ]
 }

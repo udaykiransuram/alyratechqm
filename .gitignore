@@ -36,3 +36,8 @@ __pycache__/
 *.egg-info/
 *.test.js
 *.test.ts
+# Local-only Playwright tests and reports
+local-tests/
+playwright-report/
+test-results/
+blob-report/
