@@ -7,7 +7,10 @@ import ReportHeader from "@/components/analytics/ReportHeader";
 import OptionTagModal from "@/components/analytics/OptionTagModal";
 import StatsTable from "@/components/analytics/StatsTable";
 import ChartView from "@/components/analytics/ChartView";
-import { sortStatsRows } from "@/components/analytics/helpers";
+import {
+  sortStatsRows,
+  computeInsightsForLastTag,
+} from "@/components/analytics/helpers";
 import QuestionListModal from "@/components/analytics/QuestionListModal";
 import AnalyticsExportControls from "@/components/analytics/AnalyticsExportControls";
 
@@ -59,6 +62,21 @@ export default function ClassTagReportPage({
   } | null>(null);
 
   const tableRef = useRef<HTMLDivElement>(null);
+
+  // Derived insights for last selected tag
+  const insights = React.useMemo(
+    () =>
+      stats && Array.isArray(groupBy) && groupBy.length
+        ? computeInsightsForLastTag(stats, groupBy, groupFields)
+        : [],
+    [stats, groupBy, groupFields],
+  );
+
+  const lastLabel = React.useMemo(() => {
+    if (!Array.isArray(groupBy) || groupBy.length === 0) return "Tag";
+    const last = groupBy[groupBy.length - 1];
+    return groupFields.find((f) => f.value === last)?.label || last || "Tag";
+  }, [groupBy, groupFields]);
 
   // Explicit tenant handling
   const [schoolKey, setSchoolKey] = useState<string>("");
@@ -303,6 +321,59 @@ export default function ClassTagReportPage({
             </button>
           </div>
         </div>
+
+        {insights && insights.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-slate-800">
+                Insights (Class • {lastLabel})
+              </h2>
+              <span className="text-xs text-slate-500">
+                Based on {lastLabel}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-100">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                      {lastLabel}
+                    </th>
+                    <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                      Fail (%)
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                      Category
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {insights.slice(0, 12).map((i) => (
+                    <tr
+                      key={i.tag}
+                      className="bg-white border-b border-slate-200"
+                    >
+                      <td className="px-4 py-2">{i.tag}</td>
+                      <td className="px-4 py-2 text-center font-medium text-red-600">
+                        {i.failPct}
+                      </td>
+                      <td className="px-4 py-2">{i.category}</td>
+                      <td className="px-4 py-2">{i.action}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {insights.length > 12 && (
+                <p className="text-xs text-slate-500 mt-2">
+                  Showing top 12. Refine grouping to focus further.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
         <div className="flex justify-center bg-slate-200 p-1 rounded-lg max-w-xs mx-auto">
           <button
             onClick={() => setView("table")}

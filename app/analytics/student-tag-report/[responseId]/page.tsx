@@ -10,6 +10,8 @@ import ChartView from "@/components/analytics/ChartView";
 import {
   sortStatsRows,
   getConsolidatedStudentList,
+  computeInsightsForLastTag,
+  buildStudentAreaMetrics,
 } from "@/components/analytics/helpers";
 import QuestionListModal from "@/components/analytics/QuestionListModal";
 import AnalyticsExportControls from "@/components/analytics/AnalyticsExportControls";
@@ -79,6 +81,147 @@ export default function StudentTagReportPage({
 
   const tableRef = useRef<HTMLDivElement>(null);
 
+  // For student vs class comparison
+  const [classStatsCompare, setClassStatsCompare] = useState<any>({});
+  // Pagination state: comparison table (student vs class)
+  const [cmpPage, setCmpPage] = useState(1);
+  const [cmpPageSize, setCmpPageSize] = useState(12);
+  const [cmpShowAll, setCmpShowAll] = useState(false);
+  // Pagination state: fallback/class-only insights table
+  const [insPage, setInsPage] = useState(1);
+  const [insPageSize, setInsPageSize] = useState(12);
+  const [insShowAll, setInsShowAll] = useState(false);
+
+  // Derived insights for panel (student vs class level)
+  const insights = React.useMemo(() => {
+    if (!stats || !Array.isArray(groupBy) || groupBy.length === 0)
+      return [] as Array<{
+        tag: string;
+        failPct: number;
+        category: string;
+        action: string;
+      }>;
+
+    if (classLevel) {
+      // Class insights using helper
+      return computeInsightsForLastTag(stats, groupBy, groupFields);
+    }
+
+    // Per-student insights derived from student area metrics
+    try {
+      const lastTag = groupBy[groupBy.length - 1];
+      const headerLabel =
+        groupFields.find((f) => f.value === lastTag)?.label || lastTag;
+      const metrics = buildStudentAreaMetrics(
+        stats,
+        groupBy,
+        groupFields,
+        { key: "", direction: "desc" },
+        { singleStudent: { name: student, roll: rollNumber } },
+      );
+      const key = `${rollNumber}|${student}`;
+      const entry = metrics.get(key);
+      const rows = entry?.rows || [];
+      const map = new Map<string, { total: number; fail: number }>();
+      for (const r of rows) {
+        const parts = String((r as any).area || "")
+          .split("/")
+          .map((s) => s.trim());
+        const lastPart = parts[parts.length - 1] || "";
+        const m = lastPart.match(/^([^:]+):\s*(.+)$/);
+        const val = m && m[1].trim() === headerLabel ? m[2].trim() : lastPart;
+        const agg = map.get(val) || { total: 0, fail: 0 };
+        agg.total += (r as any).total || 0;
+        const incorrect = (r as any).incorrect || 0;
+        const unattempted = (r as any).unattempted || 0;
+        agg.fail += incorrect + unattempted;
+        map.set(val, agg);
+      }
+      const rowsOut = Array.from(map.entries()).map(([tag, v]) => {
+        const pct =
+          v.total > 0 ? Number(((v.fail / v.total) * 100).toFixed(2)) : 0;
+        const category =
+          pct < 25
+            ? "Healthy"
+            : pct < 40
+              ? "Needs Attention"
+              : pct < 50
+                ? "Re-teach Recommended"
+                : "Re-teach Mandatory";
+        const action =
+          category === "Healthy"
+            ? "No re-teach; offer enrichment or quick doubt clearing."
+            : category === "Needs Attention"
+              ? "Targeted revision; revisit tricky steps and misconceptions."
+              : category === "Re-teach Recommended"
+                ? "Partial re-teach; try different explanations and more examples."
+                : "Full re-teach; restart fundamentals with visuals/analogies.";
+        return { tag, failPct: pct, category, action };
+      });
+      rowsOut.sort((a, b) => b.failPct - a.failPct);
+      return rowsOut;
+    } catch {
+      return [] as any[];
+    }
+  }, [stats, groupBy, groupFields, classLevel, student, rollNumber]);
+
+  const lastLabel = React.useMemo(() => {
+    if (!Array.isArray(groupBy) || groupBy.length === 0) return "Tag";
+    const last = groupBy[groupBy.length - 1];
+    return groupFields.find((f) => f.value === last)?.label || last || "Tag";
+  }, [groupBy, groupFields]);
+
+  // Compute class-only insights (for comparison when viewing a single student)
+  const classInsights = React.useMemo(() => {
+    if (!classStatsCompare || !Array.isArray(groupBy) || groupBy.length === 0)
+      return [] as Array<{ tag: string; failPct: number }>;
+    try {
+      return computeInsightsForLastTag(classStatsCompare, groupBy, groupFields);
+    } catch {
+      return [] as any[];
+    }
+  }, [classStatsCompare, groupBy, groupFields]);
+
+  // Merge student vs class for comparison table (only in single-student mode)
+  const compareRows = React.useMemo(() => {
+    if (classLevel)
+      return [] as Array<{
+        tag: string;
+        studentCorrect: number | null;
+        classCorrect: number | null;
+        gap: number | null;
+        category: string;
+        action: string;
+      }>;
+    const clsMap = new Map<string, number>(); // tag -> class fail %
+    (classInsights || []).forEach((c) => clsMap.set(c.tag, c.failPct));
+    const rows = (insights || []).map((s: any) => {
+      const studentCorrect = Number((100 - (s.failPct || 0)).toFixed(2));
+      const cFail = clsMap.has(s.tag) ? (clsMap.get(s.tag) as number) : null;
+      const classCorrect =
+        cFail === null ? null : Number((100 - cFail).toFixed(2));
+      const gap =
+        classCorrect === null
+          ? null
+          : Number((studentCorrect - classCorrect).toFixed(2));
+      return {
+        tag: s.tag as string,
+        studentCorrect,
+        classCorrect,
+        gap,
+        category: s.category as string,
+        action: s.action as string,
+      };
+    });
+    // Sort worst gap first (most negative)
+    rows.sort((a, b) => {
+      const ag = a.gap ?? Infinity;
+      const bg = b.gap ?? Infinity;
+      return ag - bg;
+    });
+    return rows;
+  }, [classLevel, classInsights, insights]);
+
   useEffect(() => {
     (async () => {
       const sk = getSchoolFromCookie();
@@ -130,6 +273,12 @@ export default function StudentTagReportPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupBy, hasFetchedOnce]);
 
+  // Reset pagination on key changes
+  useEffect(() => {
+    setCmpPage(1);
+    setInsPage(1);
+  }, [groupBy, classLevel]);
+
   const handleOpenModal = (
     title: string,
     questionIds: any[],
@@ -170,6 +319,7 @@ export default function StudentTagReportPage({
       return;
     }
     searchParams.set("school", sk);
+    // Primary fetch (student or class depending on toggle)
     fetch(
       `/api/analytics/student-tag-report/${params.responseId}?${searchParams.toString()}`,
     )
@@ -186,6 +336,26 @@ export default function StudentTagReportPage({
       })
       .catch(() => setError("An unexpected network error occurred."))
       .finally(() => setLoading(false));
+
+    // Always prefetch class-level stats for comparison when in single-student mode
+    try {
+      const classParams = new URLSearchParams();
+      classParams.set("json", "1");
+      if (groupBy.length) classParams.set("groupBy", groupBy.join(","));
+      classParams.set("classLevel", "1");
+      classParams.set("school", sk);
+      fetch(
+        `/api/analytics/student-tag-report/${params.responseId}?${classParams.toString()}`,
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.success) setClassStatsCompare(data.stats || {});
+          else setClassStatsCompare({});
+        })
+        .catch(() => setClassStatsCompare({}));
+    } catch {
+      setClassStatsCompare({});
+    }
   };
 
   if (loading) return <LoadingState />;
@@ -349,6 +519,299 @@ export default function StudentTagReportPage({
             </button>
           </div>
         </div>
+
+        {!classLevel && compareRows.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-slate-800">
+                Insights (Student • {lastLabel})
+              </h2>
+              <span className="text-xs text-slate-500">
+                Based on {lastLabel}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              {(() => {
+                const total = compareRows.length;
+                const maxPage = Math.max(1, Math.ceil(total / cmpPageSize));
+                const safePage = Math.min(cmpPage, maxPage);
+                const start = (safePage - 1) * cmpPageSize;
+                const end = Math.min(total, start + cmpPageSize);
+                const visible = cmpShowAll
+                  ? compareRows
+                  : compareRows.slice(start, end);
+                const RangeInfo = () => (
+                  <span className="text-xs text-slate-500">
+                    {cmpShowAll
+                      ? `Showing all ${total}`
+                      : `Showing ${total === 0 ? 0 : start + 1}–${end} of ${total}`}
+                  </span>
+                );
+                return (
+                  <>
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-slate-100">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                            {lastLabel}
+                          </th>
+                          <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                            Student Correct (%)
+                          </th>
+                          <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                            Class Correct (%)
+                          </th>
+                          <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                            Gap (%)
+                          </th>
+                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                            Category
+                          </th>
+                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                            Action
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visible.map((r) => {
+                          const gapClass =
+                            r.gap == null
+                              ? "text-slate-500"
+                              : r.gap > 0
+                                ? "text-green-600"
+                                : r.gap < 0
+                                  ? "text-red-600"
+                                  : "text-slate-700";
+                          return (
+                            <tr
+                              key={r.tag}
+                              className="bg-white border-b border-slate-200"
+                            >
+                              <td className="px-4 py-2">{r.tag}</td>
+                              <td className="px-4 py-2 text-center">
+                                {r.studentCorrect?.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-2 text-center">
+                                {r.classCorrect == null
+                                  ? "-"
+                                  : r.classCorrect.toFixed(2)}
+                              </td>
+                              <td
+                                className={`px-4 py-2 text-center font-medium ${gapClass}`}
+                              >
+                                {r.gap == null ? "-" : r.gap.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-2">{r.category}</td>
+                              <td className="px-4 py-2">{r.action}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div className="flex items-center justify-between mt-3 gap-3">
+                      <div className="flex items-center gap-3">
+                        <label className="inline-flex items-center text-sm">
+                          <input
+                            type="checkbox"
+                            className="mr-2"
+                            checked={cmpShowAll}
+                            onChange={() => {
+                              setCmpShowAll((v) => !v);
+                              setCmpPage(1);
+                            }}
+                          />
+                          Show all
+                        </label>
+                        {!cmpShowAll && total > 0 && (
+                          <label className="inline-flex items-center text-sm">
+                            <span className="mr-2">Rows per page</span>
+                            <select
+                              className="border rounded px-2 py-1 text-sm"
+                              value={cmpPageSize}
+                              onChange={(e) => {
+                                setCmpPageSize(Number(e.target.value));
+                                setCmpPage(1);
+                              }}
+                            >
+                              {[10, 12, 25, 50].map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <RangeInfo />
+                        {!cmpShowAll && total > cmpPageSize && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="px-2 py-1 border rounded disabled:opacity-50"
+                              onClick={() =>
+                                setCmpPage((p) => Math.max(1, p - 1))
+                              }
+                              disabled={safePage <= 1}
+                            >
+                              Prev
+                            </button>
+                            <button
+                              type="button"
+                              className="px-2 py-1 border rounded disabled:opacity-50"
+                              onClick={() =>
+                                setCmpPage((p) => Math.min(maxPage, p + 1))
+                              }
+                              disabled={safePage >= maxPage}
+                            >
+                              Next
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {((classLevel && insights && insights.length > 0) ||
+          (!classLevel &&
+            compareRows.length === 0 &&
+            insights &&
+            insights.length > 0)) && (
+          <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-slate-800">
+                Insights ({classLevel ? "Class" : "Student"} • {lastLabel})
+              </h2>
+              <span className="text-xs text-slate-500">
+                Based on {lastLabel}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              {(() => {
+                const total = insights.length;
+                const maxPage = Math.max(1, Math.ceil(total / insPageSize));
+                const safePage = Math.min(insPage, maxPage);
+                const start = (safePage - 1) * insPageSize;
+                const end = Math.min(total, start + insPageSize);
+                const visible = insShowAll
+                  ? insights
+                  : insights.slice(start, end);
+                const RangeInfo = () => (
+                  <span className="text-xs text-slate-500">
+                    {insShowAll
+                      ? `Showing all ${total}`
+                      : `Showing ${total === 0 ? 0 : start + 1}–${end} of ${total}`}
+                  </span>
+                );
+                return (
+                  <>
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-slate-100">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                            {lastLabel}
+                          </th>
+                          <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                            Fail (%)
+                          </th>
+                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                            Category
+                          </th>
+                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                            Action
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visible.map((i) => (
+                          <tr
+                            key={i.tag}
+                            className="bg-white border-b border-slate-200"
+                          >
+                            <td className="px-4 py-2">{i.tag}</td>
+                            <td className="px-4 py-2 text-center font-medium text-red-600">
+                              {i.failPct}
+                            </td>
+                            <td className="px-4 py-2">{i.category}</td>
+                            <td className="px-4 py-2">{i.action}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="flex items-center justify-between mt-3 gap-3">
+                      <div className="flex items-center gap-3">
+                        <label className="inline-flex items-center text-sm">
+                          <input
+                            type="checkbox"
+                            className="mr-2"
+                            checked={insShowAll}
+                            onChange={() => {
+                              setInsShowAll((v) => !v);
+                              setInsPage(1);
+                            }}
+                          />
+                          Show all
+                        </label>
+                        {!insShowAll && total > 0 && (
+                          <label className="inline-flex items-center text-sm">
+                            <span className="mr-2">Rows per page</span>
+                            <select
+                              className="border rounded px-2 py-1 text-sm"
+                              value={insPageSize}
+                              onChange={(e) => {
+                                setInsPageSize(Number(e.target.value));
+                                setInsPage(1);
+                              }}
+                            >
+                              {[10, 12, 25, 50].map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <RangeInfo />
+                        {!insShowAll && total > insPageSize && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="px-2 py-1 border rounded disabled:opacity-50"
+                              onClick={() =>
+                                setInsPage((p) => Math.max(1, p - 1))
+                              }
+                              disabled={safePage <= 1}
+                            >
+                              Prev
+                            </button>
+                            <button
+                              type="button"
+                              className="px-2 py-1 border rounded disabled:opacity-50"
+                              onClick={() =>
+                                setInsPage((p) => Math.min(maxPage, p + 1))
+                              }
+                              disabled={safePage >= maxPage}
+                            >
+                              Next
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-center bg-slate-200 p-1 rounded-lg max-w-xs mx-auto">
           <button
             onClick={() => setView("table")}
