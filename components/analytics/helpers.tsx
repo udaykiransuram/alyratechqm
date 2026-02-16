@@ -1,28 +1,35 @@
-import * as XLSX from 'xlsx';
-import { generateClassAnalyticsExcel } from '@/components/analytics/AnalyticsExportControls';
+import * as XLSX from "xlsx";
+import { generateClassAnalyticsExcel } from "@/components/analytics/AnalyticsExportControls";
 
 export function getStatsSum(node: any, key: string): number {
-  if (!node || typeof node !== 'object') return 0;
-  if (typeof node[key] === 'number') return node[key];
+  if (!node || typeof node !== "object") return 0;
+  if (typeof node[key] === "number") return node[key];
   return Object.values(node)
-    .filter(v => typeof v === 'object' && v !== null)
+    .filter((v) => typeof v === "object" && v !== null)
     .reduce((sum, child) => sum + getStatsSum(child, key), 0);
 }
 
-export function getStatsStudents(node: any, key: string): { name: string; rollNumber: string }[] {
-  if (!node || typeof node !== 'object') return [];
+export function getStatsStudents(
+  node: any,
+  key: string,
+): { name: string; rollNumber: string }[] {
+  if (!node || typeof node !== "object") return [];
   if (Array.isArray(node[key])) return node[key];
   return Object.values(node)
-    .filter(v => typeof v === 'object' && v !== null)
-    .flatMap(child => getStatsStudents(child, key));
+    .filter((v) => typeof v === "object" && v !== null)
+    .flatMap((child) => getStatsStudents(child, key));
 }
 
-export function sortStatsRows(rows: any[], key: string, direction: 'asc' | 'desc') {
+export function sortStatsRows(
+  rows: any[],
+  key: string,
+  direction: "asc" | "desc",
+) {
   if (!key) return rows;
   return [...rows].sort((a, b) => {
     const aSum = getStatsSum(a, key);
     const bSum = getStatsSum(b, key);
-    return direction === 'asc' ? aSum - bSum : bSum - aSum;
+    return direction === "asc" ? aSum - bSum : bSum - aSum;
   });
 }
 
@@ -32,35 +39,49 @@ export function getGroupLabel(key: string, row: any, groupType?: string) {
 }
 
 export function aggregateStudentsByKey(root: any, key: string) {
-  const map = new Map<string, { name: string; rollNumber: string; count: number }>();
+  const map = new Map<
+    string,
+    { name: string; rollNumber: string; count: number }
+  >();
   function isQuestionNode(n: any) {
-    return n && typeof n === 'object' && (typeof n.id === 'string' || typeof n.number === 'number');
+    return (
+      n &&
+      typeof n === "object" &&
+      (typeof n.id === "string" || typeof n.number === "number")
+    );
   }
   function walk(n: any) {
-    if (!n || typeof n !== 'object') return;
+    if (!n || typeof n !== "object") return;
     if (isQuestionNode(n) && Array.isArray(n[key])) {
       n[key].forEach((s: any) => {
         const k = `${s.rollNumber}|${s.name}`;
-        const c = typeof s.count === 'number' ? s.count : 1;
-        if (!map.has(k)) map.set(k, { name: s.name, rollNumber: s.rollNumber, count: c });
+        const c = typeof s.count === "number" ? s.count : 1;
+        if (!map.has(k))
+          map.set(k, { name: s.name, rollNumber: s.rollNumber, count: c });
         else map.get(k)!.count += c;
       });
       return;
     }
     Object.values(n).forEach((child: any) => {
-      if (child && typeof child === 'object') walk(child);
+      if (child && typeof child === "object") walk(child);
     });
   }
   walk(root);
   return Array.from(map.values());
 }
 
-export function consolidateStudentCounts(students: { name: string; rollNumber: string; count?: number }[] = []) {
-  const map = new Map<string, { name: string; rollNumber: string; count: number }>();
-  students.forEach(s => {
+export function consolidateStudentCounts(
+  students: { name: string; rollNumber: string; count?: number }[] = [],
+) {
+  const map = new Map<
+    string,
+    { name: string; rollNumber: string; count: number }
+  >();
+  students.forEach((s) => {
     const key = `${s.rollNumber}|${s.name}`;
-    const c = typeof s.count === 'number' ? s.count : 1;
-    if (!map.has(key)) map.set(key, { name: s.name, rollNumber: s.rollNumber, count: c });
+    const c = typeof s.count === "number" ? s.count : 1;
+    if (!map.has(key))
+      map.set(key, { name: s.name, rollNumber: s.rollNumber, count: c });
     else map.get(key)!.count += c;
   });
   return Array.from(map.values());
@@ -68,21 +89,24 @@ export function consolidateStudentCounts(students: { name: string; rollNumber: s
 
 export function getConsolidatedStudentList(
   questionIds: any[] | undefined,
-  key: "correctStudents" | "incorrectStudents" | "unattemptedStudents"
+  key: "correctStudents" | "incorrectStudents" | "unattemptedStudents",
 ): string {
   if (!questionIds || questionIds.length === 0) return "";
   const all: { name: string; rollNumber: string }[] = [];
-  questionIds.forEach(q => {
+  questionIds.forEach((q) => {
     if (q[key]) all.push(...q[key]);
   });
-  const map = new Map<string, { name: string; rollNumber: string; count: number }>();
-  all.forEach(s => {
+  const map = new Map<
+    string,
+    { name: string; rollNumber: string; count: number }
+  >();
+  all.forEach((s) => {
     const k = `${s.rollNumber}|${s.name}`;
     if (!map.has(k)) map.set(k, { ...s, count: 1 });
     else map.get(k)!.count += 1;
   });
   return Array.from(map.values())
-    .map(s => `${s.name} (${s.rollNumber}) x${s.count}`)
+    .map((s) => `${s.name} (${s.rollNumber}) x${s.count}`)
     .join("; ");
 }
 
@@ -92,8 +116,8 @@ export function walkStatsTree(
   groupBy: string[],
   groupFields: { value: string; label: string }[],
   sortStatsRows: Function,
-  sortConfig: { key: string; direction: 'asc' | 'desc' },
-  callback: (node: any, groupPath: string[]) => void
+  sortConfig: { key: string; direction: "asc" | "desc" },
+  callback: (node: any, groupPath: string[]) => void,
 ) {
   function walk(node: any, groupPath: string[] = []) {
     if (!node || typeof node !== "object") return;
@@ -108,7 +132,11 @@ export function walkStatsTree(
       .filter(([key, value]) => typeof value === "object" && value !== null)
       .map(([key, value]) => ({ key, ...(value as Record<string, any>) }));
 
-    const sortedRows = sortStatsRows(rows, sortConfig.key, sortConfig.direction);
+    const sortedRows = sortStatsRows(
+      rows,
+      sortConfig.key,
+      sortConfig.direction,
+    );
 
     for (const row of sortedRows) {
       const childNode = node[row.key];
@@ -124,45 +152,80 @@ export function buildStudentAreaMetrics(
   stats: any,
   groupBy: string[],
   groupFields: { value: string; label: string }[],
-  sortConfig: { key: string; direction: 'asc' | 'desc' },
-  options?: { singleStudent?: { name: string; roll: string } }
+  sortConfig: { key: string; direction: "asc" | "desc" },
+  options?: { singleStudent?: { name: string; roll: string } },
 ) {
-  const studentMap = new Map<string, { name: string; roll: string; rows: Map<string, { area: string; correct: number; incorrect: number; unattempted: number; total: number }> }>();
+  const studentMap = new Map<
+    string,
+    {
+      name: string;
+      roll: string;
+      rows: Map<
+        string,
+        {
+          area: string;
+          correct: number;
+          incorrect: number;
+          unattempted: number;
+          total: number;
+        }
+      >;
+    }
+  >();
 
   function getGroupHeaders() {
-    return groupBy.map(g => {
-      const field = groupFields.find(f => f.value === g);
+    return groupBy.map((g) => {
+      const field = groupFields.find((f) => f.value === g);
       return field ? field.label : g;
     });
   }
 
   function walk(node: any, groupPath: string[] = []) {
-    if (!node || typeof node !== 'object') return;
+    if (!node || typeof node !== "object") return;
     // If this node has questionIds arrays, use them to count per-student
     const correctQ = node.correctQuestionIds;
     const incorrectQ = node.incorrectQuestionIds;
     const unattemptedQ = node.unattemptedQuestionIds;
-    const hasQuestions = Array.isArray(correctQ) || Array.isArray(incorrectQ) || Array.isArray(unattemptedQ);
+    const hasQuestions =
+      Array.isArray(correctQ) ||
+      Array.isArray(incorrectQ) ||
+      Array.isArray(unattemptedQ);
     if (hasQuestions) {
       const groupHeaders = getGroupHeaders();
       const areaLabel = groupPath.reduce((acc, val, idx) => {
         const header = groupHeaders[idx] || `Group${idx + 1}`;
         return acc.length ? `${acc} / ${header}: ${val}` : `${header}: ${val}`;
-      }, '');
+      }, "");
 
-      const bump = (name: string, roll: string, status: 'correct' | 'incorrect' | 'unattempted') => {
+      const bump = (
+        name: string,
+        roll: string,
+        status: "correct" | "incorrect" | "unattempted",
+      ) => {
         const key = `${roll}|${name}`;
-        if (!studentMap.has(key)) studentMap.set(key, { name, roll, rows: new Map() });
+        if (!studentMap.has(key))
+          studentMap.set(key, { name, roll, rows: new Map() });
         const entry = studentMap.get(key)!;
-        if (!entry.rows.has(areaLabel)) entry.rows.set(areaLabel, { area: areaLabel || 'Overall', correct: 0, incorrect: 0, unattempted: 0, total: 0 });
+        if (!entry.rows.has(areaLabel))
+          entry.rows.set(areaLabel, {
+            area: areaLabel || "Overall",
+            correct: 0,
+            incorrect: 0,
+            unattempted: 0,
+            total: 0,
+          });
         const row = entry.rows.get(areaLabel)!;
         row.total += 1;
-        if (status === 'correct') row.correct += 1;
-        else if (status === 'incorrect') row.incorrect += 1;
+        if (status === "correct") row.correct += 1;
+        else if (status === "incorrect") row.incorrect += 1;
         else row.unattempted += 1;
       };
 
-      const safeIter = (arr: any[] | undefined, key: 'correctStudents'|'incorrectStudents'|'unattemptedStudents', status: 'correct'|'incorrect'|'unattempted') => {
+      const safeIter = (
+        arr: any[] | undefined,
+        key: "correctStudents" | "incorrectStudents" | "unattemptedStudents",
+        status: "correct" | "incorrect" | "unattempted",
+      ) => {
         if (!Array.isArray(arr)) return;
         arr.forEach((q: any) => {
           const students = Array.isArray(q?.[key]) ? q[key] : [];
@@ -170,20 +233,41 @@ export function buildStudentAreaMetrics(
         });
       };
 
-      safeIter(correctQ, 'correctStudents', 'correct');
-      safeIter(incorrectQ, 'incorrectStudents', 'incorrect');
-      safeIter(unattemptedQ, 'unattemptedStudents', 'unattempted');
+      safeIter(correctQ, "correctStudents", "correct");
+      safeIter(incorrectQ, "incorrectStudents", "incorrect");
+      safeIter(unattemptedQ, "unattemptedStudents", "unattempted");
 
       // Fallback for single-student analytics where question objects do not contain per-student arrays
       if (options?.singleStudent) {
         const key = `${options.singleStudent.roll}|${options.singleStudent.name}`;
-        if (!studentMap.has(key)) studentMap.set(key, { name: options.singleStudent.name, roll: options.singleStudent.roll, rows: new Map() });
+        if (!studentMap.has(key))
+          studentMap.set(key, {
+            name: options.singleStudent.name,
+            roll: options.singleStudent.roll,
+            rows: new Map(),
+          });
         const entry = studentMap.get(key)!;
-        if (!entry.rows.has(areaLabel)) entry.rows.set(areaLabel, { area: areaLabel || 'Overall', correct: 0, incorrect: 0, unattempted: 0, total: 0 });
+        if (!entry.rows.has(areaLabel))
+          entry.rows.set(areaLabel, {
+            area: areaLabel || "Overall",
+            correct: 0,
+            incorrect: 0,
+            unattempted: 0,
+            total: 0,
+          });
         const row = entry.rows.get(areaLabel)!;
-        const correctCount = Math.max(0, typeof node.correct === 'number' ? node.correct : 0);
-        const incorrectCount = Math.max(0, typeof node.incorrect === 'number' ? node.incorrect : 0);
-        const unattemptedCount = Math.max(0, typeof node.unattempted === 'number' ? node.unattempted : 0);
+        const correctCount = Math.max(
+          0,
+          typeof node.correct === "number" ? node.correct : 0,
+        );
+        const incorrectCount = Math.max(
+          0,
+          typeof node.incorrect === "number" ? node.incorrect : 0,
+        );
+        const unattemptedCount = Math.max(
+          0,
+          typeof node.unattempted === "number" ? node.unattempted : 0,
+        );
         const totalCount = correctCount + incorrectCount + unattemptedCount;
         row.total += totalCount;
         row.correct += correctCount;
@@ -194,9 +278,13 @@ export function buildStudentAreaMetrics(
 
     // Recurse into children in a sorted manner
     const rows = Object.entries(node)
-      .filter(([key, value]) => typeof value === 'object' && value !== null)
+      .filter(([key, value]) => typeof value === "object" && value !== null)
       .map(([key, value]) => ({ key, ...(value as Record<string, any>) }));
-    const sortedRows = sortStatsRows(rows, sortConfig.key, sortConfig.direction);
+    const sortedRows = sortStatsRows(
+      rows,
+      sortConfig.key,
+      sortConfig.direction,
+    );
     for (const row of sortedRows) {
       const childNode = (node as any)[row.key];
       walk(childNode, [...groupPath, row.key]);
@@ -208,48 +296,180 @@ export function buildStudentAreaMetrics(
   // Finalize percent for each row
   return new Map(
     Array.from(studentMap.entries()).map(([k, v]) => {
-      const finalized = Array.from(v.rows.values()).map(r => ({
+      const finalized = Array.from(v.rows.values()).map((r) => ({
         area: r.area,
         correct: r.correct,
         incorrect: r.incorrect,
         unattempted: r.unattempted,
         total: r.total,
-        percent: r.total > 0 ? Number(((r.correct / r.total) * 100).toFixed(2)) : 0,
+        percent:
+          r.total > 0 ? Number(((r.correct / r.total) * 100).toFixed(2)) : 0,
       }));
       return [k, { name: v.name, roll: v.roll, rows: finalized }];
-    })
+    }),
   );
 }
 
-export async function downloadDefaultClassAnalyticsExcel(paperId: string, numTags: number = 5, returnBlob = false) {
-  const fieldsRes = await fetch(`/api/analytics/class-tag-report/${paperId}?groupFields=1`);
+export async function downloadDefaultClassAnalyticsExcel(
+  paperId: string,
+  numTags: number = 5,
+  returnBlob = false,
+) {
+  const fieldsRes = await fetch(
+    `/api/analytics/class-tag-report/${paperId}?groupFields=1`,
+  );
   const fieldsData = await fieldsRes.json();
   const groupFields = fieldsData.fields || [];
   const selectedFields = groupFields.slice(0, numTags).map((f: any) => f.value);
   const searchParams = new URLSearchParams();
-  searchParams.set('json', '1');
-  searchParams.set('groupBy', selectedFields.join(','));
-  const analyticsRes = await fetch(`/api/analytics/class-tag-report/${paperId}?${searchParams.toString()}`);
+  searchParams.set("json", "1");
+  searchParams.set("groupBy", selectedFields.join(","));
+  const analyticsRes = await fetch(
+    `/api/analytics/class-tag-report/${paperId}?${searchParams.toString()}`,
+  );
   const analyticsData = await analyticsRes.json();
   const stats = analyticsData.stats || {};
   // generate workbook and ensure correct typing; cast because generateClassAnalyticsExcel may be untyped
-  const workbook = (generateClassAnalyticsExcel(
+  const workbook = generateClassAnalyticsExcel(
     stats,
     selectedFields,
     groupFields,
-    { key: '', direction: 'desc' },
-    'class_analytics_default.xlsx'
-  ) as unknown) as XLSX.WorkBook;
-  const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    { key: "", direction: "desc" },
+    "class_analytics_default.xlsx",
+  ) as unknown as XLSX.WorkBook;
+  const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([wbout], { type: "application/octet-stream" });
   if (returnBlob) return blob;
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
-  a.download = 'class_analytics_default.xlsx';
+  a.download = "class_analytics_default.xlsx";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
+// -------------------------
+// Insights (last selected tag)
+// -------------------------
+
+export type Insight = {
+  tag: string;
+  failPct: number; // 0..100
+  category:
+    | "Healthy"
+    | "Needs Attention"
+    | "Re-teach Recommended"
+    | "Re-teach Mandatory";
+  action: string;
+};
+
+export type InsightThresholds = {
+  healthyMax: number; // e.g., 25
+  needsAttentionMax: number; // e.g., 40
+  reteachRecommendedMax: number; // e.g., 50
+};
+
+const DEFAULT_THRESHOLDS: InsightThresholds = {
+  healthyMax: 25,
+  needsAttentionMax: 40,
+  reteachRecommendedMax: 50,
+};
+
+const ACTIONS: Record<Insight["category"], string> = {
+  Healthy: "No re-teach; offer enrichment or quick doubt clearing.",
+  "Needs Attention":
+    "Targeted revision; revisit tricky steps and misconceptions.",
+  "Re-teach Recommended":
+    "Partial re-teach; try different explanations and more examples.",
+  "Re-teach Mandatory":
+    "Full re-teach; restart fundamentals with visuals/analogies.",
+};
+
+function categorizeFailPct(
+  pct: number,
+  t: InsightThresholds = DEFAULT_THRESHOLDS,
+): Insight["category"] {
+  if (pct < t.healthyMax) return "Healthy";
+  if (pct < t.needsAttentionMax) return "Needs Attention";
+  if (pct < t.reteachRecommendedMax) return "Re-teach Recommended";
+  return "Re-teach Mandatory";
+}
+
+// Compute insights for the last selected tag value across the stats tree (class mode)
+export function computeInsightsForLastTag(
+  stats: any,
+  groupBy: string[],
+  groupFields: { value: string; label: string }[],
+  thresholds: Partial<InsightThresholds> = {},
+): Insight[] {
+  if (!stats || !Array.isArray(groupBy) || groupBy.length === 0) return [];
+  const finalT: InsightThresholds = { ...DEFAULT_THRESHOLDS, ...thresholds };
+
+  const lastHeader = (() => {
+    const last = groupBy[groupBy.length - 1];
+    const f = groupFields.find((f) => f.value === last);
+    return f ? f.label : last;
+  })();
+
+  // Walk the tree and aggregate sums at depth == groupBy.length (leaf for last tag)
+  const bucket = new Map<
+    string,
+    { correct: number; incorrect: number; unattempted: number }
+  >();
+
+  function walk(node: any, depth: number, pathKeys: string[] = []) {
+    if (!node || typeof node !== "object") return;
+
+    const isAggregateNode =
+      typeof node.correct === "number" ||
+      typeof node.incorrect === "number" ||
+      typeof node.unattempted === "number";
+
+    if (depth === groupBy.length) {
+      // At last tag level; attempt to find the tag value from the path
+      const lastKey = pathKeys[pathKeys.length - 1] || "(unknown)";
+      const acc = bucket.get(lastKey) || {
+        correct: 0,
+        incorrect: 0,
+        unattempted: 0,
+      };
+      acc.correct += getStatsSum(node, "correct");
+      acc.incorrect += getStatsSum(node, "incorrect");
+      acc.unattempted += getStatsSum(node, "unattempted");
+      bucket.set(lastKey, acc);
+      return;
+    }
+
+    // Recurse children in a stable order
+    const entries = Object.entries(node)
+      .filter(([, v]) => v && typeof v === "object")
+      .sort(([a], [b]) => String(a).localeCompare(String(b)));
+    for (const [k, v] of entries) {
+      // If this looks like an aggregate (has correct/incorrect/unattempted) and not a group node,
+      // still continue to ensure we hit depth == groupBy.length
+      walk(v, depth + 1, [...pathKeys, k]);
+    }
+  }
+
+  walk(stats, 0, []);
+
+  // Build insights
+  const rows: Insight[] = [];
+  for (const [tag, sums] of bucket.entries()) {
+    const total = sums.correct + sums.incorrect + sums.unattempted;
+    const failPct =
+      total > 0
+        ? Number(
+            (((sums.incorrect + sums.unattempted) / total) * 100).toFixed(2),
+          )
+        : 0;
+    const category = categorizeFailPct(failPct, finalT);
+    rows.push({ tag, failPct, category, action: ACTIONS[category] });
+  }
+
+  // Sort worst-first
+  rows.sort((a, b) => b.failPct - a.failPct);
+  return rows;
+}
