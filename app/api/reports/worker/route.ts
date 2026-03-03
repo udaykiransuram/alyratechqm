@@ -9,8 +9,9 @@ import {
 } from "@/lib/whatsapp/meta";
 
 const MAX_PER_RUN = 10;
-const TEMPLATE_ONLY_MODE = process.env.WHATSAPP_TEMPLATE_ONLY === "true";
-const TEMPLATE_FIRST_MODE = process.env.WHATSAPP_SEND_TEMPLATE_FIRST === "true";
+// Force template-only mode for reliability during rollout/debugging.
+const TEMPLATE_ONLY_MODE = true;
+const TEMPLATE_FIRST_MODE = false;
 
 function isLikelyConversationWindowOrTemplatePolicyError(message: string) {
   const m = String(message || "").toLowerCase();
@@ -113,6 +114,9 @@ export async function POST(req: NextRequest) {
       job.nextRetryAt = undefined;
       job.reportUrl = reportUrl;
       job.providerMessageId = waRes?.messages?.[0]?.id;
+      job.deliveryStatus = "accepted";
+      job.deliveryError = undefined;
+      job.lastWebhookAt = new Date();
       if (sentVia === "template") {
         job.error = TEMPLATE_ONLY_MODE
           ? "Template-only mode enabled; sent approved template message"

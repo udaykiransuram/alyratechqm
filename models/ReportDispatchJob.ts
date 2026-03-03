@@ -15,6 +15,11 @@ export interface IReportDispatchJob extends Document {
   lastAttemptAt?: Date;
   reportUrl?: string;
   providerMessageId?: string;
+  deliveryStatus?: "accepted" | "sent" | "delivered" | "read" | "failed";
+  deliveryError?: string;
+  deliveredAt?: Date;
+  readAt?: Date;
+  lastWebhookAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,6 +45,15 @@ const ReportDispatchJobSchema = new Schema<IReportDispatchJob>(
     lastAttemptAt: { type: Date },
     reportUrl: { type: String },
     providerMessageId: { type: String },
+    deliveryStatus: {
+      type: String,
+      enum: ["accepted", "sent", "delivered", "read", "failed"],
+      index: true,
+    },
+    deliveryError: { type: String },
+    deliveredAt: { type: Date },
+    readAt: { type: Date },
+    lastWebhookAt: { type: Date },
   },
   { timestamps: true },
 );
