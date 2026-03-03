@@ -378,6 +378,12 @@ export default function SiteHeader() {
                     >
                       Create User
                     </Link>
+                    <Link
+                      href="/manage/reports"
+                      className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
+                    >
+                      Report Jobs
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -683,6 +689,14 @@ export default function SiteHeader() {
                         className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
                       >
                         Create User
+                      </Link>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Link
+                        href="/manage/reports"
+                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
+                      >
+                        Report Jobs
                       </Link>
                     </DialogClose>
                   </div>

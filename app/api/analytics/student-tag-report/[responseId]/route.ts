@@ -5,6 +5,7 @@ import QuestionPaperResponse from "@/models/QuestionPaperResponse";
 import QuestionPaper from "@/models/QuestionPaper";
 import PDFDocument from "pdfkit";
 import { Readable } from "stream";
+import path from "node:path";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import "@/models/User";
@@ -474,7 +475,9 @@ export async function GET(
     }
 
     // PDF generation (unchanged)
-    const doc = new PDFDocument();
+    const fontPath = path.join(process.cwd(), "fonts", "Roboto-Regular.ttf");
+    // Set font at constructor level so PDFKit does not try to initialize default Helvetica AFM
+    const doc = new PDFDocument({ font: fontPath });
     const stream = new Readable().wrap(doc);
 
     let buffers: Buffer[] = [];
@@ -500,26 +503,35 @@ export async function GET(
       });
     doc.moveDown();
 
-    Object.entries(stats).forEach(([subject, topics]) => {
-      doc.fontSize(15).text(`${subject}:`, { underline: true });
-      Object.entries(topics as Record<string, any>).forEach(
-        ([topic, tagTypes]) => {
-          doc.fontSize(13).text(`  ${topic}:`, { underline: true });
-          Object.entries(tagTypes as Record<string, any>).forEach(
-            ([tagTypeAndName, stat]) => {
-              doc
-                .fontSize(12)
-                .text(
-                  `    ${tagTypeAndName}: Correct: ${stat.correct}, Incorrect: ${stat.incorrect}`,
-                );
-              doc.moveDown();
-            },
+    const renderStatsNode = (node: any, depth = 0, label?: string) => {
+      if (!node || typeof node !== "object") return;
+
+      const hasCounts =
+        typeof node.correct === "number" && typeof node.incorrect === "number";
+
+      if (hasCounts) {
+        const prefix = "  ".repeat(Math.max(0, depth));
+        doc
+          .fontSize(12)
+          .text(
+            `${prefix}${label || "Total"}: Correct: ${node.correct}, Incorrect: ${node.incorrect}`,
           );
-          doc.moveDown();
-        },
-      );
-      doc.moveDown();
-    });
+        return;
+      }
+
+      Object.entries(node).forEach(([k, v]) => {
+        if (v && typeof v === "object") {
+          const prefix = "  ".repeat(Math.max(0, depth));
+          doc.fontSize(Math.max(11, 15 - depth)).text(`${prefix}${k}:`, {
+            underline: depth <= 1,
+          });
+          renderStatsNode(v, depth + 1, k);
+          doc.moveDown(0.3);
+        }
+      });
+    };
+
+    renderStatsNode(stats, 0);
 
     doc.end();
 
