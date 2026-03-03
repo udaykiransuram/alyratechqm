@@ -9,6 +9,8 @@ import {
 } from "@/lib/whatsapp/meta";
 
 const MAX_PER_RUN = 10;
+const TEMPLATE_ONLY_MODE = process.env.WHATSAPP_TEMPLATE_ONLY === "true";
+const TEMPLATE_FIRST_MODE = process.env.WHATSAPP_SEND_TEMPLATE_FIRST === "true";
 
 function isLikelyConversationWindowOrTemplatePolicyError(message: string) {
   const m = String(message || "").toLowerCase();
@@ -76,22 +78,34 @@ export async function POST(req: NextRequest) {
       const reportUrl = `${origin}${publicPath}`;
       let waRes: any;
       let sentVia: "document" | "template" = "document";
-      try {
-        waRes = await sendWhatsAppDocument({
-          to: job.mobileNumber,
-          link: reportUrl,
-          filename: `${(response as any).paper?.title || "student_report"}.pdf`,
-          caption: `Report for ${(response as any).student?.name || "student"}`,
-        });
-      } catch (docErr: any) {
-        const msg = docErr?.message || "Failed to send WhatsApp document";
-        if (!isLikelyConversationWindowOrTemplatePolicyError(msg)) {
-          throw docErr;
-        }
 
-        // Fallback: send approved template (default hello_world), useful when document send is blocked by policy/window.
+      // Optional modes for easier rollout/debugging in production.
+      if (TEMPLATE_ONLY_MODE) {
         waRes = await sendWhatsAppTemplate({ to: job.mobileNumber });
         sentVia = "template";
+      } else if (TEMPLATE_FIRST_MODE) {
+        waRes = await sendWhatsAppTemplate({ to: job.mobileNumber });
+        sentVia = "template";
+      }
+
+      if (sentVia !== "template" || !TEMPLATE_ONLY_MODE) {
+        try {
+          waRes = await sendWhatsAppDocument({
+            to: job.mobileNumber,
+            link: reportUrl,
+            filename: `${(response as any).paper?.title || "student_report"}.pdf`,
+            caption: `Report for ${(response as any).student?.name || "student"}`,
+          });
+        } catch (docErr: any) {
+          const msg = docErr?.message || "Failed to send WhatsApp document";
+          if (!isLikelyConversationWindowOrTemplatePolicyError(msg)) {
+            throw docErr;
+          }
+
+          // Fallback: send approved template (default hello_world), useful when document send is blocked by policy/window.
+          waRes = await sendWhatsAppTemplate({ to: job.mobileNumber });
+          sentVia = "template";
+        }
       }
 
       job.status = "sent";
@@ -100,8 +114,9 @@ export async function POST(req: NextRequest) {
       job.reportUrl = reportUrl;
       job.providerMessageId = waRes?.messages?.[0]?.id;
       if (sentVia === "template") {
-        job.error =
-          "Document delivery blocked by policy/window; fallback template sent successfully";
+        job.error = TEMPLATE_ONLY_MODE
+          ? "Template-only mode enabled; sent approved template message"
+          : "Document delivery blocked or skipped; template sent successfully";
       }
       await job.save();
       sent += 1;
