@@ -13,6 +13,12 @@ type Job = {
   maxAttempts?: number;
   updatedAt?: string;
   createdAt?: string;
+  providerMessageId?: string;
+  deliveryStatus?: "accepted" | "sent" | "delivered" | "read" | "failed";
+  deliveryError?: string;
+  deliveredAt?: string;
+  readAt?: string;
+  lastWebhookAt?: string;
 };
 
 function getSchoolKeyFromCookie() {
@@ -127,6 +133,7 @@ export default function ManageReportJobsPage() {
           <thead className="bg-slate-100">
             <tr>
               <th className="px-3 py-2 text-left">Status</th>
+              <th className="px-3 py-2 text-left">WA Delivery</th>
               <th className="px-3 py-2 text-left">Type</th>
               <th className="px-3 py-2 text-left">Mobile</th>
               <th className="px-3 py-2 text-left">Attempts</th>
@@ -139,6 +146,26 @@ export default function ManageReportJobsPage() {
             {jobs.map((job) => (
               <tr key={job._id} className="border-t">
                 <td className="px-3 py-2 capitalize">{job.status}</td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-col">
+                    <span className="capitalize">
+                      {job.deliveryStatus || "-"}
+                    </span>
+                    {job.deliveryError ? (
+                      <span className="text-xs text-red-600 truncate max-w-[280px]">
+                        {job.deliveryError}
+                      </span>
+                    ) : null}
+                    {job.providerMessageId ? (
+                      <span
+                        className="text-xs text-slate-500 truncate max-w-[280px]"
+                        title={job.providerMessageId}
+                      >
+                        {job.providerMessageId}
+                      </span>
+                    ) : null}
+                  </div>
+                </td>
                 <td className="px-3 py-2 capitalize">{job.type}</td>
                 <td className="px-3 py-2">{job.mobileNumber || "-"}</td>
                 <td className="px-3 py-2">
@@ -171,7 +198,7 @@ export default function ManageReportJobsPage() {
             {jobs.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-3 py-6 text-center text-slate-500"
                 >
                   No jobs found.
