@@ -29,6 +29,15 @@ export async function POST(req: NextRequest) {
   if (!name || !type) {
     return NextResponse.json({ success: false, message: 'Tag name and type ID are required.' }, { status: 400 });
   }
+  if (!mongoose.Types.ObjectId.isValid(String(type))) {
+    return NextResponse.json({ success: false, message: 'Invalid tag type ID.' }, { status: 400 });
+  }
+  if (Array.isArray(subjectIds) && subjectIds.length > 0) {
+    const invalidSubjectId = subjectIds.find((id: any) => !mongoose.Types.ObjectId.isValid(String(id)));
+    if (invalidSubjectId) {
+      return NextResponse.json({ success: false, message: `Invalid subject ID: ${invalidSubjectId}` }, { status: 400 });
+    }
+  }
 
   // First try with a transaction (Atlas / replica set). If not supported, fall back to non-transactional flow.
   let session: mongoose.ClientSession | null = null;
@@ -99,6 +108,9 @@ export async function GET(req: NextRequest) {
   const subjectId = url.searchParams.get('subjectId');
   try {
     if (subjectId) {
+      if (!mongoose.Types.ObjectId.isValid(subjectId)) {
+        return NextResponse.json({ success: false, message: 'Invalid subject ID' }, { status: 400 });
+      }
       const subject = await SubjectModel.findById(subjectId).populate({
         path: 'tags',
         populate: { path: 'type' }

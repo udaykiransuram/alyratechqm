@@ -29,9 +29,16 @@ export default function SchoolSwitcher() {
   const [form, setForm] = useState({ key: "", displayName: "" });
 
   async function load() {
-    const res = await fetch("/api/schools");
-    const json = await res.json();
-    if (json.success) setSchools(json.schools);
+    // Be resilient during e2e/CI where backend DB may be unavailable
+    try {
+      const res = await fetch("/api/schools").catch(() => null);
+      if (!res || !res.ok) return; // silently ignore errors
+      const json = await res.json().catch(() => null);
+      if (json?.success && Array.isArray(json.schools))
+        setSchools(json.schools);
+    } catch {
+      // swallow to avoid crashing nav during tests/offline
+    }
   }
   useEffect(() => {
     setMounted(true);

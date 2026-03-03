@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import ReportDispatchJob from "@/models/ReportDispatchJob";
+import ReportDispatchJob from "../../../../../../models/ReportDispatchJob";
 
 function normalizeMobileNumber(input: string): string {
   const digits = String(input || "").replace(/\D/g, "");

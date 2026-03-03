@@ -2,10 +2,7 @@ export const dynamic = 'force-dynamic';
 // app/api/subjects/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import Subject from '@/models/Subject';
-import Tag from '@/models/Tag'; // Import Tag model to validate tag IDs if provided
 import mongoose from 'mongoose';
-import { getTenantDb } from '@/lib/db-tenant'
 import { getTenantModels } from '@/lib/db-tenant';
 import '@/models/Subject';
 import '@/models/Tag';
@@ -54,16 +51,23 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, code, description, tags } = body;
 
+    const nameTrimmed = typeof name === 'string' ? name.trim() : '';
+    if (!nameTrimmed) {
+      return NextResponse.json({ success: false, message: 'Subject name is required.' }, { status: 400 });
+    }
+    const codeTrimmed = typeof code === 'string' ? code.trim() : '';
+    const descriptionTrimmed = typeof description === 'string' && description.trim() ? description.trim() : undefined;
+
     // Check if subject name already exists (case-insensitive)
-    const existingSubjectByName = await SubjectModel.findOne({ name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } });
+    const existingSubjectByName = await SubjectModel.findOne({ name: { $regex: new RegExp(`^${nameTrimmed}$`, 'i') } });
     if (existingSubjectByName) {
       return NextResponse.json({ success: false, message: 'A subject with this name already exists.' }, { status: 409 });
     }
 
     // ADDED: Check if subject code exists and is unique (if provided)
     let subjectCodeToSave = null;
-    if (code !== undefined && code !== null && code.trim() !== '') {
-      subjectCodeToSave = code.trim();
+    if (codeTrimmed !== '') {
+      subjectCodeToSave = codeTrimmed;
       const existingSubjectByCode = await SubjectModel.findOne({ code: { $regex: new RegExp(`^${subjectCodeToSave}$`, 'i') } });
       if (existingSubjectByCode) {
         return NextResponse.json({ success: false, message: 'A subject with this code already exists.' }, { status: 409 });
@@ -72,6 +76,10 @@ export async function POST(req: NextRequest) {
 
     let validTagIds: mongoose.Types.ObjectId[] = [];
     if (tags && Array.isArray(tags) && tags.length > 0) {
+      const invalidTag = tags.find((t: any) => !mongoose.Types.ObjectId.isValid(String(t)));
+      if (invalidTag) {
+        return NextResponse.json({ success: false, message: `Invalid tag ID: ${invalidTag}` }, { status: 400 });
+      }
       // Validate if the provided tag IDs actually exist in the Tag collection
       const foundTags = await TagModel.find({ _id: { $in: tags } }) as { _id: mongoose.Types.ObjectId }[];
       if (foundTags.length !== tags.length) {
@@ -81,9 +89,9 @@ export async function POST(req: NextRequest) {
     }
 
     const newSubject = new SubjectModel({
-      name: name.trim(), // Ensure name is trimmed
+      name: nameTrimmed, // Ensure name is trimmed
       code: subjectCodeToSave, // Use the validated/trimmed code
-      description: description ? description.trim() : undefined, // Trim description, or set to undefined if empty
+      description: descriptionTrimmed, // Trim description, or set to undefined if empty
       tags: validTagIds,
     });
 

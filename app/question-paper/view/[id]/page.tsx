@@ -1,44 +1,58 @@
 "use client";
-import { notFound } from 'next/navigation';
-import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { PaperSummary } from '@/components/PaperSummary';
-import { PrintEditToolbar } from '@/components/PrintEditToolbar';
-import QuestionItemClient from '@/components/QuestionItemClient';
-import { Button } from '@/components/ui/button';
+import Link from "next/link";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { PaperSummary } from "@/components/PaperSummary";
+import { PrintEditToolbar } from "@/components/PrintEditToolbar";
+import QuestionItemClient from "@/components/QuestionItemClient";
+import { Button } from "@/components/ui/button";
 import { QuestionPaperToolbar } from "@/components/QuestionPaperToolbar";
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 function getSchoolKey() {
   try {
     const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-    return m && m[1] ? m[1] : '';
-  } catch { return ''; }
-}
-
-async function getQuestionPaper(id: string) {
-  try {
-    const schoolKey = getSchoolKey();
-    const baseUrl = window.location.origin;
-    const res = await fetch(`${baseUrl}/api/question-papers/${id}`, {
-      cache: 'no-store',
-      headers: schoolKey ? { 'x-school-key': schoolKey } : {}
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.success ? data.paper : null;
-  } catch (error) {
-    console.error("Failed to fetch question paper:", error);
-    return null;
+    return m && m[1] ? m[1] : "";
+  } catch {
+    return "";
   }
 }
 
-export default function ViewQuestionPaperPage({ params }: { params: { id: string } }) {
+async function getQuestionPaper(id: string) {
+  const schoolKey = getSchoolKey();
+  const baseUrl = window.location.origin;
+  const res = await fetch(`${baseUrl}/api/question-papers/${id}`, {
+    cache: "no-store",
+    headers: schoolKey ? { "x-school-key": schoolKey } : {},
+  });
+
+  let data: any = null;
+  try {
+    data = await res.json();
+  } catch {}
+
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.message || "Failed to load question paper.");
+  }
+
+  return data.paper;
+}
+
+export default function ViewQuestionPaperPage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const [paper, setPaper] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [schoolKey, setSchoolKey] = useState(getSchoolKey());
+  const [schoolKey, setSchoolKey] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    setSchoolKey(getSchoolKey());
+  }, []);
 
   useEffect(() => {
     const fetchPaper = async () => {
@@ -50,8 +64,8 @@ export default function ViewQuestionPaperPage({ params }: { params: { id: string
       try {
         const fetchedPaper = await getQuestionPaper(params.id);
         setPaper(fetchedPaper);
-      } catch (err) {
-        setError('Failed to load question paper.');
+      } catch (err: any) {
+        setError(err?.message || "Failed to load question paper.");
       } finally {
         setLoading(false);
       }
@@ -59,18 +73,39 @@ export default function ViewQuestionPaperPage({ params }: { params: { id: string
     fetchPaper();
   }, [params.id, schoolKey]);
 
+  if (!mounted) {
+    return <div className="container p-8 text-center">Loading...</div>;
+  }
+
   if (!schoolKey) {
     return (
       <div className="container p-8 text-center">
         <h1 className="text-2xl font-bold mb-4">No School Selected</h1>
-        <p>Please select a school using the navbar to view this question paper.</p>
+        <p>
+          Please select a school using the navbar to view this question paper.
+        </p>
       </div>
     );
   }
 
-  if (loading) return <div className="container p-8 text-center">Loading...</div>;
-  if (error) return <div className="container p-8 text-center text-destructive">{error}</div>;
-  if (!paper) return notFound();
+  if (loading)
+    return <div className="container p-8 text-center">Loading...</div>;
+  if (error)
+    return (
+      <div className="container p-8 text-center text-destructive">{error}</div>
+    );
+  if (!paper)
+    return (
+      <div className="container p-8 text-center">
+        <h1 className="text-2xl font-bold mb-3">Question paper not found</h1>
+        <p className="text-muted-foreground mb-4">
+          This paper may not belong to the currently selected school.
+        </p>
+        <Link href="/question-paper" className="underline">
+          Back to Question Papers
+        </Link>
+      </div>
+    );
   const summarySections = paper.sections.map((s: any) => ({
     id: s._id,
     name: s.name,
@@ -95,28 +130,70 @@ export default function ViewQuestionPaperPage({ params }: { params: { id: string
 
           {paper.instructions && (
             <Card>
-              <CardHeader><CardTitle>Instructions</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>Instructions</CardTitle>
+              </CardHeader>
               <CardContent className="prose prose-sm max-w-none">
                 <p>{paper.instructions}</p>
               </CardContent>
             </Card>
           )}
 
+          <Card>
+            <CardHeader>
+              <CardTitle>Paper Details</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-muted-foreground">Class:</span>{" "}
+                <span className="font-medium">{paper.class?.name || "-"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Subject:</span>{" "}
+                <span className="font-medium">
+                  {paper.subject?.name || "-"}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Duration:</span>{" "}
+                <span className="font-medium">{paper.duration ?? "-"} min</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Passing Marks:</span>{" "}
+                <span className="font-medium">{paper.passingMarks ?? "-"}</span>
+              </div>
+            </CardContent>
+          </Card>
+
           {paper.sections.map((section: any, sectionIndex: number) => (
             <Card key={section._id || sectionIndex}>
               <CardHeader>
                 <CardTitle className="text-xl flex justify-between items-center">
                   <span>{`Section ${sectionIndex + 1}: ${section.name}`}</span>
-                  <Badge variant="secondary">{section.marks} Marks</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      {section.questions?.length || 0} Questions
+                    </Badge>
+                    <Badge variant="secondary">{section.marks} Marks</Badge>
+                  </div>
                 </CardTitle>
-                {section.description && <p className="text-sm text-muted-foreground pt-2">{section.description}</p>}
+                {section.description && (
+                  <p className="text-sm text-muted-foreground pt-2">
+                    {section.description}
+                  </p>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 {section.questions.map((q: any, qIndex: number) => (
-                  <div key={q.question._id || qIndex} className="border rounded p-3 bg-background">
+                  <div
+                    key={q.question._id || qIndex}
+                    className="border rounded p-3 bg-background"
+                  >
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <p className="font-semibold mb-2">Question {qIndex + 1}</p>
+                        <p className="font-semibold mb-2">
+                          Question {qIndex + 1}
+                        </p>
                         <QuestionItemClient
                           question={q.question}
                           readOnly
