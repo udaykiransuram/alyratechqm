@@ -169,7 +169,20 @@ export default function StudentDetailPage() {
         alert(data.message || "Failed to send report");
         return;
       }
-      alert("Report sent to parent WhatsApp successfully.");
+
+      // This endpoint queues background delivery; it does not guarantee immediate send.
+      if (data.queued) {
+        const queuedMsg =
+          data.message || "Report queued for background processing.";
+        const failureMsg = data?.lastFailure?.error
+          ? `\n\nLast delivery failure: ${data.lastFailure.error}`
+          : "";
+        alert(
+          `${queuedMsg}\nCurrent status: ${data.deliveryStatus || "queued"}.${failureMsg}`,
+        );
+      } else {
+        alert(data.message || "Request accepted.");
+      }
     } catch {
       alert("Failed to send report");
     } finally {

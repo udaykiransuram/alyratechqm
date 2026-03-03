@@ -38,6 +38,28 @@ export async function POST(
     );
   }
 
+  // Fast-fail config issues so UI does not show misleading "sent"/"queued" state
+  if (!process.env.WHATSAPP_ACCESS_TOKEN) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          "WhatsApp is not configured: WHATSAPP_ACCESS_TOKEN missing in environment",
+      },
+      { status: 500 },
+    );
+  }
+  if (!process.env.WHATSAPP_PHONE_NUMBER_ID) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          "WhatsApp is not configured: WHATSAPP_PHONE_NUMBER_ID missing in environment",
+      },
+      { status: 500 },
+    );
+  }
+
   const { QuestionPaperResponse: QPRModel } = await getTenantModels(schoolKey, [
     "QuestionPaperResponse",
     "User",
@@ -68,11 +90,30 @@ export async function POST(
     responseId: response._id,
     status: { $in: ["queued", "processing"] },
   }).lean();
+
+  const latestFailed = await ReportDispatchJob.findOne({
+    schoolKey,
+    responseId: response._id,
+    status: "failed",
+  })
+    .sort({ updatedAt: -1 })
+    .lean();
+
   if (existingQueued) {
     return NextResponse.json({
       success: true,
+      queued: true,
+      deliveryStatus: existingQueued.status,
       message: "Report already queued",
       jobId: existingQueued._id,
+      ...(latestFailed?.error
+        ? {
+            lastFailure: {
+              error: latestFailed.error,
+              updatedAt: latestFailed.updatedAt,
+            },
+          }
+        : {}),
     });
   }
 
@@ -92,7 +133,16 @@ export async function POST(
   return NextResponse.json({
     success: true,
     queued: true,
+    deliveryStatus: "queued",
     message: "Report queued for background processing",
     jobId: job._id,
+    ...(latestFailed?.error
+      ? {
+          lastFailure: {
+            error: latestFailed.error,
+            updatedAt: latestFailed.updatedAt,
+          },
+        }
+      : {}),
   });
 }
