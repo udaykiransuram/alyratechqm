@@ -5,7 +5,8 @@ import { ITag } from './Tag.ts';
 export interface ISubject extends Document {
   name: string;
   tags: ITag['_id'][];
-  code: string;
+  code?: string;
+  description?: string;
 }
 
 const SubjectSchema: Schema<ISubject> = new Schema(
@@ -21,9 +22,12 @@ const SubjectSchema: Schema<ISubject> = new Schema(
         ref: 'Tag',
       },
     ],
+    description: {
+      type: String,
+      trim: true,
+    },
     code: {
       type: String,
-      required: [true, 'Subject code is required.'],
       trim: true,
     },
   },

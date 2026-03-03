@@ -1,9 +1,29 @@
-import React from 'react';
-import QuestionPaperForm from '@/components/QuestionPaperForm';
+import React from "react";
+import { cookies, headers } from "next/headers";
+import QuestionPaperForm from "@/components/QuestionPaperForm";
 
 // Helper function to fetch data
 async function getQuestionPaper(id: string) {
-  const res = await fetch(`http://localhost:3000/api/question-papers/${id}`, { cache: 'no-store' });
+  const cookieStore = cookies();
+  const headerStore = headers();
+
+  const schoolKey = cookieStore.get("schoolKey")?.value || "";
+  const host =
+    headerStore.get("x-forwarded-host") ||
+    headerStore.get("host") ||
+    "localhost:3000";
+  const protocol = headerStore.get("x-forwarded-proto") || "http";
+  const baseUrl = `${protocol}://${host}`;
+
+  const res = await fetch(
+    `${baseUrl}/api/question-papers/${id}${schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : ""}`,
+    {
+      cache: "no-store",
+      headers: {
+        ...(schoolKey ? { "x-school-key": schoolKey } : {}),
+      },
+    },
+  );
   if (!res.ok) {
     return null;
   }
@@ -11,7 +31,11 @@ async function getQuestionPaper(id: string) {
   return data.paper;
 }
 
-export default async function EditQuestionPaperPage({ params }: { params: { id: string } }) {
+export default async function EditQuestionPaperPage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const rawData = await getQuestionPaper(params.id);
 
   if (!rawData) {
@@ -21,24 +45,24 @@ export default async function EditQuestionPaperPage({ params }: { params: { id: 
   // Defensive mapping for sections/questions
   const initialData = {
     _id: rawData._id, // <-- Add this line!
-    title: rawData.title ?? '',
-    instructions: rawData.instructions ?? '',
+    title: rawData.title ?? "",
+    instructions: rawData.instructions ?? "",
     duration: rawData.duration ?? 60,
     passingMarks: rawData.passingMarks ?? 0,
-    examDate: rawData.examDate ?? '',
-    classId: rawData.class?._id ?? '',
-    subjectId: rawData.subject?._id ?? '',
+    examDate: rawData.examDate ?? "",
+    classId: rawData.class?._id ?? "",
+    subjectId: rawData.subject?._id ?? "",
     sections: (rawData.sections || []).map((section: any) => ({
       id: section._id || `section-${Math.random()}`,
-      name: section.name ?? '',
-      description: section.description ?? '',
+      name: section.name ?? "",
+      description: section.description ?? "",
       defaultMarks: section.marks ?? 1,
       defaultNegativeMarks:
         Array.isArray(section.questions) && section.questions.length > 0
-          ? section.questions[0].negativeMarks ?? 0
+          ? (section.questions[0].negativeMarks ?? 0)
           : 0,
       questions: (section.questions || []).map((q: any) => {
-        const questionObj = typeof q.question === 'object' ? q.question : {};
+        const questionObj = typeof q.question === "object" ? q.question : {};
         return {
           question: questionObj,
           marks: q.marks ?? section.marks ?? 1,

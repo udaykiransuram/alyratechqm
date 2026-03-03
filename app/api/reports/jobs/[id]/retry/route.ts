@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
-import ReportDispatchJob from "@/models/ReportDispatchJob";
+import ReportDispatchJob from "../../../../../../models/ReportDispatchJob";
 import mongoose from "mongoose";
 
 function normalizeMobileNumber(input: string): string {

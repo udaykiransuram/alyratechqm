@@ -1,12 +1,19 @@
 // app/layout.tsx
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 import SiteHeader from "@/components/navigation/SiteHeader";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+// Use a locally bundled font to avoid external network fetches during CI/e2e builds
+// This prevents build failures when Google Fonts is unreachable.
+const inter = localFont({
+  src: "../fonts/Roboto-Regular.ttf",
+  variable: "--font-sans",
+  weight: "400",
+  style: "normal",
+});
 
 export const metadata: Metadata = {
   title: "Talent Test Platform",
@@ -26,7 +33,7 @@ export default function RootLayout({
       <body
         className={cn(
           "min-h-screen bg-background font-sans antialiased",
-          inter.variable
+          inter.variable,
         )}
       >
         <SiteHeader />

@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { MessageCircle } from "lucide-react";
 
 export default function QuestionPapersListPage() {
   const [papers, setPapers] = useState<any[]>([]);
@@ -35,6 +36,9 @@ export default function QuestionPapersListPage() {
   const [classFilter, setClassFilter] = useState<string>("All");
   const [zipLoading, setZipLoading] = useState(false);
   const [excelLoadingId, setExcelLoadingId] = useState<string | null>(null);
+  const [sendingReportsPaperId, setSendingReportsPaperId] = useState<
+    string | null
+  >(null);
   const [search, setSearch] = useState("");
   const [schoolKey, setSchoolKey] = useState("");
 
@@ -169,6 +173,32 @@ export default function QuestionPapersListPage() {
     a.click();
     URL.revokeObjectURL(url);
     setZipLoading(false);
+  };
+
+  const handleSendExamReports = async (paperId: string) => {
+    try {
+      setSendingReportsPaperId(paperId);
+      const res = await fetch(
+        `/api/reports/send/exam/${paperId}` +
+          (schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : ""),
+        {
+          method: "POST",
+          headers: schoolKey ? { "x-school-key": schoolKey } : {},
+        },
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.message || "Failed to queue exam reports");
+        return;
+      }
+      alert(
+        `Queued ${data.queued} report(s). Failed: ${data.failedCount || 0}`,
+      );
+    } catch {
+      alert("Failed to queue exam reports");
+    } finally {
+      setSendingReportsPaperId(null);
+    }
   };
 
   const classOptions = useMemo(
@@ -369,6 +399,18 @@ export default function QuestionPapersListPage() {
                         >
                           <Button size="sm">Class Analytics</Button>
                         </Link>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSendExamReports(paper._id)}
+                          disabled={sendingReportsPaperId === paper._id}
+                          className="text-green-700 border-green-300"
+                        >
+                          <MessageCircle className="h-4 w-4 mr-1" />
+                          {sendingReportsPaperId === paper._id
+                            ? "Sending…"
+                            : "Send Reports"}
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
