@@ -3,9 +3,24 @@ import { connectDB } from "@/lib/db";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 import { getTenantModels } from "@/lib/db-tenant";
 import { generateStudentReportPdfAndGetPublicUrl } from "@/lib/reports/studentReport";
-import { sendWhatsAppDocument } from "@/lib/whatsapp/meta";
+import {
+  sendWhatsAppDocument,
+  sendWhatsAppTemplate,
+} from "@/lib/whatsapp/meta";
 
 const MAX_PER_RUN = 10;
+
+function isLikelyConversationWindowOrTemplatePolicyError(message: string) {
+  const m = String(message || "").toLowerCase();
+  return (
+    m.includes("outside the allowed window") ||
+    (m.includes("24") && m.includes("hour")) ||
+    m.includes("re-engagement") ||
+    m.includes("template") ||
+    m.includes("not in allowed list") ||
+    m.includes("recipient phone number")
+  );
+}
 
 function backoffMinutes(attempts: number) {
   return Math.min(60, Math.pow(2, Math.max(0, attempts - 1)) * 2);
@@ -59,18 +74,35 @@ export async function POST(req: NextRequest) {
       });
 
       const reportUrl = `${origin}${publicPath}`;
-      const waRes = await sendWhatsAppDocument({
-        to: job.mobileNumber,
-        link: reportUrl,
-        filename: `${(response as any).paper?.title || "student_report"}.pdf`,
-        caption: `Report for ${(response as any).student?.name || "student"}`,
-      });
+      let waRes: any;
+      let sentVia: "document" | "template" = "document";
+      try {
+        waRes = await sendWhatsAppDocument({
+          to: job.mobileNumber,
+          link: reportUrl,
+          filename: `${(response as any).paper?.title || "student_report"}.pdf`,
+          caption: `Report for ${(response as any).student?.name || "student"}`,
+        });
+      } catch (docErr: any) {
+        const msg = docErr?.message || "Failed to send WhatsApp document";
+        if (!isLikelyConversationWindowOrTemplatePolicyError(msg)) {
+          throw docErr;
+        }
+
+        // Fallback: send approved template (default hello_world), useful when document send is blocked by policy/window.
+        waRes = await sendWhatsAppTemplate({ to: job.mobileNumber });
+        sentVia = "template";
+      }
 
       job.status = "sent";
       job.error = undefined;
       job.nextRetryAt = undefined;
       job.reportUrl = reportUrl;
       job.providerMessageId = waRes?.messages?.[0]?.id;
+      if (sentVia === "template") {
+        job.error =
+          "Document delivery blocked by policy/window; fallback template sent successfully";
+      }
       await job.save();
       sent += 1;
     } catch (error: any) {
