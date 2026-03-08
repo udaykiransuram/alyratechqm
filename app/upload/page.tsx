@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 export default function UploadPage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -17,7 +19,6 @@ export default function UploadPage() {
 
     setUploading(true);
     try {
-      // Change the URL in this fetch request
       const res = await fetch('/api/parse', {
         method: 'POST',
         body: formData,
@@ -33,29 +34,55 @@ export default function UploadPage() {
       const json = await res.json();
       setResponse(json);
       setStatus('Done!');
-    } catch (err) {
+    } catch {
       setStatus('Error uploading file');
     }
     setUploading(false);
   };
 
   return (
-    <div className="p-10 space-y-4">
-      <h1 className="text-2xl font-bold">Upload Question PDF</h1>
-      <input type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} />
-      <button
-        className="bg-blue-500 text-white px-4 py-2 rounded"
-        onClick={handleUpload}
-        disabled={uploading || !pdfFile}
-      >
-        {uploading ? 'Uploading...' : 'Extract Questions'}
-      </button>
-      {status && <div className="text-sm text-gray-600">{status}</div>}
-      {response && (
-        <pre className="bg-gray-100 p-4 mt-4 overflow-auto max-h-[500px]">
-          {JSON.stringify(response, null, 2)}
-        </pre>
-      )}
+    <div className="app-page-shell max-w-4xl px-4 py-6 sm:px-0">
+      <div className="app-page-header">
+        <h1 className="app-page-title">Upload Question PDF</h1>
+        <p className="app-page-subtitle">
+          Upload a PDF and extract question content into a structured format.
+        </p>
+      </div>
+
+      <Card className="app-surface">
+        <CardContent className="app-surface-body">
+          <div className="app-field-group">
+            <label className="app-field-label" htmlFor="questionPdf">
+              PDF File
+            </label>
+            <input
+              id="questionPdf"
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+              className="app-form-file"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={handleUpload} disabled={uploading || !pdfFile}>
+              {uploading ? 'Uploading...' : 'Extract Questions'}
+            </Button>
+            {status ? <p className="app-page-subtitle">{status}</p> : null}
+          </div>
+
+          {response ? (
+            <div className="app-section">
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                Extracted Response
+              </h2>
+              <pre className="max-h-[520px] overflow-auto rounded-xl bg-background p-4 text-sm text-foreground">
+                {JSON.stringify(response, null, 2)}
+              </pre>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -191,15 +190,15 @@ export default function StudentDetailPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Student Details</h1>
-          <p className="text-muted-foreground mt-1">
-            View information for a single student.
+    <div className="container py-6 space-y-6">
+      <div className="app-page-header-row">
+        <div className="app-page-header">
+          <h1 className="app-page-title">Student Details</h1>
+          <p className="app-page-subtitle">
+            View student profile information, enrollment data, and exam attempts.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link href="/students">
             <Button variant="outline">Back to Students</Button>
           </Link>
@@ -210,76 +209,69 @@ export default function StudentDetailPage() {
       </div>
 
       {loading ? (
-        <div className="text-sm text-muted-foreground">Loading…</div>
+        <div className="app-empty-state">Loading student details...</div>
       ) : error ? (
-        <div className="text-destructive">{error}</div>
+        <div className="app-feedback app-feedback-error">{error}</div>
       ) : !user ? (
-        <div className="text-muted-foreground">User not found.</div>
+        <div className="app-empty-state">User not found.</div>
       ) : (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+          <Card className="app-surface">
+            <CardHeader className="app-section-header">
+              <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-xl font-semibold tracking-tight">
                 <span>{user.name}</span>
-                <span className="text-sm font-normal text-muted-foreground">
-                  Role: {user.role}
+                <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  {user.role}
                 </span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs uppercase text-muted-foreground">
-                    Email
-                  </div>
-                  <div>{user.email || "-"}</div>
+            <CardContent className="app-section-body">
+              <div className="app-detail-grid">
+                <div className="app-detail-item">
+                  <div className="app-detail-label">Email</div>
+                  <div className="app-detail-value">{user.email || "-"}</div>
                 </div>
-                <div>
-                  <div className="text-xs uppercase text-muted-foreground">
-                    Class
-                  </div>
-                  <div>{className}</div>
+                <div className="app-detail-item">
+                  <div className="app-detail-label">Class</div>
+                  <div className="app-detail-value">{className}</div>
                 </div>
-                <div>
-                  <div className="text-xs uppercase text-muted-foreground">
-                    Roll Number
-                  </div>
-                  <div>{user.rollNumber || "-"}</div>
+                <div className="app-detail-item">
+                  <div className="app-detail-label">Roll Number</div>
+                  <div className="app-detail-value">{user.rollNumber || "-"}</div>
                 </div>
-                <div>
-                  <div className="text-xs uppercase text-muted-foreground">
-                    Enrolled At
-                  </div>
-                  <div>
+                <div className="app-detail-item">
+                  <div className="app-detail-label">Enrolled At</div>
+                  <div className="app-detail-value">
                     {user.enrolledAt
                       ? new Date(user.enrolledAt).toLocaleDateString()
                       : "-"}
                   </div>
                 </div>
-              </div>
-              <Separator />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-muted-foreground">
-                <div>
-                  Created:{" "}
-                  {user.createdAt
-                    ? new Date(user.createdAt).toLocaleString()
-                    : "-"}
+                <div className="app-detail-item">
+                  <div className="app-detail-label">Created</div>
+                  <div className="app-detail-value">
+                    {user.createdAt
+                      ? new Date(user.createdAt).toLocaleString()
+                      : "-"}
+                  </div>
                 </div>
-                <div>
-                  Updated:{" "}
-                  {user.updatedAt
-                    ? new Date(user.updatedAt).toLocaleString()
-                    : "-"}
+                <div className="app-detail-item">
+                  <div className="app-detail-label">Updated</div>
+                  <div className="app-detail-value">
+                    {user.updatedAt
+                      ? new Date(user.updatedAt).toLocaleString()
+                      : "-"}
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between text-xl font-semibold tracking-tight">
                 <span>Attempts ({totalAttempts})</span>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                   <span>
                     Page {page} of {maxPage}
                   </span>
@@ -302,13 +294,13 @@ export default function StudentDetailPage() {
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="app-section-body">
               {attemptsError ? (
-                <div className="text-destructive">{attemptsError}</div>
+                <div className="app-feedback app-feedback-error">{attemptsError}</div>
               ) : totalAttempts === 0 ? (
-                <div className="text-muted-foreground">No attempts found.</div>
+                <div className="app-empty-state">No attempts found.</div>
               ) : (
-                <div className="rounded-md border overflow-x-auto">
+                <div className="app-table-wrap">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -332,7 +324,7 @@ export default function StudentDetailPage() {
                           typeof (a.paper as any)?.subject === "object"
                             ? (a.paper as any)?.subject?.name || "-"
                             : (a.paper as any)?.subject || "-";
-                        const className =
+                        const currentClassName =
                           typeof (a.paper as any)?.class === "object"
                             ? (a.paper as any)?.class?.name || "-"
                             : (a.paper as any)?.class || "-";
@@ -345,11 +337,9 @@ export default function StudentDetailPage() {
                         const score = calcScore(a);
                         return (
                           <TableRow key={a._id}>
-                            <TableCell className="font-medium">
-                              {paperTitle}
-                            </TableCell>
+                            <TableCell className="font-medium">{paperTitle}</TableCell>
                             <TableCell>{subjectName}</TableCell>
-                            <TableCell>{className}</TableCell>
+                            <TableCell>{currentClassName}</TableCell>
                             <TableCell>{started}</TableCell>
                             <TableCell>{submitted}</TableCell>
                             <TableCell>
@@ -366,8 +356,7 @@ export default function StudentDetailPage() {
                             <TableCell>
                               {Array.isArray(a.sectionAnswers)
                                 ? a.sectionAnswers.reduce(
-                                    (sum, sec) =>
-                                      sum + (sec.answers?.length || 0),
+                                    (sum, sec) => sum + (sec.answers?.length || 0),
                                     0,
                                   )
                                 : 0}
@@ -375,19 +364,13 @@ export default function StudentDetailPage() {
                             <TableCell>{score}</TableCell>
                             <TableCell>
                               <div className="flex flex-wrap items-center gap-2">
-                                <Link
-                                  href={
-                                    "/analytics/student-tag-report/" + a._id
-                                  }
-                                >
+                                <Link href={"/analytics/student-tag-report/" + a._id}>
                                   <Button variant="outline" size="sm">
                                     Student Report
                                   </Button>
                                 </Link>
                                 <Link
-                                  href={
-                                    "/analytics/class-tag-report/" + paperId
-                                  }
+                                  href={"/analytics/class-tag-report/" + paperId}
                                   prefetch={false}
                                 >
                                   <Button size="sm">Class Report</Button>
@@ -402,9 +385,9 @@ export default function StudentDetailPage() {
                                   size="sm"
                                   onClick={() => handleSendStudentReport(a._id)}
                                   disabled={sendingResponseId === a._id}
-                                  className="text-green-700 border-green-300"
+                                  className="border-green-300 text-green-700"
                                 >
-                                  <MessageCircle className="h-4 w-4 mr-1" />
+                                  <MessageCircle className="mr-1 h-4 w-4" />
                                   {sendingResponseId === a._id
                                     ? "Sending…"
                                     : "Send Parent Report"}

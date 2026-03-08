@@ -4,17 +4,13 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Button }  from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, X } from 'lucide-react';
 import { PaperDetailsForm } from '@/components/PaperDetailsForm';
 import { PaperSummary } from '@/components/PaperSummary';
 import { SectionEditor } from '@/components/SectionEditor';
 import { Question, QuestionItem } from '@/components/question-items';
-import { EditQuestionModal } from '@/components/EditQuestionModal';
 import { QuestionFilterPopup } from '@/components/QuestionFilterPopup';
 import { useToast } from '@/components/ui/use-toast';
-import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import {
   Accordion,
@@ -22,7 +18,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface TagItem { _id: string; name: string; type: { name: string } }
 interface SubjectWithTags { _id: string; name: string; tags: TagItem[] }
@@ -95,10 +90,6 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<(string | number)[]>([]);
   const [modalSearch, setModalSearch] = useState('');
-
-  // Edit Question Modal State
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
 
   // Fetch initial data
   useEffect(() => {
@@ -175,6 +166,14 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
     () => sections.reduce((sum, s) => sum + s.questions.reduce((qsum, q) => qsum + q.marks, 0), 0),
     [sections]
   );
+  const totalQuestions = useMemo(
+    () => sections.reduce((sum, section) => sum + section.questions.length, 0),
+    [sections]
+  );
+  const pageTitle = isEditMode ? 'Edit Question Paper' : 'Create Question Paper';
+  const pageSubtitle = isEditMode
+    ? 'Refine the paper structure, question mix, and grading rules before publishing.'
+    : 'Build a new paper with consistent sections, question selection, and scoring rules.';
 
   // Modal: Filter questions (exclude those already in other sections)
   const modalAvailableQuestions = useMemo(() => {
@@ -432,151 +431,201 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
   // --- Render ---
   return (
-    <div className="container mx-auto max-w-full p-4 lg:p-6 bg-muted/20 min-h-screen">
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
-        {/* --- Section Builder (Left Side) --- */}
-        <main className="flex-1 space-y-4 w-full">
-          <Accordion
-            type="multiple"
-            className="w-full space-y-4"
-            defaultValue={sections.map(s => s.id)} // Keep all sections open by default
-          >
-            {sections.map((section, sectionIndex) => {
-              const sectionTotalMarks = section.questions.reduce((sum, q) => sum + q.marks, 0);
-              const canAddQuestions =
-                section.name.trim().length > 0 &&
-                typeof section.defaultMarks === 'number' &&
-                section.defaultMarks > 0;
+    <div className="app-page-shell px-4 py-6 sm:px-0">
+      <div className="app-page-header-row">
+        <div>
+          <h1 className="app-page-title">{pageTitle}</h1>
+          <p className="app-page-subtitle">{pageSubtitle}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm text-muted-foreground">
+            {sections.length} section{sections.length === 1 ? '' : 's'}
+          </span>
+          <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm text-muted-foreground">
+            {totalQuestions} question{totalQuestions === 1 ? '' : 's'}
+          </span>
+          <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm font-medium text-foreground">
+            {totalPaperMarks} marks
+          </span>
+        </div>
+      </div>
 
-              return (
-                <AccordionItem key={section.id} value={section.id} className="border rounded-lg bg-background overflow-hidden">
-                  <AccordionTrigger className="p-4 hover:no-underline flex justify-between items-center">
-                    <div className="flex items-center gap-4 w-full">
-                      <h3 className="text-lg font-semibold text-left">{section.name || `Section ${sectionIndex + 1}`}</h3>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>{section.questions.length} Questions</span>
-                        <span>{sectionTotalMarks} Marks</span>
-                      </div>
-                    </div>
-                    {/* Chevron icon for collapse/expand */}
-                    <svg
-                      className="ml-2 h-5 w-5 transition-transform duration-200 accordion-chevron"
-                      viewBox="0 0 20 20"
-                      fill="none"
-                      stroke="currentColor"
-                    >
-                      <path d="M6 8l4 4 4-4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </AccordionTrigger>
-                  <AccordionContent className="border-t">
-                    <SectionEditor
-                      section={section}
-                      onUpdate={(field, value) => handleUpdateSection(section.id, field as 'name' | 'description' | 'defaultMarks' | 'defaultNegativeMarks', value)}
-                      onRemove={() => handleRemoveSection(section.id)}
-                      onAddQuestions={() => openQuestionModal(section.id)}
-                      canAddQuestions={canAddQuestions}
-                      sectionTotalMarks={sectionTotalMarks}
-                    >
-                      {section.questions.length > 0 ? (
-                        <div className="space-y-2">
-                          {section.questions.map((q, qIndex) => (
-                            <div key={q.question._id} className="border rounded p-2 bg-muted/40 transition">
-                              <div className="flex justify-between items-center gap-2">
-                                <div className="flex-1">
-                                  <div className="mb-1 flex items-center gap-1">
-                                    <span className="inline-block px-1 py-0.5 rounded bg-background text-xs font-semibold text-foreground">
-                                      Q{qIndex + 1}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">ID: {q.question._id}</span>
-                                  </div>
-                                  <QuestionItem
-                                    question={q.question}
-                                    onDelete={() => {}}
-                                    isDeleting={false}
-                                    classes={classes}
-                                    subjects={subjects}
-                                    allTags={allTags.map(tag => ({
-                                      _id: tag._id,
-                                      name: tag.name,
-                                      type: {
-                                        _id: (tag.type as any)?._id ?? '',
-                                        name: (tag.type as any)?.name ?? ''
-                                      }
-                                    }))}
-                                    onSave={async (updated) => {
-                                      setSections(prev =>
-                                        prev.map(section => ({
-                                          ...section,
-                                          questions: section.questions.map(q =>
-                                            q.question._id === updated._id
-                                              ? { ...q, question: updated }
-                                              : q
-                                          ),
-                                        }))
-                                      );
-                                      setAvailableQuestions(prev =>
-                                        prev.map(q => q._id === updated._id ? updated : q)
-                                      );
-                                      setEditingQuestion(null);
-                                      setEditModalOpen(false);
-                                    }}
-                                  />
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleRemoveQuestionFromSection(section.id, q.question._id)}
-                                  aria-label="Remove question"
-                                  title="Remove question"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              <div className="flex items-center gap-4 mt-2 pt-2 border-t text-xs">
-                                <div className="flex items-center gap-1.5">
-                                  <Label className="font-semibold">Marks:</Label>
-                                  <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{q.marks}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <Label className="font-semibold">Negative:</Label>
-                                  <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{q.negativeMarks}</span>
-                                </div>
-                              </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="min-w-0">
+          <div className="app-surface overflow-hidden">
+            <div className="app-section-header">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">Section Builder</h2>
+                  <p className="app-page-subtitle">Organize sections, set defaults, and add questions to each block.</p>
+                </div>
+                <Button variant="outline" className="border-dashed" onClick={handleAddSection}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add New Section
+                </Button>
+              </div>
+            </div>
+
+            <div className="app-section-body">
+              {sections.length > 0 ? (
+                <Accordion
+                  type="multiple"
+                  className="space-y-4"
+                  defaultValue={sections.map(section => section.id)}
+                >
+                  {sections.map((section, sectionIndex) => {
+                    const sectionTotalMarks = section.questions.reduce((sum, question) => sum + question.marks, 0);
+                    const canAddQuestions =
+                      section.name.trim().length > 0 &&
+                      typeof section.defaultMarks === 'number' &&
+                      section.defaultMarks > 0;
+
+                    return (
+                      <AccordionItem
+                        key={section.id}
+                        value={section.id}
+                        className="overflow-hidden rounded-xl border border-border/60 bg-background"
+                      >
+                        <AccordionTrigger className="px-5 py-4 text-left hover:no-underline">
+                          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <h3 className="truncate text-base font-semibold text-foreground">
+                              {section.name || `Section ${sectionIndex + 1}`}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                              <span className="rounded-full bg-muted px-2.5 py-1">
+                                {section.questions.length} question{section.questions.length === 1 ? '' : 's'}
+                              </span>
+                              <span className="rounded-full bg-muted px-2.5 py-1">{sectionTotalMarks} marks</span>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-4 border-2 border-dashed rounded text-muted-foreground flex flex-col items-center gap-1">
-                          <p className="text-xs">No questions in this section.</p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openQuestionModal(section.id)}
-                            disabled={!canAddQuestions}
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="border-t border-border/60">
+                          <SectionEditor
+                            section={section}
+                            onUpdate={(field, value) =>
+                              handleUpdateSection(
+                                section.id,
+                                field as 'name' | 'description' | 'defaultMarks' | 'defaultNegativeMarks',
+                                value,
+                              )
+                            }
+                            onRemove={() => handleRemoveSection(section.id)}
+                            onAddQuestions={() => openQuestionModal(section.id)}
+                            canAddQuestions={canAddQuestions}
+                            sectionTotalMarks={sectionTotalMarks}
                           >
-                            <Plus className="mr-1 h-4 w-4" /> Add Questions
-                          </Button>
-                          {!canAddQuestions && (
-                            <span className="text-xs text-destructive mt-1">
-                              Enter section name and default marks to add questions.
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </SectionEditor>
-                  </AccordionContent>
-                </AccordionItem>
-              );
-            })}
-          </Accordion>
-
-          <Button variant="outline" className="w-full py-6 border-dashed" onClick={handleAddSection}>
-            <Plus className="mr-2 h-4 w-4" /> Add New Section
-          </Button>
+                            {section.questions.length > 0 ? (
+                              <div className="space-y-3">
+                                {section.questions.map((questionInPaper, questionIndex) => (
+                                  <div
+                                    key={questionInPaper.question._id}
+                                    className="rounded-xl border border-border/60 bg-muted/10 p-3 transition"
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      <div className="min-w-0 flex-1">
+                                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                                          <span className="rounded-full bg-background px-2 py-0.5 text-xs font-semibold text-foreground">
+                                            Q{questionIndex + 1}
+                                          </span>
+                                          <span className="text-xs text-muted-foreground">ID: {questionInPaper.question._id}</span>
+                                        </div>
+                                        <QuestionItem
+                                          question={questionInPaper.question}
+                                          onDelete={() => {}}
+                                          isDeleting={false}
+                                          classes={classes}
+                                          subjects={subjects}
+                                          allTags={allTags.map(tag => ({
+                                            _id: tag._id,
+                                            name: tag.name,
+                                            type: {
+                                              _id: (tag.type as any)?._id ?? '',
+                                              name: (tag.type as any)?.name ?? '',
+                                            },
+                                          }))}
+                                          onSave={async updated => {
+                                            setSections(prev =>
+                                              prev.map(sectionItem => ({
+                                                ...sectionItem,
+                                                questions: sectionItem.questions.map(item =>
+                                                  item.question._id === updated._id
+                                                    ? { ...item, question: updated }
+                                                    : item,
+                                                ),
+                                              })),
+                                            );
+                                            setAvailableQuestions(prev =>
+                                              prev.map(item => (item._id === updated._id ? updated : item)),
+                                            );
+                                          }}
+                                        />
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleRemoveQuestionFromSection(section.id, questionInPaper.question._id)}
+                                        aria-label="Remove question"
+                                        title="Remove question"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border/60 pt-3 text-xs">
+                                      <div className="flex items-center gap-1.5">
+                                        <Label className="font-semibold">Marks:</Label>
+                                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono">{questionInPaper.marks}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <Label className="font-semibold">Negative:</Label>
+                                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono">{questionInPaper.negativeMarks}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="app-empty-state">
+                                <p>No questions in this section yet.</p>
+                                <div className="mt-4 flex justify-center">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openQuestionModal(section.id)}
+                                    disabled={!canAddQuestions}
+                                  >
+                                    <Plus className="mr-1 h-4 w-4" />
+                                    Add Questions
+                                  </Button>
+                                </div>
+                                {!canAddQuestions ? (
+                                  <p className="mt-2 text-xs text-destructive">
+                                    Enter a section name and default marks to add questions.
+                                  </p>
+                                ) : null}
+                              </div>
+                            )}
+                          </SectionEditor>
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              ) : (
+                <div className="app-empty-state">
+                  <p>No sections added yet.</p>
+                  <div className="mt-4 flex justify-center">
+                    <Button variant="outline" onClick={handleAddSection}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Your First Section
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </main>
 
-        {/* --- Sidebar (Right Side) --- */}
-        <aside className="w-full lg:w-[380px] lg:sticky lg:top-6 space-y-4">
+        <aside className="space-y-4 xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
           <PaperDetailsForm
             paperTitle={paperTitle}
             setPaperTitle={setPaperTitle}
@@ -595,6 +644,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
             classes={classes}
             subjects={subjects}
             compact
+            initialDataLoading={initialDataLoading}
           />
           <PaperSummary
             sections={sections}
@@ -604,47 +654,10 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
             examDate={examDate ? examDate.toISOString() : ''}
           />
           <Button size="lg" className="w-full" onClick={handleSavePaper} disabled={saving}>
-            {saving ? <Spinner /> : 'Save Question Paper'}
+            {saving ? <Spinner /> : isEditMode ? 'Update Question Paper' : 'Save Question Paper'}
           </Button>
         </aside>
       </div>
-
-      {/* --- Modals --- */}
-      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Edit Question</DialogTitle>
-          </DialogHeader>
-          {editingQuestion && (
-            <EditQuestionModal
-              open={editModalOpen}
-              onOpenChange={setEditModalOpen}
-              question={editingQuestion}
-              classes={classes}
-              subjects={subjects}
-              allTags={allTags.map(tag => ({
-                ...tag,
-                type: {
-                  _id: (tag.type as any)?._id ?? '',
-                  name: (tag.type as any)?.name ?? ''
-                }
-              }))}
-              onSave={async (updatedQuestion) => {
-                setSections(prev => prev.map(section => ({
-                  ...section,
-                  questions: section.questions.map(q => q.question._id === updatedQuestion._id
-                    ? { ...q, question: updatedQuestion }
-                    : q
-                  ),
-                }))
-                );
-                setAvailableQuestions(prev => prev.map(q => q._id === updatedQuestion._id ? updatedQuestion : q)
-                );
-                setEditModalOpen(false);
-              } } toast={undefined}            />
-          )}
-        </DialogContent>
-      </Dialog>
 
       <QuestionFilterPopup
         open={questionModalOpen}
@@ -667,19 +680,19 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
         selectedQuestionIds={selectedQuestionIds}
         setSelectedQuestionIds={setSelectedQuestionIds}
         handleConfirmQuestions={handleConfirmQuestions}
-        handleEditQuestionSave={async (updatedQuestion) => {
+        handleEditQuestionSave={async updatedQuestion => {
           setSections(prev =>
             prev.map(section => ({
               ...section,
-              questions: section.questions.map(q =>
-                q.question._id === updatedQuestion._id
-                  ? { ...q, question: updatedQuestion }
-                  : q
+              questions: section.questions.map(question =>
+                question.question._id === updatedQuestion._id
+                  ? { ...question, question: updatedQuestion }
+                  : question,
               ),
-            }))
+            })),
           );
           setAvailableQuestions(prev =>
-            prev.map(q => q._id === updatedQuestion._id ? updatedQuestion : q)
+            prev.map(question => (question._id === updatedQuestion._id ? updatedQuestion : question)),
           );
         }}
         toast={toast}

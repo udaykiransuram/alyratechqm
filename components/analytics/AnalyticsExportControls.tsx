@@ -34,6 +34,16 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
   studentName,
   rollNumber,
 }) => {
+  const hasData = React.useMemo(
+    () => !!stats && Object.keys(stats).length > 0,
+    [stats],
+  );
+
+  const exportModeLabel =
+    mode === "student" ? "Student exports" : "Class exports";
+  const exportGroupingLabel =
+    groupBy.length > 0 ? `${groupBy.length} grouping levels` : "No grouping selected";
+
   async function handleDownloadTableImage() {
     if (tableRef.current) {
       const dataUrl = await toPng(tableRef.current, { cacheBust: true });
@@ -665,34 +675,70 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
   }
 
   return (
-    <div className="flex gap-2 flex-wrap">
-      <Button
-        onClick={handleDownloadTableImage}
-        className="bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold shadow transition"
-      >
-        Download Table as Image
-      </Button>
-      <Button
-        onClick={handleDownloadExcel}
-        className="bg-purple-600 text-white hover:bg-purple-700 text-sm font-semibold shadow transition"
-      >
-        Download Table as Excel
-      </Button>
-      {mode === "student" ? (
-        <Button
-          onClick={handleDownloadRemedials}
-          className="bg-green-600 text-white hover:bg-green-700 text-sm font-semibold shadow transition"
-        >
-          Download Remedial PDF
-        </Button>
-      ) : (
-        <Button
-          onClick={handleDownloadRemedials}
-          className="bg-green-600 text-white hover:bg-green-700 text-sm font-semibold shadow transition"
-        >
-          Download All Remedials (ZIP)
-        </Button>
-      )}
+    <div className="w-full xl:max-w-[34rem]">
+      <div className="analytics-toolbar">
+        <div className="analytics-toolbar-row">
+          <div className="analytics-toolbar-copy">
+            <p className="analytics-toolbar-title">Export current report</p>
+            <p className="analytics-toolbar-note">
+              Downloads follow the grouping, sorting, and report mode shown in
+              this table.
+            </p>
+          </div>
+          <div className="analytics-toolbar-meta">
+            <span className="analytics-toolbar-chip">{exportModeLabel}</span>
+            <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+              {exportGroupingLabel}
+            </span>
+          </div>
+        </div>
+        <div className="analytics-toolbar-actions">
+          <Button
+            onClick={handleDownloadTableImage}
+            variant="outline"
+            size="sm"
+            disabled={!hasData}
+            className="min-w-[9.5rem] justify-center"
+          >
+            Table image
+          </Button>
+          <Button
+            onClick={handleDownloadExcel}
+            variant="outline"
+            size="sm"
+            disabled={!hasData}
+            className="min-w-[9.5rem] justify-center"
+          >
+            Excel workbook
+          </Button>
+          {mode === "student" ? (
+            <Button
+              onClick={handleDownloadRemedials}
+              variant="outline"
+              size="sm"
+              disabled={!hasData}
+              className="min-w-[10rem] justify-center"
+            >
+              Remedial PDF
+            </Button>
+          ) : (
+            <Button
+              onClick={handleDownloadRemedials}
+              variant="outline"
+              size="sm"
+              disabled={!hasData}
+              className="min-w-[10rem] justify-center"
+            >
+              Remedial ZIP
+            </Button>
+          )}
+        </div>
+        <p className="analytics-toolbar-note">
+          {mode === "student"
+            ? "Exports the visible grouped table plus one student remedial PDF."
+            : "Exports the visible grouped table plus a ZIP of remedial PDFs and the insights summary."}
+        </p>
+      </div>
     </div>
   );
 };

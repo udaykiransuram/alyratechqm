@@ -1,8 +1,16 @@
 const ErrorState = ({ message }: { message: string }) => (
-  <div className="flex items-center justify-center min-h-screen bg-slate-50">
-    <div className="p-8 text-center bg-white shadow-xl rounded-lg border border-red-200 max-w-md">
-      <h2 className="text-xl font-bold text-red-700">An Error Occurred</h2>
-      <p className="mt-2 text-red-600">{message}</p>
+  <div className="analytics-page">
+    <div className="container">
+      <div className="app-page-shell max-w-3xl">
+        <div className="analytics-card">
+          <div className="analytics-card-body">
+            <div className="app-feedback app-feedback-error space-y-2 text-center">
+              <h2 className="text-lg font-semibold">Unable to load analytics</h2>
+              <p>{message}</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 );

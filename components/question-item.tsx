@@ -1,14 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Edit, Trash2 } from 'lucide-react';
 import { Spinner } from './ui/spinner';
-import Link from 'next/link';
 import { ContentRenderer } from './ContentRenderer';
 
-// Interfaces for populated data remain the same
 interface TagType {
   _id: string;
   name: string;
@@ -25,8 +24,6 @@ interface Class { _id: string; name: string; }
 
 interface QuestionOption {
   content: string;
-  // You might also have an _id here if it comes from a database
-  // _id: string; 
 }
 
 export interface Question {
@@ -36,8 +33,9 @@ export interface Question {
   class: Class;
   tags: Tag[];
   options: QuestionOption[];
-  answerIndexes: number[]; // <-- CHANGE for multi-select
+  answerIndexes: number[];
   explanation?: string;
+  marks: number;
   createdAt: string;
 }
 
@@ -49,69 +47,70 @@ interface QuestionItemProps {
 
 export function QuestionItem({ question, onDelete, isDeleting }: QuestionItemProps) {
   return (
-    <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow border-border/40">
-      <CardHeader className="flex-row justify-between items-start gap-4">
-        <div className="flex-1">
-          {/* --- DISPLAY CLASS AND SUBJECT BADGES --- */}
-          <div className="flex items-center gap-2 mb-2">
-            {question.class && <Badge variant="secondary">{question.class.name}</Badge>}
-            {question.subject && <Badge variant="outline">{question.subject.name}</Badge>}
+    <Card className="app-surface overflow-hidden transition-shadow duration-200 hover:shadow-md">
+      <CardHeader className="flex flex-col gap-4 border-b border-border/60 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {question.class ? <Badge variant="secondary">{question.class.name}</Badge> : null}
+            {question.subject ? <Badge variant="outline">{question.subject.name}</Badge> : null}
+            <Badge variant="secondary">{question.marks} Mark(s)</Badge>
           </div>
-          <div className="prose prose-base dark:prose-invert max-w-none font-semibold text-foreground">
+          <div className="prose prose-sm max-w-none font-medium text-foreground dark:prose-invert">
             <ContentRenderer htmlContent={question.content} />
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Link href={`/questions/edit/${question._id}`} passHref>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link href={`/questions/edit/${question._id}`}>
             <Button variant="outline" size="icon" className="h-8 w-8" disabled={isDeleting}>
               <Edit className="h-4 w-4" />
             </Button>
           </Link>
-          <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => onDelete(question._id)} disabled={isDeleting}>
+          <Button
+            variant="destructive"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onDelete(question._id)}
+            disabled={isDeleting}
+          >
             {isDeleting ? <Spinner /> : <Trash2 className="h-4 w-4" />}
           </Button>
         </div>
       </CardHeader>
-      
-      {/* --- SHOW OPTIONS --- */}
-      <CardContent>
-        <div className="space-y-2">
-          {question.options.map((opt, idx) => (
-            <div
-              key={idx}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2
-                ${question.answerIndexes?.includes(idx)
-                  ? "bg-accent-green/10 border border-accent-green"
-                  : "bg-muted/60 border border-border"
-                }`}
-            >
-              <Badge
-                variant={question.answerIndexes?.includes(idx) ? "default" : "outline"}
-                className={`min-w-[60px] px-2 py-1 text-xs font-semibold
-                  ${question.answerIndexes?.includes(idx)
-                    ? "bg-accent-green text-green-800"
-                    : "bg-muted text-muted-foreground"
-                  }`}
-              >
-                {question.answerIndexes?.includes(idx) ? "Correct" : `Option ${idx + 1}`}
-              </Badge>
-              <span className="prose prose-sm dark:prose-invert font-medium">
-                <ContentRenderer htmlContent={opt.content} />
-              </span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
 
-      <CardFooter className="bg-muted/40 px-6 py-3 flex justify-between items-center">
+      {question.options?.length ? (
+        <CardContent className="space-y-2 px-5 py-4">
+          {question.options.map((option, index) => {
+            const isCorrect = question.answerIndexes?.includes(index);
+            return (
+              <div
+                key={index}
+                className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm ${
+                  isCorrect
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200'
+                    : 'border-border/60 bg-muted/20'
+                }`}
+              >
+                <Badge variant={isCorrect ? 'default' : 'outline'} className="min-w-[72px] justify-center text-xs">
+                  {isCorrect ? 'Correct' : `Option ${index + 1}`}
+                </Badge>
+                <div className="min-w-0 flex-1 prose prose-sm max-w-none dark:prose-invert">
+                  <ContentRenderer htmlContent={option.content} />
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      ) : null}
+
+      <CardFooter className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           {question.tags.map(tag => (
-            <Badge key={tag._id} variant="secondary" className="capitalize font-normal">
+            <Badge key={tag._id} variant="secondary" className="font-normal capitalize">
               {tag.type.name}: {tag.name}
             </Badge>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground flex-shrink-0 ml-4">
+        <p className="text-xs text-muted-foreground sm:text-right">
           {new Date(question.createdAt).toLocaleDateString()}
         </p>
       </CardFooter>
@@ -121,28 +120,32 @@ export function QuestionItem({ question, onDelete, isDeleting }: QuestionItemPro
 
 export function QuestionItemSkeleton() {
   return (
-    <Card className="overflow-hidden animate-pulse">
-      <CardHeader className="flex-row justify-between items-start gap-4">
-        <div className="flex-1 space-y-2">
-          {/* --- SKELETON FOR BADGES --- */}
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-20 bg-muted rounded-full"></div>
-            <div className="h-6 w-24 bg-muted rounded-full"></div>
+    <Card className="app-surface overflow-hidden animate-pulse">
+      <CardHeader className="flex flex-col gap-4 border-b border-border/60 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex-1 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <div className="h-6 w-20 rounded-full bg-muted" />
+            <div className="h-6 w-24 rounded-full bg-muted" />
+            <div className="h-6 w-20 rounded-full bg-muted" />
           </div>
-          <div className="h-5 w-full bg-muted rounded"></div>
-          <div className="h-5 w-3/4 bg-muted rounded"></div>
+          <div className="h-5 w-full rounded bg-muted" />
+          <div className="h-5 w-3/4 rounded bg-muted" />
         </div>
         <div className="flex gap-2">
-          <div className="h-8 w-8 bg-muted rounded"></div>
-          <div className="h-8 w-8 bg-muted rounded"></div>
+          <div className="h-8 w-8 rounded bg-muted" />
+          <div className="h-8 w-8 rounded bg-muted" />
         </div>
       </CardHeader>
-      <CardFooter className="bg-muted/40 px-6 py-3 flex justify-between items-center">
+      <CardContent className="space-y-2 px-5 py-4">
+        <div className="h-11 w-full rounded-xl bg-muted" />
+        <div className="h-11 w-full rounded-xl bg-muted" />
+      </CardContent>
+      <CardFooter className="flex items-center justify-between border-t border-border/60 bg-muted/10 px-5 py-3">
         <div className="flex gap-2">
-          <div className="h-6 w-24 bg-muted rounded-full"></div>
-          <div className="h-6 w-32 bg-muted rounded-full"></div>
+          <div className="h-6 w-24 rounded-full bg-muted" />
+          <div className="h-6 w-32 rounded-full bg-muted" />
         </div>
-        <div className="h-4 w-24 bg-muted rounded"></div>
+        <div className="h-4 w-24 rounded bg-muted" />
       </CardFooter>
     </Card>
   );

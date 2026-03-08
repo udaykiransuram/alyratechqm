@@ -2,6 +2,8 @@
     import Registration from '@/models/Registration';
     import { connectDB } from '@/lib/db';
     import puppeteer from 'puppeteer'; // <--- THIS MUST BE 'puppeteer', NOT 'puppeteer-core'
+
+export const dynamic = 'force-dynamic';
     // Ensure there is NO import like: import chromium from '@sparticuz/chromium';
 
     export async function GET(req: NextRequest, { params }: { params: { orderId: string } }) {

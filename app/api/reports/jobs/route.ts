@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 
+export const dynamic = 'force-dynamic';
+
 function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
   const schoolFromHeader =

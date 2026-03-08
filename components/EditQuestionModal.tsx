@@ -10,15 +10,14 @@ import { TagItem } from '@/components/ui/multi-select-tags';
 import { PlusCircle, X } from 'lucide-react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center min-h-[210px] p-4 border rounded-lg bg-muted"><Spinner /></div>,
+  loading: () => <div className="app-empty-state flex min-h-[210px] items-center justify-center"><Spinner /></div>,
 });
 const MatrixMatchConfigurator = dynamic(() => import('@/components/MatrixMatchConfigurator').then(mod => mod.default), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center min-h-[210px] p-4 border rounded-lg bg-muted"><Spinner /></div>,
+  loading: () => <div className="app-empty-state flex min-h-[210px] items-center justify-center"><Spinner /></div>,
 });
 
 interface EditQuestionModalProps {
@@ -246,29 +245,29 @@ export function EditQuestionModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-4xl"
-        onInteractOutside={e => {
+        className="overflow-hidden p-0 sm:max-w-[min(96vw,1200px)]"
+        onInteractOutside={event => {
           if (
-            (e.target as HTMLElement).closest('.tag-popover-content') ||
-            (e.target as HTMLElement).closest('[data-tag-popover]')
+            (event.target as HTMLElement).closest('.tag-popover-content') ||
+            (event.target as HTMLElement).closest('[data-tag-popover]')
           ) {
-            e.preventDefault();
+            event.preventDefault();
           }
         }}
       >
-        <DialogHeader>
-          <DialogTitle className="text-2xl">Edit Question</DialogTitle>
+        <DialogHeader className="border-b border-border/60 bg-muted/20 px-6 py-5 text-left">
+          <DialogTitle className="text-xl">Edit Question</DialogTitle>
           <DialogDescription>
             Modify the question details, options, and metadata below.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSave} className="space-y-6">
-          <div className="max-h-[65vh] overflow-y-auto pr-4 -mr-4 space-y-6">
-            <Card>
-              <CardHeader>
+        <form onSubmit={handleSave} className="flex max-h-[85vh] flex-col">
+          <div className="space-y-6 overflow-y-auto px-6 py-6">
+            <Card className="app-surface overflow-hidden shadow-none">
+              <CardHeader className="app-section-header">
                 <CardTitle>Question Content</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="app-section-body">
                 <RichTextEditor
                   key={question?._id || 'main-content'}
                   initialContent={content}
@@ -277,46 +276,54 @@ export function EditQuestionModal({
               </CardContent>
             </Card>
 
-            {(type === 'single' || type === 'multiple') && (
-              <Card>
-                <CardHeader>
+            {(type === 'single' || type === 'multiple') ? (
+              <Card className="app-surface overflow-hidden shadow-none">
+                <CardHeader className="app-section-header">
                   <CardTitle>Answer Options</CardTitle>
                   <CardDescription>Select the correct answer(s) using the checkboxes.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {options.map((opt, i) => (
-                    <div key={i} className="flex items-start gap-4">
+                <CardContent className="app-section-body space-y-4">
+                  {options.map((opt, index) => (
+                    <div key={index} className="flex items-start gap-4 rounded-xl border border-border/60 bg-muted/10 p-3">
                       <div className="flex flex-col items-center pt-2">
                         <Checkbox
-                          id={`option-${i}`}
-                          checked={answerIndexes.includes(i)}
-                          onCheckedChange={() => handleToggleAnswer(i)}
+                          id={`option-${index}`}
+                          checked={answerIndexes.includes(index)}
+                          onCheckedChange={() => handleToggleAnswer(index)}
                         />
                       </div>
                       <div className="flex-1">
                         <RichTextEditor
-                          key={`${question?._id}-option-${i}`}
+                          key={`${question?._id}-option-${index}`}
                           initialContent={opt.content}
-                          onChange={val => handleOptionChange(i, val)}
+                          onChange={value => handleOptionChange(index, value)}
                         />
                       </div>
-                      <Button variant="ghost" size="icon" type="button" onClick={() => handleRemoveOption(i)} className="mt-1 text-muted-foreground hover:text-destructive">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        type="button"
+                        onClick={() => handleRemoveOption(index)}
+                        className="mt-1 text-muted-foreground hover:text-destructive"
+                      >
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
-                  <Button variant="outline" type="button" onClick={handleAddOption} className="mt-4">
+                  <Button variant="outline" type="button" onClick={handleAddOption}>
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Add Option
                   </Button>
                 </CardContent>
               </Card>
-            )}
+            ) : null}
 
-            {type === 'matrix-match' && (
-              <Card>
-                <CardHeader><CardTitle>Matrix Configuration</CardTitle></CardHeader>
-                <CardContent>
+            {type === 'matrix-match' ? (
+              <Card className="app-surface overflow-hidden shadow-none">
+                <CardHeader className="app-section-header">
+                  <CardTitle>Matrix Configuration</CardTitle>
+                </CardHeader>
+                <CardContent className="app-section-body">
                   <MatrixMatchConfigurator
                     rows={matrixRows}
                     setRows={setMatrixRows}
@@ -327,14 +334,14 @@ export function EditQuestionModal({
                   />
                 </CardContent>
               </Card>
-            )}
+            ) : null}
 
-            <Card>
-              <CardHeader>
+            <Card className="app-surface overflow-hidden shadow-none">
+              <CardHeader className="app-section-header">
                 <CardTitle>Explanation</CardTitle>
                 <CardDescription>Provide an optional explanation for the answer.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="app-section-body">
                 <RichTextEditor
                   key={`${question?._id}-explanation`}
                   initialContent={explanation}
@@ -343,53 +350,58 @@ export function EditQuestionModal({
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader><CardTitle>Metadata</CardTitle></CardHeader>
-                <CardContent>
-                  <MetadataSelector
-                    classes={classes}
-                    classId={classId}
-                    setClassId={setClassId}
-                    subjects={subjects}
-                    subjectId={subjectId}
-                    setSubjectId={setSubjectId}
-                    subjectsLoading={false}
-                    allTags={allTags}
-                    selectedTags={selectedTags}
-                    setSelectedTags={setSelectedTags}
-                    recommendedTagIds={recommendedTagIds}
-                    initialDataLoading={false}
-                    resetCounter={0}
-                    toast={toast}
-                    onCreateNewTag={async () => null}
-                  />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle>Marks</CardTitle></CardHeader>
-                <CardContent>
-                  <Label htmlFor="marks" className="sr-only">Marks</Label>
-                  <Input
-                    id="marks"
-                    type="number"
-                    min={1}
-                    value={marks}
-                    onChange={handleMarksChange}
-                    required
-                  />
+            <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_220px]">
+              <MetadataSelector
+                classes={classes}
+                classId={classId}
+                setClassId={setClassId}
+                subjects={subjects}
+                subjectId={subjectId}
+                setSubjectId={setSubjectId}
+                subjectsLoading={false}
+                allTags={allTags}
+                selectedTags={selectedTags}
+                setSelectedTags={setSelectedTags}
+                recommendedTagIds={recommendedTagIds}
+                initialDataLoading={false}
+                resetCounter={0}
+                toast={toast}
+                onCreateNewTag={async () => null}
+              />
+
+              <Card className="app-surface overflow-hidden shadow-none">
+                <CardHeader className="app-section-header">
+                  <CardTitle>Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="app-section-body space-y-4">
+                  <div className="app-field-group">
+                    <Label htmlFor="marks" className="app-field-label">Marks</Label>
+                    <Input
+                      id="marks"
+                      type="number"
+                      min={1}
+                      value={marks}
+                      onChange={handleMarksChange}
+                      required
+                    />
+                  </div>
+                  <div className="app-field-group">
+                    <span className="app-field-label">Question Type</span>
+                    <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-sm font-medium text-foreground">
+                      {type === 'single' ? 'Single Choice' : type === 'multiple' ? 'Multiple Choice' : 'Matrix Match'}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
           </div>
 
-          <DialogFooter className="pt-6 border-t">
-            <Button variant="ghost" type="button" onClick={handleClose}>
+          <DialogFooter className="border-t border-border/60 bg-muted/10 px-6 py-4">
+            <Button variant="outline" type="button" onClick={handleClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading && <Spinner />}
-              Save Changes
+              {loading ? <Spinner /> : 'Save Changes'}
             </Button>
           </DialogFooter>
         </form>
@@ -397,3 +409,4 @@ export function EditQuestionModal({
     </Dialog>
   );
 }
+

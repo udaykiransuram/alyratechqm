@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 
+export const dynamic = 'force-dynamic';
+
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "";
 
 export async function GET(req: NextRequest) {

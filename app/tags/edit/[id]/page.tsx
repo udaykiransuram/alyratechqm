@@ -167,7 +167,7 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
       />
       <div className="max-w-2xl mx-auto py-8 space-y-8">
         <header className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight">Edit Tag</h1>
+          <h1 className="app-page-title">Edit Tag</h1>
           <p className="text-muted-foreground mt-1">Update the tag's details and its subject associations.</p>
         </header>
 

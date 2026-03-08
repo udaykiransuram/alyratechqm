@@ -28,28 +28,46 @@ export interface PaperDetailsFormProps {
 }
 
 export function PaperDetailsForm({
-  paperTitle, setPaperTitle,
-  instructions, setInstructions,
-  duration, setDuration,
-  passingMarks, setPassingMarks,
-  examDate, setExamDate,
-  classId, setClassId,
-  subjectId, setSubjectId,
-  classes, subjects,
+  paperTitle,
+  setPaperTitle,
+  instructions,
+  setInstructions,
+  duration,
+  setDuration,
+  passingMarks,
+  setPassingMarks,
+  examDate,
+  setExamDate,
+  classId,
+  setClassId,
+  subjectId,
+  setSubjectId,
+  classes,
+  subjects,
   initialDataLoading,
 }: PaperDetailsFormProps) {
-  if (initialDataLoading) return <Spinner />;
-  
+  if (initialDataLoading) {
+    return (
+      <div className="app-surface app-surface-body">
+        <div className="app-status-row justify-center">
+          <Spinner />
+          <span>Loading paper settings...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl">
-          <BookOpen className="w-5 h-5 text-primary" /> Paper Details
+    <Card className="app-surface overflow-hidden">
+      <CardHeader className="app-section-header">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BookOpen className="h-4 w-4 text-primary" />
+          Paper Details
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-1">
-          <Label htmlFor="paper-title" className="text-sm font-medium">Paper Title</Label>
+      <CardContent className="app-section-body space-y-4">
+        <div className="app-field-group">
+          <Label htmlFor="paper-title" className="app-field-label">Paper Title</Label>
           <Input
             id="paper-title"
             value={paperTitle}
@@ -57,27 +75,34 @@ export function PaperDetailsForm({
             placeholder="e.g., Mid-Term Mathematics Test"
           />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <Label htmlFor="class" className="text-sm font-medium">Class</Label>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="app-field-group">
+            <Label htmlFor="class" className="app-field-label">Class</Label>
             <Select value={classId} onValueChange={setClassId}>
-              <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+              <SelectTrigger id="class"><SelectValue placeholder="Select class" /></SelectTrigger>
               <SelectContent>
-                {classes.map(cls => <SelectItem key={cls._id} value={cls._id}>{cls.name}</SelectItem>)}
+                {classes.map(cls => (
+                  <SelectItem key={cls._id} value={cls._id}>{cls.name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="subject" className="text-sm font-medium">Subject</Label>
+
+          <div className="app-field-group">
+            <Label htmlFor="subject" className="app-field-label">Subject</Label>
             <Select value={subjectId} onValueChange={setSubjectId}>
-              <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+              <SelectTrigger id="subject"><SelectValue placeholder="Select subject" /></SelectTrigger>
               <SelectContent>
-                {subjects.map(sub => <SelectItem key={sub._id} value={sub._id}>{sub.name}</SelectItem>)}
+                {subjects.map(sub => (
+                  <SelectItem key={sub._id} value={sub._id}>{sub.name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="examDate" className="text-sm font-medium">Exam Date</Label>
+
+          <div className="app-field-group">
+            <Label htmlFor="examDate" className="app-field-label">Exam Date</Label>
             <Input
               id="examDate"
               type="date"
@@ -85,8 +110,9 @@ export function PaperDetailsForm({
               onChange={e => setExamDate(new Date(e.target.value))}
             />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="duration" className="text-sm font-medium">Duration (min)</Label>
+
+          <div className="app-field-group">
+            <Label htmlFor="duration" className="app-field-label">Duration (min)</Label>
             <Input
               id="duration"
               type="number"
@@ -96,8 +122,9 @@ export function PaperDetailsForm({
               placeholder="e.g., 60"
             />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="passingMarks" className="text-sm font-medium">Passing Marks</Label>
+
+          <div className="app-field-group sm:col-span-2">
+            <Label htmlFor="passingMarks" className="app-field-label">Passing Marks</Label>
             <Input
               id="passingMarks"
               type="number"
@@ -108,14 +135,15 @@ export function PaperDetailsForm({
             />
           </div>
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="instructions" className="text-sm font-medium">Instructions</Label>
+
+        <div className="app-field-group">
+          <Label htmlFor="instructions" className="app-field-label">Instructions</Label>
           <Textarea
             id="instructions"
             value={instructions}
             onChange={e => setInstructions(e.target.value)}
             placeholder="Add any instructions for the students..."
-            className="min-h-[80px]"
+            className="min-h-[110px]"
           />
         </div>
       </CardContent>

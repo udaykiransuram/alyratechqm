@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "es2015",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -17,7 +21,9 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     },
     "plugins": [
       {
@@ -35,7 +41,8 @@
     ".next/types/**/*.ts",
     "global.d.ts",
     "postcss.config.js",
-    "app/utils/extractQuestionsFromText.js"
+    "app/utils/extractQuestionsFromText.js",
+    ".next-dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

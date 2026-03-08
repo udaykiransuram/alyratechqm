@@ -1,18 +1,17 @@
-// app/subjects/create/page.tsx
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { ChevronLeft } from 'lucide-react';
+
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { useRouter } from 'next/navigation';
-import { Label } from '@/components/ui/label'; // Added Label for form fields
-import { Textarea } from '@/components/ui/textarea'; // Added Textarea for description
-import { Separator } from '@/components/ui/separator'; // Added Separator for visual breaks
-import { MultiSelectTags, TagItem } from '@/components/ui/multi-select-tags'; // Added MultiSelectTags
-import { Spinner } from '@/components/ui/spinner'; // Ensure Spinner is imported from shared location
-import Link from 'next/link'; // For the cancel button to act as a link
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { MultiSelectTags, TagItem } from '@/components/ui/multi-select-tags';
+import { Spinner } from '@/components/ui/spinner';
 
 export default function CreateSubjectPage() {
   const [name, setName] = useState('');
@@ -21,13 +20,12 @@ export default function CreateSubjectPage() {
   const [isCreatingSubject, setIsCreatingSubject] = useState(false);
 
   const [allAvailableTags, setAllAvailableTags] = useState<TagItem[]>([]);
-  const [selectedTags, setSelectedTags] = useState<TagItem[]>([]); // State for selected tags (TagItem objects)
-  const [tagsLoading, setTagsLoading] = useState(true); // Loading state for tags
+  const [selectedTags, setSelectedTags] = useState<TagItem[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(true);
 
   const { toast } = useToast();
   const router = useRouter();
 
-  // Fetch all available tags when component mounts
   const fetchAllTags = useCallback(async () => {
     setTagsLoading(true);
     try {
@@ -38,17 +36,17 @@ export default function CreateSubjectPage() {
       } else {
         console.error('Failed to fetch tags:', data.message);
         toast({
-          title: "Error",
-          description: data.message || "Failed to load available tags.",
-          variant: "destructive",
+          title: 'Error',
+          description: data.message || 'Failed to load available tags.',
+          variant: 'destructive',
         });
       }
     } catch (error) {
       console.error('Network error fetching tags:', error);
       toast({
-        title: "Error",
-        description: "Network error when fetching available tags.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Network error when fetching available tags.',
+        variant: 'destructive',
       });
     } finally {
       setTagsLoading(false);
@@ -59,68 +57,66 @@ export default function CreateSubjectPage() {
     fetchAllTags();
   }, [fetchAllTags]);
 
-  // Handler for creating new tags directly from MultiSelectTags
-  const handleCreateNewTag = useCallback(async (tagName: string, tagType: string): Promise<TagItem | null> => {
-    try {
-      const res = await fetch('/api/tags', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: tagName, type: tagType }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast({
-          title: "Tag Created",
-          description: `"${data.tag.name}" (${data.tag.type}) added.`,
+  const handleCreateNewTag = useCallback(
+    async (tagName: string, tagType: string): Promise<TagItem | null> => {
+      try {
+        const res = await fetch('/api/tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: tagName, type: tagType }),
         });
-        setAllAvailableTags(prev => {
-            if (!prev.some(t => t._id === data.tag._id)) {
-                return [...prev, data.tag];
+        const data = await res.json();
+        if (data.success) {
+          toast({
+            title: 'Tag Created',
+            description: `"${data.tag.name}" (${data.tag.type}) added.`,
+          });
+          setAllAvailableTags((prev) => {
+            if (!prev.some((tag) => tag._id === data.tag._id)) {
+              return [...prev, data.tag];
             }
             return prev;
-        });
-        return data.tag;
-      } else {
+          });
+          return data.tag;
+        }
+
         console.error('Failed to create new tag:', data.message);
         toast({
-          title: "Creation Failed",
+          title: 'Creation Failed',
           description: data.message || `Could not create tag "${tagName}".`,
-          variant: "destructive",
+          variant: 'destructive',
+        });
+        return null;
+      } catch (error) {
+        console.error('Network error creating tag:', error);
+        toast({
+          title: 'Network Error',
+          description: `Failed to create tag "${tagName}" due to a network issue.`,
+          variant: 'destructive',
         });
         return null;
       }
-    } catch (error) {
-      console.error('Network error creating tag:', error);
-      toast({
-        title: "Network Error",
-        description: `Failed to create tag "${tagName}" due to network issue.`,
-        variant: "destructive",
-      });
-      return null;
-    }
-  }, [toast]);
-
+    },
+    [toast],
+  );
 
   const createSubject = async () => {
     if (!name.trim()) {
       toast({
-        title: "Validation Error",
-        description: "Subject Name cannot be empty.",
-        variant: "destructive",
+        title: 'Validation Error',
+        description: 'Subject name cannot be empty.',
+        variant: 'destructive',
       });
       return;
     }
+
     setIsCreatingSubject(true);
 
-    // Construct the payload, mapping selectedTags to their IDs
     const payload = {
       name: name.trim(),
-      // Send code as null if empty, otherwise trimmed value
       code: code.trim() === '' ? null : code.trim(),
-      // Send description as null if empty, otherwise trimmed value
       description: description.trim() === '' ? null : description.trim(),
-      // Send selected tag IDs to the backend
-      tags: selectedTags.map(tag => tag._id),
+      tags: selectedTags.map((tag) => tag._id),
     };
 
     try {
@@ -134,26 +130,26 @@ export default function CreateSubjectPage() {
         setName('');
         setCode('');
         setDescription('');
-        setSelectedTags([]); // Clear selected tags
+        setSelectedTags([]);
         toast({
-          title: "Success",
-          description: "Subject created successfully! Redirecting...",
+          title: 'Success',
+          description: 'Subject created successfully. Redirecting…',
         });
-        router.push('/subjects'); // Redirect to view all subjects page
+        router.push('/subjects');
       } else {
         console.error('Failed to create subject:', data.message);
         toast({
-          title: "Error",
-          description: data.message || "Failed to create subject.",
-          variant: "destructive",
+          title: 'Error',
+          description: data.message || 'Failed to create subject.',
+          variant: 'destructive',
         });
       }
     } catch (error) {
       console.error('Error creating subject:', error);
       toast({
-        title: "Error",
-        description: "Network error when creating subject.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Network error when creating subject.',
+        variant: 'destructive',
       });
     } finally {
       setIsCreatingSubject(false);
@@ -161,69 +157,97 @@ export default function CreateSubjectPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground py-8 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
-      <div className="max-w-md mx-auto space-y-8">
-        <h1 className="text-4xl font-extrabold text-center text-foreground mb-10">Create New Subject</h1>
+    <div className="container py-6">
+      <div className="app-page-shell max-w-3xl">
+        <div className="app-page-header-row">
+          <div className="app-page-header">
+            <h1 className="app-page-title">Create Subject</h1>
+            <p className="app-page-subtitle">
+              Add a new subject with an optional code, description, and linked tags.
+            </p>
+          </div>
 
-        <Card className="shadow-lg border border-border/50 bg-card text-card-foreground">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-2xl font-bold">Add New Subject Details</CardTitle>
-            <CardDescription className="mt-2 text-base">
-              Fill in the details below to create a new subject.
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            onClick={() => router.push('/subjects')}
+            disabled={isCreatingSubject}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back to Subjects
+          </Button>
+        </div>
+
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header">
+            <CardTitle>Subject Details</CardTitle>
+            <CardDescription>
+              Fill in the subject basics first, then optionally organize it with tags.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6 pt-0"> {/* Consistent spacing */}
-            {/* Subject Name Input */}
-            <div className="space-y-2">
-              <Label htmlFor="subjectName">Subject Name</Label>
-              <Input
-                id="subjectName"
-                placeholder="e.g., Mathematics"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="h-10"
-                aria-label="Subject Name"
-                required
-                disabled={isCreatingSubject}
-              />
+
+          <CardContent className="app-section-body space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="app-field-group">
+                <Label htmlFor="subjectName" className="app-field-label">
+                  Subject Name
+                </Label>
+                <Input
+                  id="subjectName"
+                  placeholder="e.g., Mathematics"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  aria-label="Subject Name"
+                  required
+                  disabled={isCreatingSubject}
+                />
+              </div>
+
+              <div className="app-field-group">
+                <Label htmlFor="subjectCode" className="app-field-label">
+                  Subject Code
+                </Label>
+                <Input
+                  id="subjectCode"
+                  placeholder="e.g., MATH101"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                  aria-label="Subject Code"
+                  disabled={isCreatingSubject}
+                />
+              </div>
             </div>
 
-            {/* Subject Code Input */}
-            <div className="space-y-2">
-              <Label htmlFor="subjectCode">Subject Code (Optional)</Label>
-              <Input
-                id="subjectCode"
-                placeholder="e.g., MATH101"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="h-10"
-                aria-label="Subject Code"
-                disabled={isCreatingSubject}
-              />
-            </div>
-
-            {/* Subject Description Textarea */}
-            <div className="space-y-2">
-              <Label htmlFor="subjectDescription">Description (Optional)</Label>
+            <div className="app-field-group">
+              <Label htmlFor="subjectDescription" className="app-field-label">
+                Description
+              </Label>
               <Textarea
                 id="subjectDescription"
                 placeholder="Provide a brief description of the subject."
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="min-h-[100px]"
+                onChange={(event) => setDescription(event.target.value)}
+                className="min-h-[140px]"
                 aria-label="Subject Description"
                 disabled={isCreatingSubject}
               />
             </div>
 
-            <Separator className="my-6" /> {/* Visual separator */}
+            <div className="app-section space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="tag-select" className="app-field-label">
+                  Associated Tags
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Categorize the subject with existing tags, or create a new one inline.
+                </p>
+              </div>
 
-            {/* Tag Selection Section */}
-            <div className="space-y-2">
-              <Label htmlFor="tag-select" className="text-base font-medium">Associated Tags (Optional)</Label>
               {tagsLoading ? (
-                <div className="flex items-center justify-center h-10 text-muted-foreground">
-                  <Spinner /> <span className="ml-2">Loading tags...</span>
+                <div className="app-status-row justify-center rounded-xl border border-dashed border-border/60 bg-background px-4 py-6">
+                  <Spinner />
+                  <span>Loading tags…</span>
                 </div>
               ) : (
                 <MultiSelectTags
@@ -234,26 +258,25 @@ export default function CreateSubjectPage() {
                   isLoading={isCreatingSubject}
                 />
               )}
-              <p className="text-sm text-muted-foreground pt-1">
-                Categorize your subject with relevant tags. You can also create new tags on the fly.
-              </p>
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <Button
-                onClick={createSubject}
-                disabled={isCreatingSubject || !name.trim()}
-                className="flex-1 h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold rounded-md shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isCreatingSubject ? <Spinner /> : 'Add Subject'}
-              </Button>
-              <Button
-                onClick={() => router.push('/subjects')}
+                type="button"
                 variant="outline"
-                className="flex-1 h-11 text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground"
+                className="sm:min-w-[140px]"
+                onClick={() => router.push('/subjects')}
                 disabled={isCreatingSubject}
               >
                 Cancel
+              </Button>
+              <Button
+                type="button"
+                className="sm:min-w-[160px]"
+                onClick={createSubject}
+                disabled={isCreatingSubject || !name.trim()}
+              >
+                {isCreatingSubject ? <Spinner /> : 'Create Subject'}
               </Button>
             </div>
           </CardContent>

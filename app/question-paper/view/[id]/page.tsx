@@ -1,13 +1,16 @@
 "use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PaperSummary } from "@/components/PaperSummary";
 import { PrintEditToolbar } from "@/components/PrintEditToolbar";
 import QuestionItemClient from "@/components/QuestionItemClient";
-import { Button } from "@/components/ui/button";
 import { QuestionPaperToolbar } from "@/components/QuestionPaperToolbar";
-import { useEffect, useState } from "react";
+import { Spinner } from "@/components/ui/spinner";
+import { ArrowLeft } from "lucide-react";
 
 function getSchoolKey() {
   try {
@@ -74,143 +77,182 @@ export default function ViewQuestionPaperPage({
   }, [params.id, schoolKey]);
 
   if (!mounted) {
-    return <div className="container p-8 text-center">Loading...</div>;
+    return (
+      <div className="app-page-shell px-4 py-6 sm:px-0">
+        <div className="app-surface app-surface-body">
+          <div className="app-status-row justify-center">
+            <Spinner />
+            <span>Loading question paper...</span>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!schoolKey) {
     return (
-      <div className="container p-8 text-center">
-        <h1 className="text-2xl font-bold mb-4">No School Selected</h1>
-        <p>
-          Please select a school using the navbar to view this question paper.
-        </p>
+      <div className="app-page-shell px-4 py-6 sm:px-0">
+        <div className="app-page-header">
+          <h1 className="app-page-title">No School Selected</h1>
+          <p className="app-page-subtitle">Please select a school using the navbar to view this question paper.</p>
+        </div>
+        <div className="app-empty-state">A school context is required before this paper can be viewed.</div>
       </div>
     );
   }
 
-  if (loading)
-    return <div className="container p-8 text-center">Loading...</div>;
-  if (error)
+  if (loading) {
     return (
-      <div className="container p-8 text-center text-destructive">{error}</div>
-    );
-  if (!paper)
-    return (
-      <div className="container p-8 text-center">
-        <h1 className="text-2xl font-bold mb-3">Question paper not found</h1>
-        <p className="text-muted-foreground mb-4">
-          This paper may not belong to the currently selected school.
-        </p>
-        <Link href="/question-paper" className="underline">
-          Back to Question Papers
-        </Link>
+      <div className="app-page-shell px-4 py-6 sm:px-0">
+        <div className="app-surface app-surface-body">
+          <div className="app-status-row justify-center">
+            <Spinner />
+            <span>Loading question paper...</span>
+          </div>
+        </div>
       </div>
     );
-  const summarySections = paper.sections.map((s: any) => ({
-    id: s._id,
-    name: s.name,
-    questions: s.questions.map((q: any) => ({
-      question: q.question,
-      marks: q.marks,
-      negativeMarks: q.negativeMarks,
+  }
+
+  if (error) {
+    return (
+      <div className="app-page-shell px-4 py-6 sm:px-0">
+        <div className="app-page-header-row">
+          <div>
+            <h1 className="app-page-title">Question Paper</h1>
+            <p className="app-page-subtitle">The requested paper could not be loaded.</p>
+          </div>
+          <Button variant="outline" asChild>
+            <Link href="/question-paper">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Papers
+            </Link>
+          </Button>
+        </div>
+        <div className="app-feedback app-feedback-error text-center">{error}</div>
+      </div>
+    );
+  }
+
+  if (!paper) {
+    return (
+      <div className="app-page-shell px-4 py-6 sm:px-0">
+        <div className="app-page-header-row">
+          <div>
+            <h1 className="app-page-title">Question Paper</h1>
+            <p className="app-page-subtitle">This paper may not belong to the currently selected school.</p>
+          </div>
+          <Button variant="outline" asChild>
+            <Link href="/question-paper">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Papers
+            </Link>
+          </Button>
+        </div>
+        <div className="app-empty-state">Question paper not found.</div>
+      </div>
+    );
+  }
+
+  const summarySections = paper.sections.map((section: any) => ({
+    id: section._id,
+    name: section.name,
+    questions: section.questions.map((question: any) => ({
+      question: question.question,
+      marks: question.marks,
+      negativeMarks: question.negativeMarks,
     })),
   }));
 
   return (
-    <div className="container p-4 lg:p-6 bg-muted/20 min-h-screen">
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
-        {/* --- Main Content (Left Side) --- */}
-        <main className="flex-1 space-y-4 w-full">
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold tracking-tight">{paper.title}</h1>
-          </div>
+    <div className="container py-6 space-y-6">
+      <div className="app-page-header-row">
+        <div>
+          <h1 className="app-page-title">{paper.title}</h1>
+          <p className="app-page-subtitle">Review paper details, sections, question composition, and scoring rules.</p>
+        </div>
+        <PrintEditToolbar paperId={paper._id} />
+      </div>
 
-          {/* Toolbar: Edit & Make a Copy */}
-          <QuestionPaperToolbar paper={paper} />
+      <QuestionPaperToolbar paper={paper} />
 
-          {paper.instructions && (
-            <Card>
-              <CardHeader>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] items-start">
+        <main className="min-w-0 space-y-6">
+          {paper.instructions ? (
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
                 <CardTitle>Instructions</CardTitle>
               </CardHeader>
-              <CardContent className="prose prose-sm max-w-none">
+              <CardContent className="app-section-body prose prose-sm max-w-none dark:prose-invert">
                 <p>{paper.instructions}</p>
               </CardContent>
             </Card>
-          )}
+          ) : null}
 
-          <Card>
-            <CardHeader>
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
               <CardTitle>Paper Details</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-muted-foreground">Class:</span>{" "}
-                <span className="font-medium">{paper.class?.name || "-"}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Subject:</span>{" "}
-                <span className="font-medium">
-                  {paper.subject?.name || "-"}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Duration:</span>{" "}
-                <span className="font-medium">{paper.duration ?? "-"} min</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Passing Marks:</span>{" "}
-                <span className="font-medium">{paper.passingMarks ?? "-"}</span>
+            <CardContent className="app-section-body">
+              <div className="app-detail-grid">
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Class</p>
+                  <div className="app-detail-value">{paper.class?.name || '-'}</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Subject</p>
+                  <div className="app-detail-value">{paper.subject?.name || '-'}</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Duration</p>
+                  <div className="app-detail-value">{paper.duration ?? '-'} min</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Passing Marks</p>
+                  <div className="app-detail-value">{paper.passingMarks ?? '-'}</div>
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {paper.sections.map((section: any, sectionIndex: number) => (
-            <Card key={section._id || sectionIndex}>
-              <CardHeader>
-                <CardTitle className="text-xl flex justify-between items-center">
-                  <span>{`Section ${sectionIndex + 1}: ${section.name}`}</span>
+            <Card key={section._id || sectionIndex} className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <CardTitle className="text-lg">{`Section ${sectionIndex + 1}: ${section.name}`}</CardTitle>
+                    {section.description ? (
+                      <p className="mt-2 text-sm text-muted-foreground">{section.description}</p>
+                    ) : null}
+                  </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline">
-                      {section.questions?.length || 0} Questions
-                    </Badge>
+                    <Badge variant="outline">{section.questions?.length || 0} Questions</Badge>
                     <Badge variant="secondary">{section.marks} Marks</Badge>
                   </div>
-                </CardTitle>
-                {section.description && (
-                  <p className="text-sm text-muted-foreground pt-2">
-                    {section.description}
-                  </p>
-                )}
+                </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {section.questions.map((q: any, qIndex: number) => (
+              <CardContent className="app-section-body space-y-4">
+                {section.questions.map((item: any, questionIndex: number) => (
                   <div
-                    key={q.question._id || qIndex}
-                    className="border rounded p-3 bg-background"
+                    key={item.question._id || questionIndex}
+                    className="rounded-xl border border-border/60 bg-muted/10 p-4"
                   >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <p className="font-semibold mb-2">
-                          Question {qIndex + 1}
-                        </p>
-                        <QuestionItemClient
-                          question={q.question}
-                          readOnly
-                          classes={[]}
-                          subjects={[]}
-                          allTags={[]}
-                        />
-                      </div>
-                      <div className="text-right ml-4">
-                        <Badge variant="outline">{q.marks} Marks</Badge>
-                        {q.negativeMarks > 0 && (
-                          <Badge variant="destructive" className="mt-1 block">
-                            {q.negativeMarks} Negative
-                          </Badge>
-                        )}
+                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <p className="text-sm font-semibold text-foreground">Question {questionIndex + 1}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{item.marks} Marks</Badge>
+                        {item.negativeMarks > 0 ? (
+                          <Badge variant="destructive">{item.negativeMarks} Negative</Badge>
+                        ) : null}
                       </div>
                     </div>
+                    <QuestionItemClient
+                      question={item.question}
+                      readOnly
+                      classes={[]}
+                      subjects={[]}
+                      allTags={[]}
+                    />
                   </div>
                 ))}
               </CardContent>
@@ -218,8 +260,7 @@ export default function ViewQuestionPaperPage({
           ))}
         </main>
 
-        {/* --- Sidebar (Right Side) --- */}
-        <aside className="w-full lg:w-[380px] lg:sticky lg:top-6 space-y-4 print:hidden">
+        <aside className="space-y-4 xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start print:hidden">
           <PaperSummary
             sections={summarySections}
             totalPaperMarks={paper.totalMarks}
@@ -229,8 +270,6 @@ export default function ViewQuestionPaperPage({
           />
         </aside>
       </div>
-      {/* Place PrintEditToolbar here, outside Server Component tree */}
-      <PrintEditToolbar paperId={paper._id} />
     </div>
   );
 }

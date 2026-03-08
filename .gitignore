@@ -23,6 +23,7 @@ npm-debug.log*
 yarn-error.log*
 out/
 .next/
+.next-dev/
 *.pdf
 __pycache__/
 *.pyc

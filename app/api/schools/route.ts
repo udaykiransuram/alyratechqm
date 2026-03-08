@@ -4,6 +4,8 @@ import { connectDB } from '@/lib/db';
 import { provisionTenant } from '@/lib/tenant-provision';
 import School from '@/models/School';
 
+export const dynamic = 'force-dynamic';
+
 export const runtime = 'nodejs';
 
 export async function GET() {

@@ -1,4 +1,10 @@
-import React from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function OptionTagModal({
   isOpen,
@@ -15,37 +21,42 @@ export default function OptionTagModal({
   isCorrect: boolean;
   students: { name: string; rollNumber: string }[];
 }) {
-  if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center" onClick={onClose}>
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-800">
-            Option: {option} | Tag: {tag} | {isCorrect ? "Correct" : "Incorrect"}
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-full text-slate-500 hover:bg-slate-200 focus:outline-none"
-            aria-label="Close"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader className="text-left">
+          <DialogTitle>
+            {option}: {tag}
+          </DialogTitle>
+          <DialogDescription>
+            {isCorrect ? 'Correct' : 'Incorrect'} option-tag selections for this group.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="analytics-subsection">
+          <div className="flex flex-wrap gap-2">
+            <span className={`analytics-badge ${isCorrect ? 'analytics-badge-success' : 'analytics-badge-danger'}`}>
+              {isCorrect ? 'Correct' : 'Incorrect'}
+            </span>
+            <span className="analytics-badge border-border/60 bg-background text-foreground">
+              {students.length} student{students.length === 1 ? '' : 's'}
+            </span>
+          </div>
+
+          {students.length > 0 ? (
+            <ul className="space-y-2 text-sm text-foreground">
+              {students.map((student, index) => (
+                <li key={`${student.rollNumber}-${student.name}-${index}`} className="analytics-order-item">
+                  <span className="font-medium">{student.name}</span>
+                  <span className="text-muted-foreground">{student.rollNumber}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="app-empty-state py-8">No students recorded for this option tag.</div>
+          )}
         </div>
-        <div className="p-4">
-          <div className="font-semibold mb-2">Students:</div>
-          <ul className="list-disc list-inside text-sm">
-            {students.length
-              ? students.map((s, i) => (
-                  <li key={i}>
-                    {s.name} ({s.rollNumber})
-                  </li>
-                ))
-              : <li className="text-slate-400 italic">None</li>}
-          </ul>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

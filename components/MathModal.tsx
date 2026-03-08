@@ -6,7 +6,7 @@ declare global {
   }
 }
 
-import { useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -23,10 +23,18 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onInsert: (latex: string, mode?: 'inline' | 'block') => void;
-  initialLatex?: string; // Prop to pre-fill the math field for editing
+  initialLatex?: string;
 };
 
 const RECENT_KEY = 'recent_math_expressions';
+
+const mathFieldStyle: CSSProperties = {
+  width: '100%',
+  minHeight: '72px',
+  fontSize: '1.1rem',
+  background: 'transparent',
+  outline: 'none',
+};
 
 export default function MathModal({ open, onClose, onInsert, initialLatex }: Props) {
   const mathRef = useRef<any>(null);
@@ -36,77 +44,76 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
   const [error, setError] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
 
-  // Dynamically register <math-field> and configure sounds directory
   useEffect(() => {
     const loadMathLive = async () => {
       if (typeof window !== 'undefined' && !window.__mathlive_registered__) {
         const { MathfieldElement } = await import('mathlive');
-
-        // Set soundsDirectory on the MathfieldElement class itself
-        MathfieldElement.soundsDirectory = '/sounds/'; // Point to your public/sounds folder
-        // Optionally, you can explicitly disable sounds if desired:
-        // MathfieldElement.keypressSound = 'none';
-        // MathfieldElement.plonkSound = 'none';
+        MathfieldElement.soundsDirectory = '/sounds/';
 
         if (!customElements.get('math-field')) {
           customElements.define('math-field', MathfieldElement);
         }
         window.__mathlive_registered__ = true;
-        console.log('MathfieldElement defined and soundsDirectory set.');
       }
     };
+
     loadMathLive();
   }, []);
 
-  // Reset state when modal opens and focus math field
   useEffect(() => {
-    if (open) {
-      // Set initial LaTeX if provided, otherwise clear
-      const initialValue = initialLatex || '';
-      setLatex(initialValue);
-      setError('');
-      setPreviewHtml('');
-      loadRecent();
+    if (!open) return;
 
-      // Set value on math-field and trigger input handler
-      if (mathRef.current) {
-        mathRef.current.setValue(initialValue);
-        // Manually trigger handleInput to update preview if initialValue is set
-        // A small timeout ensures MathLive has initialized the value before focusing
-        setTimeout(() => {
-          handleInput(); // Call handleInput to generate preview
-          mathRef.current?.focus(); // Focus after setting value
-        }, 100);
-      }
+    const initialValue = initialLatex || '';
+    setLatex(initialValue);
+    setError('');
+    setPreviewHtml('');
+    loadRecent();
+
+    if (mathRef.current) {
+      mathRef.current.setValue(initialValue);
+      setTimeout(() => {
+        handleInput();
+        mathRef.current?.focus();
+      }, 100);
     }
-  }, [open, initialLatex]); // Depend on initialLatex to re-initialize when editing different math
+  }, [open, initialLatex]);
 
-  // Prevent modal from closing on virtual keyboard input
-  // The global 'pointerdown' listener was removed as onPointerDownOutside is more suitable
   useEffect(() => {
-    const el = mathRef.current;
-    if (!el) return;
+    const field = mathRef.current;
+    if (!field) return;
 
-    const stopKey = (e: KeyboardEvent) => e.stopPropagation();
-
-    el.addEventListener('keydown', stopKey);
-    el.addEventListener('keyup', stopKey);
+    const stopKey = (event: KeyboardEvent) => event.stopPropagation();
+    field.addEventListener('keydown', stopKey);
+    field.addEventListener('keyup', stopKey);
 
     return () => {
-      el.removeEventListener('keydown', stopKey);
-      el.removeEventListener('keyup', stopKey);
+      field.removeEventListener('keydown', stopKey);
+      field.removeEventListener('keyup', stopKey);
     };
   }, [mathRef.current]);
 
+  useEffect(() => {
+    if (open && mathRef.current) {
+      handleInput();
+    }
+  }, [mode, open]);
+
   const loadRecent = () => {
     const data = localStorage.getItem(RECENT_KEY);
-    if (data) {
+    if (!data) {
+      setRecent([]);
+      return;
+    }
+
+    try {
       setRecent(JSON.parse(data));
+    } catch {
+      setRecent([]);
     }
   };
 
   const saveToRecent = (expression: string) => {
-    const updated = [expression, ...recent.filter((e) => e !== expression)].slice(0, 5);
+    const updated = [expression, ...recent.filter((item) => item !== expression)].slice(0, 5);
     setRecent(updated);
     localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
   };
@@ -114,6 +121,13 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
   const handleInput = () => {
     const current = mathRef.current?.value || '';
     setLatex(current);
+
+    if (!current) {
+      setPreviewHtml('');
+      setError('');
+      return;
+    }
+
     try {
       const html = katex.renderToString(current, {
         displayMode: mode === 'block',
@@ -135,92 +149,98 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent
+        className="sm:max-w-2xl"
         aria-describedby="math-dialog-description"
-        // This prop prevents the dialog from closing when clicking on the MathLive virtual keyboard
-        onPointerDownOutside={(e) => {
-          const target = e.target as HTMLElement;
-          // Check if the clicked element (or any of its parents) is part of the MathLive virtual keyboard
+        onPointerDownOutside={(event) => {
+          const target = event.target as HTMLElement;
           if (target.closest('.ML__keyboard')) {
-            e.preventDefault(); // Prevent the default behavior (closing the dialog)
+            event.preventDefault();
           }
         }}
       >
-        <DialogHeader>
+        <DialogHeader className="text-left">
           <DialogTitle>Insert Math</DialogTitle>
+          <DialogDescription id="math-dialog-description">
+            Enter or edit a LaTeX expression, preview it instantly, and insert it in inline or block mode.
+          </DialogDescription>
         </DialogHeader>
 
-        {/* ADD DialogDescription here, as a direct child of DialogContent */}
-        <DialogDescription id="math-dialog-description" className="sr-only">
-          Enter a LaTeX math expression to insert or edit in the editor.
-        </DialogDescription>
+        <div className="space-y-5">
+          <div className="app-section space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">Math Mode</p>
+                <p className="text-sm text-muted-foreground">Choose how the expression should render in the editor.</p>
+              </div>
+              <ToggleGroup
+                type="single"
+                value={mode}
+                onValueChange={(value) => {
+                  if (value === 'inline' || value === 'block') {
+                    setMode(value);
+                  }
+                }}
+              >
+                <ToggleGroupItem value="inline">Inline</ToggleGroupItem>
+                <ToggleGroupItem value="block">Block</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
 
-        {/* Mode toggle */}
-        <div className="flex items-center justify-between gap-2">
-          <label className="text-sm font-medium">Math Mode:</label>
-          <ToggleGroup
-            type="single"
-            value={mode}
-            onValueChange={(val) => setMode(val as 'inline' | 'block')}
-          >
-            <ToggleGroupItem value="inline">Inline</ToggleGroupItem>
-            <ToggleGroupItem value="block">Block</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-
-        {/* Math input */}
-        <math-field
-          ref={mathRef}
-          onInput={handleInput}
-          style={{
-            width: '100%',
-            minHeight: '64px',
-            fontSize: '1.2rem',
-            border: '1px solid #ccc',
-            borderRadius: '8px',
-            padding: '8px',
-          }}
-        />
-
-        {/* Live preview */}
-        <div className="mt-2">
-          <label className="text-sm font-medium">Preview:</label>
-          <div
-            className="p-2 border rounded min-h-[40px] mt-1 bg-gray-50"
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
-          />
-          {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
-        </div>
-
-        {/* Recent */}
-        {recent.length > 0 && (
-          <div className="mt-3">
-            <label className="text-sm font-medium">Recent:</label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {recent.map((item) => (
-                <Button
-                  key={item}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (mathRef.current) {
-                      mathRef.current.setValue(item);
-                      setLatex(item);
-                      handleInput(); // Trigger input handler for preview
-                    }
-                  }}
-                >
-                  {item}
-                </Button>
-              ))}
+            <div className="space-y-2">
+              <label className="app-field-label">Expression</label>
+              <div className="rounded-xl border border-border/60 bg-background px-3 py-3 shadow-sm">
+                <math-field ref={mathRef} onInput={handleInput} style={mathFieldStyle} />
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Actions */}
-        <DialogFooter className="mt-4">
-          <Button variant="secondary" onClick={onClose}>
+          <div className="app-section space-y-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">Preview</p>
+              <p className="text-sm text-muted-foreground">Verify the rendered output before inserting it.</p>
+            </div>
+            <div
+              className="min-h-[72px] rounded-xl border border-border/60 bg-background px-4 py-3 text-foreground"
+              dangerouslySetInnerHTML={{
+                __html: previewHtml || '<span class="text-sm text-muted-foreground">Start typing to preview the expression.</span>',
+              }}
+            />
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          </div>
+
+          {recent.length > 0 ? (
+            <div className="app-section space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Recent</p>
+                <p className="text-sm text-muted-foreground">Reuse one of your recently inserted expressions.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {recent.map((item) => (
+                  <Button
+                    key={item}
+                    variant="outline"
+                    size="sm"
+                    className="max-w-full font-mono text-xs"
+                    onClick={() => {
+                      if (mathRef.current) {
+                        mathRef.current.setValue(item);
+                        setLatex(item);
+                        handleInput();
+                      }
+                    }}
+                  >
+                    {item}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <DialogFooter className="gap-2 pt-2">
+          <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button disabled={!latex || !!error} onClick={handleInsert}>

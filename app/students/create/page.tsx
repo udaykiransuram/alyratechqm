@@ -24,7 +24,6 @@ export default function CreateStudentPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  // Fetch classes on mount
   useEffect(() => {
     fetch(
       "/api/classes" +
@@ -80,7 +79,6 @@ export default function CreateStudentPage() {
     }
   };
 
-  // --- Bulk Upload Handlers ---
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -91,7 +89,6 @@ export default function CreateStudentPage() {
 
     if (file.name.endsWith(".csv")) {
       const text = await file.text();
-      console.log("CSV file content:", text); // <-- Add this
       const lines = text.split("\n").filter(Boolean);
       const [header, ...rows] = lines;
       const columns = header.split(",").map((h) => h.trim());
@@ -103,7 +100,6 @@ export default function CreateStudentPage() {
             obj[col] = values[idx] || "";
           });
           obj.role = "student";
-          // Map class name to class ID
           if (obj.class) {
             const found = classes.find(
               (c) =>
@@ -114,11 +110,7 @@ export default function CreateStudentPage() {
           if (obj.enrolledAt) obj.enrolledAt = new Date(obj.enrolledAt);
           return obj;
         })
-        .filter((s) => s.class); // Only keep students with a valid class
-
-      // For CSV
-      console.log("Parsed CSV rows:", rows);
-      console.log("CSV columns:", columns);
+        .filter((s) => s.class);
 
       const unmatched = rows
         .map((row) => {
@@ -138,16 +130,16 @@ export default function CreateStudentPage() {
             ),
         );
 
-      console.log("Unmatched class names:", unmatched);
+      if (unmatched.length > 0) {
+        setMessage(`Unmatched class names: ${unmatched.join(", ")}`);
+      }
     } else if (file.name.endsWith(".xlsx")) {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: "array" });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const json = XLSX.utils.sheet_to_json(sheet);
-      console.log("Excel parsed JSON:", json); // <-- Add this
 
-      // Normalize keys to lowercase for each row
       const normalizedJson = json.map((row: any) => {
         const newRow: any = {};
         Object.keys(row).forEach((key) => {
@@ -158,7 +150,6 @@ export default function CreateStudentPage() {
 
       students = normalizedJson
         .map((row: any) => {
-          // Map class name to class ID
           if (row.class) {
             const found = classes.find(
               (c) =>
@@ -182,15 +173,12 @@ export default function CreateStudentPage() {
       return;
     }
 
-    // After mapping and before sending:
     const skipped = students.filter((s) => !s.class);
     if (skipped.length > 0) {
       setMessage(
         `Some students were skipped due to invalid class: ${skipped.map((s) => s.name).join(", ")}`,
       );
     }
-
-    console.log("Sending students to backend:", students);
 
     const res = await fetch(
       "/api/users/bulk" +
@@ -204,10 +192,7 @@ export default function CreateStudentPage() {
     const data = await res.json();
     setBulkLoading(false);
 
-    console.log("Bulk upload response:", data);
-
     if (data.success) {
-      // Count successes and failures
       const failed = (data.results || []).filter((r: any) => !r.success);
       const succeeded = (data.results || []).filter(
         (r: any) => r.success && !r.existed,
@@ -222,7 +207,6 @@ export default function CreateStudentPage() {
         msg += ` ${failed.length} failed: `;
         msg += failed
           .map((f: any) => {
-            // Try to get row number from student object, fallback to name
             const rowNum =
               (f.student?.__rownum__ ??
                 f.student?.__rowNum__ ??
@@ -240,99 +224,96 @@ export default function CreateStudentPage() {
     e.target.value = "";
   };
 
-  return (
-    <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded shadow">
-      <h1 className="text-2xl font-bold mb-4">Create Student</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          name="name"
-          placeholder="Name"
-          value={form.name}
-          onChange={handleChange}
-          required
-          className="w-full border px-3 py-2 rounded"
-        />
-        <input
-          name="email"
-          placeholder="Email"
-          value={form.email}
-          onChange={handleChange}
-          type="email"
-          className="w-full border px-3 py-2 rounded"
-        />
-        <input
-          name="mobileNumber"
-          placeholder="Parent Mobile Number (WhatsApp)"
-          value={form.mobileNumber}
-          onChange={handleChange}
-          className="w-full border px-3 py-2 rounded"
-        />
-        <input
-          name="password"
-          placeholder="Password"
-          value={form.password}
-          onChange={handleChange}
-          type="password"
-          className="w-full border px-3 py-2 rounded"
-        />
-        <select
-          name="class"
-          value={form.class}
-          onChange={handleChange}
-          required
-          className="w-full border px-3 py-2 rounded"
-        >
-          <option value="">Select Class</option>
-          {classes.map((cls) => (
-            <option key={cls._id} value={cls._id}>
-              {cls.name}
-            </option>
-          ))}
-        </select>
-        <input
-          name="rollNumber"
-          placeholder="Roll Number"
-          value={form.rollNumber}
-          onChange={handleChange}
-          required
-          className="w-full border px-3 py-2 rounded"
-        />
-        <input
-          name="enrolledAt"
-          placeholder="Enrolled At (YYYY-MM-DD)"
-          value={form.enrolledAt}
-          onChange={handleChange}
-          type="date"
-          className="w-full border px-3 py-2 rounded"
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-        >
-          {loading ? "Creating..." : "Create Student"}
-        </button>
-      </form>
+  let messageClassName = "app-feedback app-feedback-success";
+  if (message?.toLowerCase().includes("error") || message?.toLowerCase().includes("failed") || message?.toLowerCase().includes("unsupported")) {
+    messageClassName = "app-feedback app-feedback-error";
+  } else if (message?.toLowerCase().includes("skipped") || message?.toLowerCase().includes("unmatched")) {
+    messageClassName = "app-feedback app-feedback-info";
+  }
 
-      <div className="my-6 border-t pt-6">
-        <label className="block font-semibold mb-2">
-          Bulk Upload Students (CSV or Excel)
-        </label>
-        <input
-          type="file"
-          accept=".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          onChange={handleBulkUpload}
-          disabled={bulkLoading}
-          className="block w-full text-sm text-slate-700 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-        />
-        <p className="text-xs text-slate-500 mt-2">
-          CSV or Excel columns:{" "}
-          <code>name,email,password,class,rollNumber,enrolledAt</code>
+  return (
+    <div className="app-page-shell max-w-xl px-4 py-6 sm:px-0">
+      <div className="app-page-header">
+        <h1 className="app-page-title">Create Student</h1>
+        <p className="app-page-subtitle">
+          Add a student manually or upload a batch from CSV or Excel.
         </p>
-        {bulkLoading && <div className="mt-2 text-blue-600">Uploading...</div>}
       </div>
 
-      {message && <div className="mt-4 text-center">{message}</div>}
+      <div className="app-surface app-surface-body">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="app-field-group">
+            <label className="app-field-label" htmlFor="name">Name</label>
+            <input id="name" name="name" placeholder="Enter student name" value={form.name} onChange={handleChange} required className="app-form-input" />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="app-field-group">
+              <label className="app-field-label" htmlFor="email">Email</label>
+              <input id="email" name="email" placeholder="Enter email" value={form.email} onChange={handleChange} type="email" className="app-form-input" />
+            </div>
+            <div className="app-field-group">
+              <label className="app-field-label" htmlFor="mobileNumber">Parent Mobile Number</label>
+              <input id="mobileNumber" name="mobileNumber" placeholder="Enter WhatsApp number" value={form.mobileNumber} onChange={handleChange} className="app-form-input" />
+            </div>
+          </div>
+
+          <div className="app-field-group">
+            <label className="app-field-label" htmlFor="password">Password</label>
+            <input id="password" name="password" placeholder="Create password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="app-field-group">
+              <label className="app-field-label" htmlFor="class">Class</label>
+              <select id="class" name="class" value={form.class} onChange={handleChange} required className="app-form-input">
+                <option value="">Select Class</option>
+                {classes.map((cls) => (
+                  <option key={cls._id} value={cls._id}>
+                    {cls.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="app-field-group">
+              <label className="app-field-label" htmlFor="rollNumber">Roll Number</label>
+              <input id="rollNumber" name="rollNumber" placeholder="Enter roll number" value={form.rollNumber} onChange={handleChange} required className="app-form-input" />
+            </div>
+          </div>
+
+          <div className="app-field-group">
+            <label className="app-field-label" htmlFor="enrolledAt">Enrollment Date</label>
+            <input id="enrolledAt" name="enrolledAt" value={form.enrolledAt} onChange={handleChange} type="date" className="app-form-input" />
+          </div>
+
+          <button type="submit" disabled={loading} className="app-button-primary w-full">
+            {loading ? "Creating..." : "Create Student"}
+          </button>
+        </form>
+
+        <div className="app-section">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">
+              Bulk Upload Students
+            </h2>
+            <p className="app-page-subtitle">
+              CSV or Excel columns: <code>name,email,password,class,rollNumber,enrolledAt</code>
+            </p>
+          </div>
+
+          <input
+            type="file"
+            accept=".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={handleBulkUpload}
+            disabled={bulkLoading}
+            className="app-form-file"
+          />
+
+          {bulkLoading ? <p className="app-page-subtitle">Uploading...</p> : null}
+        </div>
+
+        {message ? <div className={messageClassName}>{message}</div> : null}
+      </div>
     </div>
   );
 }

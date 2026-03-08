@@ -97,6 +97,7 @@ function ExcelStudentResponseUploadPageContent() {
   const paperId = searchParams.get("paperId");
   const [fileName, setFileName] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Fetch section name from QuestionPaper when paperId changes
   useEffect(() => {
@@ -122,7 +123,9 @@ function ExcelStudentResponseUploadPageContent() {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
-    setResults([]); // Clear previous results
+    setResults([]);
+    setExcelRows([]);
+    setProgress(0);
     const reader = new FileReader();
     reader.onload = (evt) => {
       const bstr = evt.target?.result;
@@ -133,6 +136,16 @@ function ExcelStudentResponseUploadPageContent() {
       setExcelRows(data);
     };
     reader.readAsBinaryString(file);
+  };
+
+  const clearSelectedFile = () => {
+    setFileName(null);
+    setExcelRows([]);
+    setResults([]);
+    setProgress(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   // Add this cache outside the function so it persists during the upload
@@ -360,207 +373,339 @@ function ExcelStudentResponseUploadPageContent() {
     setLoading(false);
   };
 
+  const rowCount = Math.max(excelRows.length - 1, 0);
+  const successCount = results.filter((r) => r.success).length;
+  const failureCount = results.length - successCount;
+  const mappedQuestionCount = Object.keys(questionMap).length;
+  const uploadStatusLabel = loading
+    ? "Uploading"
+    : rowCount > 0
+      ? "Ready to upload"
+      : fileName
+        ? "No data rows found"
+        : "Waiting for file";
+
   return (
-    <div className="bg-slate-50 min-h-screen py-12 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">
-            Student Response Bulk Upload
-          </h1>
-          <p className="text-slate-500 mt-2">
-            Upload an Excel file to create student responses for a test paper.
-          </p>
-        </div>
-
-        {paperId && (
-          <div className="mb-6 text-sm text-center text-slate-600 bg-slate-100 border border-slate-200 rounded-lg px-4 py-2 max-w-md mx-auto">
-            <span className="font-semibold text-slate-800">
-              Active Paper ID:
-            </span>
-            <span className="ml-2 font-mono bg-slate-200 text-blue-700 px-2 py-0.5 rounded">
-              {paperId}
-            </span>
-          </div>
-        )}
-
-        <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-200">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-            {/* Left Side: File Upload */}
-            <div>
-              <label htmlFor="file-upload" className="cursor-pointer">
-                <div className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
-                  <UploadCloudIcon className="w-10 h-10 text-slate-400 mb-2" />
-                  <span className="font-semibold text-slate-600">
-                    Click to upload a file
+    <div className="analytics-page">
+      <div className="container max-w-5xl space-y-6">
+        <div className="analytics-card">
+          <div className="analytics-card-header">
+            <div className="analytics-toolbar-row gap-4">
+              <div className="analytics-toolbar-copy">
+                <h1 className="analytics-card-title">
+                  Student Response Bulk Upload
+                </h1>
+                <p className="analytics-card-description">
+                  Upload an Excel file to create student responses for a test
+                  paper.
+                </p>
+              </div>
+              <div className="analytics-toolbar-meta">
+                {paperId && (
+                  <span className="analytics-toolbar-chip">
+                    Paper ID: {paperId}
                   </span>
-                  <span className="text-xs text-slate-500">
-                    or drag and drop
+                )}
+                {sectionName && (
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    Section: {sectionName}
                   </span>
-                  <p className="text-xs text-slate-500 mt-2">XLSX, XLS</p>
-                </div>
-              </label>
-              <input
-                id="file-upload"
-                type="file"
-                className="hidden"
-                accept=".xlsx,.xls"
-                onChange={handleFile}
-              />
+                )}
+              </div>
             </div>
-
-            {/* Right Side: Upload Action */}
-            <div className="text-center md:text-left">
-              {fileName ? (
-                <div className="mb-4">
-                  <div className="flex items-center justify-center md:justify-start bg-blue-50 text-blue-800 p-3 rounded-lg border border-blue-200">
-                    <FileIcon className="w-5 h-5 mr-3 flex-shrink-0" />
-                    <span className="font-medium text-sm truncate">
-                      {fileName}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-2 text-center md:text-left">
-                    {excelRows.length - 1} rows detected.
+          </div>
+          <div className="analytics-card-body">
+            <div className="analytics-toolbar">
+              <div className="analytics-toolbar-row">
+                <div className="analytics-toolbar-copy">
+                  <p className="analytics-toolbar-title">Upload checklist</p>
+                  <p className="analytics-toolbar-note">
+                    Select a workbook, verify the detected rows, then start the
+                    import. Row-level results appear below as each response is
+                    processed.
                   </p>
                 </div>
-              ) : (
-                <p className="text-slate-500 mb-4">
-                  Please select a file to begin.
-                </p>
-              )}
-
-              <button
-                onClick={handleUpload}
-                className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md font-semibold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                disabled={loading || excelRows.length <= 1}
-              >
-                {loading ? (
-                  <>
-                    <svg
-                      className="animate-spin h-5 w-5 text-white"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v8z"
-                      ></path>
-                    </svg>
-                    <span>Uploading...</span>
-                  </>
-                ) : (
-                  <span>Process and Upload File</span>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {loading && (
-            <div className="mt-6">
-              <div className="w-full bg-slate-200 rounded-full h-2.5">
-                <div
-                  className="bg-blue-600 h-2.5 rounded-full"
-                  style={{ width: `${progress}%`, transition: "width 0.2s" }}
-                ></div>
+                <div className="analytics-toolbar-meta">
+                  <span className="analytics-toolbar-chip">
+                    {uploadStatusLabel}
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {mappedQuestionCount} mapped questions
+                  </span>
+                </div>
               </div>
-              <p className="text-center text-sm text-slate-600 mt-2">
-                {Math.round(progress)}% Complete
-              </p>
+              <div className="analytics-info-grid">
+                <div className="analytics-info-card">
+                  <p className="analytics-info-label">Selected file</p>
+                  <p className="analytics-info-value">
+                    {fileName || "No file selected"}
+                  </p>
+                </div>
+                <div className="analytics-info-card">
+                  <p className="analytics-info-label">Detected rows</p>
+                  <p className="analytics-info-value">{rowCount}</p>
+                </div>
+                <div className="analytics-info-card">
+                  <p className="analytics-info-label">Target section</p>
+                  <p className="analytics-info-value">
+                    {sectionName || "Waiting for paper data"}
+                  </p>
+                </div>
+                <div className="analytics-info-card">
+                  <p className="analytics-info-label">Upload status</p>
+                  <p className="analytics-info-value">{uploadStatusLabel}</p>
+                </div>
+              </div>
             </div>
-          )}
+
+            <div className="grid gap-6 lg:grid-cols-[1.15fr,0.95fr]">
+              <div className="analytics-subsection">
+                <div className="analytics-toolbar-copy">
+                  <p className="analytics-toolbar-title">Select workbook</p>
+                  <p className="analytics-toolbar-note">
+                    The importer reads the first sheet in the workbook.
+                    Supported file types: XLSX and XLS.
+                  </p>
+                </div>
+                <label htmlFor="file-upload" className="block cursor-pointer">
+                  <div className="flex h-56 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/70 bg-background text-center transition-colors hover:bg-muted/20">
+                    <UploadCloudIcon className="mb-3 h-10 w-10 text-muted-foreground" />
+                    <span className="text-base font-semibold text-foreground">
+                      {fileName ? "Replace selected workbook" : "Choose an Excel workbook"}
+                    </span>
+                    <span className="mt-1 text-sm text-muted-foreground">
+                      Drag and drop or click to browse
+                    </span>
+                    <p className="mt-3 text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                      XLSX • XLS
+                    </p>
+                  </div>
+                </label>
+                <input
+                  ref={fileInputRef}
+                  id="file-upload"
+                  type="file"
+                  className="hidden"
+                  accept=".xlsx,.xls"
+                  onChange={handleFile}
+                />
+                <div className="analytics-toolbar-actions">
+                  <label
+                    htmlFor="file-upload"
+                    className="app-button-secondary cursor-pointer"
+                  >
+                    {fileName ? "Choose another file" : "Choose file"}
+                  </label>
+                  {fileName && (
+                    <button
+                      type="button"
+                      className="app-button-secondary"
+                      onClick={clearSelectedFile}
+                      disabled={loading}
+                    >
+                      Clear file
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="analytics-toolbar">
+                <div className="analytics-toolbar-copy">
+                  <p className="analytics-toolbar-title">Run bulk import</p>
+                  <p className="analytics-toolbar-note">
+                    Each populated row becomes one student response. Any failed
+                    rows stay listed below so they can be fixed and retried.
+                  </p>
+                </div>
+
+                {fileName ? (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-lg border border-primary/20 bg-background p-2 text-primary">
+                        <FileIcon className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {fileName}
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {rowCount} response rows detected and ready for import.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="app-empty-state">
+                    Choose a workbook to enable the upload action.
+                  </div>
+                )}
+
+                <div className="analytics-toolbar-actions">
+                  <button
+                    onClick={handleUpload}
+                    className="app-button-primary flex w-full items-center justify-center gap-2 sm:w-auto"
+                    disabled={loading || rowCount <= 0}
+                  >
+                    {loading ? (
+                      <>
+                        <svg
+                          className="h-5 w-5 animate-spin"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8v8z"
+                          ></path>
+                        </svg>
+                        <span>Uploading...</span>
+                      </>
+                    ) : (
+                      <span>
+                        {rowCount > 0
+                          ? `Upload ${rowCount} response${rowCount === 1 ? "" : "s"}`
+                          : "Upload responses"}
+                      </span>
+                    )}
+                  </button>
+                </div>
+                <p className="analytics-toolbar-note">
+                  {fileName
+                    ? rowCount > 0
+                      ? "The upload uses the active paper from the URL and the section mapping shown above."
+                      : "Your sheet needs a header row and at least one student response row."
+                    : "Columns are validated against the active paper before each response is created."}
+                </p>
+              </div>
+            </div>
+
+            {loading && (
+              <div className="analytics-toolbar">
+                <div className="analytics-toolbar-row">
+                  <div className="analytics-toolbar-copy">
+                    <p className="analytics-toolbar-title">Upload progress</p>
+                    <p className="analytics-toolbar-note">
+                      Responses are processed concurrently and the progress bar
+                      updates as each row completes.
+                    </p>
+                  </div>
+                  <span className="analytics-toolbar-chip">
+                    {Math.round(progress)}% complete
+                  </span>
+                </div>
+                <div className="h-2.5 w-full rounded-full bg-muted">
+                  <div
+                    className="h-2.5 rounded-full bg-primary transition-all"
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {results.length > 0 && (
-          <div className="mt-10 bg-white p-6 rounded-2xl shadow-md border border-slate-200">
-            <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-slate-800">
-                Upload Results
-              </h3>
-              <div className="text-sm text-slate-600 mt-2 sm:mt-0">
-                <span className="font-semibold text-green-600">
-                  {results.filter((r) => r.success).length}
-                </span>{" "}
-                Succeeded
-                <span className="mx-2">|</span>
-                <span className="font-semibold text-red-600">
-                  {results.filter((r) => !r.success).length}
-                </span>{" "}
-                Failed
+          <div className="analytics-card">
+            <div className="analytics-card-body">
+              <div className="analytics-toolbar">
+                <div className="analytics-toolbar-row">
+                  <div className="analytics-toolbar-copy">
+                    <h2 className="analytics-card-title">Upload Results</h2>
+                    <p className="analytics-toolbar-note">
+                      Review each processed row below. Failed entries can be
+                      fixed in Excel and uploaded again.
+                    </p>
+                  </div>
+                  <div className="analytics-toolbar-meta">
+                    <span className="analytics-toolbar-chip">
+                      {results.length} processed
+                    </span>
+                    <span className="analytics-badge analytics-badge-success">
+                      {successCount} succeeded
+                    </span>
+                    <span className="analytics-badge analytics-badge-danger">
+                      {failureCount} failed
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="min-w-full text-sm divide-y divide-slate-200">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">
-                      Row
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">
-                      Message
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-200">
-                  {results.map((r, idx) => (
-                    <tr key={idx}>
-                      <td className="px-4 py-3 font-medium text-slate-500">
-                        {r.row}
-                      </td>
-                      <td className="px-4 py-3">
-                        {r.success ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <CheckCircleIcon className="w-4 h-4" /> Success
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            <AlertCircleIcon className="w-4 h-4" /> Error
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{r.message}</td>
+              <div className="analytics-table-wrap">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-muted/30">
+                    <tr>
+                      <th className="analytics-th">Row</th>
+                      <th className="analytics-th">Status</th>
+                      <th className="analytics-th">Message</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {results.map((r, idx) => (
+                      <tr key={idx} className="analytics-row">
+                        <td className="analytics-td font-medium text-muted-foreground">
+                          {r.row}
+                        </td>
+                        <td className="analytics-td">
+                          {r.success ? (
+                            <span className="analytics-badge analytics-badge-success">
+                              <CheckCircleIcon className="h-4 w-4" /> Success
+                            </span>
+                          ) : (
+                            <span className="analytics-badge analytics-badge-danger">
+                              <AlertCircleIcon className="h-4 w-4" /> Error
+                            </span>
+                          )}
+                        </td>
+                        <td className="analytics-td text-muted-foreground">
+                          {r.message}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
-        <div className="mt-8 text-sm text-gray-700 bg-blue-50 border border-blue-100 rounded p-4">
-          <p className="mb-1">
-            <b>Excel columns required:</b>{" "}
-            <span className="font-mono">CANDIDATE ID</span>,{" "}
-            <span className="font-mono">CANDIDATE NAME</span>,{" "}
-            <span className="font-mono">FATHER</span>,{" "}
-            <span className="font-mono">GROUP</span>,{" "}
-            <span className="font-mono">Q1</span>,{" "}
-            <span className="font-mono">Q2</span>, ...
+        <div className="analytics-subsection">
+          <div className="analytics-toolbar-copy">
+            <p className="analytics-toolbar-title">Excel format guide</p>
+            <p className="analytics-toolbar-note">
+              Use these columns exactly so the importer can match students,
+              classes, and answers correctly.
+            </p>
+          </div>
+          <div className="analytics-toolbar-actions">
+            {[
+              "CANDIDATE ID",
+              "CANDIDATE NAME",
+              "FATHER",
+              "GROUP",
+              "Q1",
+              "Q2",
+              "...",
+            ].map((label) => (
+              <span key={label} className="analytics-toolbar-chip">
+                {label}
+              </span>
+            ))}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Question columns like <span className="font-mono">Q1</span> and{" "}
+            <span className="font-mono">Q2</span> accept option letters such
+            as <span className="font-mono">A</span>/<span className="font-mono">B</span>/<span className="font-mono">C</span>/<span className="font-mono">D</span> or numeric option indexes like <span className="font-mono">1</span>, <span className="font-mono">2</span>, <span className="font-mono">12</span>, and <span className="font-mono">25</span>.
           </p>
-          <p className="mb-1">
-            The question columns (<span className="font-mono">Q1</span>,{" "}
-            <span className="font-mono">Q2</span>, etc.) should contain the
-            selected option index or letter: use{" "}
-            <span className="font-mono">A</span>/
-            <span className="font-mono">B</span>/
-            <span className="font-mono">C</span>/
-            <span className="font-mono">D</span> for the first four options, or
-            the option number (e.g., <span className="font-mono">1</span>,{" "}
-            <span className="font-mono">2</span>,{" "}
-            <span className="font-mono">12</span>,{" "}
-            <span className="font-mono">25</span>).
-          </p>
-          <p>
-            The <b>paper</b> is taken from the URL.
+          <p className="text-sm text-muted-foreground">
+            The active paper is taken from the URL, and uploads use the first
+            section mapping loaded above.
           </p>
         </div>
       </div>

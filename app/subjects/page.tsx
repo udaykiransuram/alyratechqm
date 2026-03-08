@@ -1,8 +1,8 @@
-// app/subjects/page.tsx
-
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
@@ -16,9 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { SubjectItem, SubjectItemSkeleton } from '@/components/subject-item';
-import Link from 'next/link';
-import type { Subject } from '@/components/subject-item'; // Import the consistent Subject type
+import { SubjectItem, SubjectItemSkeleton, type Subject } from '@/components/subject-item';
 import { Spinner } from '@/components/ui/spinner';
 
 export default function ViewSubjectsPage() {
@@ -31,24 +29,25 @@ export default function ViewSubjectsPage() {
 
   const { toast } = useToast();
 
-  // This single fetch is all that's needed for the page.
   const fetchSubjects = useCallback(async () => {
     setPageLoading(true);
     setFetchError(null);
+
     try {
       const res = await fetch('/api/subjects');
       const data = await res.json();
+
       if (data.success) {
         setSubjects(data.subjects);
       } else {
-        const errorMessage = data.message || "Failed to load subjects.";
+        const errorMessage = data.message || 'Failed to load subjects.';
         setFetchError(errorMessage);
-        toast({ title: "Error", description: errorMessage, variant: "destructive" });
+        toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
       }
-    } catch (error) {
-      const errorMessage = "Network error when fetching subjects.";
+    } catch {
+      const errorMessage = 'Network error when fetching subjects.';
       setFetchError(errorMessage);
-      toast({ title: "Error", description: errorMessage, variant: "destructive" });
+      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
     } finally {
       setPageLoading(false);
     }
@@ -74,13 +73,21 @@ export default function ViewSubjectsPage() {
 
       const data = await res.json();
       if (data.success) {
-        setSubjects(prev => prev.filter((s) => s._id !== subjectToDeleteId));
-        toast({ title: "Success", description: "Subject deleted successfully!" });
+        setSubjects((prev) => prev.filter((subject) => subject._id !== subjectToDeleteId));
+        toast({ title: 'Success', description: 'Subject deleted successfully!' });
       } else {
-        toast({ title: "Error", description: data.message || "Failed to delete subject.", variant: "destructive" });
+        toast({
+          title: 'Error',
+          description: data.message || 'Failed to delete subject.',
+          variant: 'destructive',
+        });
       }
-    } catch (error) {
-      toast({ title: "Error", description: "Network error when deleting subject.", variant: "destructive" });
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Network error when deleting subject.',
+        variant: 'destructive',
+      });
     } finally {
       setIsDeleting(false);
       setShowDeleteDialog(false);
@@ -89,44 +96,54 @@ export default function ViewSubjectsPage() {
   }, [subjectToDeleteId, toast]);
 
   return (
-    <div className="container py-8 space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">All Subjects</h1>
-        <Link href="/subjects/create" passHref>
-          <Button>+ Add New Subject</Button>
+    <div className="container py-6 space-y-6">
+      <div className="app-page-header-row">
+        <div>
+          <h1 className="app-page-title">All Subjects</h1>
+          <p className="app-page-subtitle">
+            Browse, update, and organize subject definitions and linked tags.
+          </p>
+        </div>
+        <Link href="/subjects/create">
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Subject
+          </Button>
         </Link>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="app-surface overflow-hidden">
+        <CardHeader className="app-section-header">
           <CardTitle>Existing Subjects</CardTitle>
           <CardDescription>Browse, edit, or delete your current subjects.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="app-section-body">
           {fetchError ? (
-            <div className="text-center text-destructive py-10">
+            <div className="app-feedback app-feedback-error text-center">
               <p>{fetchError}</p>
-              <Button onClick={fetchSubjects} variant="outline" className="mt-4">
-                Try Again
-              </Button>
+              <div className="mt-4 flex justify-center">
+                <Button onClick={fetchSubjects} variant="outline">
+                  Try Again
+                </Button>
+              </div>
             </div>
           ) : pageLoading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <SubjectItemSkeleton key={i} />
+            <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <SubjectItemSkeleton key={index} />
               ))}
-            </div>
+            </ul>
           ) : subjects.length === 0 ? (
-            <div className="text-center text-muted-foreground py-10">
-              <p>No subjects found.</p>
-              <Link href="/subjects/create">
-                <Button variant="outline" className="mt-4">
-                  Create your first subject
-                </Button>
-              </Link>
+            <div className="app-empty-state">
+              <p>No subjects found yet.</p>
+              <div className="mt-4 flex justify-center">
+                <Link href="/subjects/create">
+                  <Button variant="outline">Create your first subject</Button>
+                </Link>
+              </div>
             </div>
           ) : (
-            <ul className="space-y-4">
+            <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {subjects.map((subject) => (
                 <SubjectItem
                   key={subject._id}
@@ -150,7 +167,11 @@ export default function ViewSubjectsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
               {isDeleting ? <Spinner /> : 'Delete Subject'}
             </AlertDialogAction>
           </AlertDialogFooter>

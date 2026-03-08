@@ -4,6 +4,8 @@ import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
 import { getTenantModels } from '@/lib/db-tenant';
 
+export const dynamic = 'force-dynamic';
+
 function resolveSchoolKey(req: NextRequest){
   const url = new URL(req.url);
   const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');

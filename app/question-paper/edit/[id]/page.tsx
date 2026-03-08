@@ -2,7 +2,6 @@ import React from "react";
 import { cookies, headers } from "next/headers";
 import QuestionPaperForm from "@/components/QuestionPaperForm";
 
-// Helper function to fetch data
 async function getQuestionPaper(id: string) {
   const cookieStore = cookies();
   const headerStore = headers();
@@ -24,9 +23,11 @@ async function getQuestionPaper(id: string) {
       },
     },
   );
+
   if (!res.ok) {
     return null;
   }
+
   const data = await res.json();
   return data.paper;
 }
@@ -39,12 +40,19 @@ export default async function EditQuestionPaperPage({
   const rawData = await getQuestionPaper(params.id);
 
   if (!rawData) {
-    return <div>Question paper not found.</div>;
+    return (
+      <div className="app-page-shell px-4 py-6 sm:px-0">
+        <div className="app-page-header">
+          <h1 className="app-page-title">Edit Question Paper</h1>
+          <p className="app-page-subtitle">The requested paper could not be loaded.</p>
+        </div>
+        <div className="app-empty-state">Question paper not found.</div>
+      </div>
+    );
   }
 
-  // Defensive mapping for sections/questions
   const initialData = {
-    _id: rawData._id, // <-- Add this line!
+    _id: rawData._id,
     title: rawData.title ?? "",
     instructions: rawData.instructions ?? "",
     duration: rawData.duration ?? 60,
@@ -61,12 +69,12 @@ export default async function EditQuestionPaperPage({
         Array.isArray(section.questions) && section.questions.length > 0
           ? (section.questions[0].negativeMarks ?? 0)
           : 0,
-      questions: (section.questions || []).map((q: any) => {
-        const questionObj = typeof q.question === "object" ? q.question : {};
+      questions: (section.questions || []).map((question: any) => {
+        const questionObj = typeof question.question === "object" ? question.question : {};
         return {
           question: questionObj,
-          marks: q.marks ?? section.marks ?? 1,
-          negativeMarks: q.negativeMarks ?? 0,
+          marks: question.marks ?? section.marks ?? 1,
+          negativeMarks: question.negativeMarks ?? 0,
         };
       }),
     })),
