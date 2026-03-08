@@ -313,7 +313,7 @@ export default function CreateTagPage() {
               <ChevronLeft className="mr-2 h-4 w-4" />
               Back to Tags
             </Button>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            <h1 className="app-page-title text-foreground">
               Create a New Tag
             </h1>
             <p className="text-muted-foreground">

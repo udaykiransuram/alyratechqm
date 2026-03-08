@@ -108,94 +108,90 @@ export default function EditStudentPage() {
     }
   };
 
-  if (loading) return <div className="max-w-md mx-auto mt-10">Loading…</div>;
-  if (error)
+  if (loading) {
     return (
-      <div className="max-w-md mx-auto mt-10 text-destructive">{error}</div>
+      <div className="app-page-shell max-w-xl px-4 py-6 sm:px-0">
+        <div className="app-feedback app-feedback-info">Loading student details...</div>
+      </div>
     );
+  }
+
+  if (error) {
+    return (
+      <div className="app-page-shell max-w-xl px-4 py-6 sm:px-0">
+        <div className="app-feedback app-feedback-error">{error}</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded shadow">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Edit Student</h1>
-        <button onClick={() => router.back()} className="text-sm text-blue-600">
+    <div className="app-page-shell max-w-xl px-4 py-6 sm:px-0">
+      <div className="app-page-header-row">
+        <div className="app-page-header">
+          <h1 className="app-page-title">Edit Student</h1>
+          <p className="app-page-subtitle">
+            Update student details, class placement, and enrollment information.
+          </p>
+        </div>
+        <button type="button" onClick={() => router.back()} className="app-button-secondary">
           Back
         </button>
       </div>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          name="name"
-          placeholder="Name"
-          value={form.name}
-          onChange={handleChange}
-          required
-          className="w-full border px-3 py-2 rounded"
-        />
-        <input
-          name="email"
-          placeholder="Email"
-          value={form.email}
-          onChange={handleChange}
-          type="email"
-          className="w-full border px-3 py-2 rounded"
-        />
-        <input
-          name="mobileNumber"
-          placeholder="Parent Mobile Number (WhatsApp)"
-          value={form.mobileNumber}
-          onChange={handleChange}
-          className="w-full border px-3 py-2 rounded"
-        />
-        <input
-          name="password"
-          placeholder="New Password (optional)"
-          value={form.password}
-          onChange={handleChange}
-          type="password"
-          className="w-full border px-3 py-2 rounded"
-        />
-        <select
-          name="class"
-          value={form.class}
-          onChange={handleChange}
-          required
-          className="w-full border px-3 py-2 rounded"
-        >
-          <option value="">Select Class</option>
-          {classes.map((cls) => (
-            <option key={cls._id} value={cls._id}>
-              {cls.name}
-            </option>
-          ))}
-        </select>
-        <input
-          name="rollNumber"
-          placeholder="Roll Number"
-          value={form.rollNumber}
-          onChange={handleChange}
-          required
-          className="w-full border px-3 py-2 rounded"
-        />
-        <input
-          name="enrolledAt"
-          placeholder="Enrolled At (YYYY-MM-DD)"
-          value={form.enrolledAt}
-          onChange={handleChange}
-          type="date"
-          className="w-full border px-3 py-2 rounded"
-        />
-        <button
-          type="submit"
-          disabled={saving}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-70"
-        >
-          {saving ? "Saving…" : "Save Changes"}
-        </button>
-      </form>
-      {message && (
-        <div className="mt-4 text-center text-green-600">{message}</div>
-      )}
-      {error && <div className="mt-2 text-center text-red-600">{error}</div>}
+
+      <div className="app-surface app-surface-body">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="app-field-group">
+            <label className="app-field-label" htmlFor="name">Name</label>
+            <input id="name" name="name" placeholder="Enter student name" value={form.name} onChange={handleChange} required className="app-form-input" />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="app-field-group">
+              <label className="app-field-label" htmlFor="email">Email</label>
+              <input id="email" name="email" placeholder="Enter email" value={form.email} onChange={handleChange} type="email" className="app-form-input" />
+            </div>
+            <div className="app-field-group">
+              <label className="app-field-label" htmlFor="mobileNumber">Parent Mobile Number</label>
+              <input id="mobileNumber" name="mobileNumber" placeholder="Enter WhatsApp number" value={form.mobileNumber} onChange={handleChange} className="app-form-input" />
+            </div>
+          </div>
+
+          <div className="app-field-group">
+            <label className="app-field-label" htmlFor="password">New Password</label>
+            <input id="password" name="password" placeholder="Leave blank to keep the current password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="app-field-group">
+              <label className="app-field-label" htmlFor="class">Class</label>
+              <select id="class" name="class" value={form.class} onChange={handleChange} required className="app-form-input">
+                <option value="">Select Class</option>
+                {classes.map((cls) => (
+                  <option key={cls._id} value={cls._id}>
+                    {cls.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="app-field-group">
+              <label className="app-field-label" htmlFor="rollNumber">Roll Number</label>
+              <input id="rollNumber" name="rollNumber" placeholder="Enter roll number" value={form.rollNumber} onChange={handleChange} required className="app-form-input" />
+            </div>
+          </div>
+
+          <div className="app-field-group">
+            <label className="app-field-label" htmlFor="enrolledAt">Enrollment Date</label>
+            <input id="enrolledAt" name="enrolledAt" value={form.enrolledAt} onChange={handleChange} type="date" className="app-form-input" />
+          </div>
+
+          <button type="submit" disabled={saving} className="app-button-primary w-full">
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </form>
+
+        {message ? <div className="app-feedback app-feedback-success">{message}</div> : null}
+        {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+      </div>
     </div>
   );
 }

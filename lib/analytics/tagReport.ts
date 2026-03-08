@@ -4,12 +4,17 @@ export function buildTagReport({
   groupBy,
   isClassLevel,
   questionStats = {},
+  filters = {},
 }: {
   responses: any[];
   paperSections: any[];
   groupBy: string[];
   isClassLevel?: boolean;
   questionStats?: Record<string, any>;
+  filters?: {
+    classId?: string;
+    subjectId?: string;
+  };
 }) {
   function arraysEqual(a: number[], b: number[]) {
     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
@@ -21,6 +26,26 @@ export function buildTagReport({
   function getTagValue(tags: any[], type: string) {
     const tag = tags.find((t: any) => t.type?.name?.toLowerCase() === type.toLowerCase());
     return tag?.name || `Unknown ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+  }
+
+  function getQuestionClassId(question: any) {
+    return String(question?.class?._id || question?.class || "");
+  }
+
+  function getQuestionSubjectId(question: any) {
+    return String(question?.subject?._id || question?.subject || "");
+  }
+
+  function getGroupKey(question: any, group: string, sectionName: string) {
+    if (group === 'section') return sectionName;
+    if (group === 'class') return question?.class?.name || 'Unknown Class';
+    if (group === 'subject') return question?.subject?.name || 'Unknown Subject';
+    if (group === 'tagtype') {
+      return (question.tags || [])
+        .map((tag: any) => `${tag.type?.name || 'Other'}: ${tag.name || 'Unknown'}`)
+        .join(', ');
+    }
+    return getTagValue(question.tags || [], group);
   }
 
   const stats: any = {};
@@ -42,6 +67,11 @@ export function buildTagReport({
       for (const qWrap of questions) {
         const question = qWrap.question;
         if (!question || !question.tags || !question._id) continue;
+
+        const questionClassId = getQuestionClassId(question);
+        const questionSubjectId = getQuestionSubjectId(question);
+        if (filters.classId && questionClassId !== filters.classId) continue;
+        if (filters.subjectId && questionSubjectId !== filters.subjectId) continue;
 
         const ans = answerMap[sectionName]?.[String(question._id)];
         const attempted = ans && Array.isArray(ans.selectedOptions) && ans.selectedOptions.length > 0;
@@ -68,15 +98,7 @@ export function buildTagReport({
         let pointer = stats;
         for (let i = 0; i < groupBy.length; i++) {
           const group = groupBy[i];
-          let key;
-          if (group === 'section') key = sectionName;
-          else if (group === 'tagtype') {
-            key = (question.tags || [])
-              .map((tag: any) => `${tag.type?.name || 'Other'}: ${tag.name || 'Unknown'}`)
-              .join(', ');
-          } else {
-            key = getTagValue(question.tags, group);
-          }
+          const key = getGroupKey(question, group, sectionName);
 
           if (!pointer[key]) pointer[key] = i === groupBy.length - 1
             ? { 

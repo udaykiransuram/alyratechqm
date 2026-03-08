@@ -4,6 +4,8 @@ import { connectDB } from '@/lib/db';
 import { getTenantModels } from '@/lib/db-tenant';
 import mongoose from 'mongoose';
 
+export const dynamic = 'force-dynamic';
+
 const isValidObjectId = (id: string): boolean => mongoose.Types.ObjectId.isValid(id);
 
 async function resolveTenant(req: NextRequest) {

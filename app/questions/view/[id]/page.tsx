@@ -6,9 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CheckCircle, Info } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Info, Grid3X3 } from 'lucide-react';
+import { ContentRenderer } from '@/components/ContentRenderer';
 
-// Updated interface for more accurate typing
 interface Question {
   _id: string;
   content: string;
@@ -21,6 +21,8 @@ interface Question {
   marks?: number;
   class?: { _id: string; name: string };
   subject?: { _id: string; name: string; code?: string };
+  matrixOptions?: { left?: string; right?: string }[];
+  matrixAnswers?: number[][];
 }
 
 export default function ViewQuestionPage({ params }: { params: { id: string } }) {
@@ -39,146 +41,193 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
         if (data.success && data.question) {
           setQuestion(data.question as Question);
         } else {
-          setError(data.message || "Question not found.");
+          setError(data.message || 'Question not found.');
         }
       })
-      .catch(() => setError("Network error loading question data."))
+      .catch(() => setError('Network error loading question data.'))
       .finally(() => setLoading(false));
   }, [id]);
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen bg-muted/20">
-        <Spinner /> <span className="ml-2 text-muted-foreground">Loading question details...</span>
+      <div className="app-page-shell px-4 py-6 sm:px-0">
+        <div className="app-surface app-surface-body">
+          <div className="app-status-row justify-center">
+            <Spinner />
+            <span>Loading question details...</span>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error || !question) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-muted/20">
-        <Card className="p-8 text-center shadow-lg">
-          <p className="text-red-600 mb-4 font-semibold">{error || "Question not found."}</p>
+      <div className="app-page-shell px-4 py-6 sm:px-0">
+        <div className="app-page-header-row">
+          <div>
+            <h1 className="app-page-title">View Question</h1>
+            <p className="app-page-subtitle">The requested question could not be loaded.</p>
+          </div>
           <Button variant="outline" onClick={() => router.push('/questions')}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Questions
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Questions
           </Button>
-        </Card>
+        </div>
+        <div className="app-feedback app-feedback-error text-center">{error || 'Question not found.'}</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-muted/20 min-h-screen">
-      <div className="container py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">View Question</h1>
-            <p className="text-muted-foreground">Detailed view of a single question and its properties.</p>
-          </div>
-          <Button variant="outline" onClick={() => router.push('/questions')}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back
-          </Button>
+    <div className="app-page-shell px-4 py-6 sm:px-0">
+      <div className="app-page-header-row">
+        <div>
+          <h1 className="app-page-title">View Question</h1>
+          <p className="app-page-subtitle">Detailed view of a single question and its metadata.</p>
         </div>
+        <Button variant="outline" onClick={() => router.push('/questions')}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          {/* Main Content: Question, Options, Explanation */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Question</CardTitle>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
+        <div className="min-w-0 space-y-6">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Question</CardTitle>
+            </CardHeader>
+            <CardContent className="app-section-body prose max-w-none dark:prose-invert">
+              <ContentRenderer htmlContent={question.content} />
+            </CardContent>
+          </Card>
+
+          {question.options && question.options.length > 0 ? (
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Options</CardTitle>
+                <CardDescription>Correct answers are highlighted below.</CardDescription>
               </CardHeader>
-              <CardContent className="prose max-w-none" dangerouslySetInnerHTML={{ __html: question.content }} />
+              <CardContent className="app-section-body">
+                <ul className="space-y-3">
+                  {question.options.map((option, index) => {
+                    const isAnswer = question.answerIndexes?.includes(index);
+                    return (
+                      <li
+                        key={index}
+                        className={`flex items-start gap-3 rounded-xl border px-3 py-3 ${
+                          isAnswer
+                            ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/40'
+                            : 'border-border/60 bg-muted/10'
+                        }`}
+                      >
+                        {isAnswer ? <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" /> : null}
+                        <div className={`min-w-0 flex-1 prose prose-sm max-w-none dark:prose-invert ${isAnswer ? 'font-medium' : ''}`}>
+                          <ContentRenderer htmlContent={option.content || ''} />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </CardContent>
             </Card>
+          ) : null}
 
-            {question.options && question.options.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Options</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-3">
-                    {question.options.map((opt, idx) => {
-                      const isAnswer = question.answerIndexes?.includes(idx);
-                      return (
-                        <li
-                          key={idx}
-                          className={`flex items-start p-3 rounded-md border ${isAnswer ? 'border-green-200 bg-green-50' : 'bg-background'}`}
-                        >
-                          {isAnswer && <CheckCircle className="h-5 w-5 text-green-600 mr-3 mt-0.5 flex-shrink-0" />}
-                          <div
-                            className={`prose prose-sm max-w-none ${isAnswer ? 'text-green-800 font-semibold' : ''}`}
-                            dangerouslySetInnerHTML={{ __html: opt.content || '' }}
-                          />
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
-
-            {question.explanation && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Info className="h-5 w-5 mr-2 text-blue-600" />
-                    Explanation
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: question.explanation }} />
-              </Card>
-            )}
-          </div>
-
-          {/* Sidebar: Metadata */}
-          <aside className="lg:col-span-1 space-y-6 lg:sticky lg:top-8">
-            <Card>
-              <CardHeader>
-                <CardTitle>Details</CardTitle>
+          {question.type === 'matrix-match' && question.matrixOptions?.length ? (
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle className="flex items-center gap-2">
+                  <Grid3X3 className="h-4 w-4 text-primary" />
+                  Matrix Configuration
+                </CardTitle>
+                <CardDescription>Read-only view of the matrix rows and columns.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Type</span>
-                  <Badge variant="secondary" className="capitalize">{question.type}</Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Marks</span>
-                  <span className="font-medium">{question.marks ?? '-'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subject</span>
-                  <span className="font-medium text-right">{question.subject?.name || '-'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Class</span>
-                  <span className="font-medium">{question.class?.name || '-'}</span>
+              <CardContent className="app-section-body">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {question.matrixOptions.map((option, index) => (
+                    <div key={index} className="app-detail-item">
+                      <p className="app-detail-label">Pair {index + 1}</p>
+                      <div className="space-y-2 text-sm text-foreground">
+                        <div>
+                          <span className="font-medium text-muted-foreground">Left:</span>{' '}
+                          <span>{option.left || '-'}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-muted-foreground">Right:</span>{' '}
+                          <span>{option.right || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
+          ) : null}
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Tags</CardTitle>
-                <CardDescription>Associated tags and their types.</CardDescription>
+          {question.explanation ? (
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle className="flex items-center gap-2">
+                  <Info className="h-4 w-4 text-primary" />
+                  Explanation
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                {question.tags && question.tags.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {question.tags.map(tag => (
-                      <Badge key={tag._id} variant="outline">
-                        {tag.name}
-                        {tag.type?.name && <span className="ml-1.5 opacity-60">[{tag.type.name}]</span>}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">No tags assigned.</p>
-                )}
+              <CardContent className="app-section-body prose prose-sm max-w-none dark:prose-invert">
+                <ContentRenderer htmlContent={question.explanation} />
               </CardContent>
             </Card>
-          </aside>
+          ) : null}
         </div>
+
+        <aside className="space-y-4 xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Details</CardTitle>
+              <CardDescription>Core metadata for this question.</CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <div className="app-detail-grid">
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Type</p>
+                  <div className="app-detail-value capitalize">{question.type}</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Marks</p>
+                  <div className="app-detail-value">{question.marks ?? '-'}</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Class</p>
+                  <div className="app-detail-value">{question.class?.name || '-'}</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Subject</p>
+                  <div className="app-detail-value">{question.subject?.name || '-'}</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Tags</CardTitle>
+              <CardDescription>Tags linked to this question.</CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              {question.tags?.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {question.tags.map(tag => (
+                    <Badge key={tag._id} variant="secondary">
+                      {tag.type?.name ? `${tag.type.name}: ` : ''}{tag.name}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <div className="app-empty-state py-6">No tags linked.</div>
+              )}
+            </CardContent>
+          </Card>
+        </aside>
       </div>
     </div>
   );

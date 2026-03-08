@@ -10,6 +10,7 @@ import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import "@/models/User";
 import "@/models/Subject";
+import "@/models/Class";
 import "@/models/TagType";
 import "@/models/Tag";
 import { buildTagReport } from "@/lib/analytics/tagReport";
@@ -120,6 +121,8 @@ export async function GET(
 
   // Validate params and query
   const groupByParam = req.nextUrl.searchParams.get("groupBy");
+  const filterClassId = req.nextUrl.searchParams.get("classId")?.trim() || "";
+  const filterSubjectId = req.nextUrl.searchParams.get("subjectId")?.trim() || "";
   const groupByParts = groupByParam
     ? groupByParam
         .split(",")
@@ -132,6 +135,8 @@ export async function GET(
     json: z.string().optional(),
     groupFields: z.string().optional(),
     classLevel: z.string().optional(),
+    classId: z.string().optional(),
+    subjectId: z.string().optional(),
   });
   const qRes = parseOr400(querySchema, {
     responseId: params.responseId,
@@ -139,6 +144,8 @@ export async function GET(
     json: req.nextUrl.searchParams.get("json"),
     groupFields: req.nextUrl.searchParams.get("groupFields"),
     classLevel: req.nextUrl.searchParams.get("classLevel"),
+    classId: filterClassId || undefined,
+    subjectId: filterSubjectId || undefined,
   });
   // Do not block on validation; proceed best-effort. If responseId is invalid, DB lookup will yield 404 later.
 
@@ -153,42 +160,93 @@ export async function GET(
       "Question",
       "Tag",
       "TagType",
+      "Subject",
+      "Class",
+      "User",
     ]);
 
   if (req.nextUrl.searchParams.get("groupFields") === "1") {
     try {
-      const response = await QPRModel.findById(params.responseId).populate({
-        path: "sectionAnswers.answers.question",
-        select: "tags",
-        populate: {
-          path: "tags",
-          populate: { path: "type", select: "name" },
-        },
-      });
+      const response = await QPRModel.findById(params.responseId)
+        .populate({
+          path: "paper",
+          select: "title sections",
+          populate: {
+            path: "sections.questions.question",
+            select: "tags subject class",
+            populate: [
+              {
+                path: "tags",
+                populate: { path: "type", select: "name" },
+              },
+              { path: "subject", select: "name" },
+              { path: "class", select: "name" },
+            ],
+          },
+        })
+        .lean();
 
+      const paperSections = Array.isArray(response)
+        ? response[0]?.paper?.sections || []
+        : response?.paper?.sections || [];
       const tagTypeSet = new Set<string>();
-      response?.sectionAnswers?.forEach((section: any) => {
-        section.answers?.forEach((ans: any) => {
-          ans.question?.tags?.forEach((tag: any) => {
+      const classMap = new Map<string, { value: string; label: string }>();
+      const subjectMap = new Map<string, { value: string; label: string }>();
+
+      paperSections.forEach((section: any) => {
+        (section.questions || []).forEach((qWrap: any) => {
+          const question = qWrap.question;
+          (question?.tags || []).forEach((tag: any) => {
             if (tag.type?.name) tagTypeSet.add(tag.type.name);
           });
+          if (question?.class?._id) {
+            classMap.set(String(question.class._id), {
+              value: String(question.class._id),
+              label: question.class.name || "Unknown Class",
+            });
+          }
+          if (question?.subject?._id) {
+            subjectMap.set(String(question.subject._id), {
+              value: String(question.subject._id),
+              label: question.subject.name || "Unknown Subject",
+            });
+          }
         });
       });
 
-      const fields = [{ value: "section", label: "Section" }].concat(
+      const fields = [
+        { value: "section", label: "Section" },
+        { value: "class", label: "Class" },
+        { value: "subject", label: "Subject" },
+      ].concat(
         Array.from(tagTypeSet).map((name) => ({
           value: name.toLowerCase(),
           label: name,
         })),
       );
 
-      const res = NextResponse.json({ fields });
+      const res = NextResponse.json({
+        fields,
+        filters: {
+          classes: Array.from(classMap.values()).sort((a, b) =>
+            a.label.localeCompare(b.label),
+          ),
+          subjects: Array.from(subjectMap.values()).sort((a, b) =>
+            a.label.localeCompare(b.label),
+          ),
+        },
+      });
       res.headers.set("X-Debug-Student-GF", "ok");
       return res;
     } catch (e: any) {
       console.error("student groupFields error:", e?.message || e);
       const res = NextResponse.json({
-        fields: [{ value: "section", label: "Section" }],
+        fields: [
+          { value: "section", label: "Section" },
+          { value: "class", label: "Class" },
+          { value: "subject", label: "Subject" },
+        ],
+        filters: { classes: [], subjects: [] },
       });
       res.headers.set("X-Debug-Student-GF", "fallback");
       return res;
@@ -241,22 +299,30 @@ export async function GET(
       const paper = await QPModel.findById(paperId)
         .populate({
           path: "sections.questions.question",
-          select: "tags content answerIndexes options",
-          populate: {
-            path: "tags",
-            populate: { path: "type", select: "name" },
-          },
+          select: "tags content answerIndexes options subject class",
+          populate: [
+            {
+              path: "tags",
+              populate: { path: "type", select: "name" },
+            },
+            { path: "subject", select: "name" },
+            { path: "class", select: "name" },
+          ],
         })
         .lean();
 
       responses = await QPRModel.find({ paper: paperId })
         .populate({
           path: "sectionAnswers.answers.question",
-          select: "answerIndexes tags content options",
-          populate: {
-            path: "tags",
-            populate: { path: "type", select: "name" },
-          },
+          select: "answerIndexes tags content options subject class",
+          populate: [
+            {
+              path: "tags",
+              populate: { path: "type", select: "name" },
+            },
+            { path: "subject", select: "name" },
+            { path: "class", select: "name" },
+          ],
         })
         .populate("student", "name rollNumber")
         .lean();
@@ -323,22 +389,30 @@ export async function GET(
       const response = await QPRModel.findById(params.responseId)
         .populate({
           path: "sectionAnswers.answers.question",
-          select: "answerIndexes tags content options",
-          populate: {
-            path: "tags",
-            populate: { path: "type", select: "name" },
-          },
+          select: "answerIndexes tags content options subject class",
+          populate: [
+            {
+              path: "tags",
+              populate: { path: "type", select: "name" },
+            },
+            { path: "subject", select: "name" },
+            { path: "class", select: "name" },
+          ],
         })
         .populate({
           path: "paper",
           select: "title subject sections",
           populate: {
             path: "sections.questions.question",
-            select: "tags content answerIndexes options",
-            populate: {
-              path: "tags",
-              populate: { path: "type", select: "name" },
-            },
+            select: "tags content answerIndexes options subject class",
+            populate: [
+              {
+                path: "tags",
+                populate: { path: "type", select: "name" },
+              },
+              { path: "subject", select: "name" },
+              { path: "class", select: "name" },
+            ],
           },
         })
         .populate("student", "name rollNumber")
@@ -375,6 +449,10 @@ export async function GET(
       groupBy,
       isClassLevel,
       questionStats,
+      filters: {
+        classId: filterClassId || undefined,
+        subjectId: filterSubjectId || undefined,
+      },
     });
 
     if (req.nextUrl.searchParams.get("json") === "1") {

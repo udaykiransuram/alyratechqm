@@ -1,12 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
 import { toast } from '@/components/ui/use-toast';
 import useSWR from 'swr';
 
@@ -17,7 +21,6 @@ async function fetcher(url: string) {
 }
 
 export default function IndexingClient() {
-  const router = useRouter();
   const [schoolKey, setSchoolKey] = useState('');
   const [results, setResults] = useState<Record<string, any> | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,15 +39,25 @@ export default function IndexingClient() {
       const data = await res.json();
       setResults(data.results);
       toast({ title: 'Success', description: 'Indexing completed for all tenants.' });
-    } catch (err) {
-      toast({ title: 'Error', description: 'Failed to index all tenants.', variant: 'destructive' });
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to index all tenants.',
+        variant: 'destructive',
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleIndexOne = async () => {
-    if (!schoolKey) return toast({ title: 'Error', description: 'Please select a school.', variant: 'destructive' });
+    if (!schoolKey) {
+      return toast({
+        title: 'Error',
+        description: 'Please select a school.',
+        variant: 'destructive',
+      });
+    }
     setIsLoading(true);
     try {
       const res = await fetch('/api/admin/reindex-ui', {
@@ -56,53 +69,72 @@ export default function IndexingClient() {
       const data = await res.json();
       setResults(data.results);
       toast({ title: 'Success', description: `Indexing completed for ${schoolKey}.` });
-    } catch (err) {
-      toast({ title: 'Error', description: 'Failed to index selected tenant.', variant: 'destructive' });
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to index selected tenant.',
+        variant: 'destructive',
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Database Indexing</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Button onClick={handleIndexAll} disabled={isLoading}>
-          {isLoading ? 'Indexing...' : 'Index All Tenants'}
-        </Button>
-        <div className="flex space-x-2">
-          {schoolsError ? (
-            <Input
-              placeholder="Enter School Key"
-              value={schoolKey}
-              onChange={(e) => setSchoolKey(e.target.value)}
-            />
-          ) : (
-            <Select onValueChange={setSchoolKey}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select School" />
-              </SelectTrigger>
-              <SelectContent>
-                {schools?.schools?.map((school: any) => (
-                  <SelectItem key={school.key} value={school.key}>
-                    {school.displayName || school.key}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <Button onClick={handleIndexOne} disabled={isLoading || !schoolKey}>
-            {isLoading ? 'Indexing...' : 'Index Selected Tenant'}
-          </Button>
-        </div>
-        {results && (
-          <pre className="bg-gray-100 p-4 rounded overflow-auto">
-            {JSON.stringify(results, null, 2)}
-          </pre>
-        )}
-      </CardContent>
-    </Card>
+    <div className="app-page-shell max-w-4xl px-4 py-6 sm:px-0">
+      <div className="app-page-header">
+        <h1 className="app-page-title">Database Indexing</h1>
+        <p className="app-page-subtitle">
+          Rebuild indexes for one tenant or for the full multi-tenant workspace.
+        </p>
+      </div>
+
+      <Card className="app-surface">
+        <CardContent className="app-surface-body">
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={handleIndexAll} disabled={isLoading}>
+              {isLoading ? 'Indexing...' : 'Index All Tenants'}
+            </Button>
+          </div>
+
+          <div className="flex flex-col gap-3 md:flex-row">
+            {schoolsError ? (
+              <Input
+                placeholder="Enter School Key"
+                value={schoolKey}
+                onChange={(e) => setSchoolKey(e.target.value)}
+              />
+            ) : (
+              <Select onValueChange={setSchoolKey} value={schoolKey}>
+                <SelectTrigger className="md:max-w-sm">
+                  <SelectValue placeholder="Select School" />
+                </SelectTrigger>
+                <SelectContent>
+                  {schools?.schools?.map((school: any) => (
+                    <SelectItem key={school.key} value={school.key}>
+                      {school.displayName || school.key}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button onClick={handleIndexOne} disabled={isLoading || !schoolKey}>
+              {isLoading ? 'Indexing...' : 'Index Selected Tenant'}
+            </Button>
+          </div>
+
+          {results ? (
+            <div className="app-section">
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                Latest Result
+              </h2>
+              <pre className="overflow-auto rounded-xl bg-background p-4 text-sm text-foreground">
+                {JSON.stringify(results, null, 2)}
+              </pre>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

@@ -58,6 +58,18 @@ export async function POST(request: NextRequest) {
       } = normalizedStudent;
       const finalRollNumber = rn2 || rn1 || rollnumber;
       const finalMobileNumber = mobileNumber || mobilenumber;
+      const normalizedClassIds = Array.isArray(normalizedStudent.classids)
+        ? normalizedStudent.classids
+            .map((id: unknown) => String(id))
+            .filter(Boolean)
+        : [];
+      const normalizedSubjectIds = Array.isArray(normalizedStudent.subjectids)
+        ? normalizedStudent.subjectids
+            .map((id: unknown) => String(id))
+            .filter(Boolean)
+        : [];
+      const allowAllClasses = Boolean(normalizedStudent.hasallclasses);
+      const allowAllSubjects = Boolean(normalizedStudent.hasallsubjects);
 
       if (!name || !role) {
         results.push({
@@ -71,6 +83,38 @@ export async function POST(request: NextRequest) {
         results.push({
           success: false,
           message: "rollNumber is required for students.",
+          student,
+        });
+        continue;
+      }
+      if (!finalMobileNumber || !String(finalMobileNumber).trim()) {
+        results.push({
+          success: false,
+          message: "Phone number is required.",
+          student,
+        });
+        continue;
+      }
+      if (
+        role === "teacher" &&
+        (normalizedClassIds.length === 0 || normalizedSubjectIds.length === 0)
+      ) {
+        results.push({
+          success: false,
+          message: "Teachers must have at least one class and one subject.",
+          student,
+        });
+        continue;
+      }
+      if (
+        role === "admin" &&
+        ((!allowAllClasses && normalizedClassIds.length === 0) ||
+          (!allowAllSubjects && normalizedSubjectIds.length === 0))
+      ) {
+        results.push({
+          success: false,
+          message:
+            "Admins must have all classes/subjects enabled or choose at least one class and one subject.",
           student,
         });
         continue;
@@ -118,8 +162,18 @@ export async function POST(request: NextRequest) {
         email,
         passwordHash,
         role,
-        mobileNumber: finalMobileNumber || undefined,
+        mobileNumber: String(finalMobileNumber).trim(),
         class: role === "student" ? classId : undefined,
+        classIds:
+          role === "teacher" || role === "admin"
+            ? normalizedClassIds
+            : undefined,
+        subjectIds:
+          role === "teacher" || role === "admin"
+            ? normalizedSubjectIds
+            : undefined,
+        hasAllClasses: role === "admin" ? allowAllClasses : false,
+        hasAllSubjects: role === "admin" ? allowAllSubjects : false,
         rollNumber: role === "student" ? finalRollNumber : undefined,
         enrolledAt: role === "student" ? enrolledat || Date.now() : undefined,
       });

@@ -1,742 +1,632 @@
 "use client";
 
+import { type ComponentType, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import SchoolSwitcher from "@/components/navigation/SchoolSwitcher";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import { Menu, BarChart2, Users2, Upload, Layers } from "lucide-react";
-import SchoolSwitcher from "@/components/navigation/SchoolSwitcher";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  BarChart2,
+  BookOpen,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  FileQuestion,
+  GraduationCap,
+  Layers,
+  Menu,
+  Megaphone,
+  Settings2,
+  Tags,
+  Upload,
+  UserCog,
+  Users,
+} from "lucide-react";
 
-function NavLink({ href, label }: { href: string; label: string }) {
-  const pathname = usePathname();
-  const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
+type SidebarChild = {
+  href: string;
+  label: string;
+};
+
+type SidebarItem = {
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  children: SidebarChild[];
+};
+
+type SidebarGroup = {
+  title: string;
+  items: SidebarItem[];
+};
+
+const SIDEBAR_EXPANDED_WIDTH = "var(--app-sidebar-expanded-width)";
+const SIDEBAR_COLLAPSED_WIDTH = "var(--app-sidebar-collapsed-width)";
+const SIDEBAR_STORAGE_KEY = "app-sidebar-collapsed";
+
+const sidebarGroups: SidebarGroup[] = [
+  {
+    title: "Overview",
+    items: [
+      {
+        label: "Home",
+        icon: Layers,
+        children: [{ href: "/", label: "Home" }],
+      },
+    ],
+  },
+  {
+    title: "Public",
+    items: [
+      {
+        label: "Public",
+        icon: Megaphone,
+        children: [
+          { href: "/register", label: "Register" },
+          { href: "/marketing", label: "Product" },
+        ],
+      },
+    ],
+  },
+  {
+    title: "Assessment",
+    items: [
+      {
+        label: "Papers",
+        icon: BookOpen,
+        children: [
+          { href: "/question-paper", label: "All Papers" },
+          { href: "/question-paper/create", label: "Create Paper" },
+        ],
+      },
+      {
+        label: "Questions",
+        icon: FileQuestion,
+        children: [
+          { href: "/questions", label: "All Questions" },
+          { href: "/questions/create", label: "Create Question" },
+          { href: "/questions/bulk-upload", label: "Bulk Upload" },
+        ],
+      },
+      {
+        label: "Students",
+        icon: GraduationCap,
+        children: [
+          { href: "/students", label: "All Students" },
+          { href: "/students/create", label: "Create Student" },
+        ],
+      },
+    ],
+  },
+  {
+    title: "Academic Setup",
+    items: [
+      {
+        label: "Subjects",
+        icon: Layers,
+        children: [
+          { href: "/subjects", label: "All Subjects" },
+          { href: "/subjects/create", label: "Create Subject" },
+        ],
+      },
+      {
+        label: "Tags",
+        icon: Tags,
+        children: [
+          { href: "/tags", label: "All Tags" },
+          { href: "/tags/create", label: "Create Tag" },
+        ],
+      },
+      {
+        label: "Classes",
+        icon: Layers,
+        children: [
+          { href: "/manage/classes", label: "All Classes" },
+          { href: "/manage/classes/create", label: "Create Class" },
+        ],
+      },
+    ],
+  },
+  {
+    title: "Administration",
+    items: [
+      {
+        label: "Users",
+        icon: Users,
+        children: [{ href: "/manage/users", label: "Users" }],
+      },
+      {
+        label: "Teachers",
+        icon: UserCog,
+        children: [
+          { href: "/teachers", label: "Teachers List" },
+          { href: "/teachers/create", label: "Create Teacher" },
+        ],
+      },
+      {
+        label: "Admins",
+        icon: Settings2,
+        children: [
+          { href: "/admins", label: "Admins List" },
+          { href: "/admins/create", label: "Create Admin" },
+        ],
+      },
+      {
+        label: "Reports",
+        icon: BarChart2,
+        children: [{ href: "/manage/reports", label: "Report Jobs" }],
+      },
+      {
+        label: "Schools",
+        icon: Building2,
+        children: [{ href: "/manage/schools", label: "Manage Schools" }],
+      },
+    ],
+  },
+  {
+    title: "Analytics",
+    items: [],
+  },
+  {
+    title: "Utilities",
+    items: [
+      {
+        label: "Upload Tools",
+        icon: Upload,
+        children: [
+          { href: "/upload", label: "Upload" },
+          { href: "/upload/getjson", label: "Get JSON" },
+        ],
+      },
+    ],
+  },
+];
+
+function isChildActive(pathname: string, child: SidebarChild) {
+  return child.href === "/" ? pathname === "/" : pathname.startsWith(child.href);
+}
+
+function isItemActive(pathname: string, item: SidebarItem) {
+  return item.children.some((child) => isChildActive(pathname, child));
+}
+
+function Brand() {
   return (
     <Link
-      href={href}
-      aria-current={isActive ? "page" : undefined}
-      className={cn(
-        "px-3 py-2 rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground",
-        isActive && "bg-accent text-accent-foreground",
-      )}
+      href="/"
+      className="flex min-w-0 items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-accent/70"
     >
-      {label}
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Layers className="h-5 w-5" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold tracking-wide">ALYRA TECH</p>
+        <p className="text-xs text-muted-foreground">Talent Test Platform</p>
+      </div>
     </Link>
   );
 }
 
-function getSchoolKey() {
-  try {
-    const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-    return m && m[1] ? m[1] : "";
-  } catch {
-    return "";
+function getSchoolInitials(label: string, key: string) {
+  const source = label.trim() || key.trim();
+  const words = source
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+
+  if (words.length >= 2) {
+    return `${words[0][0] || ""}${words[1][0] || ""}`.toUpperCase();
   }
+
+  return source.replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase() || "SC";
+}
+
+function CollapsedSchoolBadge() {
+  const [school, setSchool] = useState<{ key: string; displayName: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSchool() {
+      try {
+        const match = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
+        const schoolKey = match?.[1] ? decodeURIComponent(match[1]) : "";
+
+        if (!schoolKey) {
+          if (!cancelled) setSchool(null);
+          return;
+        }
+
+        const res = await fetch("/api/schools", { cache: "no-store" }).catch(() => null);
+        if (!res || !res.ok) {
+          if (!cancelled) {
+            setSchool({ key: schoolKey, displayName: schoolKey });
+          }
+          return;
+        }
+
+        const json = await res.json().catch(() => null);
+        const currentSchool =
+          json?.success && Array.isArray(json.schools)
+            ? json.schools.find((entry: any) => String(entry?.key || "") === schoolKey)
+            : null;
+
+        if (!cancelled) {
+          setSchool(
+            currentSchool
+              ? {
+                  key: String(currentSchool.key || schoolKey),
+                  displayName: String(currentSchool.displayName || currentSchool.key || schoolKey),
+                }
+              : { key: schoolKey, displayName: schoolKey },
+          );
+        }
+      } catch {
+        if (!cancelled) setSchool(null);
+      }
+    }
+
+    loadSchool();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!school) return null;
+
+  const initials = getSchoolInitials(school.displayName, school.key);
+
+  return (
+    <Link
+      href="/manage/schools"
+      title={`${school.displayName} (${school.key})`}
+      aria-label={`Current school: ${school.displayName}`}
+      className="mt-3 flex items-center justify-center rounded-2xl border border-border/60 bg-card/60 p-2 shadow-sm transition-colors hover:bg-accent/60"
+    >
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold tracking-[0.08em] text-primary">
+        {initials}
+      </div>
+    </Link>
+  );
+}
+
+function DesktopSidebarItem({
+  item,
+  collapsed,
+}: {
+  item: SidebarItem;
+  collapsed: boolean;
+}) {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const Icon = item.icon;
+  const directChild = item.children.length === 1 ? item.children[0] : null;
+  const isActive = isItemActive(pathname, item);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  const triggerClassName = cn(
+    "flex w-full items-center rounded-xl text-sm transition-colors",
+    collapsed ? "justify-center px-0 py-2.5" : "justify-between gap-3 px-3 py-2.5",
+    isActive
+      ? "bg-primary text-primary-foreground shadow-sm"
+      : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
+  );
+
+  const content = (
+    <>
+      <span className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
+        <Icon className="h-4 w-4 shrink-0" />
+        {!collapsed && <span className="truncate">{item.label}</span>}
+      </span>
+      {!collapsed && !directChild && <span className="text-xs opacity-70">›</span>}
+    </>
+  );
+
+  if (directChild) {
+    return (
+      <Link
+        href={directChild.href}
+        title={item.label}
+        aria-label={item.label}
+        className={triggerClassName}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={item.label}
+          aria-label={item.label}
+          className={triggerClassName}
+        >
+          {content}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={collapsed ? 14 : 10}
+        className="w-56 p-2"
+      >
+        <div className="space-y-1">
+          <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
+            {item.label}
+          </p>
+          {item.children.map((child) => {
+            const childActive = isChildActive(pathname, child);
+
+            return (
+              <Link
+                key={child.href}
+                href={child.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "block rounded-lg px-3 py-2 text-sm transition-colors",
+                  childActive
+                    ? "bg-primary/10 font-medium text-primary"
+                    : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
+                )}
+              >
+                {child.label}
+              </Link>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function SidebarNav({ collapsed }: { collapsed: boolean }) {
+  return (
+    <div className="flex h-full flex-col gap-5">
+      {sidebarGroups
+        .filter((group) => group.items.length > 0)
+        .map((group) => (
+          <div key={group.title}>
+            {collapsed ? (
+              <div className="mb-2 px-2" aria-hidden="true">
+                <div className="h-px rounded-full bg-border" />
+              </div>
+            ) : (
+              <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                {group.title}
+              </p>
+            )}
+            <div className="space-y-1">
+              {group.items.map((item) => (
+                <DesktopSidebarItem
+                  key={item.label}
+                  item={item}
+                  collapsed={collapsed}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+function MobileSidebar() {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="icon" className="rounded-xl lg:hidden">
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Open menu</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="inset-0 h-[100dvh] w-screen translate-x-0 translate-y-0 rounded-none p-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:w-full sm:max-w-sm sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl">
+        <DialogHeader className="border-b px-5 py-4">
+          <DialogTitle>Navigation</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[calc(100dvh-80px)] overflow-y-auto px-4 py-4">
+          <div className="mb-5 rounded-2xl border border-border/60 bg-card/40 p-3">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              School Workspace
+            </p>
+            <SchoolSwitcher
+              className="max-w-none border-0 bg-transparent p-0 shadow-none backdrop-blur-0"
+              showCreateButton={false}
+              onManageClick={() => setOpen(false)}
+            />
+          </div>
+          <div className="flex h-full flex-col gap-5">
+            {sidebarGroups
+              .filter((group) => group.items.length > 0)
+              .map((group) => (
+                <div key={group.title}>
+                  <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    {group.title}
+                  </p>
+                  <div className="space-y-1">
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
+                      const directChild =
+                        item.children.length === 1 ? item.children[0] : null;
+                      const isActive = isItemActive(pathname, item);
+
+                      if (directChild) {
+                        return (
+                          <Link
+                            key={item.label}
+                            href={directChild.href}
+                            onClick={() => setOpen(false)}
+                            className={cn(
+                              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                              isActive
+                                ? "bg-primary text-primary-foreground shadow-sm"
+                                : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
+                            )}
+                          >
+                            <Icon className="h-4 w-4 shrink-0" />
+                            <span>{item.label}</span>
+                          </Link>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={item.label}
+                          className="rounded-xl border bg-card/40 p-2"
+                        >
+                          <div className="flex items-center gap-3 px-2 py-2 text-sm font-medium">
+                            <Icon className="h-4 w-4 shrink-0" />
+                            <span>{item.label}</span>
+                          </div>
+                          <div className="space-y-1">
+                            {item.children.map((child) => {
+                              const childActive = isChildActive(pathname, child);
+
+                              return (
+                                <Link
+                                  key={child.href}
+                                  href={child.href}
+                                  onClick={() => setOpen(false)}
+                                  className={cn(
+                                    "block rounded-lg px-3 py-2 text-sm transition-colors",
+                                    childActive
+                                      ? "bg-primary/10 font-medium text-primary"
+                                      : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
+                                  )}
+                                >
+                                  {child.label}
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export default function SiteHeader() {
-  const router = useRouter();
-  const [responseId, setResponseId] = useState("");
-  const [paperId, setPaperId] = useState("");
-
-  // Controls which nav popover is open; null means none is open
-  const [openKey, setOpenKey] = useState<string | null>(null);
-
-  const [schoolKey, setSchoolKey] = useState("");
-  const [mounted, setMounted] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    const initialSchoolKey = getSchoolKey();
-    setSchoolKey(initialSchoolKey);
-
-    const handleCookieChange = () => {
-      const newSchoolKey = getSchoolKey();
-      setSchoolKey(newSchoolKey);
-    };
-
-    window.addEventListener("storage", handleCookieChange);
-    return () => window.removeEventListener("storage", handleCookieChange);
+    try {
+      const savedState = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
+      if (savedState === "true") {
+        setCollapsed(true);
+      }
+    } catch {
+    }
   }, []);
 
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--app-sidebar-width",
+      collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH,
+    );
+
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
+    } catch {
+    }
+  }, [collapsed]);
+
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex h-14 items-center justify-between px-3">
-        {/* Left: Brand */}
-        <div className="flex items-center gap-2 shrink-0">
-          <Link
-            href="/"
-            className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent"
-          >
-            <Layers className="h-6 w-6" />
-            <span className="font-bold tracking-tight">ALYRA TECH</span>
-          </Link>
-        </div>
-
-        {/* Center: Desktop nav */}
-        <nav className="hidden md:flex items-center gap-1 lg:gap-2 text-sm font-medium mx-2 lg:mx-3 flex-1 justify-center max-w-[60%] overflow-x-auto whitespace-nowrap">
-          <NavLink href="/" label="Home" />
-          <NavLink href="/register" label="Register" />
-          <NavLink href="/marketing" label="Product" />
-
-          {/* Papers */}
-          <Popover
-            open={openKey === "papers"}
-            onOpenChange={(v) => setOpenKey(v ? "papers" : null)}
-          >
-            <PopoverTrigger className="px-3 py-2 rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
-              Papers
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="w-64 p-2"
-              onClick={() => setOpenKey(null)}
-            >
-              <div className="flex flex-col text-sm">
-                <Link
-                  href="/question-paper"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  All Papers
-                </Link>
-                <Link
-                  href="/question-paper/create"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  Create Paper
-                </Link>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          {/* Questions */}
-          <Popover
-            open={openKey === "questions"}
-            onOpenChange={(v) => setOpenKey(v ? "questions" : null)}
-          >
-            <PopoverTrigger className="px-3 py-2 rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
-              Questions
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="w-64 p-2"
-              onClick={() => setOpenKey(null)}
-            >
-              <div className="flex flex-col text-sm">
-                <Link
-                  href="/questions"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  All Questions
-                </Link>
-                <Link
-                  href="/questions/create"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  Create Question
-                </Link>
-                <Link
-                  href="/questions/bulk-upload"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  Bulk Upload
-                </Link>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          {/* Subjects */}
-          <Popover
-            open={openKey === "subjects"}
-            onOpenChange={(v) => setOpenKey(v ? "subjects" : null)}
-          >
-            <PopoverTrigger className="px-3 py-2 rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
-              Subjects
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="w-64 p-2"
-              onClick={() => setOpenKey(null)}
-            >
-              <div className="flex flex-col text-sm">
-                <Link
-                  href="/subjects"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  All Subjects
-                </Link>
-                <Link
-                  href="/subjects/create"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  Create Subject
-                </Link>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          {/* Tags */}
-          <Popover
-            open={openKey === "tags"}
-            onOpenChange={(v) => setOpenKey(v ? "tags" : null)}
-          >
-            <PopoverTrigger className="px-3 py-2 rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
-              Tags
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="w-64 p-2"
-              onClick={() => setOpenKey(null)}
-            >
-              <div className="flex flex-col text-sm">
-                <Link
-                  href="/tags"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  All Tags
-                </Link>
-                <Link
-                  href="/tags/create"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  Create Tag
-                </Link>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          {/* Students */}
-          <Popover
-            open={openKey === "students"}
-            onOpenChange={(v) => setOpenKey(v ? "students" : null)}
-          >
-            <PopoverTrigger className="px-3 py-2 rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
-              Students
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="w-64 p-2"
-              onClick={() => setOpenKey(null)}
-            >
-              <div className="flex flex-col text-sm">
-                <Link
-                  href="/students"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  All Students
-                </Link>
-                <Link
-                  href="/students/create"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  Create Student
-                </Link>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          {/* Analytics */}
-          <Popover
-            open={openKey === "analytics"}
-            onOpenChange={(v) => setOpenKey(v ? "analytics" : null)}
-          >
-            <PopoverTrigger className="px-3 py-2 rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
-              <span className="inline-flex items-center gap-1">
-                <BarChart2 className="h-4 w-4" /> Analytics
-              </span>
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="w-80 p-3"
-              onClick={() => setOpenKey(null)}
-            >
-              <div className="flex flex-col gap-3">
-                <Link
-                  href="/analytics/student-tag-report/excel-upload"
-                  className="text-sm block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  Upload Student Tag Excel
-                </Link>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    Student Tag Report
-                  </p>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (!responseId.trim()) return;
-                      router.push(
-                        `/analytics/student-tag-report/${encodeURIComponent(responseId.trim())}`,
-                      );
-                      setResponseId("");
-                    }}
-                    className="flex items-center gap-2"
-                  >
-                    <Input
-                      value={responseId}
-                      onChange={(e) => setResponseId(e.target.value)}
-                      placeholder="Enter responseId"
-                      className="h-9"
-                    />
-                    <Button type="submit" size="sm">
-                      Go
-                    </Button>
-                  </form>
-                </div>
-                <Separator className="my-2" />
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    Class Tag Report
-                  </p>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (!paperId.trim()) return;
-                      router.push(
-                        `/analytics/class-tag-report/${encodeURIComponent(paperId.trim())}`,
-                      );
-                      setPaperId("");
-                    }}
-                    className="flex items-center gap-2"
-                  >
-                    <Input
-                      value={paperId}
-                      onChange={(e) => setPaperId(e.target.value)}
-                      placeholder="Enter paperId"
-                      className="h-9"
-                    />
-                    <Button type="submit" size="sm">
-                      Go
-                    </Button>
-                  </form>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          {/* Manage */}
-          <Popover
-            open={openKey === "manage"}
-            onOpenChange={(v) => setOpenKey(v ? "manage" : null)}
-          >
-            <PopoverTrigger className="px-3 py-2 rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Users2 className="h-4 w-4" /> Manage
-              </span>
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="w-64 p-3"
-              onClick={() => setOpenKey(null)}
-            >
-              <div className="flex flex-col gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Classes</p>
-                  <div className="flex flex-col">
-                    <Link
-                      href="/manage/classes"
-                      className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                    >
-                      All Classes
-                    </Link>
-                    <Link
-                      href="/manage/classes/create"
-                      className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                    >
-                      Create Class
-                    </Link>
-                  </div>
-                </div>
-                <Separator />
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Users</p>
-                  <div className="flex flex-col">
-                    <Link
-                      href="/manage/users"
-                      className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                    >
-                      All Users
-                    </Link>
-                    <Link
-                      href="/manage/users/create"
-                      className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                    >
-                      Create User
-                    </Link>
-                    <Link
-                      href="/manage/reports"
-                      className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                    >
-                      Report Jobs
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          {/* Tools */}
-          <Popover
-            open={openKey === "tools"}
-            onOpenChange={(v) => setOpenKey(v ? "tools" : null)}
-          >
-            <PopoverTrigger className="px-3 py-2 rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Upload className="h-4 w-4" /> Tools
-              </span>
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="w-64 p-2"
-              onClick={() => setOpenKey(null)}
-            >
-              <div className="flex flex-col text-sm">
-                <Link
-                  href="/upload"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  Upload
-                </Link>
-                <Link
-                  href="/upload/getjson"
-                  className="block px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  Get JSON
-                </Link>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </nav>
-
-        {/* Right: Utilities */}
-        <div className="flex items-center justify-end gap-2 shrink-0">
-          {/* Hide wide controls on mobile to prevent crowding; available inside menu */}
-          <div className="hidden md:flex items-center gap-2">
-            <SchoolSwitcher />
-            <Button asChild>
-              <Link href="/register">Register</Link>
-            </Button>
+    <>
+      <header className="fixed inset-x-0 top-0 z-50 h-[var(--app-header-height)] border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+        <div className="flex h-full items-center justify-between gap-4 px-4 lg:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <MobileSidebar />
+            <Brand />
           </div>
 
-          {/* Mobile menu */}
-          <Dialog>
-            <DialogTrigger className="inline-flex items-center justify-center rounded-md p-2 md:hidden border hover:bg-accent">
-              <Menu className="h-5 w-5" />
-              <span className="sr-only">Open menu</span>
-            </DialogTrigger>
-            {/* Make mobile menu full-screen on small screens for better layout */}
-            <DialogContent className="p-0 inset-0 h-[100dvh] w-screen rounded-none translate-x-0 translate-y-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:w-full sm:max-w-md sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg">
-              <DialogHeader className="px-6 pt-6">
-                <DialogTitle>Menu</DialogTitle>
-              </DialogHeader>
-              <div className="px-6 pb-6">
-                <div className="flex flex-col gap-3 text-sm">
-                  {/* School switcher for mobile view */}
-                  <div className="pt-1">
-                    <p className="text-xs text-muted-foreground mb-2">School</p>
-                    <SchoolSwitcher />
-                  </div>
-                  <Separator className="my-2" />
-                  <DialogClose asChild>
-                    <Link
-                      href="/"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Home
-                    </Link>
-                  </DialogClose>
-                  <DialogClose asChild>
-                    <Link
-                      href="/register"
-                      className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                    >
-                      Register
-                    </Link>
-                  </DialogClose>
-
-                  <div className="pt-4">
-                    <p className="text-xs text-muted-foreground mb-2">Papers</p>
-                    <DialogClose asChild>
-                      <Link
-                        href="/question-paper"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        All Papers
-                      </Link>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Link
-                        href="/question-paper/create"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Create Paper
-                      </Link>
-                    </DialogClose>
-                  </div>
-
-                  <div className="pt-4">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Questions
-                    </p>
-                    <DialogClose asChild>
-                      <Link
-                        href="/questions"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        All Questions
-                      </Link>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Link
-                        href="/questions/create"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Create Question
-                      </Link>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Link
-                        href="/questions/bulk-upload"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Bulk Upload
-                      </Link>
-                    </DialogClose>
-                  </div>
-
-                  <div className="pt-4">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Subjects
-                    </p>
-                    <DialogClose asChild>
-                      <Link
-                        href="/subjects"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        All Subjects
-                      </Link>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Link
-                        href="/subjects/create"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Create Subject
-                      </Link>
-                    </DialogClose>
-                  </div>
-
-                  <div className="pt-4">
-                    <p className="text-xs text-muted-foreground mb-2">Tags</p>
-                    <DialogClose asChild>
-                      <Link
-                        href="/tags"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        All Tags
-                      </Link>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Link
-                        href="/tags/create"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Create Tag
-                      </Link>
-                    </DialogClose>
-                  </div>
-
-                  <div className="pt-4">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Students
-                    </p>
-                    <DialogClose asChild>
-                      <Link
-                        href="/students"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        All Students
-                      </Link>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Link
-                        href="/students/create"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Create Student
-                      </Link>
-                    </DialogClose>
-                  </div>
-
-                  <div className="pt-4">
-                    <p className="text-xs text-muted-foreground mb-2 inline-flex items-center gap-1">
-                      <BarChart2 className="h-4 w-4" /> Analytics
-                    </p>
-                    <DialogClose asChild>
-                      <Link
-                        href="/analytics/student-tag-report/excel-upload"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Upload Student Tag Excel
-                      </Link>
-                    </DialogClose>
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs text-muted-foreground">
-                        Student Tag Report
-                      </p>
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (!responseId.trim()) return;
-                          router.push(
-                            `/analytics/student-tag-report/${encodeURIComponent(responseId.trim())}`,
-                          );
-                          setResponseId("");
-                        }}
-                        className="flex items-center gap-2"
-                      >
-                        <Input
-                          value={responseId}
-                          onChange={(e) => setResponseId(e.target.value)}
-                          placeholder="responseId"
-                          className="h-9"
-                        />
-                        <DialogClose asChild>
-                          <Button type="submit" size="sm">
-                            Go
-                          </Button>
-                        </DialogClose>
-                      </form>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs text-muted-foreground">
-                        Class Tag Report
-                      </p>
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (!paperId.trim()) return;
-                          router.push(
-                            `/analytics/class-tag-report/${encodeURIComponent(paperId.trim())}`,
-                          );
-                          setPaperId("");
-                        }}
-                        className="flex items-center gap-2"
-                      >
-                        <Input
-                          value={paperId}
-                          onChange={(e) => setPaperId(e.target.value)}
-                          placeholder="paperId"
-                          className="h-9"
-                        />
-                        <DialogClose asChild>
-                          <Button type="submit" size="sm">
-                            Go
-                          </Button>
-                        </DialogClose>
-                      </form>
-                    </div>
-                  </div>
-
-                  <div className="pt-4">
-                    <p className="text-xs text-muted-foreground mb-2 inline-flex items-center gap-1">
-                      <Users2 className="h-4 w-4" /> Manage
-                    </p>
-                    <p className="text-xs text-muted-foreground">Classes</p>
-                    <DialogClose asChild>
-                      <Link
-                        href="/manage/classes"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        All Classes
-                      </Link>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Link
-                        href="/manage/classes/create"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Create Class
-                      </Link>
-                    </DialogClose>
-                    <p className="text-xs text-muted-foreground mt-3">Users</p>
-                    <DialogClose asChild>
-                      <Link
-                        href="/manage/users"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        All Users
-                      </Link>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Link
-                        href="/manage/users/create"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Create User
-                      </Link>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Link
-                        href="/manage/reports"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Report Jobs
-                      </Link>
-                    </DialogClose>
-                  </div>
-
-                  <div className="pt-4">
-                    <p className="text-xs text-muted-foreground mb-2 inline-flex items-center gap-1">
-                      <Upload className="h-4 w-4" /> Tools
-                    </p>
-                    <DialogClose asChild>
-                      <Link
-                        href="/upload"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Upload
-                      </Link>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Link
-                        href="/upload/getjson"
-                        className="py-2 px-3 rounded-md hover:bg-accent hover:text-accent-foreground block"
-                      >
-                        Get JSON
-                      </Link>
-                    </DialogClose>
-                  </div>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <div className="hidden min-w-0 flex-1 items-center justify-end md:flex">
+            <SchoolSwitcher className="max-w-[24rem] xl:max-w-[28rem]" />
+          </div>
         </div>
+      </header>
+
+      <div className="fixed inset-x-0 top-[var(--app-header-height)] z-40 border-b bg-background/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75 md:hidden">
+        <SchoolSwitcher className="max-w-none" showCreateButton={false} />
       </div>
-      {mounted && !schoolKey && (
-        <div
-          suppressHydrationWarning
-          className="bg-yellow-100 p-2 text-center text-sm"
-        >
-          Please select a school in the navbar to access tenant-specific
-          content.
+
+      <aside className="fixed bottom-0 left-0 top-[var(--app-header-height)] hidden w-[var(--app-sidebar-width)] border-r bg-background transition-[width] duration-200 ease-in-out lg:block">
+        <div className="flex h-full flex-col">
+          <div className={cn("border-b py-3", collapsed ? "px-2" : "px-3")}>
+            <div
+              className={cn(
+                "flex items-center",
+                collapsed ? "justify-center" : "justify-between",
+              )}
+            >
+              {!collapsed && (
+                <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Navigation
+                </p>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                className="h-9 w-9 rounded-xl"
+                onClick={() => setCollapsed((value) => !value)}
+              >
+                {collapsed ? (
+                  <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <ChevronLeft className="h-4 w-4" />
+                )}
+                <span className="sr-only">
+                  {collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                </span>
+              </Button>
+            </div>
+            {collapsed ? <CollapsedSchoolBadge /> : null}
+          </div>
+
+          <div
+            className={cn(
+              "flex-1 overflow-y-auto py-5",
+              collapsed ? "px-2" : "px-4",
+            )}
+          >
+            <SidebarNav collapsed={collapsed} />
+          </div>
         </div>
-      )}
-    </header>
+      </aside>
+    </>
   );
 }

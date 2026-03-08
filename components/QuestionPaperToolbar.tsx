@@ -1,17 +1,28 @@
 "use client";
+
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Copy, Pencil } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/use-toast";
+
 export function QuestionPaperToolbar({ paper }: { paper: any }) {
-  const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [names, setNames] = useState("");
   const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
-  // Helper to build the copy payload (same as your Make a Copy logic)
   function buildCopyPayload(name: string) {
     const { _id, title, examDate, ...rest } = paper;
     const sections = (paper.sections || []).map((section: any) => ({
@@ -23,12 +34,12 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
         Array.isArray(section.questions) && section.questions.length > 0
           ? section.questions[0].negativeMarks ?? 0
           : 0,
-      questions: (section.questions || []).map((q: any) => {
-        const questionObj = typeof q.question === "object" ? q.question : {};
+      questions: (section.questions || []).map((question: any) => {
+        const questionObj = typeof question.question === "object" ? question.question : {};
         return {
           question: questionObj,
-          marks: q.marks ?? section.marks ?? 1,
-          negativeMarks: q.negativeMarks ?? 0,
+          marks: question.marks ?? section.marks ?? 1,
+          negativeMarks: question.negativeMarks ?? 0,
         };
       }),
     }));
@@ -46,83 +57,138 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
     };
   }
 
-  // Handler for Copy Multiple
-  const handleCopyMultiple = async () => {
-    setLoading(true);
-    const nameList = names
-      .split("\n")
-      .map(n => n.trim())
-      .filter(Boolean);
-
-    if (!nameList.length) {
-      setLoading(false);
-      return;
-    }
-
-    // Send all payloads to the backend
-    const res = await fetch("/api/question-papers/copy-multiple", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        papers: nameList.map(name => buildCopyPayload(name)),
-      }),
-    });
-
-    setLoading(false);
-    if (res.ok) {
-      alert("Copies created!");
-      setShowModal(false);
+  const handleDialogChange = (nextOpen: boolean) => {
+    setShowModal(nextOpen);
+    if (!nextOpen && !loading) {
       setNames("");
-    } else {
-      alert("Failed to create copies.");
     }
   };
 
+  const handleCopyMultiple = async () => {
+    const nameList = names
+      .split("\n")
+      .map((name) => name.trim())
+      .filter(Boolean);
+
+    if (!nameList.length) {
+      toast({
+        title: "No names added",
+        description: "Enter at least one paper name before creating copies.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/question-papers/copy-multiple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          papers: nameList.map((name) => buildCopyPayload(name)),
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast({
+          title: "Copies created",
+          description: `${nameList.length} question paper ${nameList.length === 1 ? "copy is" : "copies are"} ready.`,
+        });
+        setShowModal(false);
+        setNames("");
+      } else {
+        toast({
+          title: "Create failed",
+          description: data?.message || "Failed to create copies.",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "Network Error",
+        description: "Failed to create copies.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const lineCount = names
+    .split("\n")
+    .map((name) => name.trim())
+    .filter(Boolean).length;
+
   return (
-    <div className="flex gap-2 mt-8">
-      <Link href={`/question-paper/edit/${paper._id}`}>
-        <Button variant="secondary">
-          <Pencil className="mr-2 h-4 w-4" /> Edit
+    <>
+      <div className="flex flex-wrap gap-2">
+        <Link href={`/question-paper/edit/${paper._id}`}>
+          <Button variant="secondary">
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+        </Link>
+        <Button
+          variant="outline"
+          onClick={() => {
+            const copyPayload = buildCopyPayload("");
+            sessionStorage.setItem("questionPaperCopy", JSON.stringify(copyPayload));
+            window.location.href = "/question-paper/create";
+          }}
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          Make a Copy
         </Button>
-      </Link>
-      <Button
-        variant="outline"
-        onClick={() => {
-          const copyPayload = buildCopyPayload("");
-          sessionStorage.setItem("questionPaperCopy", JSON.stringify(copyPayload));
-          window.location.href = "/question-paper/create";
-        }}
-      >
-        <Copy className="mr-2 h-4 w-4" /> Make a Copy
-      </Button>
-      <Button variant="outline" onClick={() => setShowModal(true)}>
-        <Copy className="mr-2 h-4 w-4" /> Copy Multiple
-      </Button>
-      {showModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded shadow-lg w-full max-w-md">
-            <h2 className="text-lg font-bold mb-2">Copy Multiple</h2>
-            <p className="mb-2 text-sm text-muted-foreground">
-              Enter one name per line for each new question paper:
-            </p>
-            <textarea
-              className="w-full border rounded p-2 mb-4"
-              rows={5}
-              value={names}
-              onChange={e => setNames(e.target.value)}
-              placeholder="Paper Copy 1&#10;Paper Copy 2&#10;Paper Copy 3"
-            />
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowModal(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCopyMultiple} disabled={loading}>
-                {loading ? "Creating..." : "Create Copies"}
-              </Button>
+        <Button variant="outline" onClick={() => setShowModal(true)}>
+          <Copy className="mr-2 h-4 w-4" />
+          Copy Multiple
+        </Button>
+      </div>
+
+      <Dialog open={showModal} onOpenChange={handleDialogChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader className="text-left">
+            <DialogTitle>Copy Multiple</DialogTitle>
+            <DialogDescription>
+              Enter one name per line to create several copies of this paper in one go.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="app-field-group">
+              <label htmlFor="copy-paper-names" className="app-field-label">
+                Paper Names
+              </label>
+              <Textarea
+                id="copy-paper-names"
+                rows={6}
+                className="min-h-[180px]"
+                value={names}
+                onChange={(event) => setNames(event.target.value)}
+                placeholder={"Paper Copy 1\nPaper Copy 2\nPaper Copy 3"}
+                disabled={loading}
+              />
+            </div>
+
+            <div className="app-section flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Each non-empty line becomes a new paper with the same sections, metadata, and instructions.
+              </p>
+              <span className="shrink-0 text-sm font-medium text-foreground">{lineCount} queued</span>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="outline" onClick={() => handleDialogChange(false)} disabled={loading}>
+              Cancel
+            </Button>
+            <Button onClick={handleCopyMultiple} disabled={loading}>
+              {loading ? <Spinner /> : "Create Copies"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

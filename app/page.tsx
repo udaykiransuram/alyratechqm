@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 // Remove 'use client' for static optimization and SEO, since no client-only logic is needed
@@ -96,7 +97,7 @@ const importantDates = [
 ];
 
 // Add metadata for SEO (Next.js app directory)
-export const metadata = {
+export const metadata: Metadata = {
   title: "Young Scholars Talent Test | Ignite Brilliance. Master Tomorrow.",
   description:
     "A national-level STEM talent assessment for Classes 1-10. Register now for holistic evaluation, AI-powered analytics, and exclusive awards.",
@@ -104,7 +105,7 @@ export const metadata = {
     title: "Young Scholars Talent Test",
     description:
       "A national-level STEM talent assessment for Classes 1-10. Register now for holistic evaluation, AI-powered analytics, and exclusive awards.",
-    url: "https://yourdomain.com/",
+    url: "/",
     siteName: "Young Scholars Talent Initiative",
     images: [
       {

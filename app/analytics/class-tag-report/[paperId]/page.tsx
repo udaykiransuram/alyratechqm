@@ -40,6 +40,7 @@ export default function ClassTagReportPage({
     useState<boolean>(false);
   const [view, setView] = useState<"table" | "charts">("table");
   const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
+  const [showControls, setShowControls] = useState(false);
 
   const [modalData, setModalData] = useState<{
     isOpen: boolean;
@@ -77,6 +78,34 @@ export default function ClassTagReportPage({
     const last = groupBy[groupBy.length - 1];
     return groupFields.find((f) => f.value === last)?.label || last || "Tag";
   }, [groupBy, groupFields]);
+
+  const selectedGroupLabels = React.useMemo(
+    () =>
+      groupBy
+        .map(
+          (value) =>
+            groupFields.find((field) => field.value === value)?.label || value,
+        )
+        .filter(Boolean),
+    [groupBy, groupFields],
+  );
+
+  const activeSortLabel = React.useMemo(() => {
+    if (!sortConfig.key) return "Default row order";
+    const metric =
+      sortConfig.key.charAt(0).toUpperCase() + sortConfig.key.slice(1);
+    return `${metric} • ${sortConfig.direction === "asc" ? "Low to high" : "High to low"}`;
+  }, [sortConfig]);
+
+  const groupingPreviewLabel =
+    selectedGroupLabels.length > 0
+      ? selectedGroupLabels.join(" → ")
+      : "Choose grouping order";
+
+  const visibleColumnsLabel =
+    [showTagsColumn ? "Tags" : null, showOptionTagsColumn ? "Option tags" : null]
+      .filter(Boolean)
+      .join(" • ") || "Core metrics only";
 
   // Explicit tenant handling
   const [schoolKey, setSchoolKey] = useState<string>("");
@@ -184,24 +213,109 @@ export default function ClassTagReportPage({
   if (error) return <ErrorState message={error} />;
 
   return (
-    <div className="bg-slate-50 min-h-screen p-4 sm:p-6 lg:p-8">
-      <div className="container space-y-8">
-        <ReportHeader paper={paper} student="" rollNumber="" />
-        <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6">
-          <h2 className="text-xl font-semibold text-slate-800 mb-4">
-            Report Controls
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Group By */}
-            <div>
-              <label className="font-semibold text-slate-700 block mb-2">
-                Group By (in order)
-              </label>
-              <p className="text-sm text-slate-500 mb-3">
-                Select and drag fields to create a nested report.
-              </p>
-              <div className="p-4 border rounded-lg bg-slate-50/50 space-y-4">
-                <div className="flex flex-wrap gap-2 mb-2">
+    <div className="analytics-page">
+      <div className="container space-y-6">
+        <ReportHeader paper={paper} student="" rollNumber="" variant="class" />
+        <div className="analytics-card overflow-hidden">
+          <div className="analytics-card-header">
+            <div className="analytics-toolbar-row gap-4">
+              <div className="analytics-toolbar-copy">
+                <h2 className="analytics-card-title">Report Controls</h2>
+                <p className="analytics-card-description">
+                  Pick how this report groups data, review the current setup,
+                  and refresh the grouped results when you are ready.
+                </p>
+              </div>
+              <div className="analytics-toolbar-meta">
+                <span className="analytics-toolbar-chip">
+                  {groupFields.length} available fields
+                </span>
+                <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                  {groupingPreviewLabel}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3 p-3 sm:p-4">
+            <div className="analytics-toolbar">
+              <div className="analytics-toolbar-row">
+                <div className="analytics-toolbar-copy">
+                  <p className="analytics-toolbar-title">Quick setup</p>
+                  <p className="analytics-toolbar-note">
+                    Keep the page lighter by opening the full setup only when you
+                    need to change the grouping order.
+                  </p>
+                </div>
+                <div className="analytics-toolbar-actions">
+                  <button
+                    type="button"
+                    onClick={() => setShowControls((value) => !value)}
+                    aria-expanded={showControls}
+                    className="app-button-secondary h-9 px-3"
+                  >
+                    {showControls ? "Hide full setup" : "Adjust setup"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={fetchAnalytics}
+                    disabled={loading}
+                    className="app-button-primary h-9 px-3"
+                  >
+                    {loading ? "Refreshing report..." : "Refresh report"}
+                  </button>
+                </div>
+              </div>
+              <div className="analytics-toolbar-row">
+                <div className="analytics-toolbar-meta">
+                  <span className="analytics-toolbar-chip">
+                    {groupFields.length} available fields
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {view === "table" ? "Table view" : "Chart view"}
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {groupingPreviewLabel}
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {visibleColumnsLabel}
+                  </span>
+                </div>
+                <div className="analytics-toolbar-actions">
+                  <label className="analytics-checkbox-card w-full justify-between sm:w-auto sm:justify-start">
+                    <input
+                      type="checkbox"
+                      checked={showTagsColumn}
+                      onChange={() => setShowTagsColumn((value) => !value)}
+                      className="analytics-inline-check"
+                    />
+                    <span>Show tags column</span>
+                  </label>
+                  <label className="analytics-checkbox-card w-full justify-between sm:w-auto sm:justify-start">
+                    <input
+                      type="checkbox"
+                      checked={showOptionTagsColumn}
+                      onChange={() => setShowOptionTagsColumn((value) => !value)}
+                      className="analytics-inline-check"
+                    />
+                    <span>Show option tags column</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {showControls ? (
+              <div className="analytics-controls-grid">
+              <div className="analytics-control-panel xl:order-2">
+                <div className="analytics-control-panel-header">
+                  <p className="analytics-control-panel-title">
+                    Group By (in order)
+                  </p>
+                  <p className="analytics-control-panel-note">
+                    Select fields and reorder them to build the nested structure
+                    used across the table, charts, and exports.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-3">
                   {groupFields.map((field) => (
                     <div key={field.value}>
                       <input
@@ -219,14 +333,14 @@ export default function ClassTagReportPage({
                       />
                       <label
                         htmlFor={`field-${field.value}`}
-                        className="inline-flex items-center justify-center px-3 py-1.5 text-sm text-slate-600 bg-white border border-slate-300 rounded-full cursor-pointer transition-colors hover:bg-slate-100 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600"
+                        className="analytics-filter-chip peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground"
                       >
                         {field.label}
                       </label>
                     </div>
                   ))}
                 </div>
-                {groupBy.length > 0 && (
+                {groupBy.length > 0 ? (
                   <ul className="space-y-2">
                     {groupBy.map((fieldValue, idx) => {
                       const field = groupFields.find(
@@ -236,15 +350,15 @@ export default function ClassTagReportPage({
                       return (
                         <li
                           key={field.value}
-                          className="flex items-center justify-between p-2 bg-white border rounded-md shadow-sm"
+                          className="analytics-order-item"
                         >
-                          <span className="font-medium text-slate-700">
+                          <span className="font-medium text-foreground">
                             {idx + 1}. {field.label}
                           </span>
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
-                              className="p-1 rounded-full text-slate-500 hover:bg-slate-200"
+                              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
                               disabled={idx === 0}
                               onClick={() => {
                                 setGroupBy((prev) => {
@@ -262,7 +376,7 @@ export default function ClassTagReportPage({
                             </button>
                             <button
                               type="button"
-                              className="p-1 rounded-full text-slate-500 hover:bg-slate-200"
+                              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
                               disabled={idx === groupBy.length - 1}
                               onClick={() => {
                                 setGroupBy((prev) => {
@@ -283,69 +397,54 @@ export default function ClassTagReportPage({
                       );
                     })}
                   </ul>
+                ) : (
+                  <div className="app-empty-state py-6">
+                    Select at least one field to define the report grouping.
+                  </div>
                 )}
               </div>
             </div>
-          </div>
 
-          {/* Tag/Option Columns & Submit */}
-          <div className="flex flex-wrap items-center gap-6 mt-6">
-            <label className="inline-flex items-center">
-              <input
-                type="checkbox"
-                checked={showTagsColumn}
-                onChange={() => setShowTagsColumn((v) => !v)}
-                className="form-checkbox"
-              />
-              <span className="ml-2 text-slate-700 font-medium">
-                Show Tags Column
-              </span>
-            </label>
-            <label className="inline-flex items-center">
-              <input
-                type="checkbox"
-                checked={showOptionTagsColumn}
-                onChange={() => setShowOptionTagsColumn((v) => !v)}
-                className="form-checkbox"
-              />
-              <span className="ml-2 text-slate-700 font-medium">
-                Show Selected Option Tags Column
-              </span>
-            </label>
-            <button
-              onClick={fetchAnalytics}
-              disabled={loading}
-              className="ml-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-            >
-              {loading ? "Loading..." : "Submit"}
-            </button>
+            ) : null}
           </div>
         </div>
 
         {insights && insights.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-slate-800">
-                Insights (Class • {lastLabel})
-              </h2>
-              <span className="text-xs text-slate-500">
-                Based on {lastLabel}
-              </span>
+          <div className="analytics-card analytics-card-body">
+            <div className="analytics-toolbar">
+              <div className="analytics-toolbar-row">
+                <div className="analytics-toolbar-copy">
+                  <h2 className="analytics-card-title">
+                    Insights (Class • {lastLabel})
+                  </h2>
+                  <p className="analytics-toolbar-note">
+                    Highest-failure groupings for the current report setup.
+                  </p>
+                </div>
+                <div className="analytics-toolbar-meta">
+                  <span className="analytics-toolbar-chip">
+                    {Math.min(insights.length, 12)} shown
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    Based on {lastLabel}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="analytics-table-wrap">
               <table className="min-w-full text-sm">
-                <thead className="bg-slate-100">
+                <thead className="bg-muted/30">
                   <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                    <th className="analytics-th">
                       {lastLabel}
                     </th>
-                    <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                    <th className="analytics-th-center">
                       Fail (%)
                     </th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                    <th className="analytics-th">
                       Category
                     </th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                    <th className="analytics-th">
                       Action
                     </th>
                   </tr>
@@ -354,84 +453,139 @@ export default function ClassTagReportPage({
                   {insights.slice(0, 12).map((i) => (
                     <tr
                       key={i.tag}
-                      className="bg-white border-b border-slate-200"
+                      className="analytics-row"
                     >
-                      <td className="px-4 py-2">{i.tag}</td>
-                      <td className="px-4 py-2 text-center font-medium text-red-600">
+                      <td className="analytics-td">{i.tag}</td>
+                      <td className="analytics-td-center font-medium text-rose-600">
                         {i.failPct}
                       </td>
-                      <td className="px-4 py-2">{i.category}</td>
-                      <td className="px-4 py-2">{i.action}</td>
+                      <td className="analytics-td">{i.category}</td>
+                      <td className="analytics-td">{i.action}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               {insights.length > 12 && (
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="px-4 py-3 text-xs text-muted-foreground">
                   Showing top 12. Refine grouping to focus further.
                 </p>
               )}
             </div>
           </div>
         )}
-        <div className="flex justify-center bg-slate-200 p-1 rounded-lg max-w-xs mx-auto">
-          <button
-            onClick={() => setView("table")}
-            className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-              view === "table"
-                ? "bg-white text-blue-700 shadow"
-                : "text-slate-600 hover:bg-slate-300/50"
-            }`}
-          >
-            Table View
-          </button>
-          <button
-            onClick={() => setView("charts")}
-            className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-              view === "charts"
-                ? "bg-white text-blue-700 shadow"
-                : "text-slate-600 hover:bg-slate-300/50"
-            }`}
-          >
-            Chart View
-          </button>
+        <div className="analytics-toolbar">
+          <div className="analytics-toolbar-row">
+            <div className="analytics-toolbar-copy">
+              <p className="analytics-toolbar-title">Choose a report view</p>
+              <p className="analytics-toolbar-note">
+                Switch between the grouped table and charts without losing your
+                current report setup.
+              </p>
+            </div>
+            <div className="analytics-toolbar-meta">
+              <span className="analytics-toolbar-chip">
+                {selectedGroupLabels.length > 0
+                  ? `Group by ${selectedGroupLabels.join(" → ")}`
+                  : "No grouping selected"}
+              </span>
+              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                {activeSortLabel}
+              </span>
+            </div>
+          </div>
+          <div className="analytics-toggle">
+            <button
+              onClick={() => setView("table")}
+              className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                view === "table"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background/70"
+              }`}
+            >
+              Table View
+            </button>
+            <button
+              onClick={() => setView("charts")}
+              className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                view === "charts"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background/70"
+              }`}
+            >
+              Chart View
+            </button>
+          </div>
         </div>
         {view === "table" ? (
-          <div className="bg-white rounded-lg shadow-md border border-slate-200/80 overflow-hidden">
-            <div className="p-6 flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-slate-800">
-                Grouped Analytics
-              </h2>
-              {/* Use the new export controls component here */}
-              <AnalyticsExportControls
-                stats={stats}
-                groupBy={groupBy}
-                groupFields={groupFields}
-                sortConfig={sortConfig}
-                tableRef={tableRef}
-                mode="class"
-                paperTitle={paper}
-              />
+          <div className="analytics-table-shell">
+            <div className="border-b border-border/60 bg-muted/20 p-4 sm:p-5">
+              <div className="analytics-toolbar-row gap-4">
+                <div className="analytics-toolbar-copy">
+                  <h2 className="analytics-card-title">
+                    Grouped Analytics
+                  </h2>
+                  <p className="analytics-toolbar-note">
+                    Review grouped performance and export the exact table shown
+                    below.
+                  </p>
+                </div>
+                <div className="analytics-toolbar-meta">
+                  <span className="analytics-toolbar-chip">
+                    {selectedGroupLabels.length > 0
+                      ? selectedGroupLabels.join(" → ")
+                      : "No grouping selected"}
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {activeSortLabel}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="analytics-toolbar-actions">
+                  <span className="analytics-toolbar-chip">
+                    {showTagsColumn ? "Tags visible" : "Tags hidden"}
+                  </span>
+                  <span className="analytics-toolbar-chip">
+                    {showOptionTagsColumn
+                      ? "Option tags visible"
+                      : "Option tags hidden"}
+                  </span>
+                  {selectedTags.length > 0 && (
+                    <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                      {selectedTags.length} highlighted tags
+                    </span>
+                  )}
+                </div>
+                <AnalyticsExportControls
+                  stats={stats}
+                  groupBy={groupBy}
+                  groupFields={groupFields}
+                  sortConfig={sortConfig}
+                  tableRef={tableRef}
+                  mode="class"
+                  paperTitle={paper}
+                />
+              </div>
             </div>
             {Object.keys(stats).length === 0 ? (
-              <div className="text-slate-500 p-6 text-center">
+              <div className="app-empty-state m-6">
                 No tag data found for the selected criteria.
               </div>
             ) : (
-              <div className="overflow-x-auto" ref={tableRef}>
+              <div className="analytics-table-wrap" ref={tableRef}>
                 <table className="min-w-full text-sm">
-                  <thead className="bg-slate-100">
+                  <thead className="bg-muted/30">
                     <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                      <th className="analytics-th">
                         Group / Tag
                       </th>
                       {showTagsColumn && (
-                        <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                        <th className="analytics-th-center">
                           Tags
                         </th>
                       )}
                       <th
-                        className="px-4 py-3 text-center font-semibold text-green-700 uppercase tracking-wider cursor-pointer select-none"
+                        className="analytics-th-center cursor-pointer select-none text-emerald-700"
                         onClick={() =>
                           setSortConfig({
                             key: "correct",
@@ -451,7 +605,7 @@ export default function ClassTagReportPage({
                           : ""}
                       </th>
                       <th
-                        className="px-4 py-3 text-center font-semibold text-red-700 uppercase tracking-wider cursor-pointer select-none"
+                        className="analytics-th-center cursor-pointer select-none text-rose-700"
                         onClick={() =>
                           setSortConfig({
                             key: "incorrect",
@@ -471,7 +625,7 @@ export default function ClassTagReportPage({
                           : ""}
                       </th>
                       <th
-                        className="px-4 py-3 text-center font-semibold text-yellow-700 uppercase tracking-wider cursor-pointer select-none"
+                        className="analytics-th-center cursor-pointer select-none text-amber-700"
                         onClick={() =>
                           setSortConfig({
                             key: "unattempted",
@@ -491,7 +645,7 @@ export default function ClassTagReportPage({
                           : ""}
                       </th>
                       {showOptionTagsColumn && (
-                        <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                        <th className="analytics-th-center">
                           Selected Option Tags
                         </th>
                       )}

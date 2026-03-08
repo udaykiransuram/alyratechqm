@@ -174,7 +174,7 @@ export default function StudentsByClassPage() {
   return (
     <div className="container mx-auto py-8">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Students by Class</h1>
+        <h1 className="app-page-title">Students by Class</h1>
         <p className="text-muted-foreground mt-1">Browse all students grouped by class. Total: {totalStudents}</p>
       </div>
 

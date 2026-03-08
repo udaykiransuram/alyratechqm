@@ -21,7 +21,7 @@ export function SectionEditor({
   onAddQuestions,
   canAddQuestions,
   sectionTotalMarks,
-  children
+  children,
 }: {
   section: Section;
   onUpdate: (field: string, value: any) => void;
@@ -33,19 +33,17 @@ export function SectionEditor({
 }) {
   return (
     <>
-      {/* Section Header Controls */}
-      <div className="space-y-4 bg-muted/30 p-4 border-b">
-        {/* Top row: Name, Question Count, and Remove button */}
-        <div className="flex items-center justify-between gap-4">
+      <div className="space-y-4 border-b border-border/60 bg-muted/20 px-5 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <Input
             value={section.name}
             onChange={e => onUpdate('name', e.target.value)}
-            className="text-lg font-bold border-0 shadow-none p-1 h-auto focus-visible:ring-1 bg-transparent flex-1"
+            className="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-lg font-semibold shadow-none focus-visible:ring-0"
             aria-label="Section name"
             placeholder="Untitled Section"
           />
-          <div className="flex items-center gap-4">
-            <span className="inline-block px-2 py-1 rounded bg-muted text-xs font-semibold text-muted-foreground whitespace-nowrap">
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <span className="rounded-full bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground">
               {section.questions.length} {section.questions.length === 1 ? 'Question' : 'Questions'}
             </span>
             <Button variant="ghost" size="icon" onClick={onRemove}>
@@ -54,41 +52,39 @@ export function SectionEditor({
           </div>
         </div>
 
-        {/* Description Textarea */}
         <Textarea
           value={section.description}
           onChange={e => onUpdate('description', e.target.value)}
           placeholder="Optional: Add a description or instructions for this section..."
-          className="text-sm bg-background"
-          rows={2}
+          className="min-h-[90px] bg-background"
+          rows={3}
         />
 
-        {/* Bottom row: Tag Summary and Marks inputs */}
-        <div className="flex items-end justify-between gap-4">
-          <div className="flex-1">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 flex-1">
             <SectionTagSummary section={section} />
           </div>
-          <div className="flex items-center gap-4">
-            <div className="space-y-1">
-              <Label className="text-xs font-medium">Default Marks</Label>
+          <div className="grid grid-cols-2 gap-3 sm:w-auto">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Default Marks</Label>
               <Input
                 type="number"
                 min={1}
                 value={section.defaultMarks ?? ''}
                 onChange={e => onUpdate('defaultMarks', e.target.value === '' ? undefined : Number(e.target.value))}
-                className="w-24 h-8"
+                className="h-9 w-full sm:w-24"
                 aria-label="Default marks"
                 required
               />
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-medium">Default Negative</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Default Negative</Label>
               <Input
                 type="number"
                 min={0}
                 value={section.defaultNegativeMarks ?? ''}
                 onChange={e => onUpdate('defaultNegativeMarks', e.target.value === '' ? undefined : Number(e.target.value))}
-                className="w-24 h-8"
+                className="h-9 w-full sm:w-24"
                 aria-label="Default negative marks"
               />
             </div>
@@ -96,24 +92,19 @@ export function SectionEditor({
         </div>
       </div>
 
-      {/* Section Content and Actions */}
-      <div className="p-4">
+      <div className="space-y-4 px-5 py-4">
         {children}
-        <div className="mt-4 flex justify-between items-center">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onAddQuestions}
-            disabled={!canAddQuestions}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Add / Manage Questions
+        <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center">
+          <Button variant="outline" size="sm" onClick={onAddQuestions} disabled={!canAddQuestions}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add / Manage Questions
           </Button>
-          {!canAddQuestions && (
-            <span className="text-xs text-destructive ml-2">
-              Set section name & default marks to add questions.
+          {!canAddQuestions ? (
+            <span className="text-xs text-destructive">
+              Set section name and default marks to add questions.
             </span>
-          )}
-          <span className="text-sm font-semibold text-muted-foreground ml-auto">
+          ) : null}
+          <span className="sm:ml-auto text-sm font-semibold text-muted-foreground">
             Section Total: {sectionTotalMarks} Marks
           </span>
         </div>

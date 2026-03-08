@@ -4,6 +4,8 @@ import { connectDB } from '@/lib/db'
 import { getTenantModels } from '@/lib/db-tenant'
 import mongoose from 'mongoose'
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   await connectDB()
   const url = new URL(req.url)

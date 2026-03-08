@@ -16,6 +16,11 @@ import {
 import QuestionListModal from "@/components/analytics/QuestionListModal";
 import AnalyticsExportControls from "@/components/analytics/AnalyticsExportControls";
 
+type ReportFilterOption = {
+  value: string;
+  label: string;
+};
+
 export default function StudentTagReportPage({
   params,
 }: {
@@ -33,6 +38,10 @@ export default function StudentTagReportPage({
   >([]);
   const [groupBy, setGroupBy] = useState<string[]>([]);
   const [classLevel, setClassLevel] = useState(false);
+  const [classOptions, setClassOptions] = useState<ReportFilterOption[]>([]);
+  const [subjectOptions, setSubjectOptions] = useState<ReportFilterOption[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState("all");
+  const [selectedSubjectId, setSelectedSubjectId] = useState("all");
 
   // Track tenant (school) explicitly to make API calls DB-specific
   const [schoolKey, setSchoolKey] = useState<string>("");
@@ -78,6 +87,7 @@ export default function StudentTagReportPage({
     useState<boolean>(false);
   const [view, setView] = useState<"table" | "charts">("table");
   const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
+  const [showControls, setShowControls] = useState(false);
 
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -222,6 +232,50 @@ export default function StudentTagReportPage({
     return rows;
   }, [classLevel, classInsights, insights]);
 
+  const selectedGroupLabels = React.useMemo(
+    () =>
+      groupBy
+        .map(
+          (value) =>
+            groupFields.find((field) => field.value === value)?.label || value,
+        )
+        .filter(Boolean),
+    [groupBy, groupFields],
+  );
+
+  const activeSortLabel = React.useMemo(() => {
+    if (!sortConfig.key) return "Default row order";
+    const metric =
+      sortConfig.key.charAt(0).toUpperCase() + sortConfig.key.slice(1);
+    return `${metric} • ${sortConfig.direction === "asc" ? "Low to high" : "High to low"}`;
+  }, [sortConfig]);
+
+  const groupingPreviewLabel =
+    selectedGroupLabels.length > 0
+      ? selectedGroupLabels.join(" → ")
+      : "Choose grouping order";
+
+  const visibleColumnsLabel =
+    [showTagsColumn ? "Tags" : null, showOptionTagsColumn ? "Option tags" : null]
+      .filter(Boolean)
+      .join(" • ") || "Core metrics only";
+
+  const hasActiveQuestionFilters =
+    selectedClassId !== "all" || selectedSubjectId !== "all";
+
+  const activeFiltersLabel = [
+    selectedClassId !== "all"
+      ? classOptions.find((option) => option.value === selectedClassId)?.label ||
+        "Filtered class"
+      : null,
+    selectedSubjectId !== "all"
+      ? subjectOptions.find((option) => option.value === selectedSubjectId)
+          ?.label || "Filtered subject"
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" • ") || "All questions";
+
   useEffect(() => {
     (async () => {
       const sk = getSchoolFromCookie();
@@ -240,6 +294,12 @@ export default function StudentTagReportPage({
           throw new Error(`groupFields fetch failed: HTTP ${res.status}`);
         const data: any = await res.json().catch(() => ({}));
         setGroupFields(Array.isArray(data?.fields) ? data.fields : []);
+        setClassOptions(
+          Array.isArray(data?.filters?.classes) ? data.filters.classes : [],
+        );
+        setSubjectOptions(
+          Array.isArray(data?.filters?.subjects) ? data.filters.subjects : [],
+        );
         if (
           Array.isArray(data?.fields) &&
           data.fields.some((f: any) => f.value === "section")
@@ -259,6 +319,8 @@ export default function StudentTagReportPage({
       } catch (e) {
         console.error("[student-tag-report] failed to load groupFields", e);
         setGroupFields([]);
+        setClassOptions([]);
+        setSubjectOptions([]);
       }
     })();
   }, [params.responseId]);
@@ -277,7 +339,7 @@ export default function StudentTagReportPage({
   useEffect(() => {
     setCmpPage(1);
     setInsPage(1);
-  }, [groupBy, classLevel]);
+  }, [groupBy, classLevel, selectedClassId, selectedSubjectId]);
 
   const handleOpenModal = (
     title: string,
@@ -304,13 +366,18 @@ export default function StudentTagReportPage({
 
   const handleCloseOptionTagModal = () => setOptionTagModal(null);
 
-  const fetchAnalytics = () => {
+  const fetchAnalytics = (overrides?: { classId?: string; subjectId?: string }) => {
     setLoading(true);
     setError(null);
+    const resolvedClassId = overrides?.classId ?? selectedClassId;
+    const resolvedSubjectId = overrides?.subjectId ?? selectedSubjectId;
     const searchParams = new URLSearchParams();
     searchParams.set("json", "1");
     if (groupBy.length) searchParams.set("groupBy", groupBy.join(","));
     if (classLevel) searchParams.set("classLevel", "1");
+    if (resolvedClassId !== "all") searchParams.set("classId", resolvedClassId);
+    if (resolvedSubjectId !== "all")
+      searchParams.set("subjectId", resolvedSubjectId);
     // Ensure we pass the tenant explicitly
     const sk = schoolKey || getSchoolFromCookie();
     if (!sk) {
@@ -343,6 +410,9 @@ export default function StudentTagReportPage({
       classParams.set("json", "1");
       if (groupBy.length) classParams.set("groupBy", groupBy.join(","));
       classParams.set("classLevel", "1");
+      if (resolvedClassId !== "all") classParams.set("classId", resolvedClassId);
+      if (resolvedSubjectId !== "all")
+        classParams.set("subjectId", resolvedSubjectId);
       classParams.set("school", sk);
       fetch(
         `/api/analytics/student-tag-report/${params.responseId}?${classParams.toString()}`,
@@ -362,44 +432,256 @@ export default function StudentTagReportPage({
   if (error) return <ErrorState message={error} />;
 
   return (
-    <div className="bg-slate-50 min-h-screen p-4 sm:p-6 lg:p-8">
-      <div className="container space-y-8">
-        <ReportHeader student={student} rollNumber={rollNumber} paper={paper} />
-        <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6">
-          <h2 className="text-xl font-semibold text-slate-800 mb-4">
-            Report Controls
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Analysis Mode */}
-            <div>
-              <label className="font-semibold text-slate-700 block mb-2">
-                Analysis Mode
-              </label>
-              <div className="flex items-center gap-4 p-3 bg-slate-100 rounded-lg">
-                <span className="text-slate-600">Single Student</span>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={classLevel}
-                    onChange={() => setClassLevel((v) => !v)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-300 rounded-full peer peer-checked:bg-blue-600 transition-colors"></div>
-                </label>
-                <span className="text-slate-600">Class Level</span>
+    <div className="analytics-page">
+      <div className="container space-y-6">
+        <ReportHeader
+          student={student}
+          rollNumber={rollNumber}
+          paper={paper}
+          variant={classLevel ? "class" : "student"}
+        />
+        <div className="analytics-card overflow-hidden">
+          <div className="analytics-card-header">
+            <div className="analytics-toolbar-row gap-4">
+              <div className="analytics-toolbar-copy">
+                <h2 className="analytics-card-title">Report Controls</h2>
+                <p className="analytics-card-description">
+                  Choose the analysis mode, shape the grouping order, and refresh
+                  the report once the setup looks right.
+                </p>
+              </div>
+              <div className="analytics-toolbar-meta">
+                <span className="analytics-toolbar-chip">
+                  {classLevel ? "Class mode" : "Student mode"}
+                </span>
+                <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                  {groupingPreviewLabel}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3 p-3 sm:p-4">
+            <div className="analytics-toolbar">
+              <div className="analytics-toolbar-row">
+                <div className="analytics-toolbar-copy">
+                  <p className="analytics-toolbar-title">Quick setup</p>
+                  <p className="analytics-toolbar-note">
+                    Keep the page lighter by opening the full setup only when you
+                    need to change grouping, filters, or analysis mode.
+                  </p>
+                </div>
+                <div className="analytics-toolbar-actions">
+                  <button
+                    type="button"
+                    onClick={() => setShowControls((value) => !value)}
+                    aria-expanded={showControls}
+                    className="app-button-secondary h-9 px-3"
+                  >
+                    {showControls ? "Hide full setup" : "Adjust setup"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fetchAnalytics()}
+                    disabled={loading}
+                    className="app-button-primary h-9 px-3"
+                  >
+                    {loading
+                      ? "Refreshing report..."
+                      : classLevel
+                        ? "Refresh class report"
+                        : "Refresh student report"}
+                  </button>
+                </div>
+              </div>
+              <div className="analytics-toolbar-row">
+                <div className="analytics-toolbar-meta">
+                  <span className="analytics-toolbar-chip">
+                    {classLevel ? "Class mode" : "Student mode"}
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {view === "table" ? "Table view" : "Chart view"}
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {selectedGroupLabels.length > 0
+                      ? `${selectedGroupLabels.length} grouping levels`
+                      : "No grouping selected"}
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {activeFiltersLabel}
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {visibleColumnsLabel}
+                  </span>
+                </div>
+                <div className="analytics-toolbar-actions">
+                  <label className="analytics-checkbox-card w-full justify-between sm:w-auto sm:justify-start">
+                    <input
+                      type="checkbox"
+                      checked={showTagsColumn}
+                      onChange={() => setShowTagsColumn((value) => !value)}
+                      className="analytics-inline-check"
+                    />
+                    <span>Show tags column</span>
+                  </label>
+                  <label className="analytics-checkbox-card w-full justify-between sm:w-auto sm:justify-start">
+                    <input
+                      type="checkbox"
+                      checked={showOptionTagsColumn}
+                      onChange={() => setShowOptionTagsColumn((value) => !value)}
+                      className="analytics-inline-check"
+                    />
+                    <span>Show option tags column</span>
+                  </label>
+                </div>
               </div>
             </div>
 
-            {/* Group By */}
-            <div>
-              <label className="font-semibold text-slate-700 block mb-2">
-                Group By (in order)
-              </label>
-              <p className="text-sm text-slate-500 mb-3">
-                Select and drag fields to create a nested report.
-              </p>
-              <div className="p-4 border rounded-lg bg-slate-50/50 space-y-4">
-                <div className="flex flex-wrap gap-2 mb-2">
+            {showControls ? (
+              <div className="analytics-controls-grid">
+              <div className="analytics-control-stack">
+                <div className="analytics-control-panel">
+                  <div className="analytics-control-panel-header">
+                    <p className="analytics-control-panel-title">
+                      Analysis Mode
+                    </p>
+                    <p className="analytics-control-panel-note">
+                      Pick the perspective first. The grouping setup below stays
+                      intact when you switch modes.
+                    </p>
+                  </div>
+                  <div className="analytics-mode-grid">
+                    <button
+                      type="button"
+                      onClick={() => setClassLevel(false)}
+                      className={`analytics-mode-card ${
+                        !classLevel ? "analytics-mode-card-active" : ""
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-foreground">
+                        Single student
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Focus on one response and compare it against the class.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setClassLevel(true)}
+                      className={`analytics-mode-card ${
+                        classLevel ? "analytics-mode-card-active" : ""
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-foreground">
+                        Class level
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Review the full class without the individual comparison
+                        layer.
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="analytics-control-panel">
+                  <div className="analytics-control-panel-header">
+                    <p className="analytics-control-panel-title">Question filters</p>
+                    <p className="analytics-control-panel-note">
+                      Narrow the report to specific question classes or subjects.
+                      These filters apply to the table, charts, insights, and
+                      exports.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="app-field-group">
+                      <label className="app-field-label">Class filter</label>
+                      <select
+                        className="analytics-select w-full"
+                        value={selectedClassId}
+                        onChange={(event) => setSelectedClassId(event.target.value)}
+                      >
+                        <option value="all">All classes</option>
+                        {classOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="app-field-group">
+                      <label className="app-field-label">Subject filter</label>
+                      <select
+                        className="analytics-select w-full"
+                        value={selectedSubjectId}
+                        onChange={(event) => setSelectedSubjectId(event.target.value)}
+                      >
+                        <option value="all">All subjects</option>
+                        {subjectOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="analytics-toolbar-chip">
+                      {selectedClassId === "all"
+                        ? "All classes"
+                        : `Class: ${
+                            classOptions.find((option) => option.value === selectedClassId)
+                              ?.label || "Filtered class"
+                          }`}
+                    </span>
+                    <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                      {selectedSubjectId === "all"
+                        ? "All subjects"
+                        : `Subject: ${
+                            subjectOptions.find(
+                              (option) => option.value === selectedSubjectId,
+                            )?.label || "Filtered subject"
+                          }`}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fetchAnalytics()}
+                      disabled={loading}
+                      className="app-button-secondary h-9 px-3"
+                    >
+                      {loading ? "Applying..." : "Apply question filters"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedClassId("all");
+                        setSelectedSubjectId("all");
+                        fetchAnalytics({ classId: "all", subjectId: "all" });
+                      }}
+                      disabled={loading || !hasActiveQuestionFilters}
+                      className="app-button-secondary h-9 px-3"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                    Active filters: {activeFiltersLabel}. Use refresh below after changing grouping or analysis mode.
+                  </p>
+                </div>
+
+              </div>
+
+              <div className="analytics-control-panel">
+                <div className="analytics-control-panel-header">
+                  <p className="analytics-control-panel-title">
+                    Group By (in order)
+                  </p>
+                  <p className="analytics-control-panel-note">
+                    Select fields and reorder them to build the nested structure
+                    used across the table, charts, and exports.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-3">
                   {groupFields.map((field) => (
                     <div key={field.value}>
                       <input
@@ -417,14 +699,14 @@ export default function StudentTagReportPage({
                       />
                       <label
                         htmlFor={`field-${field.value}`}
-                        className="inline-flex items-center justify-center px-3 py-1.5 text-sm text-slate-600 bg-white border border-slate-300 rounded-full cursor-pointer transition-colors hover:bg-slate-100 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600"
+                        className="analytics-filter-chip peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground"
                       >
                         {field.label}
                       </label>
                     </div>
                   ))}
                 </div>
-                {groupBy.length > 0 && (
+                {groupBy.length > 0 ? (
                   <ul className="space-y-2">
                     {groupBy.map((fieldValue, idx) => {
                       const field = groupFields.find(
@@ -434,15 +716,15 @@ export default function StudentTagReportPage({
                       return (
                         <li
                           key={field.value}
-                          className="flex items-center justify-between p-2 bg-white border rounded-md shadow-sm"
+                          className="analytics-order-item"
                         >
-                          <span className="font-medium text-slate-700">
+                          <span className="font-medium text-foreground">
                             {idx + 1}. {field.label}
                           </span>
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
-                              className="p-1 rounded-full text-slate-500 hover:bg-slate-200"
+                              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
                               disabled={idx === 0}
                               onClick={() => {
                                 setGroupBy((prev) => {
@@ -460,7 +742,7 @@ export default function StudentTagReportPage({
                             </button>
                             <button
                               type="button"
-                              className="p-1 rounded-full text-slate-500 hover:bg-slate-200"
+                              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
                               disabled={idx === groupBy.length - 1}
                               onClick={() => {
                                 setGroupBy((prev) => {
@@ -481,56 +763,42 @@ export default function StudentTagReportPage({
                       );
                     })}
                   </ul>
+                ) : (
+                  <div className="app-empty-state py-6">
+                    Select at least one field to define the report grouping.
+                  </div>
                 )}
               </div>
             </div>
-          </div>
 
-          {/* Tag/Option Columns & Submit */}
-          <div className="flex flex-wrap items-center gap-6 mt-6">
-            <label className="inline-flex items-center">
-              <input
-                type="checkbox"
-                checked={showTagsColumn}
-                onChange={() => setShowTagsColumn((v) => !v)}
-                className="form-checkbox"
-              />
-              <span className="ml-2 text-slate-700 font-medium">
-                Show Tags Column
-              </span>
-            </label>
-            <label className="inline-flex items-center">
-              <input
-                type="checkbox"
-                checked={showOptionTagsColumn}
-                onChange={() => setShowOptionTagsColumn((v) => !v)}
-                className="form-checkbox"
-              />
-              <span className="ml-2 text-slate-700 font-medium">
-                Show Selected Option Tags Column
-              </span>
-            </label>
-            <button
-              onClick={fetchAnalytics}
-              disabled={loading}
-              className="ml-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-            >
-              {loading ? "Loading..." : "Submit"}
-            </button>
+            ) : null}
           </div>
         </div>
 
         {!classLevel && compareRows.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-slate-800">
-                Insights (Student • {lastLabel})
-              </h2>
-              <span className="text-xs text-slate-500">
-                Based on {lastLabel}
-              </span>
+          <div className="analytics-card analytics-card-body">
+            <div className="analytics-toolbar">
+              <div className="analytics-toolbar-row">
+                <div className="analytics-toolbar-copy">
+                  <h2 className="analytics-card-title">
+                    Insights (Student • {lastLabel})
+                  </h2>
+                  <p className="analytics-toolbar-note">
+                    Compare this student against the class benchmark for the
+                    same grouping levels.
+                  </p>
+                </div>
+                <div className="analytics-toolbar-meta">
+                  <span className="analytics-toolbar-chip">
+                    {compareRows.length} comparison areas
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    Based on {lastLabel}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="analytics-table-wrap">
               {(() => {
                 const total = compareRows.length;
                 const maxPage = Math.max(1, Math.ceil(total / cmpPageSize));
@@ -540,34 +808,30 @@ export default function StudentTagReportPage({
                 const visible = cmpShowAll
                   ? compareRows
                   : compareRows.slice(start, end);
-                const RangeInfo = () => (
-                  <span className="text-xs text-slate-500">
-                    {cmpShowAll
-                      ? `Showing all ${total}`
-                      : `Showing ${total === 0 ? 0 : start + 1}–${end} of ${total}`}
-                  </span>
-                );
+                const rangeLabel = cmpShowAll
+                  ? `Showing all ${total}`
+                  : `Showing ${total === 0 ? 0 : start + 1}–${end} of ${total}`;
                 return (
                   <>
                     <table className="min-w-full text-sm">
-                      <thead className="bg-slate-100">
+                      <thead className="bg-muted/30">
                         <tr>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                          <th className="analytics-th">
                             {lastLabel}
                           </th>
-                          <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                          <th className="analytics-th-center">
                             Student Correct (%)
                           </th>
-                          <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                          <th className="analytics-th-center">
                             Class Correct (%)
                           </th>
-                          <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                          <th className="analytics-th-center">
                             Gap (%)
                           </th>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                          <th className="analytics-th">
                             Category
                           </th>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                          <th className="analytics-th">
                             Action
                           </th>
                         </tr>
@@ -576,98 +840,107 @@ export default function StudentTagReportPage({
                         {visible.map((r) => {
                           const gapClass =
                             r.gap == null
-                              ? "text-slate-500"
+                              ? "text-muted-foreground"
                               : r.gap > 0
-                                ? "text-green-600"
+                                ? "text-emerald-600"
                                 : r.gap < 0
-                                  ? "text-red-600"
-                                  : "text-slate-700";
+                                  ? "text-rose-600"
+                                  : "text-foreground";
                           return (
                             <tr
                               key={r.tag}
-                              className="bg-white border-b border-slate-200"
+                              className="analytics-row"
                             >
-                              <td className="px-4 py-2">{r.tag}</td>
-                              <td className="px-4 py-2 text-center">
+                              <td className="analytics-td">{r.tag}</td>
+                              <td className="analytics-td-center">
                                 {r.studentCorrect?.toFixed(2)}
                               </td>
-                              <td className="px-4 py-2 text-center">
+                              <td className="analytics-td-center">
                                 {r.classCorrect == null
                                   ? "-"
                                   : r.classCorrect.toFixed(2)}
                               </td>
                               <td
-                                className={`px-4 py-2 text-center font-medium ${gapClass}`}
+                                className={`analytics-td-center font-medium ${gapClass}`}
                               >
                                 {r.gap == null ? "-" : r.gap.toFixed(2)}
                               </td>
-                              <td className="px-4 py-2">{r.category}</td>
-                              <td className="px-4 py-2">{r.action}</td>
+                              <td className="analytics-td">{r.category}</td>
+                              <td className="analytics-td">{r.action}</td>
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
-                    <div className="flex items-center justify-between mt-3 gap-3">
-                      <div className="flex items-center gap-3">
-                        <label className="inline-flex items-center text-sm">
-                          <input
-                            type="checkbox"
-                            className="mr-2"
-                            checked={cmpShowAll}
-                            onChange={() => {
-                              setCmpShowAll((v) => !v);
-                              setCmpPage(1);
-                            }}
-                          />
-                          Show all
-                        </label>
-                        {!cmpShowAll && total > 0 && (
-                          <label className="inline-flex items-center text-sm">
-                            <span className="mr-2">Rows per page</span>
-                            <select
-                              className="border rounded px-2 py-1 text-sm"
-                              value={cmpPageSize}
-                              onChange={(e) => {
-                                setCmpPageSize(Number(e.target.value));
+                    <div className="border-t border-border/60 bg-muted/20 p-4">
+                      <div className="analytics-toolbar-row">
+                        <div className="analytics-toolbar-actions">
+                          <label className="analytics-checkbox-card">
+                            <input
+                              type="checkbox"
+                              className="analytics-inline-check"
+                              checked={cmpShowAll}
+                              onChange={() => {
+                                setCmpShowAll((v) => !v);
                                 setCmpPage(1);
                               }}
-                            >
-                              {[10, 12, 25, 50].map((n) => (
-                                <option key={n} value={n}>
-                                  {n}
-                                </option>
-                              ))}
-                            </select>
+                            />
+                            <span>Show all rows</span>
                           </label>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <RangeInfo />
-                        {!cmpShowAll && total > cmpPageSize && (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              className="px-2 py-1 border rounded disabled:opacity-50"
-                              onClick={() =>
-                                setCmpPage((p) => Math.max(1, p - 1))
-                              }
-                              disabled={safePage <= 1}
-                            >
-                              Prev
-                            </button>
-                            <button
-                              type="button"
-                              className="px-2 py-1 border rounded disabled:opacity-50"
-                              onClick={() =>
-                                setCmpPage((p) => Math.min(maxPage, p + 1))
-                              }
-                              disabled={safePage >= maxPage}
-                            >
-                              Next
-                            </button>
-                          </div>
-                        )}
+                          {!cmpShowAll && total > 0 && (
+                            <label className="analytics-checkbox-card">
+                              <span className="text-muted-foreground">
+                                Rows per page
+                              </span>
+                              <select
+                                className="analytics-select h-8"
+                                value={cmpPageSize}
+                                onChange={(e) => {
+                                  setCmpPageSize(Number(e.target.value));
+                                  setCmpPage(1);
+                                }}
+                              >
+                                {[10, 12, 25, 50].map((n) => (
+                                  <option key={n} value={n}>
+                                    {n}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                        </div>
+                        <div className="analytics-toolbar-actions">
+                          <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                            {rangeLabel}
+                          </span>
+                          {!cmpShowAll && total > cmpPageSize && (
+                            <>
+                              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                                Page {safePage} of {maxPage}
+                              </span>
+                              <button
+                                type="button"
+                                className="analytics-pagination-button"
+                                onClick={() =>
+                                  setCmpPage((p) => Math.max(1, p - 1))
+                                }
+                                disabled={safePage <= 1}
+                              >
+                                Previous
+                              </button>
+                              <button
+                                type="button"
+                                className="analytics-pagination-button"
+                                onClick={() =>
+                                  setCmpPage((p) => Math.min(maxPage, p + 1))
+                                }
+                                disabled={safePage >= maxPage}
+                              >
+                                Next
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </>
@@ -682,16 +955,28 @@ export default function StudentTagReportPage({
             compareRows.length === 0 &&
             insights &&
             insights.length > 0)) && (
-          <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-slate-800">
-                Insights ({classLevel ? "Class" : "Student"} • {lastLabel})
-              </h2>
-              <span className="text-xs text-slate-500">
-                Based on {lastLabel}
-              </span>
+          <div className="analytics-card analytics-card-body">
+            <div className="analytics-toolbar">
+              <div className="analytics-toolbar-row">
+                <div className="analytics-toolbar-copy">
+                  <h2 className="analytics-card-title">
+                    Insights ({classLevel ? "Class" : "Student"} • {lastLabel})
+                  </h2>
+                  <p className="analytics-toolbar-note">
+                    Weakest areas for the active report mode and grouping setup.
+                  </p>
+                </div>
+                <div className="analytics-toolbar-meta">
+                  <span className="analytics-toolbar-chip">
+                    {insights.length} insight rows
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    Based on {lastLabel}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="analytics-table-wrap">
               {(() => {
                 const total = insights.length;
                 const maxPage = Math.max(1, Math.ceil(total / insPageSize));
@@ -701,28 +986,24 @@ export default function StudentTagReportPage({
                 const visible = insShowAll
                   ? insights
                   : insights.slice(start, end);
-                const RangeInfo = () => (
-                  <span className="text-xs text-slate-500">
-                    {insShowAll
-                      ? `Showing all ${total}`
-                      : `Showing ${total === 0 ? 0 : start + 1}–${end} of ${total}`}
-                  </span>
-                );
+                const rangeLabel = insShowAll
+                  ? `Showing all ${total}`
+                  : `Showing ${total === 0 ? 0 : start + 1}–${end} of ${total}`;
                 return (
                   <>
                     <table className="min-w-full text-sm">
-                      <thead className="bg-slate-100">
+                      <thead className="bg-muted/30">
                         <tr>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                          <th className="analytics-th">
                             {lastLabel}
                           </th>
-                          <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                          <th className="analytics-th-center">
                             Fail (%)
                           </th>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                          <th className="analytics-th">
                             Category
                           </th>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                          <th className="analytics-th">
                             Action
                           </th>
                         </tr>
@@ -731,78 +1012,87 @@ export default function StudentTagReportPage({
                         {visible.map((i) => (
                           <tr
                             key={i.tag}
-                            className="bg-white border-b border-slate-200"
+                            className="analytics-row"
                           >
-                            <td className="px-4 py-2">{i.tag}</td>
-                            <td className="px-4 py-2 text-center font-medium text-red-600">
+                            <td className="analytics-td">{i.tag}</td>
+                            <td className="analytics-td-center font-medium text-rose-600">
                               {i.failPct}
                             </td>
-                            <td className="px-4 py-2">{i.category}</td>
-                            <td className="px-4 py-2">{i.action}</td>
+                            <td className="analytics-td">{i.category}</td>
+                            <td className="analytics-td">{i.action}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                    <div className="flex items-center justify-between mt-3 gap-3">
-                      <div className="flex items-center gap-3">
-                        <label className="inline-flex items-center text-sm">
-                          <input
-                            type="checkbox"
-                            className="mr-2"
-                            checked={insShowAll}
-                            onChange={() => {
-                              setInsShowAll((v) => !v);
-                              setInsPage(1);
-                            }}
-                          />
-                          Show all
-                        </label>
-                        {!insShowAll && total > 0 && (
-                          <label className="inline-flex items-center text-sm">
-                            <span className="mr-2">Rows per page</span>
-                            <select
-                              className="border rounded px-2 py-1 text-sm"
-                              value={insPageSize}
-                              onChange={(e) => {
-                                setInsPageSize(Number(e.target.value));
+                    <div className="border-t border-border/60 bg-muted/20 p-4">
+                      <div className="analytics-toolbar-row">
+                        <div className="analytics-toolbar-actions">
+                          <label className="analytics-checkbox-card">
+                            <input
+                              type="checkbox"
+                              className="analytics-inline-check"
+                              checked={insShowAll}
+                              onChange={() => {
+                                setInsShowAll((v) => !v);
                                 setInsPage(1);
                               }}
-                            >
-                              {[10, 12, 25, 50].map((n) => (
-                                <option key={n} value={n}>
-                                  {n}
-                                </option>
-                              ))}
-                            </select>
+                            />
+                            <span>Show all rows</span>
                           </label>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <RangeInfo />
-                        {!insShowAll && total > insPageSize && (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              className="px-2 py-1 border rounded disabled:opacity-50"
-                              onClick={() =>
-                                setInsPage((p) => Math.max(1, p - 1))
-                              }
-                              disabled={safePage <= 1}
-                            >
-                              Prev
-                            </button>
-                            <button
-                              type="button"
-                              className="px-2 py-1 border rounded disabled:opacity-50"
-                              onClick={() =>
-                                setInsPage((p) => Math.min(maxPage, p + 1))
-                              }
-                              disabled={safePage >= maxPage}
-                            >
-                              Next
-                            </button>
-                          </div>
-                        )}
+                          {!insShowAll && total > 0 && (
+                            <label className="analytics-checkbox-card">
+                              <span className="text-muted-foreground">
+                                Rows per page
+                              </span>
+                              <select
+                                className="analytics-select h-8"
+                                value={insPageSize}
+                                onChange={(e) => {
+                                  setInsPageSize(Number(e.target.value));
+                                  setInsPage(1);
+                                }}
+                              >
+                                {[10, 12, 25, 50].map((n) => (
+                                  <option key={n} value={n}>
+                                    {n}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                        </div>
+                        <div className="analytics-toolbar-actions">
+                          <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                            {rangeLabel}
+                          </span>
+                          {!insShowAll && total > insPageSize && (
+                            <>
+                              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                                Page {safePage} of {maxPage}
+                              </span>
+                              <button
+                                type="button"
+                                className="analytics-pagination-button"
+                                onClick={() =>
+                                  setInsPage((p) => Math.max(1, p - 1))
+                                }
+                                disabled={safePage <= 1}
+                              >
+                                Previous
+                              </button>
+                              <button
+                                type="button"
+                                className="analytics-pagination-button"
+                                onClick={() =>
+                                  setInsPage((p) => Math.min(maxPage, p + 1))
+                                }
+                                disabled={safePage >= maxPage}
+                              >
+                                Next
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </>
@@ -812,66 +1102,122 @@ export default function StudentTagReportPage({
           </div>
         )}
 
-        <div className="flex justify-center bg-slate-200 p-1 rounded-lg max-w-xs mx-auto">
-          <button
-            onClick={() => setView("table")}
-            className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-              view === "table"
-                ? "bg-white text-blue-700 shadow"
-                : "text-slate-600 hover:bg-slate-300/50"
-            }`}
-          >
-            Table View
-          </button>
-          <button
-            onClick={() => setView("charts")}
-            className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-              view === "charts"
-                ? "bg-white text-blue-700 shadow"
-                : "text-slate-600 hover:bg-slate-300/50"
-            }`}
-          >
-            Chart View
-          </button>
+        <div className="analytics-toolbar">
+          <div className="analytics-toolbar-row">
+            <div className="analytics-toolbar-copy">
+              <p className="analytics-toolbar-title">Choose a report view</p>
+              <p className="analytics-toolbar-note">
+                Switch between the grouped table and charts without losing the
+                current analysis mode or grouping order.
+              </p>
+            </div>
+            <div className="analytics-toolbar-meta">
+              <span className="analytics-toolbar-chip">
+                {classLevel ? "Class mode" : "Student mode"}
+              </span>
+              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                {activeSortLabel}
+              </span>
+            </div>
+          </div>
+          <div className="analytics-toggle">
+            <button
+              onClick={() => setView("table")}
+              className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                view === "table"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background/70"
+              }`}
+            >
+              Table View
+            </button>
+            <button
+              onClick={() => setView("charts")}
+              className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                view === "charts"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background/70"
+              }`}
+            >
+              Chart View
+            </button>
+          </div>
         </div>
         {view === "table" ? (
-          <div className="bg-white rounded-lg shadow-md border border-slate-200/80 overflow-hidden">
-            <div className="p-6 flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-slate-800">
-                Grouped Analytics
-              </h2>
-              {/* Use the new export controls component here */}
-              <AnalyticsExportControls
-                stats={stats}
-                groupBy={groupBy}
-                groupFields={groupFields}
-                sortConfig={sortConfig}
-                tableRef={tableRef}
-                mode={classLevel ? "class" : "student"}
-                paperTitle={paper}
-                studentName={student}
-                rollNumber={rollNumber}
-              />
+          <div className="analytics-table-shell">
+            <div className="border-b border-border/60 bg-muted/20 p-4 sm:p-5">
+              <div className="analytics-toolbar-row gap-4">
+                <div className="analytics-toolbar-copy">
+                  <h2 className="analytics-card-title">
+                    Grouped Analytics
+                  </h2>
+                  <p className="analytics-toolbar-note">
+                    Review grouped performance and export the exact table shown
+                    below.
+                  </p>
+                </div>
+                <div className="analytics-toolbar-meta">
+                  <span className="analytics-toolbar-chip">
+                    {classLevel ? "Class mode" : "Student mode"}
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {activeSortLabel}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="analytics-toolbar-actions">
+                  <span className="analytics-toolbar-chip">
+                    {selectedGroupLabels.length > 0
+                      ? `Group by ${selectedGroupLabels.join(" → ")}`
+                      : "No grouping selected"}
+                  </span>
+                  <span className="analytics-toolbar-chip">
+                    {showTagsColumn ? "Tags visible" : "Tags hidden"}
+                  </span>
+                  <span className="analytics-toolbar-chip">
+                    {showOptionTagsColumn
+                      ? "Option tags visible"
+                      : "Option tags hidden"}
+                  </span>
+                  {selectedTags.length > 0 && (
+                    <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                      {selectedTags.length} highlighted tags
+                    </span>
+                  )}
+                </div>
+                <AnalyticsExportControls
+                  stats={stats}
+                  groupBy={groupBy}
+                  groupFields={groupFields}
+                  sortConfig={sortConfig}
+                  tableRef={tableRef}
+                  mode={classLevel ? "class" : "student"}
+                  paperTitle={paper}
+                  studentName={student}
+                  rollNumber={rollNumber}
+                />
+              </div>
             </div>
             {Object.keys(stats).length === 0 ? (
-              <div className="text-slate-500 p-6 text-center">
+              <div className="app-empty-state m-6">
                 No tag data found for the selected criteria.
               </div>
             ) : (
-              <div className="overflow-x-auto" ref={tableRef}>
+              <div className="analytics-table-wrap" ref={tableRef}>
                 <table className="min-w-full text-sm">
-                  <thead className="bg-slate-100">
+                  <thead className="bg-muted/30">
                     <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wider">
+                      <th className="analytics-th">
                         Group / Tag
                       </th>
                       {showTagsColumn && (
-                        <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                        <th className="analytics-th-center">
                           Tags
                         </th>
                       )}
                       <th
-                        className="px-4 py-3 text-center font-semibold text-green-700 uppercase tracking-wider cursor-pointer select-none"
+                        className="analytics-th-center cursor-pointer select-none text-emerald-700"
                         onClick={() =>
                           setSortConfig({
                             key: "correct",
@@ -891,7 +1237,7 @@ export default function StudentTagReportPage({
                           : ""}
                       </th>
                       <th
-                        className="px-4 py-3 text-center font-semibold text-red-700 uppercase tracking-wider cursor-pointer select-none"
+                        className="analytics-th-center cursor-pointer select-none text-rose-700"
                         onClick={() =>
                           setSortConfig({
                             key: "incorrect",
@@ -911,7 +1257,7 @@ export default function StudentTagReportPage({
                           : ""}
                       </th>
                       <th
-                        className="px-4 py-3 text-center font-semibold text-yellow-700 uppercase tracking-wider cursor-pointer select-none"
+                        className="analytics-th-center cursor-pointer select-none text-amber-700"
                         onClick={() =>
                           setSortConfig({
                             key: "unattempted",
@@ -931,7 +1277,7 @@ export default function StudentTagReportPage({
                           : ""}
                       </th>
                       {showOptionTagsColumn && (
-                        <th className="px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wider">
+                        <th className="analytics-th-center">
                           Selected Option Tags
                         </th>
                       )}

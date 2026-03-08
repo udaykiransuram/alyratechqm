@@ -1,18 +1,17 @@
-// app/subjects/edit/[id]/page.tsx
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { ChevronLeft } from 'lucide-react';
+
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { MultiSelectTags, TagItem } from '@/components/ui/multi-select-tags';
 import { Spinner } from '@/components/ui/spinner';
-import { ChevronLeft } from 'lucide-react'; // Added for a back button icon
 
 interface Subject {
   _id: string;
@@ -54,7 +53,6 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
         setSubjectName(subject.name);
         setSubjectCode(subject.code || '');
         setSubjectDescription(subject.description || '');
-
         setSelectedTags(subject.tags || []);
         setAllAvailableTags(tags);
       } else {
@@ -62,67 +60,69 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
           (!subjectData.success ? subjectData.message : '') +
           (!allTagsData.success ? (subjectData.success ? '' : ' & ') + allTagsData.message : '');
         console.error('Failed to fetch data:', errorMessage);
-        setFetchError(errorMessage || "Failed to load subject details or available tags.");
+        setFetchError(errorMessage || 'Failed to load subject details or available tags.');
         toast({
-          title: "Error",
-          description: errorMessage || "Failed to load subject details or available tags.",
-          variant: "destructive",
+          title: 'Error',
+          description: errorMessage || 'Failed to load subject details or available tags.',
+          variant: 'destructive',
         });
       }
     } catch (error) {
-      const errorMessage = "Network error when fetching subject details. Please check your connection.";
+      const errorMessage = 'Network error when fetching subject details. Please check your connection.';
       console.error('Network error fetching subject/tags for edit:', error);
       setFetchError(errorMessage);
       toast({
-        title: "Network Error",
+        title: 'Network Error',
         description: errorMessage,
-        variant: "destructive",
+        variant: 'destructive',
       });
     } finally {
       setPageLoading(false);
     }
   }, [subjectId, toast]);
 
-  const handleCreateNewTag = useCallback(async (tagName: string, tagType: string): Promise<TagItem | null> => {
-    try {
-      const res = await fetch('/api/tags', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: tagName, type: tagType }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast({
-          title: "Tag Created",
-          description: `"${data.tag.name}" (${data.tag.type}) added.`,
+  const handleCreateNewTag = useCallback(
+    async (tagName: string, tagType: string): Promise<TagItem | null> => {
+      try {
+        const res = await fetch('/api/tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: tagName, type: tagType }),
         });
-        setAllAvailableTags(prev => {
-            if (!prev.some(t => t._id === data.tag._id)) {
-                return [...prev, data.tag];
+        const data = await res.json();
+        if (data.success) {
+          toast({
+            title: 'Tag Created',
+            description: `"${data.tag.name}" (${data.tag.type}) added.`,
+          });
+          setAllAvailableTags((prev) => {
+            if (!prev.some((tag) => tag._id === data.tag._id)) {
+              return [...prev, data.tag];
             }
             return prev;
-        });
-        return data.tag;
-      } else {
+          });
+          return data.tag;
+        }
+
         console.error('Failed to create new tag:', data.message);
         toast({
-          title: "Creation Failed",
+          title: 'Creation Failed',
           description: data.message || `Could not create tag "${tagName}".`,
-          variant: "destructive",
+          variant: 'destructive',
+        });
+        return null;
+      } catch (error) {
+        console.error('Network error creating tag:', error);
+        toast({
+          title: 'Network Error',
+          description: `Failed to create tag "${tagName}" due to a network issue.`,
+          variant: 'destructive',
         });
         return null;
       }
-    } catch (error) {
-      console.error('Network error creating tag:', error);
-      toast({
-        title: "Network Error",
-        description: `Failed to create tag "${tagName}" due to network issue.`,
-        variant: "destructive",
-      });
-      return null;
-    }
-  }, [toast]);
-
+    },
+    [toast],
+  );
 
   useEffect(() => {
     fetchSubjectDetailsAndAllTags();
@@ -131,9 +131,9 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
   const handleUpdateSubject = async () => {
     if (!subjectName.trim()) {
       toast({
-        title: "Validation Issue",
-        description: "Subject Name cannot be empty.",
-        variant: "destructive",
+        title: 'Validation Issue',
+        description: 'Subject name cannot be empty.',
+        variant: 'destructive',
       });
       return;
     }
@@ -141,17 +141,17 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
     setIsSaving(true);
 
     const payload: {
-        name: string;
-        code?: string | null;
-        description?: string | null;
-        tags?: string[];
+      name: string;
+      code?: string | null;
+      description?: string | null;
+      tags?: string[];
     } = {
       name: subjectName.trim(),
     };
 
     payload.code = subjectCode.trim() !== '' ? subjectCode.trim() : null;
     payload.description = subjectDescription.trim() !== '' ? subjectDescription.trim() : null;
-    payload.tags = selectedTags.map(tag => tag._id);
+    payload.tags = selectedTags.map((tag) => tag._id);
 
     try {
       const res = await fetch(`/api/subjects/${subjectId}`, {
@@ -164,168 +164,201 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
 
       if (data.success) {
         toast({
-          title: "Success",
-          description: `"${data.subject.name}" updated!`,
+          title: 'Success',
+          description: `"${data.subject.name}" updated.`,
         });
         router.push('/subjects');
       } else {
         console.error('Failed to update subject:', data.message);
         toast({
-          title: "Update Failed",
+          title: 'Update Failed',
           description: data.message || `Failed to update "${subjectName}".`,
-          variant: "destructive",
+          variant: 'destructive',
         });
       }
     } catch (error) {
       console.error('Network error updating subject:', error);
       toast({
-        title: "Network Error",
-        description: `Failed to update "${subjectName}" due to network issue.`,
-        variant: "destructive",
+        title: 'Network Error',
+        description: `Failed to update "${subjectName}" due to a network issue.`,
+        variant: 'destructive',
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  // --- Loading and Error States ---
   if (pageLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
-        <Spinner />
-        <p className="mt-4 text-lg text-muted-foreground">Loading subject details...</p>
+      <div className="container py-6">
+        <div className="app-page-shell max-w-3xl">
+          <Card className="app-surface">
+            <CardContent className="app-surface-body">
+              <div className="app-status-row justify-center py-8">
+                <Spinner />
+                <span>Loading subject details…</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   if (fetchError) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
-        <Card className="w-full max-w-md text-center shadow-lg border border-destructive/50 bg-destructive/10">
-          <CardHeader>
-            <CardTitle className="text-2xl text-destructive">Loading Error</CardTitle>
-            <CardDescription className="text-destructive/80 mt-2">
-              {fetchError}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <Button onClick={fetchSubjectDetailsAndAllTags} variant="outline" className="text-destructive border-destructive hover:bg-destructive/20">
-              Try Again
+      <div className="container py-6">
+        <div className="app-page-shell max-w-3xl">
+          <div className="app-page-header-row">
+            <div className="app-page-header">
+              <h1 className="app-page-title">Edit Subject</h1>
+              <p className="app-page-subtitle">We couldn’t load the subject details for editing.</p>
+            </div>
+
+            <Button type="button" variant="outline" className="gap-2" onClick={() => router.push('/subjects')}>
+              <ChevronLeft className="h-4 w-4" />
+              Back to Subjects
             </Button>
-            <Button onClick={() => router.push('/subjects')} variant="secondary">
-              Go Back to Subjects
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+
+          <Card className="app-surface">
+            <CardContent className="app-surface-body">
+              <div className="app-feedback app-feedback-error space-y-4">
+                <div>
+                  <p className="font-medium">Loading Error</p>
+                  <p className="mt-1">{fetchError}</p>
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                  <Button type="button" variant="outline" onClick={() => router.push('/subjects')}>
+                    Go Back to Subjects
+                  </Button>
+                  <Button type="button" onClick={fetchSubjectDetailsAndAllTags}>
+                    Try Again
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
-  // --- Main Edit Form UI ---
   return (
-    <div className="min-h-screen bg-background text-foreground py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-xl mx-auto space-y-8">
-        {/* Back Button and Title */}
-        <div className="flex items-center justify-between mb-8">
+    <div className="container py-6">
+      <div className="app-page-shell max-w-3xl">
+        <div className="app-page-header-row">
+          <div className="app-page-header">
+            <h1 className="app-page-title">Edit Subject</h1>
+            <p className="app-page-subtitle">
+              Update the subject details and keep related tags organized.
+            </p>
+          </div>
+
           <Button
-            variant="ghost"
+            type="button"
+            variant="outline"
+            className="gap-2"
             onClick={() => router.push('/subjects')}
-            className="text-muted-foreground hover:text-foreground"
             disabled={isSaving}
           >
-            <ChevronLeft className="mr-2 h-5 w-5" />
+            <ChevronLeft className="h-4 w-4" />
             Back to Subjects
           </Button>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-center text-foreground flex-1 pr-12">
-            Edit Subject
-          </h1>
-          <div className="w-auto"></div> {/* Placeholder to balance flex */}
         </div>
 
-        <Card className="shadow-lg border border-border/50 bg-card text-card-foreground">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-2xl font-bold">Subject Details</CardTitle>
-            <CardDescription className="mt-2 text-base">
-              Update the information for your subject.
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header">
+            <CardTitle>Subject Details</CardTitle>
+            <CardDescription>
+              Review the current values, then save the updates when you’re ready.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6 pt-0"> {/* Increased spacing */}
-            {/* Subject Name Input */}
-            <div className="space-y-2"> {/* Consistent spacing */}
-              <Label htmlFor="subjectName">Subject Name</Label>
-              <Input
-                id="subjectName"
-                placeholder="e.g., Algebra I"
-                value={subjectName}
-                onChange={(e) => setSubjectName(e.target.value)}
-                className="h-10"
-                aria-label="Subject Name"
-                required
-                disabled={isSaving}
-              />
+
+          <CardContent className="app-section-body space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="app-field-group">
+                <Label htmlFor="subjectName" className="app-field-label">
+                  Subject Name
+                </Label>
+                <Input
+                  id="subjectName"
+                  placeholder="e.g., Algebra I"
+                  value={subjectName}
+                  onChange={(event) => setSubjectName(event.target.value)}
+                  aria-label="Subject Name"
+                  required
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="app-field-group">
+                <Label htmlFor="subjectCode" className="app-field-label">
+                  Subject Code
+                </Label>
+                <Input
+                  id="subjectCode"
+                  placeholder="e.g., MATH101"
+                  value={subjectCode}
+                  onChange={(event) => setSubjectCode(event.target.value)}
+                  aria-label="Subject Code"
+                  disabled={isSaving}
+                />
+              </div>
             </div>
 
-            {/* Subject Code Input */}
-            <div className="space-y-2">
-              <Label htmlFor="subjectCode">Subject Code (Optional)</Label>
-              <Input
-                id="subjectCode"
-                placeholder="e.g., MATH101, CS200"
-                value={subjectCode}
-                onChange={(e) => setSubjectCode(e.target.value)}
-                className="h-10"
-                aria-label="Subject Code"
-                disabled={isSaving}
-              />
-            </div>
-
-            {/* Subject Description Textarea */}
-            <div className="space-y-2">
-              <Label htmlFor="subjectDescription">Description (Optional)</Label>
+            <div className="app-field-group">
+              <Label htmlFor="subjectDescription" className="app-field-label">
+                Description
+              </Label>
               <Textarea
                 id="subjectDescription"
                 placeholder="Provide a brief description of the subject."
                 value={subjectDescription}
-                onChange={(e) => setSubjectDescription(e.target.value)}
-                className="min-h-[100px]"
+                onChange={(event) => setSubjectDescription(event.target.value)}
+                className="min-h-[140px]"
                 aria-label="Subject Description"
                 disabled={isSaving}
               />
             </div>
 
-            <Separator className="my-6" /> {/* More prominent separator */}
+            <div className="app-section space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="tag-select" className="app-field-label">
+                  Associated Tags
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Adjust related tags here, or create a new tag without leaving the page.
+                </p>
+              </div>
 
-            {/* Tag Selection Section */}
-            <div className="space-y-2">
-              <Label htmlFor="tag-select" className="text-base font-medium">Associated Tags (Optional)</Label>
               <MultiSelectTags
                 selectedTags={selectedTags}
-                allTags={allAvailableTags ?? []} // <-- Ensure it's always an array
+                allTags={allAvailableTags}
                 onSelectedTagsChange={setSelectedTags}
                 onCreateNewTag={handleCreateNewTag}
                 isLoading={isSaving}
               />
-              <p className="text-sm text-muted-foreground pt-1">
-                Select relevant tags to categorize your subject. You can also create new tags.
-              </p>
             </div>
 
-            <div className="flex gap-3 pt-4"> {/* Buttons side-by-side with gap */}
-                <Button
-                    onClick={handleUpdateSubject}
-                    disabled={isSaving || !subjectName.trim()}
-                    className="flex-1 h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold rounded-md shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                    {isSaving ? <Spinner /> : 'Save Changes'}
-                </Button>
-                <Button
-                    onClick={() => router.push('/subjects')}
-                    variant="outline"
-                    className="flex-1 h-11 text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground"
-                    disabled={isSaving}
-                >
-                    Cancel
-                </Button>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="sm:min-w-[140px]"
+                onClick={() => router.push('/subjects')}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="sm:min-w-[160px]"
+                onClick={handleUpdateSubject}
+                disabled={isSaving || !subjectName.trim()}
+              >
+                {isSaving ? <Spinner /> : 'Save Changes'}
+              </Button>
             </div>
           </CardContent>
         </Card>

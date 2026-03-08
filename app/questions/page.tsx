@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 import { MetadataSelector } from '@/components/MetadataSelector';
+import { Input } from '@/components/ui/input';
 
 
 function getSchoolKey() {
@@ -131,109 +132,128 @@ export default function ViewQuestionsPage() {
   const filteredQuestions = questions;
 
   return (
-    <div className="container py-8 space-y-8">
-      <div className="flex justify-between items-center">
+    <div className="container py-6 space-y-6">
+      <div className="app-page-header-row">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">All Questions</h1>
-          <p className="text-muted-foreground mt-1">Browse, manage, and create questions.</p>
+          <h1 className="app-page-title">All Questions</h1>
+          <p className="app-page-subtitle">Browse, filter, edit, and remove questions from the bank.</p>
         </div>
-        <Link href="/questions/create" passHref>
-          <Button className="flex items-center gap-2">
+        <Link href="/questions/create">
+          <Button className="gap-2">
             <Plus className="h-4 w-4" />
             Create Question
           </Button>
         </Link>
       </div>
 
-      {/* --- Filter Controls --- */}
-      <div className="bg-white rounded-lg shadow-md border border-slate-200/80 p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-4">Filter Questions</h2>
-        <div className="flex flex-col md:flex-row md:items-end gap-6">
-          <div className="flex-1">
-            <MetadataSelector
-              classes={classes}
-              classId={classId}
-              setClassId={setClassId}
-              subjects={subjects}
-              subjectId={subjectId}
-              setSubjectId={setSubjectId}
-              subjectsLoading={false}
-              allTags={allTags}
-              selectedTags={selectedTags}
-              setSelectedTags={setSelectedTags}
-              recommendedTagIds={[]}
-              initialDataLoading={false}
-              resetCounter={0}
-              toast={toast}
-              onCreateNewTag={async () => null}
-              disableClassSubject={false}
-            />
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <MetadataSelector
+          classes={classes}
+          classId={classId}
+          setClassId={setClassId}
+          subjects={subjects}
+          subjectId={subjectId}
+          setSubjectId={setSubjectId}
+          subjectsLoading={false}
+          allTags={allTags}
+          selectedTags={selectedTags}
+          setSelectedTags={setSelectedTags}
+          recommendedTagIds={[]}
+          initialDataLoading={false}
+          resetCounter={0}
+          toast={toast}
+          onCreateNewTag={async () => null}
+          disableClassSubject={false}
+        />
+
+        <div className="app-surface overflow-hidden">
+          <div className="app-section-header">
+            <h2 className="text-base font-semibold text-foreground">Search</h2>
+            <p className="app-page-subtitle">Search question content or reset the current filters.</p>
           </div>
-          <div className="w-full md:w-64">
-            <input
-              type="text"
-              value={modalSearch}
-              onChange={e => setModalSearch(e.target.value)}
-              placeholder="Search by content..."
-              className="border rounded px-3 py-2 w-full"
-            />
+          <div className="app-section-body space-y-4">
+            <div className="app-field-group">
+              <p className="app-field-label">Search Content</p>
+              <Input
+                value={modalSearch}
+                onChange={event => setModalSearch(event.target.value)}
+                placeholder="Search by content..."
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={fetchQuestions}>Refresh</Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setClassId('');
+                  setSubjectId('');
+                  setSelectedTags([]);
+                  setModalSearch('');
+                }}
+              >
+                Clear Filters
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="space-y-6">
-        {/* Show filtered count and bulk delete button */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-right text-sm text-slate-600">
-            Showing {filteredQuestions.length} question{filteredQuestions.length !== 1 ? 's' : ''}
-          </div>
-          {filteredQuestions.length > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={async () => {
-                if (!window.confirm(`Are you sure you want to delete all ${filteredQuestions.length} filtered questions? This cannot be undone.`)) return;
-                setIsDeleting(true);
-                try {
-                  // Send a bulk delete request (if your backend supports it), otherwise delete one by one
-                  for (const q of filteredQuestions) {
-                    await fetch(`/api/questions/${q._id}`, { method: 'DELETE' });
-                  }
-                  setQuestions(prev => prev.filter(q => !filteredQuestions.some(fq => fq._id === q._id)));
-                  toast({ title: 'Success', description: 'All filtered questions deleted.' });
-                } catch (err: any) {
-                  toast({ title: 'Error', description: 'Failed to delete all filtered questions.', variant: 'destructive' });
-                } finally {
-                  setIsDeleting(false);
+      <div className="app-page-header-row">
+        <p className="app-page-subtitle">
+          Showing {filteredQuestions.length} question{filteredQuestions.length !== 1 ? 's' : ''}.
+        </p>
+        {filteredQuestions.length > 0 ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={async () => {
+              if (!window.confirm(`Are you sure you want to delete all ${filteredQuestions.length} filtered questions? This cannot be undone.`)) return;
+              setIsDeleting(true);
+              try {
+                for (const question of filteredQuestions) {
+                  await fetch(`/api/questions/${question._id}`, { method: 'DELETE' });
                 }
-              }}
-              disabled={isDeleting}
-            >
-              {isDeleting ? 'Deleting...' : `Delete All (${filteredQuestions.length})`}
-            </Button>
-          )}
-        </div>
+                setQuestions(prev => prev.filter(question => !filteredQuestions.some(filtered => filtered._id === question._id)));
+                toast({ title: 'Success', description: 'All filtered questions deleted.' });
+              } catch {
+                toast({ title: 'Error', description: 'Failed to delete all filtered questions.', variant: 'destructive' });
+              } finally {
+                setIsDeleting(false);
+              }
+            }}
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Deleting...' : `Delete All (${filteredQuestions.length})`}
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="space-y-4">
         {loading ? (
-          Array.from({ length: 3 }).map((_, i) => <QuestionItemSkeleton key={i} />)
+          Array.from({ length: 3 }).map((_, index) => <QuestionItemSkeleton key={index} />)
         ) : error ? (
-          <div className="text-center py-10 text-destructive">
+          <div className="app-feedback app-feedback-error text-center">
             <p>{error}</p>
-            <Button onClick={fetchQuestions} variant="outline" className="mt-4">Try Again</Button>
+            <div className="mt-4 flex justify-center">
+              <Button onClick={fetchQuestions} variant="outline">Try Again</Button>
+            </div>
           </div>
         ) : filteredQuestions.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground">
-            <p>No questions match your filters.</p>
-            <Link href="/questions/create">
-              <Button variant="outline" className="mt-4">Create your first question</Button>
-            </Link>
+          <div className="app-empty-state">
+            <p>No questions match your current filters.</p>
+            <div className="mt-4 flex justify-center">
+              <Link href="/questions/create">
+                <Button variant="outline">Create your first question</Button>
+              </Link>
+            </div>
           </div>
         ) : (
-          filteredQuestions.map(q => (
+          filteredQuestions.map(question => (
             <QuestionItem
-              key={q._id}
-              question={q}
+              key={question._id}
+              question={question}
               onDelete={handleDeleteRequest}
-              isDeleting={isDeleting && questionToDelete === q._id}
+              isDeleting={isDeleting && questionToDelete === question._id}
             />
           ))
         )}
@@ -258,3 +278,4 @@ export default function ViewQuestionsPage() {
     </div>
   );
 }
+

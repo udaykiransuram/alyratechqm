@@ -245,9 +245,9 @@ export default function QuestionPapersListPage() {
     );
 
   return (
-    <div className="container mx-auto py-6 space-y-4">
+    <div className="container py-6 space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Question Papers</h1>
+        <h1 className="app-page-title">Question Papers</h1>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/question-paper/create">
             <Button>Create</Button>
@@ -255,11 +255,11 @@ export default function QuestionPapersListPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="app-surface">
+        <CardHeader className="app-section-header">
           <CardTitle>Filters & Actions</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="app-section-body">
           <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <div className="w-full sm:w-48">
@@ -310,9 +310,9 @@ export default function QuestionPapersListPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="app-surface overflow-hidden">
         <CardContent className="p-0">
-          <div className="rounded-md border">
+          <div className="app-table-wrap rounded-none border-x-0 border-b-0">
             <Table>
               <TableHeader>
                 <TableRow>

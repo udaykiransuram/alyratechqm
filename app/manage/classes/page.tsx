@@ -102,20 +102,20 @@ export default function ManageClassesPage() {
   };
 
   return (
-    <div className="container py-8">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Manage Classes</h1>
-        <p className="text-muted-foreground mt-1">Add, view, or remove classes from the system.</p>
+    <div className="container py-6 space-y-6">
+      <header className="app-page-header">
+        <h1 className="app-page-title">Manage Classes</h1>
+        <p className="app-page-subtitle">Add, view, or remove classes from the system.</p>
       </header>
 
-      <div className="space-y-8">
-        <Card>
-          <CardHeader>
+      <div className="space-y-6">
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header">
             <CardTitle>Create New Class</CardTitle>
             <CardDescription>Add a new class to be used for categorizing questions.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreateClass} className="flex items-center gap-4">
+          <CardContent className="app-section-body">
+            <form onSubmit={handleCreateClass} className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <Input
                 placeholder="e.g., Grade 10"
                 value={newClassName}
@@ -129,11 +129,11 @@ export default function ManageClassesPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header">
             <CardTitle>Existing Classes</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="app-section-body">
             {isLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-10 w-full" />
@@ -141,9 +141,9 @@ export default function ManageClassesPage() {
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : error ? (
-              <p className="text-destructive text-center py-4">{error}</p>
+              <div className="app-feedback app-feedback-error">{error}</div>
             ) : (
-              <Table>
+              <div className="app-table-wrap"><Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Class Name</TableHead>
@@ -189,6 +189,7 @@ export default function ManageClassesPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

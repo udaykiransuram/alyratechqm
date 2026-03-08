@@ -30,13 +30,12 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
   passingMarks: number;
   examDate: string;
 }) {
-  const totalQuestions = sections.reduce((sum, s) => sum + s.questions.length, 0);
+  const totalQuestions = sections.reduce((sum, section) => sum + section.questions.length, 0);
 
-  // Aggregate all tags and their counts across the paper
   const tagTypeCounts: Record<string, Record<string, number>> = {};
   sections.forEach(section => {
-    section.questions.forEach(q => {
-      (q.question.tags ?? []).forEach(tag => {
+    section.questions.forEach(question => {
+      (question.question.tags ?? []).forEach(tag => {
         const type = tag.type?.name || 'Other';
         if (!tagTypeCounts[type]) tagTypeCounts[type] = {};
         tagTypeCounts[type][tag.name] = (tagTypeCounts[type][tag.name] || 0) + 1;
@@ -44,55 +43,53 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
     });
   });
 
+  const stats = [
+    { label: 'Total Marks', value: totalPaperMarks, icon: ListOrdered },
+    { label: 'Duration', value: `${duration} min`, icon: Clock },
+    { label: 'Sections', value: sections.length, icon: Layers },
+    { label: 'Questions', value: totalQuestions, icon: Hash },
+    { label: 'Passing', value: passingMarks, icon: Award },
+    { label: 'Date', value: examDate ? format(new Date(examDate), 'PPP') : '-', icon: CalendarDays },
+  ];
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl">
-          <CheckCircle className="w-5 h-5 text-primary" /> Paper Summary
+    <Card className="app-surface overflow-hidden">
+      <CardHeader className="app-section-header">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CheckCircle className="h-4 w-4 text-primary" />
+          Paper Summary
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-          <div className="flex items-center gap-2">
-            <ListOrdered className="w-4 h-4 text-muted-foreground" />
-            <span className="font-medium">Total Marks:</span> {totalPaperMarks}
-          </div>
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-muted-foreground" />
-            <span className="font-medium">Duration:</span> {duration} min
-          </div>
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-muted-foreground" />
-            <span className="font-medium">Sections:</span> {sections.length}
-          </div>
-          <div className="flex items-center gap-2">
-            <Hash className="w-4 h-4 text-muted-foreground" />
-            <span className="font-medium">Questions:</span> {totalQuestions}
-          </div>
-          <div className="flex items-center gap-2">
-            <Award className="w-4 h-4 text-muted-foreground" />
-            <span className="font-medium">Passing:</span> {passingMarks}
-          </div>
-          <div className="flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-muted-foreground" />
-            <span className="font-medium">Date:</span> {examDate ? format(new Date(examDate), 'PPP') : '-'}
-          </div>
+      <CardContent className="app-section-body space-y-5">
+        <div className="app-detail-grid">
+          {stats.map(({ label, value, icon: Icon }) => (
+            <div key={label} className="app-detail-item">
+              <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+                <Icon className="h-4 w-4" />
+                <span className="app-detail-label mb-0">{label}</span>
+              </div>
+              <div className="app-detail-value">{value}</div>
+            </div>
+          ))}
         </div>
-        {/* Tag Summary for the whole paper */}
-        <div className="pt-4 border-t">
-          <h4 className="font-semibold mb-2 text-sm text-foreground flex items-center gap-2">
-            <TagIcon className="w-4 h-4" /> Tag Summary
+
+        <div className="space-y-3 border-t border-border/60 pt-4">
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <TagIcon className="h-4 w-4" />
+            Tag Summary
           </h4>
           {Object.keys(tagTypeCounts).length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {Object.entries(tagTypeCounts).map(([type, tags]) => (
-                <div key={type}>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">{type}</p>
-                  <div className="flex flex-wrap gap-1">
+                <div key={type} className="space-y-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    {type}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
                     {Object.entries(tags).map(([name, count]) => (
                       <Badge key={name} variant="secondary" className="font-normal">
                         {name}
-                        <span className="ml-1 px-1 py-0.5 rounded-full bg-background text-foreground text-xs font-mono">
+                        <span className="ml-1 rounded-full bg-background px-1.5 py-0.5 text-[10px] font-mono text-foreground">
                           {count}
                         </span>
                       </Badge>
@@ -102,7 +99,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground italic">No tags in this paper.</p>
+            <p className="text-sm text-muted-foreground">No tags in this paper yet.</p>
           )}
         </div>
       </CardContent>

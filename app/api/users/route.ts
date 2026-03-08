@@ -3,6 +3,13 @@ import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import bcrypt from "bcryptjs";
 
+export const dynamic = 'force-dynamic';
+
+function normalizeIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item)).filter(Boolean);
+}
+
 // GET users with optional filters
 export async function GET(req: NextRequest) {
   await connectDB();
@@ -100,11 +107,27 @@ export async function POST(req: NextRequest) {
       rollNumber,
       enrolledAt,
       mobileNumber,
+      classIds,
+      subjectIds,
+      hasAllClasses,
+      hasAllSubjects,
     } = await req.json();
+
+    const normalizedMobileNumber = String(mobileNumber || "").trim();
+    const normalizedClassIds = normalizeIds(classIds);
+    const normalizedSubjectIds = normalizeIds(subjectIds);
+    const allowAllClasses = Boolean(hasAllClasses);
+    const allowAllSubjects = Boolean(hasAllSubjects);
 
     if (!name || !role) {
       return NextResponse.json(
         { success: false, message: "Name and role are required." },
+        { status: 400 },
+      );
+    }
+    if (!normalizedMobileNumber) {
+      return NextResponse.json(
+        { success: false, message: "Phone number is required." },
         { status: 400 },
       );
     }
@@ -113,6 +136,35 @@ export async function POST(req: NextRequest) {
         { success: false, message: "rollNumber is required for students." },
         { status: 400 },
       );
+    }
+    if (role === "teacher") {
+      if (
+        normalizedClassIds.length === 0 ||
+        normalizedSubjectIds.length === 0
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Teachers must have at least one class and one subject.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+    if (role === "admin") {
+      if (
+        (!allowAllClasses && normalizedClassIds.length === 0) ||
+        (!allowAllSubjects && normalizedSubjectIds.length === 0)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Admins must have all classes/subjects enabled or choose at least one class and one subject.",
+          },
+          { status: 400 },
+        );
+      }
     }
 
     if (role === "student" && rollNumber && classId) {
@@ -159,8 +211,16 @@ export async function POST(req: NextRequest) {
       email,
       passwordHash,
       role,
-      mobileNumber: mobileNumber || undefined,
+      mobileNumber: normalizedMobileNumber,
       class: role === "student" ? classId : undefined,
+      classIds:
+        role === "teacher" || role === "admin" ? normalizedClassIds : undefined,
+      subjectIds:
+        role === "teacher" || role === "admin"
+          ? normalizedSubjectIds
+          : undefined,
+      hasAllClasses: role === "admin" ? allowAllClasses : false,
+      hasAllSubjects: role === "admin" ? allowAllSubjects : false,
       rollNumber: role === "student" ? rollNumber : undefined,
       enrolledAt: role === "student" ? enrolledAt || Date.now() : undefined,
     });

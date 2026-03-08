@@ -34,11 +34,11 @@ const ChartCard = ({
   title: React.ReactNode;
   children: React.ReactNode;
 }) => (
-  <div className="bg-white rounded-xl shadow-lg border border-slate-200/80 h-full flex flex-col transition-shadow hover:shadow-xl">
-    <h3 className="text-lg font-semibold text-slate-800 p-5 border-b border-slate-200">
-      {title}
-    </h3>
-    <div className="p-4 md:p-6 flex-grow">{children}</div>
+  <div className="analytics-card flex h-full flex-col">
+    <div className="analytics-card-header">
+      <h3 className="analytics-card-title">{title}</h3>
+    </div>
+    <div className="analytics-card-body flex-grow">{children}</div>
   </div>
 );
 
@@ -47,29 +47,29 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     const pld = payload[0];
     const students = pld.payload.students || [];
     return (
-      <div className="bg-white/90 backdrop-blur-sm p-3 shadow-lg rounded-lg border border-slate-300 min-w-[220px] max-w-xs">
-        <p className="font-bold text-slate-800 mb-1">{label}</p>
+      <div className="min-w-[220px] max-w-xs rounded-xl border border-border/60 bg-background/95 p-3 shadow-xl backdrop-blur supports-[backdrop-filter]:bg-background/90">
+        <p className="mb-1 font-semibold text-foreground">{label}</p>
         <div className="mb-2 flex items-center gap-2">
           <span
             className="w-2 h-2 rounded-full"
             style={{ backgroundColor: pld.color || pld.fill }}
           ></span>
-          <span className="text-slate-600">{pld.name}:</span>
-          <span className="font-semibold text-slate-800 ml-1">{pld.value}</span>
+          <span className="text-muted-foreground">{pld.name}:</span>
+          <span className="ml-1 font-semibold text-foreground">{pld.value}</span>
         </div>
-        <div className="text-xs text-slate-700">
+        <div className="text-xs text-foreground">
           <div className="font-semibold mb-1">Students:</div>
           {students.length > 0 ? (
             <ul className="max-h-64 overflow-y-auto space-y-1">
               {students.map((s: any, i: number) => (
                 <li key={i}>
                   {s.name}{" "}
-                  <span className="text-slate-400">({s.rollNumber})</span>
+                  <span className="text-muted-foreground">({s.rollNumber})</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <span className="italic text-slate-400">None</span>
+            <span className="italic text-muted-foreground">None</span>
           )}
         </div>
       </div>
@@ -250,9 +250,9 @@ const ChartView = ({
 
   if (!stats || Object.keys(stats).length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-10 bg-white rounded-lg shadow-md border border-slate-200/80 text-center">
+      <div className="app-empty-state flex min-h-[240px] flex-col items-center justify-center gap-3">
         <svg
-          className="w-16 h-16 text-slate-300"
+          className="h-16 w-16 text-muted-foreground/50"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -264,10 +264,10 @@ const ChartView = ({
             d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
           />
         </svg>
-        <p className="mt-4 text-lg font-semibold text-slate-600">
+        <p className="text-lg font-semibold text-foreground">
           No Chart Data Available
         </p>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-muted-foreground">
           Try adjusting the filters or group by options.
         </p>
       </div>
@@ -293,7 +293,7 @@ const ChartView = ({
       unattempted: getStatsSum(stats, "unattempted"),
     };
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-6">
+      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         <OverallPerformancePieChart
           stats={overallStats}
           title="Overall Performance"
@@ -469,7 +469,7 @@ const ChartView = ({
   }
 
   return (
-    <div className="space-y-12 mt-6" ref={chartContainerRef}>
+    <div className="space-y-8 pt-2" ref={chartContainerRef}>
       <div ref={barChartRef}>
         <GroupedPerformanceBarChart
           stats={barChartStats}
@@ -477,14 +477,14 @@ const ChartView = ({
         />
       </div>
       <div>
-        <h2 className="text-2xl font-bold text-slate-800 mb-6">
+        <h2 className="analytics-card-title mb-6">
           Detailed Breakdown by {groupBy[0]}
         </h2>
-        <div className="flex flex-wrap gap-2 justify-end mb-4">
+        <div className="mb-4 flex flex-wrap justify-end gap-2">
           <button
             onClick={handleDownloadChartImage}
             disabled={downloading}
-            className="px-4 py-2 bg-blue-600 disabled:opacity-60 text-white rounded hover:bg-blue-700 text-sm font-semibold shadow transition"
+            className="app-button-secondary disabled:opacity-60"
             title="Download Chart Image"
           >
             {downloading ? "Preparing..." : "Download Chart Image"}
@@ -492,7 +492,7 @@ const ChartView = ({
           <button
             onClick={handleDownloadBarChartImage}
             disabled={downloading}
-            className="px-4 py-2 bg-indigo-600 disabled:opacity-60 text-white rounded hover:bg-indigo-700 text-sm font-semibold shadow transition"
+            className="app-button-secondary disabled:opacity-60"
             title="Download Bar Chart Image"
           >
             {downloading ? "Preparing..." : "Download Bar Chart"}
@@ -500,7 +500,7 @@ const ChartView = ({
           <button
             onClick={handleDownloadPieChartsImage}
             disabled={downloading}
-            className="px-4 py-2 bg-fuchsia-600 disabled:opacity-60 text-white rounded hover:bg-fuchsia-700 text-sm font-semibold shadow transition"
+            className="app-button-secondary disabled:opacity-60"
             title="Download Pie Charts Image"
           >
             {downloading ? "Preparing..." : "Download Pie Charts"}
@@ -508,7 +508,7 @@ const ChartView = ({
           <button
             onClick={handleDownloadRemedials}
             disabled={downloading}
-            className="px-4 py-2 bg-green-600 disabled:opacity-60 text-white rounded hover:bg-green-700 text-sm font-semibold shadow transition"
+            className="app-button-primary disabled:opacity-60"
             title={
               mode === "student"
                 ? "Download Remedial PDF"
@@ -525,7 +525,7 @@ const ChartView = ({
           </button>
         </div>
         <div ref={allPieChartsRef}>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {firstLevelGroups.map(([key, value]) => {
               let statsForPie: any;
               if ("correct" in value) {

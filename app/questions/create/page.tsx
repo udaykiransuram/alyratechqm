@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
@@ -19,15 +19,16 @@ import { X, PlusCircle } from 'lucide-react';
 import { MetadataSelector } from '@/components/MetadataSelector';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Dynamically load Tiptap rich editor
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center min-h-[210px] p-4 border rounded-lg bg-muted"><Spinner /></div>,
+  loading: () => <div className="app-empty-state flex min-h-[210px] items-center justify-center"><Spinner /></div>,
 });
 const MatrixMatchConfigurator = dynamic(() => import('@/components/MatrixMatchConfigurator').then(mod => mod.default), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center min-h-[210px] p-4 border rounded-lg bg-muted"><Spinner /></div>,
+  loading: () => <div className="app-empty-state flex min-h-[210px] items-center justify-center"><Spinner /></div>,
 });
 
 interface SubjectWithTags {
@@ -43,7 +44,6 @@ export default function CreateQuestionPage() {
   const { toast } = useToast();
   const [classId, setClassId] = useState('');
   const [subjectId, setSubjectId] = useState('');
-  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   
   const [classes, setClasses] = useState<Class[]>([]);
   const [subjects, setSubjects] = useState<SubjectWithTags[]>([]);
@@ -290,76 +290,80 @@ export default function CreateQuestionPage() {
   };
 
   return (
-    <div className="container py-8 space-y-8">
-      <header className="mb-6 border-b pb-4">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Create New Question</h1>
-        <p className="text-muted-foreground mt-1 text-base">Fill out the form below to add a new question to the database.</p>
+    <div className="app-page-shell px-4 py-6 sm:px-0">
+      <header className="app-page-header">
+        <h1 className="app-page-title">Create New Question</h1>
+        <p className="app-page-subtitle">Fill out the form below to add a new question to the database.</p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        <div className="lg:col-span-2 space-y-8">
-          {/* Question Content Card */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">Question Content</CardTitle>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] items-start">
+        <div className="min-w-0 space-y-6">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Question Content</CardTitle>
               <CardDescription>
                 Write the main body of the question. <span className="text-destructive">*</span>
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="app-section-body">
               <RichTextEditor key={resetCounter + '-content'} initialContent={content} onChange={setContent} />
             </CardContent>
           </Card>
 
-          {/* Options Card */}
-          {questionType !== 'matrix-match' && (
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg">Answer Options</CardTitle>
+          {questionType !== 'matrix-match' ? (
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Answer Options</CardTitle>
                 <CardDescription>
-                  Provide the possible answers and select <b>one or more</b> correct ones. All options are required.
+                  Provide the possible answers and select one or more correct ones. All options are required.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {options.map((opt, i) => (
-                  <div key={i} className="flex items-start gap-4">
-                    <input
-                      type="checkbox"
-                      name="answer"
-                      id={`option-${i}`}
-                      className="mt-8 h-4 w-4 accent-primary"
-                      checked={answerIndexes.includes(i)}
-                      onChange={() => handleToggleAnswer(i)}
-                    />
-                    <div className="flex-1">
-                      <Label htmlFor={`option-${i}`} className="sr-only">Option {i + 1}</Label>
-                      <RichTextEditor key={resetCounter + '-option-' + i} initialContent={opt.content} onChange={(val) => handleOptionChange(i, val)} />
+              <CardContent className="app-section-body space-y-4">
+                {options.map((opt, index) => (
+                  <div key={index} className="flex items-start gap-4 rounded-xl border border-border/60 bg-muted/10 p-3">
+                    <div className="pt-2">
+                      <Checkbox
+                        id={`option-${index}`}
+                        checked={answerIndexes.includes(index)}
+                        onCheckedChange={() => handleToggleAnswer(index)}
+                      />
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => handleRemoveOption(i)} className="mt-5 text-muted-foreground hover:text-destructive" aria-label="Remove option">
+                    <div className="flex-1">
+                      <Label htmlFor={`option-${index}`} className="sr-only">Option {index + 1}</Label>
+                      <RichTextEditor
+                        key={resetCounter + '-option-' + index}
+                        initialContent={opt.content}
+                        onChange={value => handleOptionChange(index, value)}
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveOption(index)}
+                      className="mt-1 text-muted-foreground hover:text-destructive"
+                      aria-label="Remove option"
+                    >
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
               </CardContent>
-              <CardFooter>
+              <CardFooter className="app-section-body border-t border-border/60 pt-4">
                 <Button variant="outline" onClick={handleAddOption} className="w-full">
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Add Option
                 </Button>
               </CardFooter>
             </Card>
-          )}
+          ) : null}
 
-          {/* Matrix Match Pairs Card */}
-          {questionType === 'matrix-match' && (
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg">Matrix Configuration</CardTitle>
-                <CardDescription>
-                  Define your rows and columns. You can have a different number of each.
-                </CardDescription>
+          {questionType === 'matrix-match' ? (
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Matrix Configuration</CardTitle>
+                <CardDescription>Define your rows and columns. You can have a different number of each.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="app-section-body">
                 <MatrixMatchConfigurator
                   rows={matrixRows}
                   setRows={setMatrixRows}
@@ -370,99 +374,47 @@ export default function CreateQuestionPage() {
                 />
               </CardContent>
             </Card>
-          )}
+          ) : null}
 
-          {/* Explanation Card - moved below matrix/options */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">Explanation <span className="text-muted-foreground text-xs">(Optional)</span></CardTitle>
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Explanation</CardTitle>
               <CardDescription>Provide an explanation for the correct answer.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="app-section-body">
               <RichTextEditor key={resetCounter + '-explanation'} initialContent={explanation} onChange={setExplanation} />
             </CardContent>
           </Card>
         </div>
 
-        <div className="lg:col-span-1 space-y-8 lg:sticky lg:top-8">
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">Metadata</CardTitle>
+        <div className="space-y-4 xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
+          <MetadataSelector
+            classes={classes}
+            classId={classId}
+            setClassId={handleClassChange}
+            subjects={subjects}
+            subjectId={subjectId}
+            setSubjectId={setSubjectId}
+            subjectsLoading={subjectsLoading}
+            allTags={allTags}
+            selectedTags={selectedTags}
+            setSelectedTags={setSelectedTags}
+            recommendedTagIds={recommendedTagIds}
+            initialDataLoading={initialDataLoading}
+            resetCounter={resetCounter}
+            toast={toast}
+            onCreateNewTag={async () => null}
+          />
+
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Marks</CardTitle>
             </CardHeader>
-            <CardContent>
-              <MetadataSelector
-                classes={classes}
-                classId={classId}
-                setClassId={handleClassChange}
-                subjects={subjects}
-                subjectId={subjectId}
-                setSubjectId={setSubjectId}
-                subjectsLoading={subjectsLoading}
-                allTags={allTags}
-                selectedTags={selectedTags}
-                setSelectedTags={setSelectedTags}
-                recommendedTagIds={recommendedTagIds}
-                initialDataLoading={initialDataLoading}
-                resetCounter={resetCounter}
-                toast={toast}
-                onCreateNewTag={async (tagName: string) => {
-                  if (!selectedTypeId) {
-                    toast({
-                      title: 'Cannot Create Tag',
-                      description: 'A tag type must be selected first.',
-                      variant: 'destructive',
-                    });
-                    return null;
-                  }
-                  try {
-                    const res = await fetch('/api/tags', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        name: tagName,
-                        type: selectedTypeId,
-                        subjectIds: [subjectId]
-                      }),
-                    });
-
-                    const data = await res.json();
-
-                    if (data.success) {
-                      toast({
-                        title: 'Tag Created',
-                        description: `Tag "${data.tag.name}" has been created.`,
-                      });
-                      setAllTags((prev) => [...prev, data.tag]);
-                      return data.tag;
-                    } else {
-                      toast({
-                        title: 'Error Creating Tag',
-                        description: data.message,
-                        variant: 'destructive',
-                      });
-                      return null;
-                    }
-                  } catch (error) {
-                    toast({
-                      title: 'Network Error',
-                      description: 'Failed to create the new tag.',
-                      variant: 'destructive',
-                    });
-                    return null;
-                  }
-                }}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Marks Input */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">Marks</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Label htmlFor="marks-input">Marks <span className="text-destructive">*</span></Label>
+            <CardContent className="app-section-body">
+              <div className="app-field-group">
+                <Label htmlFor="marks-input" className="app-field-label">
+                  Marks <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="marks-input"
                   type="number"
@@ -476,47 +428,34 @@ export default function CreateQuestionPage() {
             </CardContent>
           </Card>
 
-          {/* Question Type Selector */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">Question Type</CardTitle>
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Question Type</CardTitle>
+              <CardDescription>Select how students should answer this question.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex gap-2">
-                <Button
-                  variant={questionType === 'single' ? 'default' : 'outline'}
-                  onClick={() => setQuestionType('single')}
-                  className="flex-1"
-                >
+            <CardContent className="app-section-body">
+              <div className="grid grid-cols-3 gap-2">
+                <Button variant={questionType === 'single' ? 'default' : 'outline'} onClick={() => setQuestionType('single')} className="w-full">
                   Single
                 </Button>
-                <Button
-                  variant={questionType === 'multiple' ? 'default' : 'outline'}
-                  onClick={() => setQuestionType('multiple')}
-                  className="flex-1"
-                >
+                <Button variant={questionType === 'multiple' ? 'default' : 'outline'} onClick={() => setQuestionType('multiple')} className="w-full">
                   Multiple
                 </Button>
-                <Button
-                  variant={questionType === 'matrix-match' ? 'default' : 'outline'}
-                  onClick={() => setQuestionType('matrix-match')}
-                  className="flex-1"
-                >
+                <Button variant={questionType === 'matrix-match' ? 'default' : 'outline'} onClick={() => setQuestionType('matrix-match')} className="w-full">
                   Matrix
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Actions Card */}
-          <Card className="shadow-sm bg-gray-50">
-            <CardHeader>
-              <CardTitle className="text-lg">Actions</CardTitle>
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Actions</CardTitle>
+              <CardDescription>Save the question and continue building your paper.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="app-section-body">
               <Button size="lg" className="w-full" disabled={loading} onClick={handleSubmit}>
-                {loading && <Spinner />}
-                {loading ? 'Submitting...' : 'Submit Question'}
+                {loading ? <Spinner /> : 'Submit Question'}
               </Button>
             </CardContent>
           </Card>
@@ -525,3 +464,4 @@ export default function CreateQuestionPage() {
     </div>
   );
 }
+
