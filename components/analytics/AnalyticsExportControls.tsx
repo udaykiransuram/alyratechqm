@@ -42,7 +42,9 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
   const exportModeLabel =
     mode === "student" ? "Student exports" : "Class exports";
   const exportGroupingLabel =
-    groupBy.length > 0 ? `${groupBy.length} grouping levels` : "No grouping selected";
+    groupBy.length > 0
+      ? `${groupBy.length} grouping levels`
+      : "No grouping selected";
 
   async function handleDownloadTableImage() {
     if (tableRef.current) {
@@ -680,10 +682,6 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
         <div className="analytics-toolbar-row">
           <div className="analytics-toolbar-copy">
             <p className="analytics-toolbar-title">Export current report</p>
-            <p className="analytics-toolbar-note">
-              Downloads follow the grouping, sorting, and report mode shown in
-              this table.
-            </p>
           </div>
           <div className="analytics-toolbar-meta">
             <span className="analytics-toolbar-chip">{exportModeLabel}</span>
@@ -733,11 +731,6 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
             </Button>
           )}
         </div>
-        <p className="analytics-toolbar-note">
-          {mode === "student"
-            ? "Exports the visible grouped table plus one student remedial PDF."
-            : "Exports the visible grouped table plus a ZIP of remedial PDFs and the insights summary."}
-        </p>
       </div>
     </div>
   );

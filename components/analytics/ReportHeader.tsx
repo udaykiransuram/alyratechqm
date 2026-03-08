@@ -2,40 +2,42 @@ type ReportHeaderProps = {
   student?: string;
   rollNumber?: string;
   paper: string;
-  variant?: 'student' | 'class';
+  variant?: "student" | "class";
 };
 
 const ReportHeader = ({
-  student = '',
-  rollNumber = '',
+  student = "",
+  rollNumber = "",
   paper,
-  variant = 'student',
+  variant = "student",
 }: ReportHeaderProps) => {
-  const isClass = variant === 'class';
-  const title = isClass ? 'Class Analytics Report' : 'Student Analytics Report';
+  const isClass = variant === "class";
+  const title = isClass ? "Class Analytics Report" : "Student Analytics Report";
   const subtitle = isClass
-    ? 'Explore class-wide performance patterns by grouped tags and answer trends.'
-    : 'Review the student’s tag-level performance, gaps, and remedial priorities.';
+    ? "Class performance overview"
+    : "Student performance overview";
 
   const items = isClass
     ? [
-        { label: 'Report Scope', value: 'Class Level' },
-        { label: 'Paper', value: paper || '-' },
+        { label: "Report Scope", value: "Class Level" },
+        { label: "Paper", value: paper || "-" },
       ]
     : [
-        { label: 'Student', value: student || '-' },
-        { label: 'Roll Number', value: rollNumber || '-' },
-        { label: 'Paper', value: paper || '-' },
+        { label: "Student", value: student || "-" },
+        { label: "Roll Number", value: rollNumber || "-" },
+        { label: "Paper", value: paper || "-" },
       ];
 
   return (
     <div className="analytics-card overflow-hidden">
-      <div className="analytics-card-header">
+      <div className="analytics-card-header border-l-4 border-primary bg-gradient-to-r from-primary/5 to-transparent">
         <h1 className="app-page-title">{title}</h1>
         <p className="app-page-subtitle">{subtitle}</p>
       </div>
-      <div className="p-6">
-        <div className={`grid gap-4 ${items.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+      <div className="p-4 sm:p-5">
+        <div
+          className={`grid gap-4 ${items.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}
+        >
           {items.map((item) => (
             <div key={item.label} className="app-detail-item">
               <p className="app-detail-label">{item.label}</p>

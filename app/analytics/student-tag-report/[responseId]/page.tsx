@@ -39,7 +39,9 @@ export default function StudentTagReportPage({
   const [groupBy, setGroupBy] = useState<string[]>([]);
   const [classLevel, setClassLevel] = useState(false);
   const [classOptions, setClassOptions] = useState<ReportFilterOption[]>([]);
-  const [subjectOptions, setSubjectOptions] = useState<ReportFilterOption[]>([]);
+  const [subjectOptions, setSubjectOptions] = useState<ReportFilterOption[]>(
+    [],
+  );
   const [selectedClassId, setSelectedClassId] = useState("all");
   const [selectedSubjectId, setSelectedSubjectId] = useState("all");
 
@@ -256,25 +258,29 @@ export default function StudentTagReportPage({
       : "Choose grouping order";
 
   const visibleColumnsLabel =
-    [showTagsColumn ? "Tags" : null, showOptionTagsColumn ? "Option tags" : null]
+    [
+      showTagsColumn ? "Tags" : null,
+      showOptionTagsColumn ? "Option tags" : null,
+    ]
       .filter(Boolean)
       .join(" • ") || "Core metrics only";
 
   const hasActiveQuestionFilters =
     selectedClassId !== "all" || selectedSubjectId !== "all";
 
-  const activeFiltersLabel = [
-    selectedClassId !== "all"
-      ? classOptions.find((option) => option.value === selectedClassId)?.label ||
-        "Filtered class"
-      : null,
-    selectedSubjectId !== "all"
-      ? subjectOptions.find((option) => option.value === selectedSubjectId)
-          ?.label || "Filtered subject"
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" • ") || "All questions";
+  const activeFiltersLabel =
+    [
+      selectedClassId !== "all"
+        ? classOptions.find((option) => option.value === selectedClassId)
+            ?.label || "Filtered class"
+        : null,
+      selectedSubjectId !== "all"
+        ? subjectOptions.find((option) => option.value === selectedSubjectId)
+            ?.label || "Filtered subject"
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" • ") || "All questions";
 
   useEffect(() => {
     (async () => {
@@ -366,7 +372,10 @@ export default function StudentTagReportPage({
 
   const handleCloseOptionTagModal = () => setOptionTagModal(null);
 
-  const fetchAnalytics = (overrides?: { classId?: string; subjectId?: string }) => {
+  const fetchAnalytics = (overrides?: {
+    classId?: string;
+    subjectId?: string;
+  }) => {
     setLoading(true);
     setError(null);
     const resolvedClassId = overrides?.classId ?? selectedClassId;
@@ -410,7 +419,8 @@ export default function StudentTagReportPage({
       classParams.set("json", "1");
       if (groupBy.length) classParams.set("groupBy", groupBy.join(","));
       classParams.set("classLevel", "1");
-      if (resolvedClassId !== "all") classParams.set("classId", resolvedClassId);
+      if (resolvedClassId !== "all")
+        classParams.set("classId", resolvedClassId);
       if (resolvedSubjectId !== "all")
         classParams.set("subjectId", resolvedSubjectId);
       classParams.set("school", sk);
@@ -433,7 +443,7 @@ export default function StudentTagReportPage({
 
   return (
     <div className="analytics-page">
-      <div className="container space-y-6">
+      <div className="container space-y-4 sm:space-y-5">
         <ReportHeader
           student={student}
           rollNumber={rollNumber}
@@ -445,15 +455,9 @@ export default function StudentTagReportPage({
             <div className="analytics-toolbar-row gap-4">
               <div className="analytics-toolbar-copy">
                 <h2 className="analytics-card-title">Report Controls</h2>
-                <p className="analytics-card-description">
-                  Choose the analysis mode, shape the grouping order, and refresh
-                  the report once the setup looks right.
-                </p>
+                <p className="analytics-card-description">Controls</p>
               </div>
               <div className="analytics-toolbar-meta">
-                <span className="analytics-toolbar-chip">
-                  {classLevel ? "Class mode" : "Student mode"}
-                </span>
                 <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                   {groupingPreviewLabel}
                 </span>
@@ -466,8 +470,7 @@ export default function StudentTagReportPage({
                 <div className="analytics-toolbar-copy">
                   <p className="analytics-toolbar-title">Quick setup</p>
                   <p className="analytics-toolbar-note">
-                    Keep the page lighter by opening the full setup only when you
-                    need to change grouping, filters, or analysis mode.
+                    Adjust filters, grouping, and mode.
                   </p>
                 </div>
                 <div className="analytics-toolbar-actions">
@@ -495,22 +498,14 @@ export default function StudentTagReportPage({
               </div>
               <div className="analytics-toolbar-row">
                 <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip">
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                     {classLevel ? "Class mode" : "Student mode"}
                   </span>
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    {view === "table" ? "Table view" : "Chart view"}
-                  </span>
-                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    {selectedGroupLabels.length > 0
-                      ? `${selectedGroupLabels.length} grouping levels`
-                      : "No grouping selected"}
+                    {view === "table" ? "Table" : "Charts"}
                   </span>
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                     {activeFiltersLabel}
-                  </span>
-                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    {visibleColumnsLabel}
                   </span>
                 </div>
                 <div className="analytics-toolbar-actions">
@@ -527,7 +522,9 @@ export default function StudentTagReportPage({
                     <input
                       type="checkbox"
                       checked={showOptionTagsColumn}
-                      onChange={() => setShowOptionTagsColumn((value) => !value)}
+                      onChange={() =>
+                        setShowOptionTagsColumn((value) => !value)
+                      }
                       className="analytics-inline-check"
                     />
                     <span>Show option tags column</span>
@@ -538,245 +535,249 @@ export default function StudentTagReportPage({
 
             {showControls ? (
               <div className="analytics-controls-grid">
-              <div className="analytics-control-stack">
+                <div className="analytics-control-stack">
+                  <div className="analytics-control-panel">
+                    <div className="analytics-control-panel-header">
+                      <p className="analytics-control-panel-title">
+                        Analysis Mode
+                      </p>
+                      <p className="analytics-control-panel-note">
+                        Choose student or class mode.
+                      </p>
+                    </div>
+                    <div className="analytics-mode-grid">
+                      <button
+                        type="button"
+                        onClick={() => setClassLevel(false)}
+                        className={`analytics-mode-card ${
+                          !classLevel ? "analytics-mode-card-active" : ""
+                        }`}
+                      >
+                        <p className="text-sm font-semibold text-foreground">
+                          Single student
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          Focus on one response and compare it against the
+                          class.
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClassLevel(true)}
+                        className={`analytics-mode-card ${
+                          classLevel ? "analytics-mode-card-active" : ""
+                        }`}
+                      >
+                        <p className="text-sm font-semibold text-foreground">
+                          Class level
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          Review the full class without the individual
+                          comparison layer.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="analytics-control-panel">
+                    <div className="analytics-control-panel-header">
+                      <p className="analytics-control-panel-title">
+                        Question filters
+                      </p>
+                      <p className="analytics-control-panel-note">
+                        Filter by class or subject.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="app-field-group">
+                        <label className="app-field-label">Class filter</label>
+                        <select
+                          className="analytics-select w-full"
+                          value={selectedClassId}
+                          onChange={(event) =>
+                            setSelectedClassId(event.target.value)
+                          }
+                        >
+                          <option value="all">All classes</option>
+                          {classOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="app-field-group">
+                        <label className="app-field-label">
+                          Subject filter
+                        </label>
+                        <select
+                          className="analytics-select w-full"
+                          value={selectedSubjectId}
+                          onChange={(event) =>
+                            setSelectedSubjectId(event.target.value)
+                          }
+                        >
+                          <option value="all">All subjects</option>
+                          {subjectOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="analytics-toolbar-chip">
+                        {selectedClassId === "all"
+                          ? "All classes"
+                          : `Class: ${
+                              classOptions.find(
+                                (option) => option.value === selectedClassId,
+                              )?.label || "Filtered class"
+                            }`}
+                      </span>
+                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                        {selectedSubjectId === "all"
+                          ? "All subjects"
+                          : `Subject: ${
+                              subjectOptions.find(
+                                (option) => option.value === selectedSubjectId,
+                              )?.label || "Filtered subject"
+                            }`}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fetchAnalytics()}
+                        disabled={loading}
+                        className="app-button-secondary h-9 px-3"
+                      >
+                        {loading ? "Applying..." : "Apply question filters"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedClassId("all");
+                          setSelectedSubjectId("all");
+                          fetchAnalytics({ classId: "all", subjectId: "all" });
+                        }}
+                        disabled={loading || !hasActiveQuestionFilters}
+                        className="app-button-secondary h-9 px-3"
+                      >
+                        Clear filters
+                      </button>
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                      Active filters: {activeFiltersLabel}
+                    </p>
+                  </div>
+                </div>
+
                 <div className="analytics-control-panel">
                   <div className="analytics-control-panel-header">
                     <p className="analytics-control-panel-title">
-                      Analysis Mode
+                      Group By (in order)
                     </p>
                     <p className="analytics-control-panel-note">
-                      Pick the perspective first. The grouping setup below stays
-                      intact when you switch modes.
+                      Select and reorder fields.
                     </p>
                   </div>
-                  <div className="analytics-mode-grid">
-                    <button
-                      type="button"
-                      onClick={() => setClassLevel(false)}
-                      className={`analytics-mode-card ${
-                        !classLevel ? "analytics-mode-card-active" : ""
-                      }`}
-                    >
-                      <p className="text-sm font-semibold text-foreground">
-                        Single student
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        Focus on one response and compare it against the class.
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setClassLevel(true)}
-                      className={`analytics-mode-card ${
-                        classLevel ? "analytics-mode-card-active" : ""
-                      }`}
-                    >
-                      <p className="text-sm font-semibold text-foreground">
-                        Class level
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        Review the full class without the individual comparison
-                        layer.
-                      </p>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="analytics-control-panel">
-                  <div className="analytics-control-panel-header">
-                    <p className="analytics-control-panel-title">Question filters</p>
-                    <p className="analytics-control-panel-note">
-                      Narrow the report to specific question classes or subjects.
-                      These filters apply to the table, charts, insights, and
-                      exports.
-                    </p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="app-field-group">
-                      <label className="app-field-label">Class filter</label>
-                      <select
-                        className="analytics-select w-full"
-                        value={selectedClassId}
-                        onChange={(event) => setSelectedClassId(event.target.value)}
-                      >
-                        <option value="all">All classes</option>
-                        {classOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="app-field-group">
-                      <label className="app-field-label">Subject filter</label>
-                      <select
-                        className="analytics-select w-full"
-                        value={selectedSubjectId}
-                        onChange={(event) => setSelectedSubjectId(event.target.value)}
-                      >
-                        <option value="all">All subjects</option>
-                        {subjectOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="analytics-toolbar-chip">
-                      {selectedClassId === "all"
-                        ? "All classes"
-                        : `Class: ${
-                            classOptions.find((option) => option.value === selectedClassId)
-                              ?.label || "Filtered class"
-                          }`}
-                    </span>
-                    <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                      {selectedSubjectId === "all"
-                        ? "All subjects"
-                        : `Subject: ${
-                            subjectOptions.find(
-                              (option) => option.value === selectedSubjectId,
-                            )?.label || "Filtered subject"
-                          }`}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => fetchAnalytics()}
-                      disabled={loading}
-                      className="app-button-secondary h-9 px-3"
-                    >
-                      {loading ? "Applying..." : "Apply question filters"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedClassId("all");
-                        setSelectedSubjectId("all");
-                        fetchAnalytics({ classId: "all", subjectId: "all" });
-                      }}
-                      disabled={loading || !hasActiveQuestionFilters}
-                      className="app-button-secondary h-9 px-3"
-                    >
-                      Clear filters
-                    </button>
-                  </div>
-                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                    Active filters: {activeFiltersLabel}. Use refresh below after changing grouping or analysis mode.
-                  </p>
-                </div>
-
-              </div>
-
-              <div className="analytics-control-panel">
-                <div className="analytics-control-panel-header">
-                  <p className="analytics-control-panel-title">
-                    Group By (in order)
-                  </p>
-                  <p className="analytics-control-panel-note">
-                    Select fields and reorder them to build the nested structure
-                    used across the table, charts, and exports.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {groupFields.map((field) => (
-                    <div key={field.value}>
-                      <input
-                        type="checkbox"
-                        id={`field-${field.value}`}
-                        checked={groupBy.includes(field.value)}
-                        onChange={() =>
-                          setGroupBy((prev) =>
-                            prev.includes(field.value)
-                              ? prev.filter((f) => f !== field.value)
-                              : [...prev, field.value],
-                          )
-                        }
-                        className="hidden peer"
-                      />
-                      <label
-                        htmlFor={`field-${field.value}`}
-                        className="analytics-filter-chip peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground"
-                      >
-                        {field.label}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-                {groupBy.length > 0 ? (
-                  <ul className="space-y-2">
-                    {groupBy.map((fieldValue, idx) => {
-                      const field = groupFields.find(
-                        (f) => f.value === fieldValue,
-                      );
-                      if (!field) return null;
-                      return (
-                        <li
-                          key={field.value}
-                          className="analytics-order-item"
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {groupFields.map((field) => (
+                      <div key={field.value}>
+                        <input
+                          type="checkbox"
+                          id={`field-${field.value}`}
+                          checked={groupBy.includes(field.value)}
+                          onChange={() =>
+                            setGroupBy((prev) =>
+                              prev.includes(field.value)
+                                ? prev.filter((f) => f !== field.value)
+                                : [...prev, field.value],
+                            )
+                          }
+                          className="hidden peer"
+                        />
+                        <label
+                          htmlFor={`field-${field.value}`}
+                          className="analytics-filter-chip peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground"
                         >
-                          <span className="font-medium text-foreground">
-                            {idx + 1}. {field.label}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
-                              disabled={idx === 0}
-                              onClick={() => {
-                                setGroupBy((prev) => {
-                                  const arr = [...prev];
-                                  [arr[idx - 1], arr[idx]] = [
-                                    arr[idx],
-                                    arr[idx - 1],
-                                  ];
-                                  return arr;
-                                });
-                              }}
-                              title="Move up"
-                            >
-                              ▲
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
-                              disabled={idx === groupBy.length - 1}
-                              onClick={() => {
-                                setGroupBy((prev) => {
-                                  const arr = [...prev];
-                                  [arr[idx], arr[idx + 1]] = [
-                                    arr[idx + 1],
-                                    arr[idx],
-                                  ];
-                                  return arr;
-                                });
-                              }}
-                              title="Move down"
-                            >
-                              ▼
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <div className="app-empty-state py-6">
-                    Select at least one field to define the report grouping.
+                          {field.label}
+                        </label>
+                      </div>
+                    ))}
                   </div>
-                )}
+                  {groupBy.length > 0 ? (
+                    <ul className="space-y-2">
+                      {groupBy.map((fieldValue, idx) => {
+                        const field = groupFields.find(
+                          (f) => f.value === fieldValue,
+                        );
+                        if (!field) return null;
+                        return (
+                          <li
+                            key={field.value}
+                            className="analytics-order-item"
+                          >
+                            <span className="font-medium text-foreground">
+                              {idx + 1}. {field.label}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                                disabled={idx === 0}
+                                onClick={() => {
+                                  setGroupBy((prev) => {
+                                    const arr = [...prev];
+                                    [arr[idx - 1], arr[idx]] = [
+                                      arr[idx],
+                                      arr[idx - 1],
+                                    ];
+                                    return arr;
+                                  });
+                                }}
+                                title="Move up"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                                disabled={idx === groupBy.length - 1}
+                                onClick={() => {
+                                  setGroupBy((prev) => {
+                                    const arr = [...prev];
+                                    [arr[idx], arr[idx + 1]] = [
+                                      arr[idx + 1],
+                                      arr[idx],
+                                    ];
+                                    return arr;
+                                  });
+                                }}
+                                title="Move down"
+                              >
+                                ▼
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <div className="app-empty-state py-6">
+                      Select at least one field to define the report grouping.
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-
             ) : null}
           </div>
         </div>
 
         {!classLevel && compareRows.length > 0 && (
-          <div className="analytics-card analytics-card-body">
+          <div className="analytics-card analytics-card-body border-l-4 border-[hsl(var(--accent-blue))]">
             <div className="analytics-toolbar">
               <div className="analytics-toolbar-row">
                 <div className="analytics-toolbar-copy">
@@ -784,14 +785,10 @@ export default function StudentTagReportPage({
                     Insights (Student • {lastLabel})
                   </h2>
                   <p className="analytics-toolbar-note">
-                    Compare this student against the class benchmark for the
-                    same grouping levels.
+                    Student vs class comparison.
                   </p>
                 </div>
                 <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip">
-                    {compareRows.length} comparison areas
-                  </span>
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                     Based on {lastLabel}
                   </span>
@@ -816,24 +813,16 @@ export default function StudentTagReportPage({
                     <table className="min-w-full text-sm">
                       <thead className="bg-muted/30">
                         <tr>
-                          <th className="analytics-th">
-                            {lastLabel}
-                          </th>
+                          <th className="analytics-th">{lastLabel}</th>
                           <th className="analytics-th-center">
                             Student Correct (%)
                           </th>
                           <th className="analytics-th-center">
                             Class Correct (%)
                           </th>
-                          <th className="analytics-th-center">
-                            Gap (%)
-                          </th>
-                          <th className="analytics-th">
-                            Category
-                          </th>
-                          <th className="analytics-th">
-                            Action
-                          </th>
+                          <th className="analytics-th-center">Gap (%)</th>
+                          <th className="analytics-th">Category</th>
+                          <th className="analytics-th">Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -847,10 +836,7 @@ export default function StudentTagReportPage({
                                   ? "text-rose-600"
                                   : "text-foreground";
                           return (
-                            <tr
-                              key={r.tag}
-                              className="analytics-row"
-                            >
+                            <tr key={r.tag} className="analytics-row">
                               <td className="analytics-td">{r.tag}</td>
                               <td className="analytics-td-center">
                                 {r.studentCorrect?.toFixed(2)}
@@ -955,21 +941,16 @@ export default function StudentTagReportPage({
             compareRows.length === 0 &&
             insights &&
             insights.length > 0)) && (
-          <div className="analytics-card analytics-card-body">
+          <div className="analytics-card analytics-card-body border-l-4 border-rose-400">
             <div className="analytics-toolbar">
               <div className="analytics-toolbar-row">
                 <div className="analytics-toolbar-copy">
                   <h2 className="analytics-card-title">
                     Insights ({classLevel ? "Class" : "Student"} • {lastLabel})
                   </h2>
-                  <p className="analytics-toolbar-note">
-                    Weakest areas for the active report mode and grouping setup.
-                  </p>
+                  <p className="analytics-toolbar-note">Weakest areas first.</p>
                 </div>
                 <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip">
-                    {insights.length} insight rows
-                  </span>
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                     Based on {lastLabel}
                   </span>
@@ -994,26 +975,15 @@ export default function StudentTagReportPage({
                     <table className="min-w-full text-sm">
                       <thead className="bg-muted/30">
                         <tr>
-                          <th className="analytics-th">
-                            {lastLabel}
-                          </th>
-                          <th className="analytics-th-center">
-                            Fail (%)
-                          </th>
-                          <th className="analytics-th">
-                            Category
-                          </th>
-                          <th className="analytics-th">
-                            Action
-                          </th>
+                          <th className="analytics-th">{lastLabel}</th>
+                          <th className="analytics-th-center">Fail (%)</th>
+                          <th className="analytics-th">Category</th>
+                          <th className="analytics-th">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {visible.map((i) => (
-                          <tr
-                            key={i.tag}
-                            className="analytics-row"
-                          >
+                          <tr key={i.tag} className="analytics-row">
                             <td className="analytics-td">{i.tag}</td>
                             <td className="analytics-td-center font-medium text-rose-600">
                               {i.failPct}
@@ -1102,19 +1072,15 @@ export default function StudentTagReportPage({
           </div>
         )}
 
-        <div className="analytics-toolbar">
+        <div className="analytics-toolbar border border-border/60 bg-card/70">
           <div className="analytics-toolbar-row">
             <div className="analytics-toolbar-copy">
-              <p className="analytics-toolbar-title">Choose a report view</p>
+              <p className="analytics-toolbar-title">Report view</p>
               <p className="analytics-toolbar-note">
-                Switch between the grouped table and charts without losing the
-                current analysis mode or grouping order.
+                Switch between table and charts.
               </p>
             </div>
             <div className="analytics-toolbar-meta">
-              <span className="analytics-toolbar-chip">
-                {classLevel ? "Class mode" : "Student mode"}
-              </span>
               <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                 {activeSortLabel}
               </span>
@@ -1148,44 +1114,19 @@ export default function StudentTagReportPage({
             <div className="border-b border-border/60 bg-muted/20 p-4 sm:p-5">
               <div className="analytics-toolbar-row gap-4">
                 <div className="analytics-toolbar-copy">
-                  <h2 className="analytics-card-title">
-                    Grouped Analytics
-                  </h2>
+                  <h2 className="analytics-card-title">Grouped Analytics</h2>
                   <p className="analytics-toolbar-note">
-                    Review grouped performance and export the exact table shown
-                    below.
+                    Grouped performance summary.
                   </p>
                 </div>
                 <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip">
-                    {classLevel ? "Class mode" : "Student mode"}
-                  </span>
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                     {activeSortLabel}
                   </span>
                 </div>
               </div>
               <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div className="analytics-toolbar-actions">
-                  <span className="analytics-toolbar-chip">
-                    {selectedGroupLabels.length > 0
-                      ? `Group by ${selectedGroupLabels.join(" → ")}`
-                      : "No grouping selected"}
-                  </span>
-                  <span className="analytics-toolbar-chip">
-                    {showTagsColumn ? "Tags visible" : "Tags hidden"}
-                  </span>
-                  <span className="analytics-toolbar-chip">
-                    {showOptionTagsColumn
-                      ? "Option tags visible"
-                      : "Option tags hidden"}
-                  </span>
-                  {selectedTags.length > 0 && (
-                    <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                      {selectedTags.length} highlighted tags
-                    </span>
-                  )}
-                </div>
+                <div className="analytics-toolbar-actions" />
                 <AnalyticsExportControls
                   stats={stats}
                   groupBy={groupBy}
@@ -1208,13 +1149,9 @@ export default function StudentTagReportPage({
                 <table className="min-w-full text-sm">
                   <thead className="bg-muted/30">
                     <tr>
-                      <th className="analytics-th">
-                        Group / Tag
-                      </th>
+                      <th className="analytics-th">Group / Tag</th>
                       {showTagsColumn && (
-                        <th className="analytics-th-center">
-                          Tags
-                        </th>
+                        <th className="analytics-th-center">Tags</th>
                       )}
                       <th
                         className="analytics-th-center cursor-pointer select-none text-emerald-700"

@@ -103,7 +103,10 @@ export default function ClassTagReportPage({
       : "Choose grouping order";
 
   const visibleColumnsLabel =
-    [showTagsColumn ? "Tags" : null, showOptionTagsColumn ? "Option tags" : null]
+    [
+      showTagsColumn ? "Tags" : null,
+      showOptionTagsColumn ? "Option tags" : null,
+    ]
       .filter(Boolean)
       .join(" • ") || "Core metrics only";
 
@@ -214,22 +217,16 @@ export default function ClassTagReportPage({
 
   return (
     <div className="analytics-page">
-      <div className="container space-y-6">
+      <div className="container space-y-4 sm:space-y-5">
         <ReportHeader paper={paper} student="" rollNumber="" variant="class" />
         <div className="analytics-card overflow-hidden">
           <div className="analytics-card-header">
             <div className="analytics-toolbar-row gap-4">
               <div className="analytics-toolbar-copy">
                 <h2 className="analytics-card-title">Report Controls</h2>
-                <p className="analytics-card-description">
-                  Pick how this report groups data, review the current setup,
-                  and refresh the grouped results when you are ready.
-                </p>
+                <p className="analytics-card-description">Controls</p>
               </div>
               <div className="analytics-toolbar-meta">
-                <span className="analytics-toolbar-chip">
-                  {groupFields.length} available fields
-                </span>
                 <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                   {groupingPreviewLabel}
                 </span>
@@ -242,8 +239,7 @@ export default function ClassTagReportPage({
                 <div className="analytics-toolbar-copy">
                   <p className="analytics-toolbar-title">Quick setup</p>
                   <p className="analytics-toolbar-note">
-                    Keep the page lighter by opening the full setup only when you
-                    need to change the grouping order.
+                    Adjust grouping and refresh.
                   </p>
                 </div>
                 <div className="analytics-toolbar-actions">
@@ -267,14 +263,8 @@ export default function ClassTagReportPage({
               </div>
               <div className="analytics-toolbar-row">
                 <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip">
-                    {groupFields.length} available fields
-                  </span>
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    {view === "table" ? "Table view" : "Chart view"}
-                  </span>
-                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    {groupingPreviewLabel}
+                    {view === "table" ? "Table" : "Charts"}
                   </span>
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                     {visibleColumnsLabel}
@@ -294,7 +284,9 @@ export default function ClassTagReportPage({
                     <input
                       type="checkbox"
                       checked={showOptionTagsColumn}
-                      onChange={() => setShowOptionTagsColumn((value) => !value)}
+                      onChange={() =>
+                        setShowOptionTagsColumn((value) => !value)
+                      }
                       className="analytics-inline-check"
                     />
                     <span>Show option tags column</span>
@@ -305,126 +297,119 @@ export default function ClassTagReportPage({
 
             {showControls ? (
               <div className="analytics-controls-grid">
-              <div className="analytics-control-panel xl:order-2">
-                <div className="analytics-control-panel-header">
-                  <p className="analytics-control-panel-title">
-                    Group By (in order)
-                  </p>
-                  <p className="analytics-control-panel-note">
-                    Select fields and reorder them to build the nested structure
-                    used across the table, charts, and exports.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {groupFields.map((field) => (
-                    <div key={field.value}>
-                      <input
-                        type="checkbox"
-                        id={`field-${field.value}`}
-                        checked={groupBy.includes(field.value)}
-                        onChange={() =>
-                          setGroupBy((prev) =>
-                            prev.includes(field.value)
-                              ? prev.filter((f) => f !== field.value)
-                              : [...prev, field.value],
-                          )
-                        }
-                        className="hidden peer"
-                      />
-                      <label
-                        htmlFor={`field-${field.value}`}
-                        className="analytics-filter-chip peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground"
-                      >
-                        {field.label}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-                {groupBy.length > 0 ? (
-                  <ul className="space-y-2">
-                    {groupBy.map((fieldValue, idx) => {
-                      const field = groupFields.find(
-                        (f) => f.value === fieldValue,
-                      );
-                      if (!field) return null;
-                      return (
-                        <li
-                          key={field.value}
-                          className="analytics-order-item"
-                        >
-                          <span className="font-medium text-foreground">
-                            {idx + 1}. {field.label}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
-                              disabled={idx === 0}
-                              onClick={() => {
-                                setGroupBy((prev) => {
-                                  const arr = [...prev];
-                                  [arr[idx - 1], arr[idx]] = [
-                                    arr[idx],
-                                    arr[idx - 1],
-                                  ];
-                                  return arr;
-                                });
-                              }}
-                              title="Move up"
-                            >
-                              ▲
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
-                              disabled={idx === groupBy.length - 1}
-                              onClick={() => {
-                                setGroupBy((prev) => {
-                                  const arr = [...prev];
-                                  [arr[idx], arr[idx + 1]] = [
-                                    arr[idx + 1],
-                                    arr[idx],
-                                  ];
-                                  return arr;
-                                });
-                              }}
-                              title="Move down"
-                            >
-                              ▼
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <div className="app-empty-state py-6">
-                    Select at least one field to define the report grouping.
+                <div className="analytics-control-panel xl:order-2">
+                  <div className="analytics-control-panel-header">
+                    <p className="analytics-control-panel-title">
+                      Group By (in order)
+                    </p>
+                    <p className="analytics-control-panel-note">
+                      Select and reorder fields.
+                    </p>
                   </div>
-                )}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {groupFields.map((field) => (
+                      <div key={field.value}>
+                        <input
+                          type="checkbox"
+                          id={`field-${field.value}`}
+                          checked={groupBy.includes(field.value)}
+                          onChange={() =>
+                            setGroupBy((prev) =>
+                              prev.includes(field.value)
+                                ? prev.filter((f) => f !== field.value)
+                                : [...prev, field.value],
+                            )
+                          }
+                          className="hidden peer"
+                        />
+                        <label
+                          htmlFor={`field-${field.value}`}
+                          className="analytics-filter-chip peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground"
+                        >
+                          {field.label}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  {groupBy.length > 0 ? (
+                    <ul className="space-y-2">
+                      {groupBy.map((fieldValue, idx) => {
+                        const field = groupFields.find(
+                          (f) => f.value === fieldValue,
+                        );
+                        if (!field) return null;
+                        return (
+                          <li
+                            key={field.value}
+                            className="analytics-order-item"
+                          >
+                            <span className="font-medium text-foreground">
+                              {idx + 1}. {field.label}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                                disabled={idx === 0}
+                                onClick={() => {
+                                  setGroupBy((prev) => {
+                                    const arr = [...prev];
+                                    [arr[idx - 1], arr[idx]] = [
+                                      arr[idx],
+                                      arr[idx - 1],
+                                    ];
+                                    return arr;
+                                  });
+                                }}
+                                title="Move up"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                                disabled={idx === groupBy.length - 1}
+                                onClick={() => {
+                                  setGroupBy((prev) => {
+                                    const arr = [...prev];
+                                    [arr[idx], arr[idx + 1]] = [
+                                      arr[idx + 1],
+                                      arr[idx],
+                                    ];
+                                    return arr;
+                                  });
+                                }}
+                                title="Move down"
+                              >
+                                ▼
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <div className="app-empty-state py-6">
+                      Select at least one field to define the report grouping.
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-
             ) : null}
           </div>
         </div>
 
         {insights && insights.length > 0 && (
-          <div className="analytics-card analytics-card-body">
+          <div className="analytics-card analytics-card-body border-l-4 border-rose-400">
             <div className="analytics-toolbar">
               <div className="analytics-toolbar-row">
                 <div className="analytics-toolbar-copy">
                   <h2 className="analytics-card-title">
                     Insights (Class • {lastLabel})
                   </h2>
-                  <p className="analytics-toolbar-note">
-                    Highest-failure groupings for the current report setup.
-                  </p>
+                  <p className="analytics-toolbar-note">Weakest areas first.</p>
                 </div>
                 <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip">
-                    {Math.min(insights.length, 12)} shown
-                  </span>
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                     Based on {lastLabel}
                   </span>
@@ -435,26 +420,15 @@ export default function ClassTagReportPage({
               <table className="min-w-full text-sm">
                 <thead className="bg-muted/30">
                   <tr>
-                    <th className="analytics-th">
-                      {lastLabel}
-                    </th>
-                    <th className="analytics-th-center">
-                      Fail (%)
-                    </th>
-                    <th className="analytics-th">
-                      Category
-                    </th>
-                    <th className="analytics-th">
-                      Action
-                    </th>
+                    <th className="analytics-th">{lastLabel}</th>
+                    <th className="analytics-th-center">Fail (%)</th>
+                    <th className="analytics-th">Category</th>
+                    <th className="analytics-th">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {insights.slice(0, 12).map((i) => (
-                    <tr
-                      key={i.tag}
-                      className="analytics-row"
-                    >
+                    <tr key={i.tag} className="analytics-row">
                       <td className="analytics-td">{i.tag}</td>
                       <td className="analytics-td-center font-medium text-rose-600">
                         {i.failPct}
@@ -473,21 +447,12 @@ export default function ClassTagReportPage({
             </div>
           </div>
         )}
-        <div className="analytics-toolbar">
+        <div className="analytics-toolbar border border-border/60 bg-card/70">
           <div className="analytics-toolbar-row">
             <div className="analytics-toolbar-copy">
-              <p className="analytics-toolbar-title">Choose a report view</p>
-              <p className="analytics-toolbar-note">
-                Switch between the grouped table and charts without losing your
-                current report setup.
-              </p>
+              <p className="analytics-toolbar-title">Report view</p>
             </div>
             <div className="analytics-toolbar-meta">
-              <span className="analytics-toolbar-chip">
-                {selectedGroupLabels.length > 0
-                  ? `Group by ${selectedGroupLabels.join(" → ")}`
-                  : "No grouping selected"}
-              </span>
               <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                 {activeSortLabel}
               </span>
@@ -521,41 +486,19 @@ export default function ClassTagReportPage({
             <div className="border-b border-border/60 bg-muted/20 p-4 sm:p-5">
               <div className="analytics-toolbar-row gap-4">
                 <div className="analytics-toolbar-copy">
-                  <h2 className="analytics-card-title">
-                    Grouped Analytics
-                  </h2>
+                  <h2 className="analytics-card-title">Grouped Analytics</h2>
                   <p className="analytics-toolbar-note">
-                    Review grouped performance and export the exact table shown
-                    below.
+                    Grouped performance summary.
                   </p>
                 </div>
                 <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip">
-                    {selectedGroupLabels.length > 0
-                      ? selectedGroupLabels.join(" → ")
-                      : "No grouping selected"}
-                  </span>
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                     {activeSortLabel}
                   </span>
                 </div>
               </div>
               <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div className="analytics-toolbar-actions">
-                  <span className="analytics-toolbar-chip">
-                    {showTagsColumn ? "Tags visible" : "Tags hidden"}
-                  </span>
-                  <span className="analytics-toolbar-chip">
-                    {showOptionTagsColumn
-                      ? "Option tags visible"
-                      : "Option tags hidden"}
-                  </span>
-                  {selectedTags.length > 0 && (
-                    <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                      {selectedTags.length} highlighted tags
-                    </span>
-                  )}
-                </div>
+                <div className="analytics-toolbar-actions" />
                 <AnalyticsExportControls
                   stats={stats}
                   groupBy={groupBy}
@@ -576,13 +519,9 @@ export default function ClassTagReportPage({
                 <table className="min-w-full text-sm">
                   <thead className="bg-muted/30">
                     <tr>
-                      <th className="analytics-th">
-                        Group / Tag
-                      </th>
+                      <th className="analytics-th">Group / Tag</th>
                       {showTagsColumn && (
-                        <th className="analytics-th-center">
-                          Tags
-                        </th>
+                        <th className="analytics-th-center">Tags</th>
                       )}
                       <th
                         className="analytics-th-center cursor-pointer select-none text-emerald-700"
