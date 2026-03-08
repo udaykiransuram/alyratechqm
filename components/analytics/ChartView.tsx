@@ -34,11 +34,11 @@ const ChartCard = ({
   title: React.ReactNode;
   children: React.ReactNode;
 }) => (
-  <div className="analytics-card flex h-full flex-col">
-    <div className="analytics-card-header">
+  <div className="analytics-card flex h-full flex-col overflow-hidden">
+    <div className="analytics-card-header border-l-4 border-[hsl(var(--accent-blue))] bg-gradient-to-r from-[hsl(var(--accent-blue))/0.08] to-transparent">
       <h3 className="analytics-card-title">{title}</h3>
     </div>
-    <div className="analytics-card-body flex-grow">{children}</div>
+    <div className="analytics-card-body flex-grow p-4 sm:p-5">{children}</div>
   </div>
 );
 
@@ -55,7 +55,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             style={{ backgroundColor: pld.color || pld.fill }}
           ></span>
           <span className="text-muted-foreground">{pld.name}:</span>
-          <span className="ml-1 font-semibold text-foreground">{pld.value}</span>
+          <span className="ml-1 font-semibold text-foreground">
+            {pld.value}
+          </span>
         </div>
         <div className="text-xs text-foreground">
           <div className="font-semibold mb-1">Students:</div>
@@ -64,7 +66,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
               {students.map((s: any, i: number) => (
                 <li key={i}>
                   {s.name}{" "}
-                  <span className="text-muted-foreground">({s.rollNumber})</span>
+                  <span className="text-muted-foreground">
+                    ({s.rollNumber})
+                  </span>
                 </li>
               ))}
             </ul>
