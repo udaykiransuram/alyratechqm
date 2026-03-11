@@ -38,6 +38,7 @@ export default function ViewQuestionsPage() {
   const [classId, setClassId] = useState('');
   const [subjectId, setSubjectId] = useState('');
   const [selectedTags, setSelectedTags] = useState<any[]>([]);
+  const [questionTagMatchMode, setQuestionTagMatchMode] = useState<'any' | 'all'>('any');
   const [modalSearch, setModalSearch] = useState('');
   const [setupNotice, setSetupNotice] = useState<string | null>(null);
 
@@ -125,9 +126,11 @@ export default function ViewQuestionsPage() {
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
       if (subjectId) params.set('subject', subjectId);
-      if (selectedTags.length > 0) params.set('tags', selectedTags.map(t => t._id).join(','));
+      if (selectedTags.length > 0) {
+        params.set('tags', selectedTags.map(t => t._id).join(','));
+        params.set('tagsMode', questionTagMatchMode === 'all' ? 'and' : 'or');
+      }
       if (modalSearch.trim()) params.set('search', modalSearch.trim());
-      if (selectedTags.length > 1) params.set('tagsMode', 'and');
 
       const qs = params.toString();
       const endpoint = qs ? `/api/questions?${qs}` : '/api/questions';
@@ -142,7 +145,7 @@ export default function ViewQuestionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [classId, subjectId, selectedTags, modalSearch]);
+  }, [classId, subjectId, selectedTags, questionTagMatchMode, modalSearch]);
 
   useEffect(() => {
     fetchQuestions();
@@ -233,6 +236,36 @@ export default function ViewQuestionsPage() {
                 placeholder="Search by content..."
               />
             </div>
+            <div className="app-field-group">
+              <p className="app-field-label">Tag Match</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={questionTagMatchMode === 'any' ? 'default' : 'outline'}
+                  className="h-9"
+                  onClick={() => setQuestionTagMatchMode('any')}
+                  disabled={selectedTags.length === 0}
+                >
+                  Any Tag
+                </Button>
+                <Button
+                  type="button"
+                  variant={questionTagMatchMode === 'all' ? 'default' : 'outline'}
+                  className="h-9"
+                  onClick={() => setQuestionTagMatchMode('all')}
+                  disabled={selectedTags.length === 0}
+                >
+                  All Tags
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {selectedTags.length === 0
+                  ? 'Select one or more tags to filter by tag match mode.'
+                  : questionTagMatchMode === 'all'
+                    ? 'Only questions containing all selected tags are shown.'
+                    : 'Questions containing any selected tag are shown.'}
+              </p>
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={fetchQuestions}>Refresh</Button>
               <Button
@@ -241,6 +274,7 @@ export default function ViewQuestionsPage() {
                   setClassId('');
                   setSubjectId('');
                   setSelectedTags([]);
+                  setQuestionTagMatchMode('any');
                   setModalSearch('');
                 }}
               >

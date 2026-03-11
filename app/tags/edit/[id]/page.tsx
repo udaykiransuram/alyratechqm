@@ -153,7 +153,7 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
 
   if (pageError) {
     return (
-      <div className="app-page-shell max-w-2xl px-4 py-6 sm:px-0">
+      <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
         <div className="app-feedback app-feedback-error">{pageError}</div>
       </div>
     );
@@ -169,25 +169,30 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
           setSelectedTagTypeId(newTagType._id);
         }}
       />
-      <div className="max-w-2xl mx-auto py-8 space-y-8">
+      <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
         {pageNotice ? <div className="app-feedback app-feedback-info">{pageNotice}</div> : null}
-        <header className="text-center">
-          <h1 className="app-page-title">Edit Tag</h1>
-          <p className="text-muted-foreground mt-1">Update the tag's details and its subject associations.</p>
-        </header>
+        <div className="app-page-header-row">
+          <div className="app-page-header">
+            <h1 className="app-page-title">Edit Tag</h1>
+            <p className="app-page-subtitle">Update the tag details and subject associations.</p>
+          </div>
+          <Button variant="outline" onClick={navigateBack} disabled={isSaving}>
+            Back
+          </Button>
+        </div>
 
-        <Card>
-          <CardHeader>
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header">
             <CardTitle>Tag Details</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="tagName">Tag Name</Label>
+          <CardContent className="app-section-body space-y-5">
+            <div className="app-field-group">
+              <Label htmlFor="tagName" className="app-field-label">Tag Name</Label>
               <Input id="tagName" value={tagName} onChange={(e) => setTagName(e.target.value)} disabled={isSaving} />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="tagType">Tag Type</Label>
+            <div className="app-field-group">
+              <Label htmlFor="tagType" className="app-field-label">Tag Type</Label>
               <div className="flex items-center gap-2">
                 <Select onValueChange={setSelectedTagTypeId} value={selectedTagTypeId} disabled={isSaving}>
                   <SelectTrigger id="tagType">
@@ -200,7 +205,7 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="icon" onClick={() => setIsModalOpen(true)} disabled={isSaving}>
+                <Button variant="outline" size="icon" onClick={() => setIsModalOpen(true)} disabled={isSaving} className="h-10 w-10">
                   <PlusCircle className="h-4 w-4" />
                 </Button>
               </div>
@@ -208,13 +213,13 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header">
             <CardTitle>Subject Associations</CardTitle>
             <CardDescription>Assign or unassign this tag from subjects.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="max-h-60 overflow-y-auto space-y-3 pr-2">
+          <CardContent className="app-section-body">
+            <div className="max-h-60 space-y-3 overflow-y-auto pr-2">
               {subjects.length === 0 ? <div className="text-sm text-muted-foreground">No subjects available for this school yet.</div> : null}
               {subjects.map((subject) => (
                 <div key={subject._id} className="flex items-center space-x-3">

@@ -216,7 +216,7 @@ export default function CreateAdminPage() {
       : 'app-feedback app-feedback-success';
 
   return (
-    <div className="app-page-shell max-w-2xl px-4 py-6 sm:px-0">
+    <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div>
           <h1 className="app-page-title">Create Admin</h1>

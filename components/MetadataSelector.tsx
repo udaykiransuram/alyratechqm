@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MultiSelectTags } from '@/components/ui/multi-select-tags';
 import { fetchApiJson, resolveClientSchoolKey } from '@/lib/client/api';
+import { cn } from '@/lib/utils';
 
 interface MetadataSelectorProps {
   classes: { _id: string; name: string }[];
@@ -22,6 +23,10 @@ interface MetadataSelectorProps {
   resetCounter: number;
   toast: any;
   onCreateNewTag: (tagName: string, tagTypeId: string) => Promise<any>;
+  variant?: 'card' | 'plain';
+  title?: string;
+  description?: string;
+  contentClassName?: string;
 }
 
 export function MetadataSelector({
@@ -40,6 +45,10 @@ export function MetadataSelector({
   disableClassSubject = false,
   resetCounter,
   toast,
+  variant = 'card',
+  title = 'Metadata',
+  description = 'Select the class, subject, and relevant tags for this question.',
+  contentClassName,
 }: MetadataSelectorProps) {
   const [selectedTypeId] = useState<string | null>(null);
 
@@ -86,67 +95,81 @@ export function MetadataSelector({
     }
   };
 
+  const fields = (
+    <>
+      <div className="app-field-group">
+        <Label className="app-field-label">Class</Label>
+        <Select value={classId} onValueChange={setClassId} disabled={disableClassSubject}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select a class" />
+          </SelectTrigger>
+          <SelectContent>
+            {classes.map((c) => (
+              <SelectItem key={c._id} value={c._id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="app-field-group">
+        <Label className="app-field-label">Subject</Label>
+        <Select value={subjectId} onValueChange={setSubjectId} disabled={disableClassSubject}>
+          <SelectTrigger>
+            <SelectValue
+              placeholder={
+                subjectsLoading
+                  ? 'Loading subjects...'
+                  : !classId
+                    ? 'Select a class first'
+                    : 'Select a subject'
+              }
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {subjects.map((sub) => (
+              <SelectItem key={sub._id} value={sub._id}>
+                {sub.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="app-field-group">
+        <Label className="app-field-label">Tags</Label>
+        <MultiSelectTags
+          key={`${resetCounter}-tags-${selectedTypeId ?? 'all'}`}
+          isLoading={initialDataLoading}
+          allTags={allTags}
+          selectedTags={selectedTags}
+          onSelectedTagsChange={setSelectedTags}
+          recommendedTagIds={recommendedTagIds}
+          disabled={false}
+          onCreateNewTag={handleCreateNewTag}
+        />
+      </div>
+
+      {disableClassSubject ? (
+        <p className="text-xs text-muted-foreground">
+          Deselect all questions to change class or subject.
+        </p>
+      ) : null}
+    </>
+  );
+
+  if (variant === 'plain') {
+    return <div className={cn('space-y-4', contentClassName)}>{fields}</div>;
+  }
+
   return (
     <Card className="app-surface overflow-hidden shadow-none">
       <CardHeader className="app-section-header">
-        <CardTitle className="text-base">Metadata</CardTitle>
-        <CardDescription>Select the class, subject, and relevant tags for this question.</CardDescription>
+        <CardTitle className="text-base">{title}</CardTitle>
+        {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>
-      <CardContent className="app-section-body space-y-4">
-        <div className="app-field-group">
-          <Label className="app-field-label">Class</Label>
-          <Select value={classId} onValueChange={setClassId} disabled={disableClassSubject}>
-            <SelectTrigger><SelectValue placeholder="Select a class" /></SelectTrigger>
-            <SelectContent>
-              {classes.map(c => (
-                <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="app-field-group">
-          <Label className="app-field-label">Subject</Label>
-          <Select value={subjectId} onValueChange={setSubjectId} disabled={disableClassSubject}>
-            <SelectTrigger>
-              <SelectValue
-                placeholder={
-                  subjectsLoading
-                    ? 'Loading subjects...'
-                    : !classId
-                      ? 'Select a class first'
-                      : 'Select a subject'
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {subjects.map(sub => (
-                <SelectItem key={sub._id} value={sub._id}>{sub.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="app-field-group">
-          <Label className="app-field-label">Tags</Label>
-          <MultiSelectTags
-            key={`${resetCounter}-tags-${selectedTypeId ?? 'all'}`}
-            isLoading={initialDataLoading}
-            allTags={allTags}
-            selectedTags={selectedTags}
-            onSelectedTagsChange={setSelectedTags}
-            recommendedTagIds={recommendedTagIds}
-            disabled={false}
-            onCreateNewTag={handleCreateNewTag}
-          />
-        </div>
-
-        {disableClassSubject ? (
-          <p className="text-xs text-muted-foreground">
-            Deselect all questions to change class or subject.
-          </p>
-        ) : null}
-      </CardContent>
+      <CardContent className={cn('app-section-body space-y-4', contentClassName)}>{fields}</CardContent>
     </Card>
   );
 }

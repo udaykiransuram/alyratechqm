@@ -116,7 +116,7 @@ export default function ViewQuestionPaperPage({
 
   if (!schoolKey) {
     return (
-      <div className="app-page-shell py-6">
+      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
         <div className="app-page-header-row">
           <div>
             <h1 className="app-page-title">No School Selected</h1>
@@ -147,7 +147,7 @@ export default function ViewQuestionPaperPage({
 
   if (error) {
     return (
-      <div className="app-page-shell py-6">
+      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
         <div className="app-page-header-row">
           <div>
             <h1 className="app-page-title">Question Paper</h1>
@@ -165,7 +165,7 @@ export default function ViewQuestionPaperPage({
 
   if (!paper) {
     return (
-      <div className="app-page-shell py-6">
+      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
         <div className="app-page-header-row">
           <div>
             <h1 className="app-page-title">Question Paper</h1>
@@ -182,7 +182,7 @@ export default function ViewQuestionPaperPage({
   }
 
   return (
-    <div className="container space-y-5">
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div>
           <h1 className="app-page-title">{paper.title || "Question Paper"}</h1>
@@ -202,7 +202,7 @@ export default function ViewQuestionPaperPage({
       <QuestionPaperToolbar paper={paper} />
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <main className="min-w-0 space-y-5">
+        <main className="min-w-0 space-y-4">
           {paper.instructions ? (
             <Card className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
@@ -272,7 +272,7 @@ export default function ViewQuestionPaperPage({
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="app-section-body space-y-4">
+                  <CardContent className="app-section-body space-y-3">
                     {sectionQuestions.length === 0 ? (
                       <div className="app-empty-state">No questions were added to this section.</div>
                     ) : (
@@ -283,7 +283,7 @@ export default function ViewQuestionPaperPage({
                         return (
                           <div
                             key={question?._id || `${sectionIndex}-${questionIndex}`}
-                            className="rounded-xl border border-border/60 bg-muted/10 p-4"
+                            className="rounded-2xl border border-border/60 bg-muted/10 p-3"
                           >
                             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                               <p className="text-sm font-semibold text-foreground">
@@ -299,6 +299,7 @@ export default function ViewQuestionPaperPage({
 
                             {question ? (
                               <QuestionItemClient
+                                compact
                                 question={{
                                   ...question,
                                   tags: Array.isArray(question.tags) ? question.tags : [],

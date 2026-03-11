@@ -33,7 +33,7 @@ export function SectionEditor({
 }) {
   return (
     <>
-      <div className="space-y-4 border-b border-border/60 bg-muted/20 px-5 py-4">
+      <div className="space-y-3.5 border-b border-border/60 bg-muted/20 px-4 py-3.5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <Input
             value={section.name}
@@ -56,7 +56,7 @@ export function SectionEditor({
           value={section.description}
           onChange={e => onUpdate('description', e.target.value)}
           placeholder="Optional: Add a description or instructions for this section..."
-          className="min-h-[90px] bg-background"
+          className="min-h-[80px] bg-background"
           rows={3}
         />
 
@@ -92,16 +92,16 @@ export function SectionEditor({
         </div>
       </div>
 
-      <div className="space-y-4 px-5 py-4">
+      <div className="space-y-3.5 px-4 py-3.5">
         {children}
-        <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 border-t border-border/60 pt-3.5 sm:flex-row sm:items-center">
           <Button variant="outline" size="sm" onClick={onAddQuestions} disabled={!canAddQuestions}>
             <Plus className="mr-2 h-4 w-4" />
             Add / Manage Questions
           </Button>
           {!canAddQuestions ? (
             <span className="text-xs text-destructive">
-              Set section name and default marks to add questions.
+              Complete section setup to manage questions.
             </span>
           ) : null}
           <span className="sm:ml-auto text-sm font-semibold text-muted-foreground">

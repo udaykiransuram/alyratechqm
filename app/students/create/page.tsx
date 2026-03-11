@@ -268,7 +268,7 @@ export default function CreateStudentPage() {
       : "app-feedback app-feedback-success";
 
   return (
-    <div className="app-page-shell max-w-2xl px-4 py-6 sm:px-0">
+    <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div>
           <h1 className="app-page-title">Create Student</h1>
@@ -282,7 +282,7 @@ export default function CreateStudentPage() {
         </Button>
       </div>
 
-      <div className="app-surface app-surface-body space-y-8">
+      <div className="app-surface app-surface-body space-y-6">
         {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
 
         <form onSubmit={handleSubmit} className="space-y-5">

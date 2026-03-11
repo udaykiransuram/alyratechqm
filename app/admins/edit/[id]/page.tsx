@@ -207,14 +207,14 @@ export default function EditAdminPage() {
 
   if (error && !message) {
     return (
-      <div className="app-page-shell max-w-2xl px-4 py-6 sm:px-0">
+      <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
         <div className="app-feedback app-feedback-error">{error}</div>
       </div>
     );
   }
 
   return (
-    <div className="app-page-shell max-w-2xl px-4 py-6 sm:px-0">
+    <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div className="app-page-header">
           <h1 className="app-page-title">Edit Admin</h1>

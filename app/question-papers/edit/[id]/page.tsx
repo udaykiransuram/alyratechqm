@@ -42,7 +42,7 @@ export default async function EditQuestionPaperPage({
 
   if (!rawData) {
     return (
-      <div className="app-page-shell px-4 py-6 sm:px-0">
+      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
         <div className="app-page-header">
           <h1 className="app-page-title">Edit Question Paper</h1>
           <p className="app-page-subtitle">The requested paper could not be loaded.</p>

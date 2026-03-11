@@ -10,6 +10,7 @@ import { ContentRenderer } from './ContentRenderer';
 import { EditQuestionModal } from './EditQuestionModal';
 import { toast as showToast } from 'sonner';
 import { Separator } from './ui/separator';
+import { cn } from '@/lib/utils';
 
 export interface TagType { _id: string; name: string; }
 export interface Tag { _id: string; name: string; type: TagType; }
@@ -39,6 +40,8 @@ export interface QuestionItemProps {
   allTags: Tag[];
   onSave?: (updated: Question) => Promise<void>;
   readOnly?: boolean;
+  compact?: boolean;
+  className?: string;
 }
 
 export function QuestionItem({
@@ -50,24 +53,38 @@ export function QuestionItem({
   allTags,
   onSave,
   readOnly = false,
+  compact = false,
+  className,
 }: QuestionItemProps) {
   const [isEditModalOpen, setEditModalOpen] = useState(false);
 
   const subjectName = typeof question.subject === 'string'
     ? subjects.find(subject => subject._id === question.subject)?.name
     : question.subject?.name;
-  const className = typeof question.class === 'string'
+  const classNameValue = typeof question.class === 'string'
     ? classes.find(classItem => classItem._id === question.class)?.name
     : question.class?.name;
   const tags = Array.isArray(question.tags) ? question.tags : [];
+  const showFooter = compact ? tags.length > 0 || Boolean(question.createdAt) : true;
 
   return (
     <>
-      <Card className="app-surface overflow-hidden transition-shadow duration-200 hover:shadow-md w-full">
-        <CardHeader className="flex flex-col gap-4 border-b border-border/60 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+      <Card
+        className={cn(
+          'app-surface w-full overflow-hidden transition-shadow duration-200',
+          compact ? 'rounded-xl hover:shadow-none' : 'hover:shadow-md',
+          className,
+        )}
+      >
+        <CardHeader
+          className={cn(
+            'flex flex-col gap-3 border-b border-border/60 sm:flex-row sm:items-start sm:justify-between',
+            compact ? 'px-4 py-3' : 'px-5 py-4',
+          )}
+        >
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              {className ? <Badge variant="secondary">{className}</Badge> : null}
+              {classNameValue ? <Badge variant="secondary">{classNameValue}</Badge> : null}
               {subjectName ? <Badge variant="outline">{subjectName}</Badge> : null}
               <Badge variant="secondary">{question.marks} Mark(s)</Badge>
             </div>
@@ -96,7 +113,7 @@ export function QuestionItem({
         </CardHeader>
 
         {question.options?.length ? (
-          <CardContent className="space-y-2 px-5 py-4">
+          <CardContent className={cn('space-y-2', compact ? 'px-4 py-3' : 'px-5 py-4')}>
             {question.options.map((option, index) => {
               const isCorrect = question.answerIndexes?.includes(index);
               return (
@@ -120,26 +137,33 @@ export function QuestionItem({
           </CardContent>
         ) : null}
 
-        <CardFooter className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-muted-foreground">
-            {className ? <Badge variant="outline">{className}</Badge> : null}
-            {subjectName ? <Badge variant="outline">{subjectName}</Badge> : null}
-            {tags.length > 0 ? <Separator orientation="vertical" className="hidden h-4 sm:block" /> : null}
-            {tags.slice(0, 3).map(tag => (
-              <Badge key={tag._id} variant="secondary" className="font-normal">
-                {tag.name}
-              </Badge>
-            ))}
-            {tags.length > 3 ? (
-              <Badge variant="outline" className="font-normal">+{tags.length - 3} more</Badge>
+        {showFooter ? (
+          <CardFooter
+            className={cn(
+              'flex flex-col gap-3 border-t border-border/60 bg-muted/10 sm:flex-row sm:items-center sm:justify-between',
+              compact ? 'px-4 py-2.5' : 'px-5 py-3',
+            )}
+          >
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-muted-foreground">
+              {!compact && classNameValue ? <Badge variant="outline">{classNameValue}</Badge> : null}
+              {!compact && subjectName ? <Badge variant="outline">{subjectName}</Badge> : null}
+              {!compact && tags.length > 0 ? <Separator orientation="vertical" className="hidden h-4 sm:block" /> : null}
+              {tags.slice(0, compact ? 4 : 3).map(tag => (
+                <Badge key={tag._id} variant="secondary" className="font-normal">
+                  {tag.name}
+                </Badge>
+              ))}
+              {tags.length > (compact ? 4 : 3) ? (
+                <Badge variant="outline" className="font-normal">+{tags.length - (compact ? 4 : 3)} more</Badge>
+              ) : null}
+            </div>
+            {question.createdAt ? (
+              <p className="text-xs text-muted-foreground sm:text-right">
+                {new Date(question.createdAt).toLocaleDateString()}
+              </p>
             ) : null}
-          </div>
-          {question.createdAt ? (
-            <p className="text-xs text-muted-foreground sm:text-right">
-              {new Date(question.createdAt).toLocaleDateString()}
-            </p>
-          ) : null}
-        </CardFooter>
+          </CardFooter>
+        ) : null}
       </Card>
 
       {!readOnly ? (

@@ -240,7 +240,7 @@ export function EditQuestionModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="overflow-hidden p-0 sm:max-w-[min(96vw,1200px)]"
+        className="flex h-[100dvh] w-screen max-w-none flex-col overflow-hidden p-0 sm:h-[min(92vh,900px)] sm:max-h-[min(92vh,900px)] sm:w-[min(96vw,1280px)] sm:max-w-[1280px]"
         onInteractOutside={event => {
           if (
             (event.target as HTMLElement).closest('.tag-popover-content') ||
@@ -250,103 +250,115 @@ export function EditQuestionModal({
           }
         }}
       >
-        <DialogHeader className="border-b border-border/60 bg-muted/20 px-6 py-5 text-left">
-          <DialogTitle className="text-xl">Edit Question</DialogTitle>
+        <DialogHeader className="border-b border-border/60 bg-muted/20 px-4 py-3.5 pr-12 text-left sm:px-5 sm:pr-14">
+          <DialogTitle className="text-lg sm:text-xl">Edit Question</DialogTitle>
           <DialogDescription>
-            Modify the question details, options, and metadata below.
+            Update the question content, answers, and metadata in one place.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSave} className="flex max-h-[85vh] flex-col">
-          <div className="space-y-6 overflow-y-auto px-6 py-6">
-            <Card className="app-surface overflow-hidden shadow-none">
-              <CardHeader className="app-section-header">
-                <CardTitle>Question Content</CardTitle>
-              </CardHeader>
-              <CardContent className="app-section-body">
-                <RichTextEditor
-                  key={question?._id || 'main-content'}
-                  initialContent={content}
-                  onChange={setContent}
-                />
-              </CardContent>
-            </Card>
 
-            {(type === 'single' || type === 'multiple') ? (
+        <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col">
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden bg-muted/20 p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <main className="min-h-0 space-y-3 overflow-y-auto pr-1">
               <Card className="app-surface overflow-hidden shadow-none">
-                <CardHeader className="app-section-header">
-                  <CardTitle>Answer Options</CardTitle>
-                  <CardDescription>Select the correct answer(s) using the checkboxes.</CardDescription>
-                </CardHeader>
-                <CardContent className="app-section-body space-y-4">
-                  {options.map((opt, index) => (
-                    <div key={index} className="flex items-start gap-4 rounded-xl border border-border/60 bg-muted/10 p-3">
-                      <div className="flex flex-col items-center pt-2">
-                        <Checkbox
-                          id={`option-${index}`}
-                          checked={answerIndexes.includes(index)}
-                          onCheckedChange={() => handleToggleAnswer(index)}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <RichTextEditor
-                          key={`${question?._id}-option-${index}`}
-                          initialContent={opt.content}
-                          onChange={value => handleOptionChange(index, value)}
-                        />
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        type="button"
-                        onClick={() => handleRemoveOption(index)}
-                        className="mt-1 text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button variant="outline" type="button" onClick={handleAddOption}>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add Option
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            {type === 'matrix-match' ? (
-              <Card className="app-surface overflow-hidden shadow-none">
-                <CardHeader className="app-section-header">
-                  <CardTitle>Matrix Configuration</CardTitle>
+                <CardHeader className="app-section-header py-3.5">
+                  <CardTitle>Question Content</CardTitle>
                 </CardHeader>
                 <CardContent className="app-section-body">
-                  <MatrixMatchConfigurator
-                    rows={matrixRows}
-                    setRows={setMatrixRows}
-                    cols={matrixCols}
-                    setCols={setMatrixCols}
-                    answers={matrixAnswers}
-                    setAnswers={setMatrixAnswers}
+                  <RichTextEditor
+                    compact
+                    key={question?._id || 'main-content'}
+                    initialContent={content}
+                    onChange={setContent}
                   />
                 </CardContent>
               </Card>
-            ) : null}
 
-            <Card className="app-surface overflow-hidden shadow-none">
-              <CardHeader className="app-section-header">
-                <CardTitle>Explanation</CardTitle>
-                <CardDescription>Provide an optional explanation for the answer.</CardDescription>
-              </CardHeader>
-              <CardContent className="app-section-body">
-                <RichTextEditor
-                  key={`${question?._id}-explanation`}
-                  initialContent={explanation}
-                  onChange={setExplanation}
-                />
-              </CardContent>
-            </Card>
+              {type === 'single' || type === 'multiple' ? (
+                <Card className="app-surface overflow-hidden shadow-none">
+                  <CardHeader className="app-section-header py-3.5">
+                    <CardTitle>Answer Options</CardTitle>
+                    <CardDescription>Select the correct answer(s) using the checkboxes.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="app-section-body space-y-3">
+                    {options.map((opt, index) => (
+                      <div
+                        key={index}
+                        className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/10 p-2.5"
+                      >
+                        <div className="flex flex-col items-center pt-2">
+                          <Checkbox
+                            id={`option-${index}`}
+                            checked={answerIndexes.includes(index)}
+                            onCheckedChange={() => handleToggleAnswer(index)}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <RichTextEditor
+                            compact
+                            key={`${question?._id}-option-${index}`}
+                            initialContent={opt.content}
+                            onChange={value => handleOptionChange(index, value)}
+                          />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          type="button"
+                          onClick={() => handleRemoveOption(index)}
+                          className="mt-1 text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button variant="outline" type="button" onClick={handleAddOption} className="w-full sm:w-auto">
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Add Option
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : null}
 
-            <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_220px]">
+              {type === 'matrix-match' ? (
+                <Card className="app-surface overflow-hidden shadow-none">
+                  <CardHeader className="app-section-header py-3.5">
+                    <CardTitle>Matrix Configuration</CardTitle>
+                  </CardHeader>
+                  <CardContent className="app-section-body">
+                    <MatrixMatchConfigurator
+                      rows={matrixRows}
+                      setRows={setMatrixRows}
+                      cols={matrixCols}
+                      setCols={setMatrixCols}
+                      answers={matrixAnswers}
+                      setAnswers={setMatrixAnswers}
+                    />
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              <Card className="app-surface overflow-hidden shadow-none">
+                <CardHeader className="app-section-header py-3.5">
+                  <CardTitle>Explanation</CardTitle>
+                  <CardDescription>Provide an optional explanation for the answer.</CardDescription>
+                </CardHeader>
+                <CardContent className="app-section-body">
+                  <RichTextEditor
+                    compact
+                    key={`${question?._id}-explanation`}
+                    initialContent={explanation}
+                    onChange={setExplanation}
+                  />
+                </CardContent>
+              </Card>
+            </main>
+
+            <aside className="min-h-0 space-y-3 overflow-y-auto xl:overflow-visible">
               <MetadataSelector
+                title="Metadata"
+                description="Update the class, subject, and tags."
+                contentClassName="space-y-3"
                 classes={classes}
                 classId={classId}
                 setClassId={setClassId}
@@ -365,10 +377,10 @@ export function EditQuestionModal({
               />
 
               <Card className="app-surface overflow-hidden shadow-none">
-                <CardHeader className="app-section-header">
+                <CardHeader className="app-section-header py-3.5">
                   <CardTitle>Settings</CardTitle>
                 </CardHeader>
-                <CardContent className="app-section-body space-y-4">
+                <CardContent className="app-section-body space-y-3">
                   <div className="app-field-group">
                     <Label htmlFor="marks" className="app-field-label">Marks</Label>
                     <Input
@@ -388,10 +400,10 @@ export function EditQuestionModal({
                   </div>
                 </CardContent>
               </Card>
-            </div>
+            </aside>
           </div>
 
-          <DialogFooter className="border-t border-border/60 bg-muted/10 px-6 py-4">
+          <DialogFooter className="border-t border-border/60 bg-muted/10 px-4 py-3 sm:px-5">
             <Button variant="outline" type="button" onClick={handleClose}>
               Cancel
             </Button>
@@ -403,5 +415,6 @@ export function EditQuestionModal({
       </DialogContent>
     </Dialog>
   );
+
 }
 

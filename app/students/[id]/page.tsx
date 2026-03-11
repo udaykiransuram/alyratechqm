@@ -225,7 +225,7 @@ export default function StudentDetailPage() {
   };
 
   return (
-    <div className="container py-6 space-y-6">
+    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div className="app-page-header">
           <h1 className="app-page-title">Student Details</h1>
