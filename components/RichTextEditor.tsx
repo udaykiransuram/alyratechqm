@@ -28,7 +28,8 @@ declare module '@tiptap/core' {
 interface RichTextEditorProps {
   initialContent?: string | null;
   onChange: (html: string) => void;
-  editorKey?: string | number; // <-- ADD THIS PROP
+  editorKey?: string | number;
+  compact?: boolean;
 }
 
 interface EditMathPayload {
@@ -39,7 +40,7 @@ interface EditMathPayload {
 // --- Component Props and Payloads ---
 
 // --- The Component ---
-const RichTextEditor = ({ initialContent, onChange, editorKey }: RichTextEditorProps) => {
+const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }: RichTextEditorProps) => {
   const [isMathModalOpen, setIsMathModalOpen] = useState(false);
   // --- FIX: Add state to track the node being edited ---
   const [editingMath, setEditingMath] = useState<EditMathPayload | null>(null);
@@ -51,6 +52,8 @@ const RichTextEditor = ({ initialContent, onChange, editorKey }: RichTextEditorP
   }, [onChange]);
 
   // --- CHANGE: Add key to force remount on reset ---
+  const editorMinHeightClass = compact ? 'min-h-[160px]' : 'min-h-[210px]';
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
@@ -69,7 +72,7 @@ const RichTextEditor = ({ initialContent, onChange, editorKey }: RichTextEditorP
       attributes: {
         // --- FIX: Add the 'prose' classes back in ---
         // This will apply the typography plugin's styles.
-        class: 'prose dark:prose-invert max-w-none min-h-[210px] w-full rounded-b-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+        class: `prose dark:prose-invert max-w-none ${editorMinHeightClass} w-full rounded-b-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`,
       },
     },
     onUpdate: ({ editor }) => {
@@ -158,7 +161,7 @@ const RichTextEditor = ({ initialContent, onChange, editorKey }: RichTextEditorP
 
   if (!editor) {
     return (
-      <div className="flex items-center justify-center min-h-[210px] p-4 border rounded-lg bg-muted">
+      <div className={`flex items-center justify-center rounded-lg border bg-muted p-4 ${compact ? 'min-h-[160px]' : 'min-h-[210px]'}`}>
         <Spinner />
       </div>
     );

@@ -80,7 +80,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
   // Filters
   const [selectedTags, setSelectedTags] = useState<TagItem[]>([]);
-  const [search, setSearch] = useState('');
+  const [questionTagMatchMode, setQuestionTagMatchMode] = useState<'any' | 'all'>('any');
 
   // Global State
   const [saving, setSaving] = useState(false);
@@ -169,14 +169,17 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
   useEffect(() => {
     const params = new URLSearchParams();
+    const questionSearch = modalSearch.trim();
+
     if (classId) params.append('class', classId);
     if (subjectId) params.append('subject', subjectId);
-    if (selectedTags.length) params.append('tags', selectedTags.map(t => t._id).join(','));
-    if (search) params.append('search', search);
-    if (selectedTags.length > 1) params.append('tagsMode', 'and');
+    if (selectedTags.length) {
+      params.append('tags', selectedTags.map(t => t._id).join(','));
+      params.append('tagsMode', questionTagMatchMode === 'all' ? 'and' : 'or');
+    }
+    if (questionSearch) params.append('search', questionSearch);
 
-    // Allow fetching by tags (or search) even if class/subject are not selected
-    const shouldFetch = (classId && subjectId) || selectedTags.length > 0 || (search?.trim().length ?? 0) > 0;
+    const shouldFetch = Boolean((classId && subjectId) || selectedTags.length > 0 || questionSearch.length > 0);
 
     if (!shouldFetch) {
       setAvailableQuestions([]);
@@ -187,12 +190,14 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
     setLoadingQuestions(true);
     const qs = params.toString();
     const endpoint = qs ? `/api/questions?${qs}` : '/api/questions';
+
     fetch(endpoint)
       .then(res => res.json())
       .then(data => {
         setAvailableQuestions(data.questions || []);
-      }).finally(() => setLoadingQuestions(false));
-  }, [classId, subjectId, selectedTags, search]);
+      })
+      .finally(() => setLoadingQuestions(false));
+  }, [classId, subjectId, selectedTags, questionTagMatchMode, modalSearch]);
 
   // Computed Values
   const totalPaperMarks = useMemo(
@@ -217,7 +222,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
     return availableQuestions
       .filter(q =>
         !usedIds.includes(q._id) &&
-        (modalSearch.trim() === '' || q.content.toLowerCase().includes(modalSearch.toLowerCase()))
+        (modalSearch.trim() === '' || String(q.content || '').toLowerCase().includes(modalSearch.toLowerCase()))
       );
   }, [availableQuestions, sections, activeSectionId, modalSearch]);
 
@@ -469,7 +474,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
   // --- Render ---
   return (
-    <div className="app-page-shell px-4 py-6 sm:px-0">
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div>
           <h1 className="app-page-title">{pageTitle}</h1>
@@ -491,7 +496,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="min-w-0">
           <div className="app-surface overflow-hidden">
             <div className="app-section-header">
@@ -511,12 +516,14 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
               {sections.length > 0 ? (
                 <Accordion
                   type="multiple"
-                  className="space-y-4"
+                  className="space-y-3"
                   defaultValue={sections.map(section => section.id)}
                 >
                   {sections.map((section, sectionIndex) => {
                     const sectionTotalMarks = section.questions.reduce((sum, question) => sum + question.marks, 0);
                     const canAddQuestions =
+                      Boolean(classId) &&
+                      Boolean(subjectId) &&
                       section.name.trim().length > 0 &&
                       typeof section.defaultMarks === 'number' &&
                       section.defaultMarks > 0;
@@ -525,9 +532,9 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
                       <AccordionItem
                         key={section.id}
                         value={section.id}
-                        className="overflow-hidden rounded-xl border border-border/60 bg-background"
+                        className="overflow-hidden rounded-2xl border border-border/60 bg-background"
                       >
-                        <AccordionTrigger className="px-5 py-4 text-left hover:no-underline">
+                        <AccordionTrigger className="px-4 py-3.5 text-left hover:no-underline">
                           <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <h3 className="truncate text-base font-semibold text-foreground">
                               {section.name || `Section ${sectionIndex + 1}`}
@@ -560,7 +567,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
                                 {section.questions.map((questionInPaper, questionIndex) => (
                                   <div
                                     key={questionInPaper.question._id}
-                                    className="rounded-xl border border-border/60 bg-muted/10 p-3 transition"
+                                    className="rounded-2xl border border-border/60 bg-muted/10 p-2.5 transition"
                                   >
                                     <div className="flex items-start gap-3">
                                       <div className="min-w-0 flex-1">
@@ -571,6 +578,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
                                           <span className="text-xs text-muted-foreground">ID: {questionInPaper.question._id}</span>
                                         </div>
                                         <QuestionItem
+                                          compact
                                           question={questionInPaper.question}
                                           classes={classes}
                                           subjects={subjects}
@@ -638,7 +646,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
                                 </div>
                                 {!canAddQuestions ? (
                                   <p className="mt-2 text-xs text-destructive">
-                                    Enter a section name and default marks to add questions.
+                                    Select the paper class and subject, then enter a section name and default marks to add questions.
                                   </p>
                                 ) : null}
                               </div>
@@ -714,6 +722,8 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
         allTags={allTags}
         selectedTags={selectedTags}
         setSelectedTags={setSelectedTags}
+        questionTagMatchMode={questionTagMatchMode}
+        setQuestionTagMatchMode={setQuestionTagMatchMode}
         initialDataLoading={initialDataLoading}
         modalSearch={modalSearch}
         setModalSearch={setModalSearch}
@@ -738,7 +748,6 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
           );
         }}
         toast={toast}
-        availableQuestions={availableQuestions}
       />
     </div>
   );

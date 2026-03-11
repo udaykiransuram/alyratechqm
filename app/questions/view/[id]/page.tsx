@@ -63,7 +63,7 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
 
   if (error || !question) {
     return (
-      <div className="app-page-shell px-4 py-6 sm:px-0">
+      <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
         <div className="app-page-header-row">
           <div>
             <h1 className="app-page-title">View Question</h1>
@@ -80,7 +80,7 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
   }
 
   return (
-    <div className="app-page-shell px-4 py-6 sm:px-0">
+    <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div>
           <h1 className="app-page-title">View Question</h1>
@@ -97,8 +97,8 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] items-start">
-        <div className="min-w-0 space-y-6">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-5">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Question</CardTitle>
@@ -115,13 +115,13 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
                 <CardDescription>Correct answers are highlighted below.</CardDescription>
               </CardHeader>
               <CardContent className="app-section-body">
-                <ul className="space-y-3">
+                <ul className="space-y-2.5">
                   {question.options.map((option, index) => {
                     const isAnswer = question.answerIndexes?.includes(index);
                     return (
                       <li
                         key={index}
-                        className={`flex items-start gap-3 rounded-xl border px-3 py-3 ${
+                        className={`flex items-start gap-3 rounded-2xl border px-3 py-2.5 ${
                           isAnswer
                             ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/40'
                             : 'border-border/60 bg-muted/10'

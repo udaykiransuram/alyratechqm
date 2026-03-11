@@ -275,7 +275,7 @@ export default function EditQuestionPage() {
   };
 
   return (
-    <div className="app-page-shell px-4 py-6 sm:px-0">
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div className="app-page-header">
           <h1 className="app-page-title">Edit Question</h1>
@@ -286,8 +286,8 @@ export default function EditQuestionPage() {
         </Button>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] items-start">
-        <div className="min-w-0 space-y-6">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 space-y-5">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Question Content</CardTitle>
@@ -306,9 +306,9 @@ export default function EditQuestionPage() {
                 <CardTitle>Answer Options</CardTitle>
                 <CardDescription>Select the correct answer(s) using the checkboxes.</CardDescription>
               </CardHeader>
-              <CardContent className="app-section-body space-y-4">
+              <CardContent className="app-section-body space-y-3">
                 {options.map((opt, index) => (
-                  <div key={index} className="flex items-start gap-4 rounded-xl border border-border/60 bg-muted/10 p-3">
+                  <div key={index} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/10 p-2.5">
                     <div className="pt-2">
                       <Checkbox
                         id={`option-${index}`}
@@ -335,7 +335,7 @@ export default function EditQuestionPage() {
                   </div>
                 ))}
               </CardContent>
-              <CardFooter className="app-section-body border-t border-border/60 pt-4">
+              <CardFooter className="app-section-body border-t border-border/60 pt-3.5">
                 <Button variant="outline" onClick={handleAddOption} className="w-full">
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Add Option

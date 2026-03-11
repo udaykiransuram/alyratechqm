@@ -157,8 +157,7 @@ export default function CreateSubjectPage() {
   };
 
   return (
-    <div className="container py-6">
-      <div className="app-page-shell max-w-3xl">
+    <div className="app-page-shell max-w-3xl px-4 py-5 sm:px-0">
         <div className="app-page-header-row">
           <div className="app-page-header">
             <h1 className="app-page-title">Create Subject</h1>
@@ -187,8 +186,8 @@ export default function CreateSubjectPage() {
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="app-section-body space-y-6">
-            <div className="grid gap-6 md:grid-cols-2">
+          <CardContent className="app-section-body space-y-5">
+            <div className="grid gap-5 md:grid-cols-2">
               <div className="app-field-group">
                 <Label htmlFor="subjectName" className="app-field-label">
                   Subject Name
@@ -228,13 +227,13 @@ export default function CreateSubjectPage() {
                 placeholder="Provide a brief description of the subject."
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                className="min-h-[140px]"
+                className="min-h-[120px]"
                 aria-label="Subject Description"
                 disabled={isCreatingSubject}
               />
             </div>
 
-            <div className="app-section space-y-4">
+            <div className="app-section space-y-3.5">
               <div className="space-y-1">
                 <Label htmlFor="tag-select" className="app-field-label">
                   Associated Tags
@@ -281,7 +280,6 @@ export default function CreateSubjectPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }

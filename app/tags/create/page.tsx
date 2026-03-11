@@ -293,7 +293,7 @@ export default function CreateTagPage() {
           setSelectedTagTypeId(newTagType._id);
         }}
       />
-      <div className="app-page-shell max-w-3xl px-4 py-6 sm:px-0">
+      <div className="app-page-shell max-w-3xl px-4 py-5 sm:px-0">
         <div className="app-page-header-row">
           <div>
             <h1 className="app-page-title">Create a New Tag</h1>
@@ -315,7 +315,7 @@ export default function CreateTagPage() {
         {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
 
         <Card className="app-surface overflow-hidden">
-          <CardContent className="app-surface-body space-y-6">
+          <CardContent className="app-surface-body space-y-5">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="tagName" className="font-semibold">Tag Name</Label>
