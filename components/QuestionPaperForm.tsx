@@ -12,6 +12,7 @@ import { Question, QuestionItem } from '@/components/question-items';
 import { QuestionFilterPopup } from '@/components/QuestionFilterPopup';
 import { useToast } from '@/components/ui/use-toast';
 import { useRouter } from 'next/navigation';
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
 import {
   Accordion,
   AccordionContent,
@@ -22,6 +23,7 @@ import {
 interface TagItem { _id: string; name: string; type: { name: string } }
 interface SubjectWithTags { _id: string; name: string; tags: TagItem[] }
 interface Class { _id: string; name: string }
+interface AcademicSectionItem { _id: string; name: string }
 interface QuestionInPaper {
   question: Question;
   marks: number;
@@ -42,6 +44,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 }) {
   const { toast } = useToast();
   const router = useRouter();
+  const { navigateBack } = useBackNavigation('/question-papers');
 
   // State initialization (use initialData if present)
   const [paperTitle, setPaperTitle] = useState(initialData?.title || '');
@@ -54,6 +57,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
   const [sections, setSections] = useState<Section[]>(initialData?.sections || []);
   const [classId, setClassId] = useState(initialData?.classId || '');
   const [subjectId, setSubjectId] = useState(initialData?.subjectId || '');
+  const [assignedAcademicSectionIds, setAssignedAcademicSectionIds] = useState<string[]>(initialData?.assignedAcademicSectionIds || []);
 
   // Hydrate state when initialData changes (for edit mode)
   useEffect(() => {
@@ -65,6 +69,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
       setExamDate(initialData.examDate ? new Date(initialData.examDate) : new Date());
       setClassId(initialData.classId || '');
       setSubjectId(initialData.subjectId || '');
+      setAssignedAcademicSectionIds(initialData.assignedAcademicSectionIds || []);
       setSections(initialData.sections || []);
     }
   }, [initialData]);
@@ -81,6 +86,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
   const [saving, setSaving] = useState(false);
   const [classes, setClasses] = useState<Class[]>([]);
   const [subjects, setSubjects] = useState<SubjectWithTags[]>([]);
+  const [availableAcademicSections, setAvailableAcademicSections] = useState<AcademicSectionItem[]>([]);
   const [allTags, setAllTags] = useState<TagItem[]>([]);
   const [initialDataLoading, setInitialDataLoading] = useState(true);
   const [subjectsLoading, setSubjectsLoading] = useState(false);
@@ -133,6 +139,33 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
     };
     fetchSubjectsForClass();
   }, [classId, toast]);
+
+  useEffect(() => {
+    const fetchAcademicSections = async () => {
+      if (!classId) {
+        setAvailableAcademicSections([]);
+        setAssignedAcademicSectionIds([]);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/sections?classId=${classId}`);
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || 'Failed to load academic sections.');
+        }
+
+        const nextSections = data.sections || [];
+        setAvailableAcademicSections(nextSections);
+        const validIds = new Set(nextSections.map((section: AcademicSectionItem) => section._id));
+        setAssignedAcademicSectionIds((prev) => prev.filter((id) => validIds.has(id)));
+      } catch (error) {
+        setAvailableAcademicSections([]);
+      }
+    };
+
+    fetchAcademicSections();
+  }, [classId]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -384,6 +417,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
         passingMarks,
         examDate,
         totalMarks: totalPaperMarks,
+        assignedAcademicSections: assignedAcademicSectionIds,
         sections: sections.map(s => ({
           name: s.name,
           description: s.description,
@@ -417,7 +451,11 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
       if (data.success) {
         toast({ title: 'Success', description: isEditMode ? 'Question paper updated.' : 'Question paper created successfully.' });
         setTimeout(() => {
-          router.push(`/question-paper/view/${data.paper._id}`);
+          if (isEditMode) {
+            navigateBack();
+            return;
+          }
+          router.push(`/question-papers/view/${data.paper._id}`);
         }, 1000);
       } else {
         toast({ title: 'Error', description: data.message || 'Failed to save paper.', variant: 'destructive' });
@@ -438,6 +476,9 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
           <p className="app-page-subtitle">{pageSubtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" onClick={navigateBack}>
+            {isEditMode ? 'Back' : 'Cancel'}
+          </Button>
           <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm text-muted-foreground">
             {sections.length} section{sections.length === 1 ? '' : 's'}
           </span>
@@ -531,8 +572,6 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
                                         </div>
                                         <QuestionItem
                                           question={questionInPaper.question}
-                                          onDelete={() => {}}
-                                          isDeleting={false}
                                           classes={classes}
                                           subjects={subjects}
                                           allTags={allTags.map(tag => ({
@@ -643,6 +682,9 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
             setSubjectId={setSubjectId}
             classes={classes}
             subjects={subjects}
+            availableAcademicSections={availableAcademicSections}
+            assignedAcademicSectionIds={assignedAcademicSectionIds}
+            setAssignedAcademicSectionIds={setAssignedAcademicSectionIds}
             compact
             initialDataLoading={initialDataLoading}
           />

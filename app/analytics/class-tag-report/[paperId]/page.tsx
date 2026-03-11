@@ -13,12 +13,45 @@ import {
 } from "@/components/analytics/helpers";
 import QuestionListModal from "@/components/analytics/QuestionListModal";
 import AnalyticsExportControls from "@/components/analytics/AnalyticsExportControls";
+import ClassBenchmarkPanel from "@/components/analytics/ClassBenchmarkPanel";
+import { Button } from "@/components/ui/button";
+import { useBackNavigation } from "@/hooks/useReturnNavigation";
+import { ArrowLeft } from "lucide-react";
+import {
+  DEFAULT_BENCHMARK_VIEW_SETTINGS,
+  type BenchmarkViewSettings,
+} from "@/lib/analytics/benchmarkPresentation";
+import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
+
+type ReportFilterOption = {
+  value: string;
+  label: string;
+};
+
+type SelectedTag = {
+  type: string;
+  value: string;
+};
+
+function isSameSelectedTag(left: SelectedTag, right: SelectedTag): boolean {
+  return left.type === right.type && left.value === right.value;
+}
+
+function toggleSelectedTagList(
+  current: SelectedTag[],
+  nextTag: SelectedTag,
+): SelectedTag[] {
+  return current.some((tag) => isSameSelectedTag(tag, nextTag))
+    ? current.filter((tag) => !isSameSelectedTag(tag, nextTag))
+    : [...current, nextTag];
+}
 
 export default function ClassTagReportPage({
   params,
 }: {
   params: { paperId: string };
 }) {
+  const { navigateBack } = useBackNavigation("/question-papers");
   const [stats, setStats] = useState<any>({});
   const [paper, setPaper] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -27,10 +60,13 @@ export default function ClassTagReportPage({
   const [groupFields, setGroupFields] = useState<
     { value: string; label: string }[]
   >([]);
-  const [groupBy, setGroupBy] = useState<string[]>([]);
-  const [selectedTags, setSelectedTags] = useState<
-    { type: string; value: string }[]
+  const [academicSectionOptions, setAcademicSectionOptions] = useState<
+    ReportFilterOption[]
   >([]);
+  const [groupBy, setGroupBy] = useState<string[]>([]);
+  const [selectedAcademicSectionId, setSelectedAcademicSectionId] =
+    useState("all");
+  const [selectedTags, setSelectedTags] = useState<SelectedTag[]>([]);
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: "asc" | "desc";
@@ -38,9 +74,19 @@ export default function ClassTagReportPage({
   const [showTagsColumn, setShowTagsColumn] = useState<boolean>(false);
   const [showOptionTagsColumn, setShowOptionTagsColumn] =
     useState<boolean>(false);
-  const [view, setView] = useState<"table" | "charts">("table");
+  const [view, setView] = useState<"table" | "charts" | "benchmark">(
+    "table",
+  );
   const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [benchmarkData, setBenchmarkData] = useState<any>(null);
+  const [benchmarkLoading, setBenchmarkLoading] = useState(false);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+  const [benchmarkViewSettings, setBenchmarkViewSettings] =
+    useState<BenchmarkViewSettings>(DEFAULT_BENCHMARK_VIEW_SETTINGS);
+  const [insPage, setInsPage] = useState(1);
+  const [insPageSize, setInsPageSize] = useState(12);
+  const [insShowAll, setInsShowAll] = useState(false);
 
   const [modalData, setModalData] = useState<{
     isOpen: boolean;
@@ -110,45 +156,85 @@ export default function ClassTagReportPage({
       .filter(Boolean)
       .join(" • ") || "Core metrics only";
 
+  const activeViewLabel =
+    view === "table" ? "Table" : view === "charts" ? "Charts" : "Benchmark";
+
+  const hasActiveAcademicSectionFilter = selectedAcademicSectionId !== "all";
+
+  const activeAcademicSectionLabel =
+    selectedAcademicSectionId !== "all"
+      ? academicSectionOptions.find(
+          (option) => option.value === selectedAcademicSectionId,
+        )?.label || "Filtered section"
+      : "All class sections";
+
   // Explicit tenant handling
   const [schoolKey, setSchoolKey] = useState<string>("");
-  function getSchoolFromCookie() {
-    try {
-      const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-      return m && m[1] ? decodeURIComponent(m[1]) : "";
-    } catch {
-      return "";
-    }
-  }
 
   useEffect(() => {
-    const sk = getSchoolFromCookie();
+    const sk = resolveClientSchoolKey();
+    const initialAcademicSectionId =
+      typeof window !== "undefined"
+        ? new URL(window.location.href).searchParams.get("academicSectionId")?.trim() ||
+          "all"
+        : "all";
+
     setSchoolKey(sk);
     if (!sk) {
       setLoading(false);
       setError("Please select a school in the navbar to load analytics.");
       return;
     }
-    fetch(
-      `/api/analytics/class-tag-report/${params.paperId}?groupFields=1&school=${encodeURIComponent(sk)}`,
-    )
-      .then((res) => res.json())
-      .then((data: any) => {
-        setGroupFields(data.fields || []);
-        if (data.fields?.some((f: any) => f.value === "section")) {
-          const sectionIdx = data.fields.findIndex(
-            (f: any) => f.value === "section",
+
+    void (async () => {
+      try {
+        const data = await fetchApiJson<any>(
+          `/api/analytics/class-tag-report/${params.paperId}?groupFields=1`,
+          {
+            cache: "no-store",
+            schoolKey: sk,
+            fallbackMessage: "Failed to load report setup.",
+          },
+        );
+
+        const nextFields = Array.isArray(data?.fields) ? data.fields : [];
+        const nextAcademicSections = Array.isArray(data?.filters?.academicSections)
+          ? data.filters.academicSections
+          : [];
+
+        if (nextFields.length === 0) {
+          throw new Error("No analytics fields are available for this paper yet.");
+        }
+
+        setGroupFields(nextFields);
+        setAcademicSectionOptions(nextAcademicSections);
+        setSelectedAcademicSectionId(
+          initialAcademicSectionId !== "all" &&
+            nextAcademicSections.some(
+              (option: any) => option.value === initialAcademicSectionId,
+            )
+            ? initialAcademicSectionId
+            : "all",
+        );
+
+        if (nextFields.some((field: any) => field.value === "section")) {
+          const sectionIdx = nextFields.findIndex(
+            (field: any) => field.value === "section",
           );
           const selected = [
-            data.fields[sectionIdx]?.value,
-            data.fields[sectionIdx + 1]?.value,
-            data.fields[sectionIdx + 2]?.value,
+            nextFields[sectionIdx]?.value,
+            nextFields[sectionIdx + 1]?.value,
+            nextFields[sectionIdx + 2]?.value,
           ].filter(Boolean);
           setGroupBy(selected);
-        } else if (data.fields?.length) {
-          setGroupBy(data.fields.slice(0, 3).map((f: any) => f.value));
+        } else {
+          setGroupBy(nextFields.slice(0, 3).map((field: any) => field.value));
         }
-      });
+      } catch (setupError: any) {
+        setLoading(false);
+        setError(setupError?.message || "Failed to load report setup.");
+      }
+    })();
   }, [params.paperId]);
 
   useEffect(() => {
@@ -183,42 +269,144 @@ export default function ClassTagReportPage({
 
   const handleCloseOptionTagModal = () => setOptionTagModal(null);
 
-  const fetchAnalytics = () => {
+  const fetchBenchmark = async (overrides?: {
+    academicSectionId?: string;
+    tags?: SelectedTag[];
+  }) => {
+    const resolvedAcademicSectionId =
+      overrides?.academicSectionId ?? selectedAcademicSectionId;
+    const resolvedTags = overrides?.tags ?? selectedTags;
+    const sk = schoolKey || resolveClientSchoolKey();
+
+    if (!sk) {
+      setBenchmarkData(null);
+      setBenchmarkLoading(false);
+      setBenchmarkError(
+        "Please select a school in the navbar to load analytics.",
+      );
+      return;
+    }
+
+    const searchParams = new URLSearchParams();
+    searchParams.set("baseline", "class_average");
+    if (groupBy.length) searchParams.set("groupBy", groupBy.join(","));
+    if (resolvedAcademicSectionId !== "all") {
+      searchParams.set("academicSectionId", resolvedAcademicSectionId);
+    }
+    resolvedTags.forEach((tag) => {
+      searchParams.append("tag", `${tag.type}:${tag.value}`);
+    });
+
+    setBenchmarkLoading(true);
+    setBenchmarkError(null);
+    setBenchmarkData(null);
+
+    try {
+      const data = await fetchApiJson<any>(
+        `/api/analytics/benchmark-report/${params.paperId}?${searchParams.toString()}`,
+        {
+          cache: "no-store",
+          schoolKey: sk,
+          fallbackMessage: "Failed to load benchmark report.",
+        },
+      );
+      setBenchmarkData(data);
+    } catch (benchmarkFetchError: any) {
+      setBenchmarkError(
+        benchmarkFetchError?.message ||
+          "An unexpected network error occurred while loading benchmark data.",
+      );
+    } finally {
+      setBenchmarkLoading(false);
+    }
+  };
+
+  const fetchAnalytics = async (overrides?: {
+    academicSectionId?: string;
+  }) => {
     setLoading(true);
     setError(null);
+    const resolvedAcademicSectionId =
+      overrides?.academicSectionId ?? selectedAcademicSectionId;
     const searchParams = new URLSearchParams();
     searchParams.set("json", "1");
     if (groupBy.length) searchParams.set("groupBy", groupBy.join(","));
-    const sk = schoolKey || getSchoolFromCookie();
+    if (resolvedAcademicSectionId !== "all") {
+      searchParams.set("academicSectionId", resolvedAcademicSectionId);
+    }
+    const sk = schoolKey || resolveClientSchoolKey();
     if (!sk) {
       setLoading(false);
       setError("Please select a school in the navbar to load analytics.");
       return;
     }
-    searchParams.set("school", sk);
-    fetch(
-      `/api/analytics/class-tag-report/${params.paperId}?${searchParams.toString()}`,
-    )
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setStats(data.stats || {});
-          setPaper(data.paper || "");
-        } else {
-          setError(data.message || "Failed to fetch tag report");
-        }
-      })
-      .catch(() => setError("An unexpected network error occurred."))
-      .finally(() => setLoading(false));
+
+    try {
+      const data = await fetchApiJson<any>(
+        `/api/analytics/class-tag-report/${params.paperId}?${searchParams.toString()}`,
+        {
+          cache: "no-store",
+          schoolKey: sk,
+          fallbackMessage: "Failed to fetch tag report.",
+        },
+      );
+
+      setStats(data.stats || {});
+      setPaper(data.paper || "");
+      void fetchBenchmark({
+        academicSectionId: resolvedAcademicSectionId,
+      });
+    } catch (fetchError: any) {
+      setError(fetchError?.message || "An unexpected network error occurred.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (loading) return <LoadingState />;
-  if (error) return <ErrorState message={error} />;
+  const handleTagToggle = (tag: SelectedTag) => {
+    const nextTags = toggleSelectedTagList(selectedTags, tag);
+    setSelectedTags(nextTags);
+    if (hasFetchedOnce) {
+      void fetchBenchmark({ tags: nextTags });
+    }
+  };
+
+  React.useEffect(() => {
+    setInsPage(1);
+  }, [groupBy, insights.length, insPageSize, insShowAll]);
+
+  const handleRemoveSelectedTag = (tagToRemove: SelectedTag) => {
+    const nextTags = selectedTags.filter(
+      (tag) => !isSameSelectedTag(tag, tagToRemove),
+    );
+    setSelectedTags(nextTags);
+    if (hasFetchedOnce) {
+      void fetchBenchmark({ tags: nextTags });
+    }
+  };
+
+  const handleClearSelectedTags = () => {
+    if (selectedTags.length === 0) return;
+    setSelectedTags([]);
+    if (hasFetchedOnce) {
+      void fetchBenchmark({ tags: [] });
+    }
+  };
+
+  const backAction = (
+    <Button variant="outline" onClick={navigateBack} className="gap-2">
+      <ArrowLeft className="h-4 w-4" />
+      Back
+    </Button>
+  );
+
+  if (loading) return <LoadingState actions={backAction} />;
+  if (error) return <ErrorState message={error} actions={backAction} />;
 
   return (
     <div className="analytics-page">
-      <div className="container space-y-4 sm:space-y-5">
-        <ReportHeader paper={paper} student="" rollNumber="" variant="class" />
+      <div className="w-full space-y-4 px-4 sm:space-y-5 sm:px-5 lg:px-6">
+        <ReportHeader paper={paper} student="" rollNumber="" variant="class" actions={backAction} />
         <div className="analytics-card overflow-hidden">
           <div className="analytics-card-header">
             <div className="analytics-toolbar-row gap-4">
@@ -230,6 +418,9 @@ export default function ClassTagReportPage({
                 <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                   {groupingPreviewLabel}
                 </span>
+                <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                  {activeAcademicSectionLabel}
+                </span>
               </div>
             </div>
           </div>
@@ -238,9 +429,6 @@ export default function ClassTagReportPage({
               <div className="analytics-toolbar-row">
                 <div className="analytics-toolbar-copy">
                   <p className="analytics-toolbar-title">Quick setup</p>
-                  <p className="analytics-toolbar-note">
-                    Adjust grouping and refresh.
-                  </p>
                 </div>
                 <div className="analytics-toolbar-actions">
                   <button
@@ -249,11 +437,11 @@ export default function ClassTagReportPage({
                     aria-expanded={showControls}
                     className="app-button-secondary h-9 px-3"
                   >
-                    {showControls ? "Hide full setup" : "Adjust setup"}
+                    {showControls ? "Hide setup" : "Setup"}
                   </button>
                   <button
                     type="button"
-                    onClick={fetchAnalytics}
+                    onClick={() => fetchAnalytics()}
                     disabled={loading}
                     className="app-button-primary h-9 px-3"
                   >
@@ -264,10 +452,13 @@ export default function ClassTagReportPage({
               <div className="analytics-toolbar-row">
                 <div className="analytics-toolbar-meta">
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    {view === "table" ? "Table" : "Charts"}
+                    {activeViewLabel}
                   </span>
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                     {visibleColumnsLabel}
+                  </span>
+                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                    {activeAcademicSectionLabel}
                   </span>
                 </div>
                 <div className="analytics-toolbar-actions">
@@ -295,15 +486,99 @@ export default function ClassTagReportPage({
               </div>
             </div>
 
+            {selectedTags.length > 0 ? (
+              <div className="rounded-xl border border-primary/15 bg-primary/[0.04] p-3">
+                <div className="analytics-toolbar-row gap-3">
+                  <div className="analytics-toolbar-copy">
+                    <p className="analytics-toolbar-title">Active tag filters</p>
+                  </div>
+                  <div className="analytics-toolbar-actions">
+                    {selectedTags.map((tag) => (
+                      <button
+                        key={`${tag.type}:${tag.value}`}
+                        type="button"
+                        onClick={() => handleRemoveSelectedTag(tag)}
+                        className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-background px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                        title="Remove tag filter"
+                      >
+                        <span>
+                          {tag.type}: {tag.value}
+                        </span>
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleClearSelectedTags}
+                      className="app-button-secondary h-8 px-3 text-xs"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {showControls ? (
               <div className="analytics-controls-grid">
+                <div className="analytics-control-panel xl:order-1">
+                  <div className="analytics-control-panel-header">
+                    <p className="analytics-control-panel-title">
+                      Academic section filter
+                    </p>
+                  </div>
+                  <div className="app-field-group">
+                    <label className="app-field-label">Class section</label>
+                    <select
+                      className="analytics-select w-full"
+                      value={selectedAcademicSectionId}
+                      onChange={(event) =>
+                        setSelectedAcademicSectionId(event.target.value)
+                      }
+                    >
+                      <option value="all">All class sections</option>
+                      {academicSectionOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="analytics-toolbar-chip">
+                      {activeAcademicSectionLabel}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        fetchAnalytics({
+                          academicSectionId: selectedAcademicSectionId,
+                        })
+                      }
+                      disabled={loading}
+                      className="app-button-secondary h-9 px-3"
+                    >
+                      {loading ? "Applying..." : "Apply filter"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAcademicSectionId("all");
+                        fetchAnalytics({ academicSectionId: "all" });
+                      }}
+                      disabled={loading || !hasActiveAcademicSectionFilter}
+                      className="app-button-secondary h-9 px-3"
+                    >
+                      Clear filter
+                    </button>
+                  </div>
+                </div>
                 <div className="analytics-control-panel xl:order-2">
                   <div className="analytics-control-panel-header">
                     <p className="analytics-control-panel-title">
                       Group By (in order)
-                    </p>
-                    <p className="analytics-control-panel-note">
-                      Select and reorder fields.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 mb-3">
@@ -407,7 +682,6 @@ export default function ClassTagReportPage({
                   <h2 className="analytics-card-title">
                     Insights (Class • {lastLabel})
                   </h2>
-                  <p className="analytics-toolbar-note">Weakest areas first.</p>
                 </div>
                 <div className="analytics-toolbar-meta">
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
@@ -417,33 +691,109 @@ export default function ClassTagReportPage({
               </div>
             </div>
             <div className="analytics-table-wrap">
-              <table className="min-w-full text-sm">
-                <thead className="bg-muted/30">
-                  <tr>
-                    <th className="analytics-th">{lastLabel}</th>
-                    <th className="analytics-th-center">Fail (%)</th>
-                    <th className="analytics-th">Category</th>
-                    <th className="analytics-th">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {insights.slice(0, 12).map((i) => (
-                    <tr key={i.tag} className="analytics-row">
-                      <td className="analytics-td">{i.tag}</td>
-                      <td className="analytics-td-center font-medium text-rose-600">
-                        {i.failPct}
-                      </td>
-                      <td className="analytics-td">{i.category}</td>
-                      <td className="analytics-td">{i.action}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {insights.length > 12 && (
-                <p className="px-4 py-3 text-xs text-muted-foreground">
-                  Showing top 12. Refine grouping to focus further.
-                </p>
-              )}
+              {(() => {
+                const total = insights.length;
+                const maxPage = Math.max(1, Math.ceil(total / insPageSize));
+                const safePage = Math.min(insPage, maxPage);
+                const start = (safePage - 1) * insPageSize;
+                const end = Math.min(total, start + insPageSize);
+                const visible = insShowAll ? insights : insights.slice(start, end);
+                const rangeLabel = insShowAll
+                  ? `Showing all ${total}`
+                  : `Showing ${total === 0 ? 0 : start + 1}–${end} of ${total}`;
+
+                return (
+                  <>
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-muted/30">
+                        <tr>
+                          <th className="analytics-th">{lastLabel}</th>
+                          <th className="analytics-th-center">Fail (%)</th>
+                          <th className="analytics-th">Category</th>
+                          <th className="analytics-th">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visible.map((i) => (
+                          <tr key={i.tag} className="analytics-row">
+                            <td className="analytics-td">{i.tag}</td>
+                            <td className="analytics-td-center font-medium text-rose-600">
+                              {i.failPct}
+                            </td>
+                            <td className="analytics-td">{i.category}</td>
+                            <td className="analytics-td">{i.action}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="border-t border-border/60 bg-muted/20 p-4">
+                      <div className="analytics-toolbar-row">
+                        <div className="analytics-toolbar-actions">
+                          <label className="analytics-checkbox-card">
+                            <input
+                              type="checkbox"
+                              className="analytics-inline-check"
+                              checked={insShowAll}
+                              onChange={() => {
+                                setInsShowAll((value) => !value);
+                                setInsPage(1);
+                              }}
+                            />
+                            <span>Show all rows</span>
+                          </label>
+                          {!insShowAll && total > 0 && (
+                            <label className="analytics-checkbox-card">
+                              <span className="text-muted-foreground">Rows per page</span>
+                              <select
+                                className="analytics-select h-8"
+                                value={insPageSize}
+                                onChange={(event) => {
+                                  setInsPageSize(Number(event.target.value));
+                                  setInsPage(1);
+                                }}
+                              >
+                                {[10, 12, 25, 50].map((count) => (
+                                  <option key={count} value={count}>
+                                    {count}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                        </div>
+                        <div className="analytics-toolbar-actions">
+                          <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                            {rangeLabel}
+                          </span>
+                          {!insShowAll && total > insPageSize && (
+                            <>
+                              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                                Page {safePage} of {maxPage}
+                              </span>
+                              <button
+                                type="button"
+                                className="analytics-pagination-button"
+                                onClick={() => setInsPage((page) => Math.max(1, page - 1))}
+                                disabled={safePage <= 1}
+                              >
+                                Previous
+                              </button>
+                              <button
+                                type="button"
+                                className="analytics-pagination-button"
+                                onClick={() => setInsPage((page) => Math.min(maxPage, page + 1))}
+                                disabled={safePage >= maxPage}
+                              >
+                                Next
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -479,6 +829,16 @@ export default function ClassTagReportPage({
             >
               Chart View
             </button>
+            <button
+              onClick={() => setView("benchmark")}
+              className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                view === "benchmark"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background/70"
+              }`}
+            >
+              Benchmark View
+            </button>
           </div>
         </div>
         {view === "table" ? (
@@ -487,9 +847,6 @@ export default function ClassTagReportPage({
               <div className="analytics-toolbar-row gap-4">
                 <div className="analytics-toolbar-copy">
                   <h2 className="analytics-card-title">Grouped Analytics</h2>
-                  <p className="analytics-toolbar-note">
-                    Grouped performance summary.
-                  </p>
                 </div>
                 <div className="analytics-toolbar-meta">
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
@@ -507,6 +864,11 @@ export default function ClassTagReportPage({
                   tableRef={tableRef}
                   mode="class"
                   paperTitle={paper}
+                  paperId={params.paperId}
+                  academicSectionId={selectedAcademicSectionId}
+                  selectedTags={selectedTags}
+                  benchmarkData={benchmarkData}
+                  benchmarkViewSettings={benchmarkViewSettings}
                 />
               </div>
             </div>
@@ -596,20 +958,7 @@ export default function ClassTagReportPage({
                       handleOpenModal={handleOpenModal}
                       handleOptionTagClick={handleOptionTagClick}
                       selectedTags={selectedTags}
-                      handleTagSelect={(tag: { type: string; value: string }) =>
-                        setSelectedTags((prev) =>
-                          prev.some(
-                            (t) => t.type === tag.type && t.value === tag.value,
-                          )
-                            ? prev.filter(
-                                (t) =>
-                                  !(
-                                    t.type === tag.type && t.value === tag.value
-                                  ),
-                              )
-                            : [...prev, tag],
-                        )
-                      }
+                      handleTagSelect={handleTagToggle}
                       sortConfig={sortConfig}
                       setSortConfig={setSortConfig}
                       showTagsColumn={showTagsColumn}
@@ -621,13 +970,27 @@ export default function ClassTagReportPage({
               </div>
             )}
           </div>
-        ) : (
+        ) : view === "charts" ? (
           <ChartView
             stats={stats}
             groupBy={groupBy}
             groupFields={groupFields}
             paperTitle={paper}
             mode="class"
+          />
+        ) : (
+          <ClassBenchmarkPanel
+            benchmarkData={benchmarkData}
+            loading={benchmarkLoading}
+            error={benchmarkError}
+            activeAcademicSectionLabel={activeAcademicSectionLabel}
+            selectedAcademicSectionId={selectedAcademicSectionId}
+            selectedGroupLabels={selectedGroupLabels}
+            selectedTags={selectedTags}
+            benchmarkViewSettings={benchmarkViewSettings}
+            onBenchmarkViewSettingsChange={setBenchmarkViewSettings}
+            onRemoveTag={handleRemoveSelectedTag}
+            onClearTags={handleClearSelectedTags}
           />
         )}
         <QuestionListModal

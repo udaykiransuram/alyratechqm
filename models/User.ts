@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
+import { applyArchiveFields, hasArchiveFields } from "@/lib/archive";
 
 export interface IUser extends Document {
   name: string;
@@ -7,9 +8,12 @@ export interface IUser extends Document {
   role: "admin" | "teacher" | "student";
   mobileNumber: string;
   class?: Types.ObjectId;
+  academicSection?: Types.ObjectId;
   classIds?: Types.ObjectId[];
+  academicSectionIds?: Types.ObjectId[];
   subjectIds?: Types.ObjectId[];
   hasAllClasses?: boolean;
+  hasAllSections?: boolean;
   hasAllSubjects?: boolean;
   // Student-specific fields (optional)
   rollNumber?: string;
@@ -29,10 +33,17 @@ const UserSchema: Schema<IUser> = new Schema(
       default: "teacher",
     },
     classIds: [{ type: Schema.Types.ObjectId, ref: "Class" }],
+    academicSectionIds: [
+      { type: Schema.Types.ObjectId, ref: "AcademicSection" },
+    ],
     subjectIds: [{ type: Schema.Types.ObjectId, ref: "Subject" }],
     hasAllClasses: {
       type: Boolean,
       default: false,
+    },
+    hasAllSections: {
+      type: Boolean,
+      default: true,
     },
     hasAllSubjects: {
       type: Boolean,
@@ -45,6 +56,10 @@ const UserSchema: Schema<IUser> = new Schema(
       required: function (this: IUser) {
         return this.role === "student";
       },
+    },
+    academicSection: {
+      type: Schema.Types.ObjectId,
+      ref: "AcademicSection",
     },
     rollNumber: {
       type: String,
@@ -82,6 +97,9 @@ UserSchema.pre("validate", function (next) {
       );
     }
     this.hasAllClasses = false;
+    if (typeof this.hasAllSections !== "boolean") {
+      this.hasAllSections = true;
+    }
     this.hasAllSubjects = false;
   }
 
@@ -109,15 +127,37 @@ UserSchema.pre("validate", function (next) {
 
   if (this.role === "student") {
     this.classIds = undefined;
+    this.academicSectionIds = undefined;
     this.subjectIds = undefined;
     this.hasAllClasses = false;
+    this.hasAllSections = false;
     this.hasAllSubjects = false;
   }
 
   next();
 });
 
+UserSchema.index({ role: 1, class: 1, rollNumber: 1 });
+UserSchema.index({ role: 1, class: 1, academicSection: 1, rollNumber: 1 });
+UserSchema.index({ academicSection: 1 });
+
+applyArchiveFields(UserSchema);
+
+const existingUserModel = mongoose.models.User as Model<IUser> | undefined;
+
+if (
+  existingUserModel &&
+  (!existingUserModel.schema.path("academicSection") ||
+    !existingUserModel.schema.path("academicSectionIds") ||
+    !existingUserModel.schema.path("classIds") ||
+    !existingUserModel.schema.path("hasAllSections") ||
+    !hasArchiveFields(existingUserModel))
+) {
+  delete mongoose.models.User;
+}
+
 const User: Model<IUser> =
-  mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
+  (mongoose.models.User as Model<IUser>) ||
+  mongoose.model<IUser>("User", UserSchema);
 
 export default User;

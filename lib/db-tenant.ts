@@ -7,12 +7,15 @@ import { connectDB } from './db.ts';
 import '@/models/TagType';
 import '@/models/Tag';
 import '@/models/Class';
+import '@/models/AcademicSection';
 import '@/models/Subject';
 import '@/models/Question';
 import '@/models/QuestionPaper';
 import '@/models/QuestionPaperResponse';
 import '@/models/User';
 import '@/models/Registration';
+import '@/models/AuditLog';
+import '@/models/ResponseUploadHistory';
 
 // Sanitize school key for db name
 function sanitizeKey(key: string) {
@@ -27,10 +30,6 @@ export async function getTenantDb(schoolKey: string) {
   if (!schoolKey) throw new Error('schoolKey is required');
   await connectDB();
   const dbName = `school_db_${sanitizeKey(schoolKey)}`;
-  // Debug: log tenant DB resolution
-  try {
-    console.debug('[db-tenant] Resolving tenant DB', { schoolKey, dbName });
-  } catch {}
   return mongoose.connection.useDb(dbName, { useCache: false });
 }
 
@@ -41,20 +40,10 @@ export async function getTenantDb(schoolKey: string) {
 export async function getTenantModels<T extends string>(schoolKey: string, names: T[]): Promise<Record<T, any>> {
   const conn = await getTenantDb(schoolKey);
   const out: Record<string, any> = {};
-  // Debug: log model compilation intent
-  try {
-    console.debug('[db-tenant] getTenantModels start', { schoolKey, names });
-  } catch {}
   for (const name of names) {
     const baseModel = mongoose.model(name); // schema must be registered on base
     const schema = baseModel.schema;
     out[name] = conn.models[name] || conn.model(name, schema);
-    try {
-      console.debug('[db-tenant] model ensured on tenant', { model: name, compiled: !!conn.models[name] });
-    } catch {}
   }
-  try {
-    console.debug('[db-tenant] getTenantModels done', { schoolKey, ensured: names });
-  } catch {}
   return out as Record<T, any>;
 }

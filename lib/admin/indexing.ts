@@ -32,7 +32,9 @@ export async function ensureIndexesForTenantDbName(dbName: string) {
   await ix('users', { role: 1 }, { name: 'user_role_1' });
   await ix('users', { name: 1 }, { name: 'user_name_1' });
   await ix('users', { class: 1, rollNumber: 1 }, { name: 'user_class_roll_1' });
+  await ix('users', { class: 1, academicSection: 1, rollNumber: 1 }, { name: 'user_class_section_roll_1' });
   await ix('users', { role: 1, class: 1 }, { name: 'user_role_class_1' });
+  await ix('academicsections', { class: 1, name: 1 }, { name: 'academic_section_class_name_1' });
   // Classes / TagTypes
   await ix('classes', { name: 1 }, { name: 'class_name_1' });
   await ix('tagtypes', { name: 1 }, { name: 'tagtype_name_1' });

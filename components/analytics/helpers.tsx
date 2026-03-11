@@ -1,5 +1,3 @@
-import * as XLSX from "xlsx";
-import { generateClassAnalyticsExcel } from "@/components/analytics/AnalyticsExportControls";
 
 export function getStatsSum(node: any, key: string): number {
   if (!node || typeof node !== "object") return 0;
@@ -314,31 +312,37 @@ export async function downloadDefaultClassAnalyticsExcel(
   paperId: string,
   numTags: number = 5,
   returnBlob = false,
+  options: {
+    academicSectionId?: string;
+  } = {},
 ) {
-  const fieldsRes = await fetch(
-    `/api/analytics/class-tag-report/${paperId}?groupFields=1`,
-  );
-  const fieldsData = await fieldsRes.json();
-  const groupFields = fieldsData.fields || [];
-  const selectedFields = groupFields.slice(0, numTags).map((f: any) => f.value);
   const searchParams = new URLSearchParams();
-  searchParams.set("json", "1");
-  searchParams.set("groupBy", selectedFields.join(","));
-  const analyticsRes = await fetch(
-    `/api/analytics/class-tag-report/${paperId}?${searchParams.toString()}`,
+  if (numTags > 0) {
+    searchParams.set("numTags", String(numTags));
+  }
+  if (options.academicSectionId) {
+    searchParams.set("academicSectionId", options.academicSectionId);
+  }
+
+  const response = await fetch(
+    `/api/reports/class-analytics/${paperId}?${searchParams.toString()}`,
+    {
+      cache: "no-store",
+    },
   );
-  const analyticsData = await analyticsRes.json();
-  const stats = analyticsData.stats || {};
-  // generate workbook and ensure correct typing; cast because generateClassAnalyticsExcel may be untyped
-  const workbook = generateClassAnalyticsExcel(
-    stats,
-    selectedFields,
-    groupFields,
-    { key: "", direction: "desc" },
-    "class_analytics_default.xlsx",
-  ) as unknown as XLSX.WorkBook;
-  const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-  const blob = new Blob([wbout], { type: "application/octet-stream" });
+
+  if (!response.ok) {
+    let message = "Failed to generate class analytics Excel.";
+    try {
+      const data = await response.json();
+      if (typeof data?.message === "string" && data.message.trim()) {
+        message = data.message.trim();
+      }
+    } catch {}
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
   if (returnBlob) return blob;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

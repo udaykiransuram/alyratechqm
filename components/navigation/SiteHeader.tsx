@@ -4,6 +4,8 @@ import { type ComponentType, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { fetchApiJson } from "@/lib/client/api";
+import { getSchoolKeyFromCookie } from "@/lib/client/school";
 import SchoolSwitcher from "@/components/navigation/SchoolSwitcher";
 import { Button } from "@/components/ui/button";
 import {
@@ -87,8 +89,8 @@ const sidebarGroups: SidebarGroup[] = [
         label: "Papers",
         icon: BookOpen,
         children: [
-          { href: "/question-paper", label: "All Papers" },
-          { href: "/question-paper/create", label: "Create Paper" },
+          { href: "/question-papers", label: "All Papers" },
+          { href: "/question-papers/create", label: "Create Paper" },
         ],
       },
       {
@@ -135,6 +137,8 @@ const sidebarGroups: SidebarGroup[] = [
         children: [
           { href: "/manage/classes", label: "All Classes" },
           { href: "/manage/classes/create", label: "Create Class" },
+          { href: "/manage/sections", label: "All Sections" },
+          { href: "/manage/sections/create", label: "Create Section" },
         ],
       },
     ],
@@ -166,7 +170,8 @@ const sidebarGroups: SidebarGroup[] = [
       {
         label: "Reports",
         icon: BarChart2,
-        children: [{ href: "/manage/reports", label: "Report Jobs" }],
+        children: [{ href: "/manage/reports", label: "Report Jobs" },
+          { href: "/manage/audit-logs", label: "Audit Logs" }],
       },
       {
         label: "Schools",
@@ -206,13 +211,13 @@ function Brand() {
   return (
     <Link
       href="/"
-      className="flex min-w-0 items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-accent/70"
+      className="flex min-w-0 items-center gap-2.5 rounded-xl px-1.5 py-1.5 transition-colors hover:bg-accent/70"
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
         <Layers className="h-5 w-5" />
       </div>
       <div className="min-w-0">
-        <p className="text-sm font-semibold tracking-wide">ALYRA TECH</p>
+        <p className="text-[13px] font-semibold tracking-wide">ALYRA TECH</p>
         <p className="text-xs text-muted-foreground">Talent Test Platform</p>
       </div>
     </Link>
@@ -241,37 +246,37 @@ function CollapsedSchoolBadge() {
 
     async function loadSchool() {
       try {
-        const match = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-        const schoolKey = match?.[1] ? decodeURIComponent(match[1]) : "";
+        const schoolKey = getSchoolKeyFromCookie();
 
         if (!schoolKey) {
           if (!cancelled) setSchool(null);
           return;
         }
 
-        const res = await fetch("/api/schools", { cache: "no-store" }).catch(() => null);
-        if (!res || !res.ok) {
-          if (!cancelled) {
-            setSchool({ key: schoolKey, displayName: schoolKey });
-          }
-          return;
-        }
-
-        const json = await res.json().catch(() => null);
-        const currentSchool =
-          json?.success && Array.isArray(json.schools)
+        try {
+          const json = await fetchApiJson<any>("/api/schools", {
+            cache: "no-store",
+            schoolKey: "",
+            fallbackMessage: "Failed to load schools.",
+          });
+          const currentSchool = Array.isArray(json.schools)
             ? json.schools.find((entry: any) => String(entry?.key || "") === schoolKey)
             : null;
 
-        if (!cancelled) {
-          setSchool(
-            currentSchool
-              ? {
-                  key: String(currentSchool.key || schoolKey),
-                  displayName: String(currentSchool.displayName || currentSchool.key || schoolKey),
-                }
-              : { key: schoolKey, displayName: schoolKey },
-          );
+          if (!cancelled) {
+            setSchool(
+              currentSchool
+                ? {
+                    key: String(currentSchool.key || schoolKey),
+                    displayName: String(currentSchool.displayName || currentSchool.key || schoolKey),
+                  }
+                : { key: schoolKey, displayName: schoolKey },
+            );
+          }
+        } catch {
+          if (!cancelled) {
+            setSchool({ key: schoolKey, displayName: schoolKey });
+          }
         }
       } catch {
         if (!cancelled) setSchool(null);
@@ -294,9 +299,9 @@ function CollapsedSchoolBadge() {
       href="/manage/schools"
       title={`${school.displayName} (${school.key})`}
       aria-label={`Current school: ${school.displayName}`}
-      className="mt-3 flex items-center justify-center rounded-2xl border border-border/60 bg-card/60 p-2 shadow-sm transition-colors hover:bg-accent/60"
+      className="mt-2.5 flex items-center justify-center rounded-xl border border-border/60 bg-card/60 p-1.5 shadow-sm transition-colors hover:bg-accent/60"
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold tracking-[0.08em] text-primary">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold tracking-[0.08em] text-primary">
         {initials}
       </div>
     </Link>
@@ -322,7 +327,7 @@ function DesktopSidebarItem({
 
   const triggerClassName = cn(
     "flex w-full items-center rounded-xl text-sm transition-colors",
-    collapsed ? "justify-center px-0 py-2.5" : "justify-between gap-3 px-3 py-2.5",
+    collapsed ? "justify-center px-0 py-2" : "justify-between gap-3 px-3 py-2",
     isActive
       ? "bg-primary text-primary-foreground shadow-sm"
       : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
@@ -367,9 +372,9 @@ function DesktopSidebarItem({
         side="right"
         align="start"
         sideOffset={collapsed ? 14 : 10}
-        className="w-56 p-2"
+        className="w-56 p-1.5"
       >
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
             {item.label}
           </p>
@@ -382,7 +387,7 @@ function DesktopSidebarItem({
                 href={child.href}
                 onClick={() => setOpen(false)}
                 className={cn(
-                  "block rounded-lg px-3 py-2 text-sm transition-colors",
+                  "block rounded-lg px-3 py-1.5 text-sm transition-colors",
                   childActive
                     ? "bg-primary/10 font-medium text-primary"
                     : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
@@ -400,7 +405,7 @@ function DesktopSidebarItem({
 
 function SidebarNav({ collapsed }: { collapsed: boolean }) {
   return (
-    <div className="flex h-full flex-col gap-5">
+    <div className="flex h-full flex-col gap-4">
       {sidebarGroups
         .filter((group) => group.items.length > 0)
         .map((group) => (
@@ -410,11 +415,11 @@ function SidebarNav({ collapsed }: { collapsed: boolean }) {
                 <div className="h-px rounded-full bg-border" />
               </div>
             ) : (
-              <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 {group.title}
               </p>
             )}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {group.items.map((item) => (
                 <DesktopSidebarItem
                   key={item.label}
@@ -460,15 +465,15 @@ function MobileSidebar() {
               onManageClick={() => setOpen(false)}
             />
           </div>
-          <div className="flex h-full flex-col gap-5">
+          <div className="flex h-full flex-col gap-4">
             {sidebarGroups
               .filter((group) => group.items.length > 0)
               .map((group) => (
                 <div key={group.title}>
-                  <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     {group.title}
                   </p>
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {group.items.map((item) => {
                       const Icon = item.icon;
                       const directChild =
@@ -482,7 +487,7 @@ function MobileSidebar() {
                             href={directChild.href}
                             onClick={() => setOpen(false)}
                             className={cn(
-                              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                              "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
                               isActive
                                 ? "bg-primary text-primary-foreground shadow-sm"
                                 : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
@@ -497,13 +502,13 @@ function MobileSidebar() {
                       return (
                         <div
                           key={item.label}
-                          className="rounded-xl border bg-card/40 p-2"
+                          className="rounded-xl border bg-card/40 p-1.5"
                         >
-                          <div className="flex items-center gap-3 px-2 py-2 text-sm font-medium">
+                          <div className="flex items-center gap-3 px-2 py-1.5 text-sm font-medium">
                             <Icon className="h-4 w-4 shrink-0" />
                             <span>{item.label}</span>
                           </div>
-                          <div className="space-y-1">
+                          <div className="space-y-0.5">
                             {item.children.map((child) => {
                               const childActive = isChildActive(pathname, child);
 
@@ -513,7 +518,7 @@ function MobileSidebar() {
                                   href={child.href}
                                   onClick={() => setOpen(false)}
                                   className={cn(
-                                    "block rounded-lg px-3 py-2 text-sm transition-colors",
+                                    "block rounded-lg px-3 py-1.5 text-sm transition-colors",
                                     childActive
                                       ? "bg-primary/10 font-medium text-primary"
                                       : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
@@ -565,7 +570,7 @@ export default function SiteHeader() {
   return (
     <>
       <header className="fixed inset-x-0 top-0 z-50 h-[var(--app-header-height)] border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
-        <div className="flex h-full items-center justify-between gap-4 px-4 lg:px-6">
+        <div className="flex h-full items-center justify-between gap-3 px-3 lg:px-4">
           <div className="flex min-w-0 items-center gap-3">
             <MobileSidebar />
             <Brand />
@@ -577,13 +582,13 @@ export default function SiteHeader() {
         </div>
       </header>
 
-      <div className="fixed inset-x-0 top-[var(--app-header-height)] z-40 border-b bg-background/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75 md:hidden">
+      <div className="fixed inset-x-0 top-[var(--app-header-height)] z-40 border-b bg-background/95 px-3 py-2.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75 md:hidden">
         <SchoolSwitcher className="max-w-none" showCreateButton={false} />
       </div>
 
       <aside className="fixed bottom-0 left-0 top-[var(--app-header-height)] hidden w-[var(--app-sidebar-width)] border-r bg-background transition-[width] duration-200 ease-in-out lg:block">
         <div className="flex h-full flex-col">
-          <div className={cn("border-b py-3", collapsed ? "px-2" : "px-3")}>
+          <div className={cn("border-b py-2.5", collapsed ? "px-1.5" : "px-3")}>
             <div
               className={cn(
                 "flex items-center",
@@ -601,7 +606,7 @@ export default function SiteHeader() {
                 size="icon"
                 title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                className="h-9 w-9 rounded-xl"
+                className="h-8 w-8 rounded-xl"
                 onClick={() => setCollapsed((value) => !value)}
               >
                 {collapsed ? (
@@ -619,8 +624,8 @@ export default function SiteHeader() {
 
           <div
             className={cn(
-              "flex-1 overflow-y-auto py-5",
-              collapsed ? "px-2" : "px-4",
+              "flex-1 overflow-y-auto py-4",
+              collapsed ? "px-1.5" : "px-3",
             )}
           >
             <SidebarNav collapsed={collapsed} />

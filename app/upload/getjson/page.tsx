@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
 
 export default function ImportQuestionsPage() {
+  const { navigateBack } = useBackNavigation('/upload');
   const [file, setFile] = useState<File | null>(null);
   const [payload, setPayload] = useState<{
     questions?: any[];
@@ -206,11 +209,17 @@ export default function ImportQuestionsPage() {
     <main className="py-6">
       <div className="container">
         <div className="app-page-shell">
-          <div className="app-page-header">
-            <h1 className="app-page-title">Question Import &amp; Test Builder</h1>
-            <p className="app-page-subtitle">
-              Convert spreadsheet uploads, review the generated artifacts, and publish directly to the question bank.
-            </p>
+          <div className="app-page-header-row">
+            <div>
+              <h1 className="app-page-title">Question Import &amp; Test Builder</h1>
+              <p className="app-page-subtitle">
+                Convert spreadsheet uploads, review the generated artifacts, and publish directly to the question bank.
+              </p>
+            </div>
+            <Button type="button" variant="outline" onClick={navigateBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
           </div>
 
           <Card className="app-surface overflow-hidden">

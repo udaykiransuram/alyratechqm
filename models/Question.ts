@@ -1,14 +1,15 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import { applyArchiveFields, hasArchiveFields } from '@/lib/archive';
 
-import './Class'; 
-import './Subject';
-import './Tag';
-import './TagType';
-import './User'; // Ensure User model is imported
-import { ISubject } from './Subject';
-import { ITag } from './Tag';
-import { IClass } from './Class';
-import { IUser } from './User'; // --- 1. IMPORT USER ---
+import './Class.ts'; 
+import './Subject.ts';
+import './Tag.ts';
+import './TagType.ts';
+import './User.ts'; // Ensure User model is imported
+import type { ISubject } from './Subject.ts';
+import type { ITag } from './Tag.ts';
+import type { IClass } from './Class.ts';
+import type { IUser } from './User.ts'; // --- 1. IMPORT USER ---
 
 // Interface for a single answer option
 export interface IOption {
@@ -173,8 +174,17 @@ QuestionSchema.index({ content: 'text' });
 QuestionSchema.index({ class: 1, subject: 1, createdAt: -1 });
 QuestionSchema.index({ marks: 1 });
 
+applyArchiveFields(QuestionSchema);
+
+const existingQuestionModel = mongoose.models.Question as Model<IQuestion> | undefined;
+
+if (existingQuestionModel && !hasArchiveFields(existingQuestionModel)) {
+  delete mongoose.models.Question;
+}
+
 // Create and export the Question model
-const Question: Model<IQuestion> = mongoose.models.Question || mongoose.model<IQuestion>('Question', QuestionSchema);
+const Question: Model<IQuestion> =
+  (mongoose.models.Question as Model<IQuestion>) || mongoose.model<IQuestion>('Question', QuestionSchema);
 
 export default Question;
 

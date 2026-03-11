@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import ReportDispatchJob from "../../../../../../models/ReportDispatchJob";
+import { hydrateResponsesWithStudents } from "@/lib/analytics/hydrateResponses";
 
 function normalizeMobileNumber(input: string): string {
   const digits = String(input || "").replace(/\D/g, "");
@@ -60,18 +61,39 @@ export async function POST(
     );
   }
 
-  const { QuestionPaperResponse: QPRModel } = await getTenantModels(schoolKey, [
+  const {
+    QuestionPaperResponse: QPRModel,
+    User: UserModel,
+    Class: ClassModel,
+    AcademicSection: AcademicSectionModel,
+  } = await getTenantModels(schoolKey, [
     "QuestionPaperResponse",
     "User",
+    "Class",
+    "AcademicSection",
   ]);
-  const response = await QPRModel.findById(params.responseId)
-    .populate("student", "name mobileNumber")
+  const rawResponse = await QPRModel.findById(params.responseId)
     .populate("paper", "title")
     .lean();
 
-  if (!response || Array.isArray(response)) {
+  if (!rawResponse || Array.isArray(rawResponse)) {
     return NextResponse.json(
       { success: false, message: "Response not found" },
+      { status: 404 },
+    );
+  }
+
+  const [response] = await hydrateResponsesWithStudents({
+    responses: [rawResponse],
+    UserModel,
+    AcademicSectionModel,
+    ClassModel,
+    studentSelect: "name mobileNumber class academicSection",
+  });
+
+  if (!response?.student) {
+    return NextResponse.json(
+      { success: false, message: "Student not found for response" },
       { status: 404 },
     );
   }
@@ -121,8 +143,15 @@ export async function POST(
     schoolKey,
     type: "student",
     student: student._id,
+    studentName: student?.name || undefined,
     responseId: response._id,
     paperId: (response as any).paper?._id,
+    paperTitle: (response as any).paper?.title || undefined,
+    classId: student?.class?._id || student?.class || undefined,
+    className: student?.class?.name || undefined,
+    academicSection:
+      student?.academicSection?._id || student?.academicSection || undefined,
+    academicSectionName: student?.academicSection?.name || undefined,
     status: "queued",
     mobileNumber: normalizedMobile,
     attempts: 0,

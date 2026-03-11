@@ -59,6 +59,7 @@ export function QuestionItem({
   const className = typeof question.class === 'string'
     ? classes.find(classItem => classItem._id === question.class)?.name
     : question.class?.name;
+  const tags = Array.isArray(question.tags) ? question.tags : [];
 
   return (
     <>
@@ -123,14 +124,14 @@ export function QuestionItem({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-muted-foreground">
             {className ? <Badge variant="outline">{className}</Badge> : null}
             {subjectName ? <Badge variant="outline">{subjectName}</Badge> : null}
-            {question.tags.length > 0 ? <Separator orientation="vertical" className="hidden h-4 sm:block" /> : null}
-            {question.tags.slice(0, 3).map(tag => (
+            {tags.length > 0 ? <Separator orientation="vertical" className="hidden h-4 sm:block" /> : null}
+            {tags.slice(0, 3).map(tag => (
               <Badge key={tag._id} variant="secondary" className="font-normal">
                 {tag.name}
               </Badge>
             ))}
-            {question.tags.length > 3 ? (
-              <Badge variant="outline" className="font-normal">+{question.tags.length - 3} more</Badge>
+            {tags.length > 3 ? (
+              <Badge variant="outline" className="font-normal">+{tags.length - 3} more</Badge>
             ) : null}
           </div>
           {question.createdAt ? (

@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { useReturnHrefBuilder } from '@/hooks/useReturnNavigation';
 
 interface TagItem {
   _id: string;
@@ -24,6 +25,7 @@ interface TagItem {
 }
 
 export default function TagsListPage() {
+  const { buildReturnHref } = useReturnHrefBuilder('/tags');
   const [tags, setTags] = useState<TagItem[]>([]);
   const [tagsLoading, setTagsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -67,25 +69,25 @@ export default function TagsListPage() {
     fetchTagsWithSubjects();
   }, [fetchTagsWithSubjects]);
 
-  const deleteTag = async (id: string) => {
-    const isConfirmed = confirm('Are you sure you want to delete this tag? This action cannot be undone.');
+  const archiveTag = async (id: string) => {
+    const isConfirmed = confirm('Are you sure you want to archive this tag? This action cannot be undone.');
     if (!isConfirmed) return;
 
     const originalTags = [...tags];
     setDeletingTagId(id);
     setTags((prevTags) => prevTags.filter((tag) => tag._id !== id));
-    toast({ title: 'Deleting Tag...', description: 'Your tag is being removed.' });
+    toast({ title: 'Archiving Tag...', description: 'Your tag is being archived.' });
 
     try {
       const res = await fetch(`/api/tags/${id}`, { method: 'DELETE' });
       const data = await res.json();
 
       if (data.success) {
-        toast({ title: 'Tag Deleted', description: 'Successfully deleted the tag.' });
+        toast({ title: 'Tag Archived', description: 'Successfully archived the tag.' });
       } else {
         setTags(originalTags);
         toast({
-          title: 'Failed to Delete',
+          title: 'Failed to Archive',
           description: data.message || 'An error occurred.',
           variant: 'destructive',
         });
@@ -94,7 +96,7 @@ export default function TagsListPage() {
       setTags(originalTags);
       toast({
         title: 'Network Error',
-        description: 'Could not delete the tag. Please try again.',
+        description: 'Could not archive the tag. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -188,7 +190,7 @@ export default function TagsListPage() {
                     </div>
 
                     <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-4">
-                      <Link href={`/tags/edit/${tag._id}`} className="flex-1">
+                      <Link href={buildReturnHref(`/tags/edit/${tag._id}`)} className="flex-1">
                         <Button variant="outline" size="sm" className="w-full" disabled={deletingTagId === tag._id}>
                           Edit
                         </Button>
@@ -197,10 +199,10 @@ export default function TagsListPage() {
                         variant="destructive"
                         size="sm"
                         className="flex-1"
-                        onClick={() => deleteTag(tag._id)}
+                        onClick={() => archiveTag(tag._id)}
                         disabled={deletingTagId === tag._id}
                       >
-                        {deletingTagId === tag._id ? <Spinner /> : 'Delete'}
+                        {deletingTagId === tag._id ? <Spinner /> : 'Archive'}
                       </Button>
                     </div>
                   </CardContent>

@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MultiSelectTags } from '@/components/ui/multi-select-tags';
+import { fetchApiJson, resolveClientSchoolKey } from '@/lib/client/api';
 
 interface MetadataSelectorProps {
   classes: { _id: string; name: string }[];
@@ -22,16 +23,6 @@ interface MetadataSelectorProps {
   toast: any;
   onCreateNewTag: (tagName: string, tagTypeId: string) => Promise<any>;
 }
-
-const getSchoolKey = () => {
-  if (typeof document === 'undefined') return '';
-  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : '';
-};
-const getSchoolQS = () => {
-  const k = getSchoolKey();
-  return k ? `?school=${encodeURIComponent(k)}` : '';
-};
 
 export function MetadataSelector({
   classes,
@@ -63,36 +54,32 @@ export function MetadataSelector({
     }
 
     try {
-      const res = await fetch('/api/tags' + getSchoolQS(), {
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error('Please select a school in the navbar first.');
+      }
+
+      const data = await fetchApiJson<any>('/api/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: tagName,
           type: tagTypeId,
-          subjectIds: [subjectId],
+          subjectIds: subjectId ? [subjectId] : [],
         }),
+        schoolKey,
+        fallbackMessage: 'Failed to create the new tag.',
       });
 
-      const data = await res.json();
-
-      if (data.success) {
-        toast({
-          title: 'Tag Created',
-          description: `Tag "${data.tag.name}" has been created.`,
-        });
-        return data.tag;
-      }
-
+      toast({
+        title: 'Tag Created',
+        description: `Tag "${data.tag.name}" has been created.`,
+      });
+      return data.tag;
+    } catch (error: any) {
       toast({
         title: 'Error Creating Tag',
-        description: data.message,
-        variant: 'destructive',
-      });
-      return null;
-    } catch {
-      toast({
-        title: 'Network Error',
-        description: 'Failed to create the new tag.',
+        description: error?.message || 'Failed to create the new tag.',
         variant: 'destructive',
       });
       return null;

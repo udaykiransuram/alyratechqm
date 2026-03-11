@@ -11,7 +11,7 @@ const Table = React.forwardRef<
       ref={ref}
       className={cn(
         // Ensure horizontal scroll on very small screens instead of squashing columns
-        "w-full caption-bottom text-sm min-w-[700px] md:min-w-0",
+        "w-full min-w-[640px] caption-bottom text-sm md:min-w-0",
         className,
       )}
       {...props}
@@ -77,7 +77,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+      "h-10 px-3 py-2 text-left align-middle text-[13px] font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
       className,
     )}
     {...props}
@@ -91,7 +91,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)}
+    className={cn("p-3 align-middle text-sm [&:has([role=checkbox])]:pr-0", className)}
     {...props}
   />
 ));

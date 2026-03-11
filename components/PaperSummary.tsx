@@ -23,6 +23,17 @@ interface Section {
   }[];
 }
 
+function formatExamDate(value: string | null | undefined) {
+  if (!value) return '-';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+
+  return format(date, 'PPP');
+}
+
 export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks, examDate }: {
   sections: Section[];
   totalPaperMarks: number;
@@ -49,7 +60,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
     { label: 'Sections', value: sections.length, icon: Layers },
     { label: 'Questions', value: totalQuestions, icon: Hash },
     { label: 'Passing', value: passingMarks, icon: Award },
-    { label: 'Date', value: examDate ? format(new Date(examDate), 'PPP') : '-', icon: CalendarDays },
+    { label: 'Date', value: formatExamDate(examDate), icon: CalendarDays },
   ];
 
   return (

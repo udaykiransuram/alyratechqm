@@ -1,19 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { useBackNavigation } from "@/hooks/useReturnNavigation";
+import PageLoadingState from "@/components/ui/page-loading-state";
 
 interface ClassItem {
   _id: string;
   name: string;
 }
 
+interface AcademicSectionItem {
+  _id: string;
+  name: string;
+  class?: { _id: string; name: string } | string;
+}
+
+function getSectionClassId(section: AcademicSectionItem) {
+  return typeof section.class === "string" ? section.class : section.class?._id || "";
+}
+
 export default function EditStudentPage() {
   const params = useParams();
-  const router = useRouter();
   const id = (params?.id as string) || "";
+  const { navigateBack } = useBackNavigation(`/students/${id}`);
 
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -25,6 +38,7 @@ export default function EditStudentPage() {
     password: "",
     mobileNumber: "",
     class: "",
+    academicSection: "",
     rollNumber: "",
     enrolledAt: "",
   });
@@ -35,30 +49,39 @@ export default function EditStudentPage() {
       try {
         setLoading(true);
         setError(null);
-        const [uRes, cRes] = await Promise.all([
+        const [uRes, cRes, sRes] = await Promise.all([
           fetch("/api/users/" + id),
           fetch("/api/classes"),
+          fetch("/api/sections"),
         ]);
         const uJson = await uRes.json();
         const cJson = await cRes.json();
+        const sJson = await sRes.json();
         if (!mounted) return;
-        if (!uJson.success)
+        if (!uJson.success) {
           throw new Error(uJson.message || "Failed to load user");
-        if (!cJson.success)
+        }
+        if (!cJson.success) {
           throw new Error(cJson.message || "Failed to load classes");
-        const u = uJson.user || {};
+        }
+        if (!sJson.success) {
+          throw new Error(sJson.message || "Failed to load sections");
+        }
+        const user = uJson.user || {};
         setForm({
-          name: u.name || "",
-          email: u.email || "",
+          name: user.name || "",
+          email: user.email || "",
           password: "",
-          mobileNumber: u.mobileNumber || "",
-          class: u.class ? String(u.class) : "",
-          rollNumber: u.rollNumber || "",
-          enrolledAt: u.enrolledAt
-            ? new Date(u.enrolledAt).toISOString().split("T")[0]
+          mobileNumber: user.mobileNumber || "",
+          class: user.class ? String(user.class) : "",
+          academicSection: user.academicSection ? String(user.academicSection) : "",
+          rollNumber: user.rollNumber || "",
+          enrolledAt: user.enrolledAt
+            ? new Date(user.enrolledAt).toISOString().split("T")[0]
             : "",
         });
         setClasses(cJson.classes || []);
+        setSections(sJson.sections || []);
       } catch (e: any) {
         setError(e.message || "Failed to load");
       } finally {
@@ -71,10 +94,20 @@ export default function EditStudentPage() {
     };
   }, [id]);
 
+  const filteredSections = useMemo(
+    () => sections.filter((section) => getSectionClassId(section) === form.class),
+    [sections, form.class],
+  );
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "class" ? { academicSection: "" } : {}),
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,6 +126,7 @@ export default function EditStudentPage() {
           mobileNumber: form.mobileNumber.trim(),
           password: form.password || undefined,
           class: form.class,
+          academicSection: form.academicSection,
           rollNumber: form.rollNumber.trim(),
           enrolledAt: form.enrolledAt ? new Date(form.enrolledAt) : undefined,
         }),
@@ -100,7 +134,7 @@ export default function EditStudentPage() {
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "Failed to update");
       setMessage("Student updated successfully.");
-      setTimeout(() => router.push("/students/" + id), 600);
+      setTimeout(() => navigateBack(), 600);
     } catch (e: any) {
       setError(e.message || "Update failed");
     } finally {
@@ -110,9 +144,10 @@ export default function EditStudentPage() {
 
   if (loading) {
     return (
-      <div className="app-page-shell max-w-xl px-4 py-6 sm:px-0">
-        <div className="app-feedback app-feedback-info">Loading student details...</div>
-      </div>
+      <PageLoadingState
+        title="Loading student details"
+        description="Preparing the student edit form and section assignment options."
+      />
     );
   }
 
@@ -130,10 +165,10 @@ export default function EditStudentPage() {
         <div className="app-page-header">
           <h1 className="app-page-title">Edit Student</h1>
           <p className="app-page-subtitle">
-            Update student details, class placement, and enrollment information.
+            Update student details, class placement, section assignment, and enrollment information.
           </p>
         </div>
-        <button type="button" onClick={() => router.back()} className="app-button-secondary">
+        <button type="button" onClick={navigateBack} className="app-button-secondary">
           Back
         </button>
       </div>
@@ -161,14 +196,33 @@ export default function EditStudentPage() {
             <input id="password" name="password" placeholder="Leave blank to keep the current password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="app-field-group">
               <label className="app-field-label" htmlFor="class">Class</label>
               <select id="class" name="class" value={form.class} onChange={handleChange} required className="app-form-input">
                 <option value="">Select Class</option>
-                {classes.map((cls) => (
-                  <option key={cls._id} value={cls._id}>
-                    {cls.name}
+                {classes.map((classItem) => (
+                  <option key={classItem._id} value={classItem._id}>
+                    {classItem.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="app-field-group">
+              <label className="app-field-label" htmlFor="academicSection">Section</label>
+              <select
+                id="academicSection"
+                name="academicSection"
+                value={form.academicSection}
+                onChange={handleChange}
+                required
+                disabled={!form.class}
+                className="app-form-input"
+              >
+                <option value="">Select Section</option>
+                {filteredSections.map((section) => (
+                  <option key={section._id} value={section._id}>
+                    {section.name}
                   </option>
                 ))}
               </select>

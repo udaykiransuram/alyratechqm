@@ -14,6 +14,11 @@ import "@/models/Class";
 import "@/models/TagType";
 import "@/models/Tag";
 import { buildTagReport } from "@/lib/analytics/tagReport";
+import {
+  filterResponsesByAcademicSection,
+  getStudentAcademicSectionId,
+  hydrateResponsesWithStudents,
+} from "@/lib/analytics/hydrateResponses";
 import { z } from "zod";
 import { objectIdSchema, schoolKeySchema, parseOr400 } from "@/lib/validation";
 
@@ -92,8 +97,6 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { responseId: string } },
 ) {
-  await connectDB();
-
   const url = new URL(req.url);
   const schoolFromHeader =
     req.headers.get("x-school-key") || req.headers.get("X-School-Key");
@@ -123,6 +126,18 @@ export async function GET(
   const groupByParam = req.nextUrl.searchParams.get("groupBy");
   const filterClassId = req.nextUrl.searchParams.get("classId")?.trim() || "";
   const filterSubjectId = req.nextUrl.searchParams.get("subjectId")?.trim() || "";
+  const rawAcademicSectionId =
+    req.nextUrl.searchParams.get("academicSectionId")?.trim() || "";
+  if (
+    rawAcademicSectionId &&
+    !mongoose.Types.ObjectId.isValid(rawAcademicSectionId)
+  ) {
+    return NextResponse.json(
+      { success: false, message: "Invalid academicSectionId" },
+      { status: 400 },
+    );
+  }
+  const filterAcademicSectionId = rawAcademicSectionId;
   const groupByParts = groupByParam
     ? groupByParam
         .split(",")
@@ -137,6 +152,7 @@ export async function GET(
     classLevel: z.string().optional(),
     classId: z.string().optional(),
     subjectId: z.string().optional(),
+    academicSectionId: objectIdSchema.optional(),
   });
   const qRes = parseOr400(querySchema, {
     responseId: params.responseId,
@@ -146,6 +162,7 @@ export async function GET(
     classLevel: req.nextUrl.searchParams.get("classLevel"),
     classId: filterClassId || undefined,
     subjectId: filterSubjectId || undefined,
+    academicSectionId: filterAcademicSectionId || undefined,
   });
   // Do not block on validation; proceed best-effort. If responseId is invalid, DB lookup will yield 404 later.
 
@@ -153,39 +170,54 @@ export async function GET(
 
   // Resolve tenant-bound models consistently with other APIs
   // Ensure related models (Question, Tag, TagType) are registered on the tenant connection
-  const { QuestionPaperResponse: QPRModel, QuestionPaper: QPModel } =
-    await getTenantModels(tenantKey, [
-      "QuestionPaperResponse",
-      "QuestionPaper",
-      "Question",
-      "Tag",
-      "TagType",
-      "Subject",
-      "Class",
-      "User",
-    ]);
+  const {
+    QuestionPaperResponse: QPRModel,
+    QuestionPaper: QPModel,
+    User: UserModel,
+    Class: ClassModel,
+    AcademicSection: AcademicSectionModel,
+  } = await getTenantModels(tenantKey, [
+    "QuestionPaperResponse",
+    "QuestionPaper",
+    "Question",
+    "Tag",
+    "TagType",
+    "Subject",
+    "Class",
+    "User",
+    "AcademicSection",
+  ]);
 
   if (req.nextUrl.searchParams.get("groupFields") === "1") {
     try {
       const response = await QPRModel.findById(params.responseId)
         .populate({
           path: "paper",
-          select: "title sections",
-          populate: {
-            path: "sections.questions.question",
-            select: "tags subject class",
-            populate: [
-              {
-                path: "tags",
-                populate: { path: "type", select: "name" },
-              },
-              { path: "subject", select: "name" },
-              { path: "class", select: "name" },
-            ],
-          },
+          select: "title class sections assignedAcademicSections",
+          populate: [
+            {
+              path: "sections.questions.question",
+              select: "tags subject class",
+              populate: [
+                {
+                  path: "tags",
+                  populate: { path: "type", select: "name" },
+                },
+                { path: "subject", select: "name" },
+                { path: "class", select: "name" },
+              ],
+            },
+            {
+              path: "assignedAcademicSections",
+              select: "name class",
+            },
+          ],
         })
         .lean();
 
+      const paperObj = Array.isArray(response)
+        ? response[0]?.paper
+        : response?.paper;
       const paperSections = Array.isArray(response)
         ? response[0]?.paper?.sections || []
         : response?.paper?.sections || [];
@@ -225,6 +257,32 @@ export async function GET(
         })),
       );
 
+      const configuredAcademicSections = Array.isArray(
+        paperObj?.assignedAcademicSections,
+      )
+        ? paperObj.assignedAcademicSections
+        : [];
+      const fallbackAcademicSections =
+        configuredAcademicSections.length === 0 && paperObj?.class
+          ? await AcademicSectionModel.find({ class: paperObj.class })
+              .select("name class")
+              .sort({ name: 1 })
+              .lean()
+          : [];
+      const academicSections = (
+        configuredAcademicSections.length > 0
+          ? configuredAcademicSections.map((section: any) => ({
+              value: String(section?._id || ""),
+              label: section?.name || "Unknown Section",
+            }))
+          : fallbackAcademicSections.map((section: any) => ({
+              value: String(section?._id || ""),
+              label: section?.name || "Unknown Section",
+            }))
+      )
+        .filter((section: any) => section.value)
+        .sort((a: any, b: any) => a.label.localeCompare(b.label));
+
       const res = NextResponse.json({
         fields,
         filters: {
@@ -234,6 +292,7 @@ export async function GET(
           subjects: Array.from(subjectMap.values()).sort((a, b) =>
             a.label.localeCompare(b.label),
           ),
+          academicSections,
         },
       });
       res.headers.set("X-Debug-Student-GF", "ok");
@@ -246,7 +305,7 @@ export async function GET(
           { value: "class", label: "Class" },
           { value: "subject", label: "Subject" },
         ],
-        filters: { classes: [], subjects: [] },
+        filters: { classes: [], subjects: [], academicSections: [] },
       });
       res.headers.set("X-Debug-Student-GF", "fallback");
       return res;
@@ -256,6 +315,8 @@ export async function GET(
   const isClassLevel = req.nextUrl.searchParams.get("classLevel") === "1";
 
   try {
+    await connectDB();
+
     const groupBy = groupByParts;
 
     let responses: any[] = [];
@@ -324,9 +385,20 @@ export async function GET(
             { path: "class", select: "name" },
           ],
         })
-        .populate("student", "name rollNumber")
         .lean();
-      students = responses.map((r) => r.student);
+
+      responses = await hydrateResponsesWithStudents({
+        responses,
+        UserModel,
+        AcademicSectionModel,
+        ClassModel,
+        studentSelect: "name rollNumber academicSection",
+      });
+      responses = filterResponsesByAcademicSection(
+        responses,
+        filterAcademicSectionId,
+      );
+      students = responses.map((r) => r.student).filter(Boolean);
 
       paperSections = Array.isArray(paper)
         ? paper[0]?.sections || []
@@ -386,7 +458,7 @@ export async function GET(
         }
       }
     } else {
-      const response = await QPRModel.findById(params.responseId)
+      const rawResponse = await QPRModel.findById(params.responseId)
         .populate({
           path: "sectionAnswers.answers.question",
           select: "answerIndexes tags content options subject class",
@@ -415,13 +487,33 @@ export async function GET(
             ],
           },
         })
-        .populate("student", "name rollNumber")
         .lean();
-      if (!response) {
+      if (!rawResponse) {
         const res = NextResponse.json(
           {
             success: false,
             message: `Response not found in selected school${tenantKey ? `: ${tenantKey}` : ""}. Please verify the school and responseId.`,
+          },
+          { status: 404 },
+        );
+        try {
+          res.headers.set("X-Debug-Tenant", tenantKey || "default");
+        } catch {}
+        return res;
+      }
+      const hydratedResponses = await hydrateResponsesWithStudents({
+        responses: [rawResponse],
+        UserModel,
+        AcademicSectionModel,
+        ClassModel,
+        studentSelect: "name rollNumber class academicSection",
+      });
+      const response = hydratedResponses[0];
+      if (!response) {
+        const res = NextResponse.json(
+          {
+            success: false,
+            message: `Response student not found in selected school${tenantKey ? `: ${tenantKey}` : ""}. Please verify the school and responseId.`,
           },
           { status: 404 },
         );
@@ -544,6 +636,10 @@ export async function GET(
         rollNumber: !isClassLevel ? students[0]?.rollNumber : undefined,
         students: isClassLevel ? students : undefined,
         paper: paperTitle,
+        paperId: paperId || undefined,
+        academicSectionId: !isClassLevel
+          ? getStudentAcademicSectionId(students[0]) || undefined
+          : filterAcademicSectionId || undefined,
       };
       const res = NextResponse.json(responsePayload);
       try {
@@ -626,7 +722,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Error in analytics route:", error);
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: error?.message || "Failed to load analytics." },
       { status: 500 },
     );
   }

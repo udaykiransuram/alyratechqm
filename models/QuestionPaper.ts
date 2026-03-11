@@ -1,20 +1,22 @@
 // In a file like /models/QuestionPaper.ts
 
 import mongoose, { Schema, Document, Types } from "mongoose";
+import { applyArchiveFields, hasArchiveFields } from "@/lib/archive";
 
 // --- FORCE MODEL REGISTRATION ---
 // Import the actual models (default export) to ensure they are registered
 // with Mongoose before this model is defined. This is the key.
-import "./Question"; // Ensure Question model is imported
-import "./Subject"; // Ensure Subject model is imported
-import "./Tag"; // Ensure Tag model is imported
-import "./TagType"; // Ensure TagType model is imported
-import "./Class";
-import Question from "./Question";
-import Subject from "./Subject";
-import Class from "./Class";
-import User from "./User"; // Corrected this line
-import Tag from "./Tag"; // Also ensure Tag is imported if referenced by Question
+import "./Question.ts"; // Ensure Question model is imported
+import "./Subject.ts"; // Ensure Subject model is imported
+import "./Tag.ts"; // Ensure Tag model is imported
+import "./TagType.ts"; // Ensure TagType model is imported
+import "./Class.ts";
+import "./AcademicSection.ts";
+import Question from "./Question.ts";
+import Subject from "./Subject.ts";
+import Class from "./Class.ts";
+import User from "./User.ts"; // Corrected this line
+import Tag from "./Tag.ts"; // Also ensure Tag is imported if referenced by Question
 
 // You can still import interfaces if you need them for type-checking, like this:
 // import { IUser } from './User';
@@ -45,6 +47,7 @@ export interface IQuestionPaper extends Document {
   examDate: Date;
   totalMarks: number;
   sections: ISection[];
+  assignedAcademicSections?: Types.ObjectId[];
   createdBy: Types.ObjectId; // Reference to the User who created it
 }
 
@@ -136,6 +139,9 @@ const QuestionPaperSchema = new Schema<IQuestionPaper>(
       required: true,
     },
     sections: [SectionSchema], // Embed the array of sections
+    assignedAcademicSections: [
+      { type: Schema.Types.ObjectId, ref: "AcademicSection" },
+    ],
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User", // Assuming you have a 'User' model
@@ -149,6 +155,8 @@ const QuestionPaperSchema = new Schema<IQuestionPaper>(
   },
 );
 
+applyArchiveFields(QuestionPaperSchema);
+
 const existingQuestionPaperModel = mongoose.models.QuestionPaper as
   | mongoose.Model<IQuestionPaper>
   | undefined;
@@ -157,7 +165,9 @@ if (
   existingQuestionPaperModel &&
   (!existingQuestionPaperModel.schema.path("duration") ||
     !existingQuestionPaperModel.schema.path("passingMarks") ||
-    !existingQuestionPaperModel.schema.path("examDate"))
+    !existingQuestionPaperModel.schema.path("examDate") ||
+    !existingQuestionPaperModel.schema.path("assignedAcademicSections") ||
+    !hasArchiveFields(existingQuestionPaperModel))
 ) {
   delete mongoose.models.QuestionPaper;
 }

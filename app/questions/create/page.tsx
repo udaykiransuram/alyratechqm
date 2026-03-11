@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import dynamic from 'next/dynamic';
 import { TagItem } from '@/components/ui/multi-select-tags';
 import { Spinner } from '@/components/ui/spinner';
+import EditorLoadingState from '@/components/ui/editor-loading-state';
 import {
   Card,
   CardContent,
@@ -15,20 +16,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { X, PlusCircle } from 'lucide-react';
+import { ArrowLeft, X, PlusCircle } from 'lucide-react';
 import { MetadataSelector } from '@/components/MetadataSelector';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
 
 // Dynamically load Tiptap rich editor
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
-  loading: () => <div className="app-empty-state flex min-h-[210px] items-center justify-center"><Spinner /></div>,
+  loading: () => <EditorLoadingState label="Loading rich text editor" />,
 });
 const MatrixMatchConfigurator = dynamic(() => import('@/components/MatrixMatchConfigurator').then(mod => mod.default), {
   ssr: false,
-  loading: () => <div className="app-empty-state flex min-h-[210px] items-center justify-center"><Spinner /></div>,
+  loading: () => <EditorLoadingState label="Loading matrix configurator" />,
 });
 
 interface SubjectWithTags {
@@ -41,6 +43,7 @@ interface Class { _id: string; name: string; }
 
 export default function CreateQuestionPage() {
   const router = useRouter();
+  const { navigateBack } = useBackNavigation('/questions');
   const { toast } = useToast();
   const [classId, setClassId] = useState('');
   const [subjectId, setSubjectId] = useState('');
@@ -270,7 +273,7 @@ export default function CreateQuestionPage() {
         setClassId('');
         setMarks(1);
         setResetCounter(c => c + 1);
-        router.push('/question-paper/create');
+        router.push('/question-papers/create');
       } else {
         toast({
           title: 'Error Saving Question',
@@ -291,10 +294,16 @@ export default function CreateQuestionPage() {
 
   return (
     <div className="app-page-shell px-4 py-6 sm:px-0">
-      <header className="app-page-header">
-        <h1 className="app-page-title">Create New Question</h1>
-        <p className="app-page-subtitle">Fill out the form below to add a new question to the database.</p>
-      </header>
+      <div className="app-page-header-row">
+        <div>
+          <h1 className="app-page-title">Create New Question</h1>
+          <p className="app-page-subtitle">Fill out the form below to add a new question to the database.</p>
+        </div>
+        <Button variant="outline" onClick={navigateBack}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] items-start">
         <div className="min-w-0 space-y-6">

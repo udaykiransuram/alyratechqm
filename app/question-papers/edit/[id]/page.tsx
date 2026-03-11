@@ -1,12 +1,13 @@
 import React from "react";
 import { cookies, headers } from "next/headers";
 import QuestionPaperForm from "@/components/QuestionPaperForm";
+import { getSchoolKeyFromServerCookies } from "@/lib/server/school";
 
 async function getQuestionPaper(id: string) {
   const cookieStore = cookies();
   const headerStore = headers();
 
-  const schoolKey = cookieStore.get("schoolKey")?.value || "";
+  const schoolKey = getSchoolKeyFromServerCookies(cookieStore);
   const host =
     headerStore.get("x-forwarded-host") ||
     headerStore.get("host") ||
@@ -60,6 +61,9 @@ export default async function EditQuestionPaperPage({
     examDate: rawData.examDate ?? "",
     classId: rawData.class?._id ?? "",
     subjectId: rawData.subject?._id ?? "",
+    assignedAcademicSectionIds: (rawData.assignedAcademicSections || []).map((section: any) =>
+      String(section?._id || section),
+    ),
     sections: (rawData.sections || []).map((section: any) => ({
       id: section._id || `section-${Math.random()}`,
       name: section.name ?? "",

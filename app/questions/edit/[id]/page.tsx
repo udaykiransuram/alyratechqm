@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import dynamic from 'next/dynamic';
 import { TagItem } from '@/components/ui/multi-select-tags';
 import { Spinner } from '@/components/ui/spinner';
+import EditorLoadingState from '@/components/ui/editor-loading-state';
 import {
   Card,
   CardContent,
@@ -20,19 +21,20 @@ import { PlusCircle, X } from 'lucide-react';
 import { MetadataSelector } from '@/components/MetadataSelector';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
-  loading: () => <div className="app-empty-state flex min-h-[210px] items-center justify-center"><Spinner /></div>,
+  loading: () => <EditorLoadingState label="Loading rich text editor" />,
 });
 const MatrixMatchConfigurator = dynamic(() => import('@/components/MatrixMatchConfigurator').then(mod => mod.default), {
   ssr: false,
-  loading: () => <div className="app-empty-state flex min-h-[210px] items-center justify-center"><Spinner /></div>,
+  loading: () => <EditorLoadingState label="Loading matrix configurator" />,
 });
 
 export default function EditQuestionPage() {
-  const router = useRouter();
   const params = useParams();
+  const { navigateBack } = useBackNavigation('/questions');
   const questionId = params.id as string;
   const { toast } = useToast();
 
@@ -253,7 +255,7 @@ export default function EditQuestionPage() {
           title: 'Question Updated!',
           description: 'Your changes have been saved.',
         });
-        router.back();
+        navigateBack();
       } else {
         toast({
           title: 'Error Updating Question',
@@ -274,10 +276,15 @@ export default function EditQuestionPage() {
 
   return (
     <div className="app-page-shell px-4 py-6 sm:px-0">
-      <header className="app-page-header">
-        <h1 className="app-page-title">Edit Question</h1>
-        <p className="app-page-subtitle">Update the question content, metadata, and answer configuration below.</p>
-      </header>
+      <div className="app-page-header-row">
+        <div className="app-page-header">
+          <h1 className="app-page-title">Edit Question</h1>
+          <p className="app-page-subtitle">Update the question content, metadata, and answer configuration below.</p>
+        </div>
+        <Button type="button" variant="outline" onClick={navigateBack}>
+          Back
+        </Button>
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] items-start">
         <div className="min-w-0 space-y-6">

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
@@ -12,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { MultiSelectTags, TagItem } from '@/components/ui/multi-select-tags';
 import { Spinner } from '@/components/ui/spinner';
+import PageLoadingState from '@/components/ui/page-loading-state';
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
 
 interface Subject {
   _id: string;
@@ -23,8 +24,8 @@ interface Subject {
 
 export default function EditSubjectPage({ params }: { params: { id: string } }) {
   const { id: subjectId } = params;
-  const router = useRouter();
   const { toast } = useToast();
+  const { navigateBack } = useBackNavigation('/subjects');
 
   const [subjectName, setSubjectName] = useState('');
   const [subjectCode, setSubjectCode] = useState('');
@@ -167,7 +168,7 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
           title: 'Success',
           description: `"${data.subject.name}" updated.`,
         });
-        router.push('/subjects');
+        navigateBack();
       } else {
         console.error('Failed to update subject:', data.message);
         toast({
@@ -192,14 +193,13 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
     return (
       <div className="container py-6">
         <div className="app-page-shell max-w-3xl">
-          <Card className="app-surface">
-            <CardContent className="app-surface-body">
-              <div className="app-status-row justify-center py-8">
-                <Spinner />
-                <span>Loading subject details…</span>
-              </div>
-            </CardContent>
-          </Card>
+          <PageLoadingState
+            title="Loading subject details"
+            description="Preparing the subject form, linked tags, and school data."
+            className="px-0 py-0"
+            contentClassName="max-w-none"
+            dense
+          />
         </div>
       </div>
     );
@@ -215,7 +215,7 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
               <p className="app-page-subtitle">We couldn’t load the subject details for editing.</p>
             </div>
 
-            <Button type="button" variant="outline" className="gap-2" onClick={() => router.push('/subjects')}>
+            <Button type="button" variant="outline" className="gap-2" onClick={navigateBack}>
               <ChevronLeft className="h-4 w-4" />
               Back to Subjects
             </Button>
@@ -229,7 +229,7 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
                   <p className="mt-1">{fetchError}</p>
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                  <Button type="button" variant="outline" onClick={() => router.push('/subjects')}>
+                  <Button type="button" variant="outline" onClick={navigateBack}>
                     Go Back to Subjects
                   </Button>
                   <Button type="button" onClick={fetchSubjectDetailsAndAllTags}>
@@ -259,7 +259,7 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
             type="button"
             variant="outline"
             className="gap-2"
-            onClick={() => router.push('/subjects')}
+            onClick={navigateBack}
             disabled={isSaving}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -346,7 +346,7 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
                 type="button"
                 variant="outline"
                 className="sm:min-w-[140px]"
-                onClick={() => router.push('/subjects')}
+                onClick={navigateBack}
                 disabled={isSaving}
               >
                 Cancel

@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
 import {
   Select,
   SelectContent,
@@ -21,6 +23,7 @@ async function fetcher(url: string) {
 }
 
 export default function IndexingClient() {
+  const { navigateBack } = useBackNavigation('/manage/users');
   const [schoolKey, setSchoolKey] = useState('');
   const [results, setResults] = useState<Record<string, any> | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -82,11 +85,17 @@ export default function IndexingClient() {
 
   return (
     <div className="app-page-shell max-w-4xl px-4 py-6 sm:px-0">
-      <div className="app-page-header">
-        <h1 className="app-page-title">Database Indexing</h1>
-        <p className="app-page-subtitle">
-          Rebuild indexes for one tenant or for the full multi-tenant workspace.
-        </p>
+      <div className="app-page-header-row">
+        <div>
+          <h1 className="app-page-title">Database Indexing</h1>
+          <p className="app-page-subtitle">
+            Rebuild indexes for one tenant or for the full multi-tenant workspace.
+          </p>
+        </div>
+        <Button type="button" variant="outline" onClick={navigateBack}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
       </div>
 
       <Card className="app-surface">

@@ -5,6 +5,7 @@ import { getTenantDb } from '@/lib/db-tenant';
 // Ensure schemas are compiled on the default connection so useDb({ useCache: true }) can reuse them
 import '@/models/Subject';
 import '@/models/Class';
+import '@/models/AcademicSection';
 import '@/models/TagType';
 import '@/models/Tag';
 import '@/models/User';
@@ -23,7 +24,7 @@ export async function provisionTenant(schoolKey: string) {
   );
 
   // Pre-provision core collections and indexes
-  const modelNames = ['Subject','Class','TagType','Tag','User','Question'] as const;
+  const modelNames = ['Subject','Class','AcademicSection','TagType','Tag','User','Question'] as const;
   for (const name of modelNames) {
     try {
       const M = conn.model(name);

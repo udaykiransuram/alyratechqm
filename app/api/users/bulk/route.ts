@@ -1,7 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import bcrypt from "bcryptjs";
+
+function normalizeIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item)).filter(Boolean);
+}
+
+function normalizeId(value: unknown) {
+  return value ? String(value).trim() : "";
+}
+
+async function validateStudentAcademicSection(
+  AcademicSectionModel: any,
+  classId: string,
+  academicSectionId: string,
+) {
+  if (!academicSectionId) {
+    return { ok: true } as const;
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(academicSectionId)) {
+    return {
+      ok: false,
+      message: "Invalid academicSectionId.",
+    } as const;
+  }
+
+  const academicSection = await AcademicSectionModel.findById(academicSectionId)
+    .select("class")
+    .lean();
+  if (!academicSection) {
+    return {
+      ok: false,
+      message: "Academic section not found.",
+    } as const;
+  }
+
+  if (classId && String((academicSection as any).class) !== String(classId)) {
+    return {
+      ok: false,
+      message: "Selected section does not belong to the selected class.",
+    } as const;
+  }
+
+  return { ok: true } as const;
+}
 
 export async function POST(request: NextRequest) {
   await connectDB();
@@ -20,13 +66,17 @@ export async function POST(request: NextRequest) {
     )
       .toString()
       .trim();
-    if (!schoolKey)
+    if (!schoolKey) {
       return NextResponse.json(
         { success: false, message: "schoolKey required" },
         { status: 400 },
       );
+    }
 
-    const { User } = await getTenantModels(schoolKey, ["User"]);
+    const {
+      User,
+      AcademicSection: AcademicSectionModel,
+    } = await getTenantModels(schoolKey, ["User", "AcademicSection"]);
 
     const { students } = await request.json();
     if (!Array.isArray(students) || students.length === 0) {
@@ -43,32 +93,35 @@ export async function POST(request: NextRequest) {
         normalizedStudent[key.toLowerCase()] = (student as any)[key];
       });
 
-      const {
-        name,
-        email,
-        password,
-        role,
-        class: classId,
-        enrolledat,
-        rollnumber,
-        rollnumber: rn1,
-        rollNumber: rn2,
-        mobilenumber,
-        mobileNumber,
-      } = normalizedStudent;
-      const finalRollNumber = rn2 || rn1 || rollnumber;
-      const finalMobileNumber = mobileNumber || mobilenumber;
-      const normalizedClassIds = Array.isArray(normalizedStudent.classids)
-        ? normalizedStudent.classids
-            .map((id: unknown) => String(id))
-            .filter(Boolean)
-        : [];
-      const normalizedSubjectIds = Array.isArray(normalizedStudent.subjectids)
-        ? normalizedStudent.subjectids
-            .map((id: unknown) => String(id))
-            .filter(Boolean)
-        : [];
+      const name = String(normalizedStudent.name || "").trim();
+      const email = normalizedStudent.email
+        ? String(normalizedStudent.email).trim()
+        : undefined;
+      const password = normalizedStudent.password
+        ? String(normalizedStudent.password)
+        : undefined;
+      const role = String(normalizedStudent.role || "").trim();
+      const classId = normalizeId(normalizedStudent.classid ?? normalizedStudent.class);
+      const academicSectionId = normalizeId(
+        normalizedStudent.academicsectionid ??
+          normalizedStudent.academicsection ??
+          normalizedStudent.sectionid ??
+          normalizedStudent.section,
+      );
+      const finalRollNumber =
+        normalizedStudent.rollnumber || normalizedStudent.rollNumber;
+      const finalMobileNumber =
+        normalizedStudent.mobilenumber || normalizedStudent.mobileNumber;
+      const normalizedClassIds = normalizeIds(normalizedStudent.classids);
+      const normalizedAcademicSectionIds = normalizeIds(
+        normalizedStudent.academicsectionids ?? normalizedStudent.sectionids,
+      );
+      const normalizedSubjectIds = normalizeIds(normalizedStudent.subjectids);
       const allowAllClasses = Boolean(normalizedStudent.hasallclasses);
+      const allowAllSections =
+        typeof normalizedStudent.hasallsections === "boolean"
+          ? normalizedStudent.hasallsections
+          : role !== "student";
       const allowAllSubjects = Boolean(normalizedStudent.hasallsubjects);
 
       if (!name || !role) {
@@ -120,12 +173,32 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      if (role === "student" && classId && academicSectionId) {
+        const sectionValidation = await validateStudentAcademicSection(
+          AcademicSectionModel,
+          classId,
+          academicSectionId,
+        );
+        if (!sectionValidation.ok) {
+          results.push({
+            success: false,
+            message: sectionValidation.message,
+            student,
+          });
+          continue;
+        }
+      }
+
       if (role === "student" && finalRollNumber && classId) {
-        const existingStudent = await User.findOne({
+        const studentQuery: any = {
           role: "student",
           rollNumber: finalRollNumber,
           class: classId,
-        });
+        };
+        if (academicSectionId) {
+          studentQuery.academicSection = academicSectionId;
+        }
+        const existingStudent = await User.findOne(studentQuery);
         if (existingStudent) {
           results.push({ success: true, user: existingStudent, existed: true });
           continue;
@@ -144,7 +217,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      let passwordHash: string | undefined = undefined;
+      let passwordHash: string | undefined;
       if (password) {
         if (String(password).length < 6) {
           results.push({
@@ -163,25 +236,38 @@ export async function POST(request: NextRequest) {
         passwordHash,
         role,
         mobileNumber: String(finalMobileNumber).trim(),
-        class: role === "student" ? classId : undefined,
+        class: role === "student" ? classId || undefined : undefined,
+        academicSection:
+          role === "student" ? academicSectionId || undefined : undefined,
         classIds:
           role === "teacher" || role === "admin"
             ? normalizedClassIds
+            : undefined,
+        academicSectionIds:
+          role === "teacher" || role === "admin"
+            ? allowAllSections
+              ? []
+              : normalizedAcademicSectionIds
             : undefined,
         subjectIds:
           role === "teacher" || role === "admin"
             ? normalizedSubjectIds
             : undefined,
         hasAllClasses: role === "admin" ? allowAllClasses : false,
+        hasAllSections:
+          role === "teacher" || role === "admin" ? allowAllSections : false,
         hasAllSubjects: role === "admin" ? allowAllSubjects : false,
         rollNumber: role === "student" ? finalRollNumber : undefined,
-        enrolledAt: role === "student" ? enrolledat || Date.now() : undefined,
+        enrolledAt:
+          role === "student"
+            ? normalizedStudent.enrolledat || Date.now()
+            : undefined,
       });
       await newUser.save();
       results.push({ success: true, user: newUser });
     }
 
-    const successCount = results.filter((r) => r.success).length;
+    const successCount = results.filter((result) => result.success).length;
     return NextResponse.json({ success: true, count: successCount, results });
   } catch (error: any) {
     return NextResponse.json(

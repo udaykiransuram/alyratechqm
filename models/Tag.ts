@@ -1,6 +1,6 @@
-// models/Tag.ts
-import mongoose, { Schema, Document, Model } from 'mongoose';
-import { ITagType } from './TagType';
+import mongoose, { Document, Model, Schema } from 'mongoose';
+import { applyArchiveFields, hasArchiveFields } from '@/lib/archive';
+import type { ITagType } from './TagType.ts';
 
 export interface ITag extends Document {
   name: string;
@@ -16,21 +16,26 @@ const TagSchema: Schema<ITag> = new Schema(
     },
     type: {
       type: Schema.Types.ObjectId,
-      ref: 'TagType', // Creates a reference to the TagType model
+      ref: 'TagType',
       required: [true, 'Tag type is required.'],
     },
   },
   {
     timestamps: true,
-    // --- REMOVE any direct reference to Class or Subject here ---
-    // --- ADD THIS COMPOUND INDEX ---
-    // This ensures that the combination of 'name' and 'type' is unique.
-    indexes: [
-      { fields: { name: 1, type: 1 }, unique: true }
-    ]
-  }
+    indexes: [{ fields: { name: 1, type: 1 }, unique: true }],
+  },
 );
 
-const Tag: Model<ITag> = mongoose.models.Tag || mongoose.model<ITag>('Tag', TagSchema);
+applyArchiveFields(TagSchema);
+
+const existingTagModel = mongoose.models.Tag as Model<ITag> | undefined;
+
+if (existingTagModel && !hasArchiveFields(existingTagModel)) {
+  delete mongoose.models.Tag;
+}
+
+const Tag: Model<ITag> =
+  (mongoose.models.Tag as Model<ITag>) ||
+  mongoose.model<ITag>('Tag', TagSchema);
 
 export default Tag;

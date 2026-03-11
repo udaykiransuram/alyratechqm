@@ -2,7 +2,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,19 +10,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from '@/components/ui/spinner';
+import PageLoadingState from '@/components/ui/page-loading-state';
 import { CreateTagTypeModal } from '@/components/CreateTagTypeModal'; // Import the modal
 import { PlusCircle } from 'lucide-react';
-
-// Helper to always include current tenant in client fetches
-const getSchoolKey = () => {
-  if (typeof document === 'undefined') return '';
-  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : '';
-};
-const getSchoolQS = () => {
-  const k = getSchoolKey();
-  return k ? `?school=${encodeURIComponent(k)}` : '';
-};
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import { buildPartialLoadMessage, fetchApiJson, resolveClientSchoolKey } from '@/lib/client/api';
 
 // Updated interfaces to reflect the new data structure
 interface TagType {
@@ -46,8 +37,8 @@ interface Subject {
 
 export default function EditTagPage({ params }: { params: { id: string } }) {
   const { id: tagId } = params;
-  const router = useRouter();
   const { toast } = useToast();
+  const { navigateBack } = useBackNavigation('/tags');
 
   const [tagName, setTagName] = useState('');
   const [selectedTagTypeId, setSelectedTagTypeId] = useState(''); // State now holds the ID
@@ -58,54 +49,61 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
   const [isSaving, setIsSaving] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [pageNotice, setPageNotice] = useState<string | null>(null);
 
   const fetchPageData = useCallback(async () => {
     setPageLoading(true);
+    setPageError(null);
+    setPageNotice(null);
     try {
-      const tagEndpoint = `/api/tags/${tagId}` + getSchoolQS();
-      const subjectsEndpoint = '/api/subjects' + getSchoolQS();
-      const tagTypesEndpoint = '/api/tag-types' + getSchoolQS();
-      console.debug('[tags/edit] fetchPageData ->', { tagEndpoint, subjectsEndpoint, tagTypesEndpoint });
-      const [tagRes, allSubjectsRes, tagTypesRes] = await Promise.all([
-        fetch(tagEndpoint),
-        fetch(subjectsEndpoint),
-        fetch(tagTypesEndpoint)
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        setPageError('Select a school workspace to edit tags.');
+        return;
+      }
+
+      const [tagResult, subjectsResult, tagTypesResult] = await Promise.allSettled([
+        fetchApiJson<any>(`/api/tags/${tagId}`, {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load tag details.',
+        }),
+        fetchApiJson<any>('/api/subjects', {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load subjects.',
+        }),
+        fetchApiJson<any>('/api/tag-types', {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load tag types.',
+        }),
       ]);
 
-      const tagData = await tagRes.json();
-      const allSubjectsData = await allSubjectsRes.json();
-      const tagTypesData = await tagTypesRes.json();
-      console.debug('[tags/edit] fetchPageData <-', {
-        tagOk: tagRes.ok, tagStatus: tagRes.status, tagSuccess: tagData?.success,
-        subjectsOk: allSubjectsRes.ok, subjectsStatus: allSubjectsRes.status, subjectsCount: allSubjectsData?.subjects?.length,
-        tagTypesOk: tagTypesRes.ok, tagTypesStatus: tagTypesRes.status, tagTypesCount: tagTypesData?.tagTypes?.length
-      });
-
-      if (tagData.success && allSubjectsData.success && tagTypesData.success) {
-        const tag = tagData.tag as TagItem;
-        
-        setTagName(tag.name);
-        setSelectedTagTypeId(tag.type._id); // Set the ID of the tag's type
-        setSelectedSubjects(tag.subjects?.map(sub => sub._id) || []);
-        
-        setSubjects(allSubjectsData.subjects as Subject[]);
-        setTagTypes(tagTypesData.tagTypes as TagType[]);
-      } else {
-        toast({
-          title: "Error",
-          description: tagData.message || allSubjectsData.message || tagTypesData.message || "Failed to load page data.",
-          variant: "destructive",
-        });
-        router.push('/tags');
+      if (tagResult.status !== 'fulfilled') {
+        throw tagResult.reason;
       }
-    } catch (error) {
-      console.error('[tags/edit] fetchPageData error', error);
-      toast({ title: "Network Error", description: "Failed to load page data.", variant: "destructive" });
-      router.push('/tags');
+
+      const tagData = tagResult.value;
+      const tag = tagData.tag as TagItem;
+      setTagName(tag.name);
+      setSelectedTagTypeId(tag.type._id);
+      setSelectedSubjects(tag.subjects?.map(sub => sub._id) || []);
+      setSubjects(subjectsResult.status === 'fulfilled' && Array.isArray(subjectsResult.value.subjects) ? subjectsResult.value.subjects as Subject[] : []);
+      setTagTypes(tagTypesResult.status === 'fulfilled' && Array.isArray(tagTypesResult.value.tagTypes) ? tagTypesResult.value.tagTypes as TagType[] : []);
+      setPageNotice(
+        buildPartialLoadMessage([
+          ...(subjectsResult.status === 'rejected' ? ['Subject associations'] : []),
+          ...(tagTypesResult.status === 'rejected' ? ['Tag types'] : []),
+        ]),
+      );
+    } catch (error: any) {
+      setPageError(error?.message || 'Failed to load page data.');
     } finally {
       setPageLoading(false);
     }
-  }, [tagId, toast, router]);
+  }, [tagId]);
 
   useEffect(() => {
     fetchPageData();
@@ -118,30 +116,27 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
     }
     setIsSaving(true);
     try {
-      const endpoint = `/api/tags/${tagId}` + getSchoolQS();
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error('Please select a school in the navbar first.');
+      }
+
       const payload = {
         name: tagName,
-        type: selectedTagTypeId, // Send the selected type ID
+        type: selectedTagTypeId,
         selectedSubjectIds: selectedSubjects,
       };
-      console.debug('[tags/edit] PATCH tag ->', { endpoint, payload });
-      const res = await fetch(endpoint, {
+      const data = await fetchApiJson<any>(`/api/tags/${tagId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        schoolKey,
+        fallbackMessage: 'Failed to update tag.',
       });
-      const data = await res.json();
-      console.debug('[tags/edit] PATCH tag <-', { ok: res.ok, status: res.status, data });
-      if (data.success) {
-        toast({ title: "Success", description: `Tag "${data.tag.name}" updated successfully.` });
-        router.push('/tags');
-      } else {
-        console.warn('[tags/edit] update responded with error', data);
-        toast({ title: "Error Updating Tag", description: data.message, variant: "destructive" });
-      }
-    } catch (error) {
-      console.error('[tags/edit] PATCH tag error', error);
-      toast({ title: "Network Error", description: "Failed to update tag.", variant: "destructive" });
+      toast({ title: "Success", description: `Tag "${data.tag.name}" updated successfully.` });
+      navigateBack();
+    } catch (error: any) {
+      toast({ title: "Network Error", description: error?.message || "Failed to update tag.", variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -149,8 +144,17 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
 
   if (pageLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <Spinner /> <span className="ml-2 text-muted-foreground">Loading tag details...</span>
+      <PageLoadingState
+        title="Loading tag details"
+        description="Preparing the tag form, subject links, and type options."
+      />
+    );
+  }
+
+  if (pageError) {
+    return (
+      <div className="app-page-shell max-w-2xl px-4 py-6 sm:px-0">
+        <div className="app-feedback app-feedback-error">{pageError}</div>
       </div>
     );
   }
@@ -166,6 +170,7 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
         }}
       />
       <div className="max-w-2xl mx-auto py-8 space-y-8">
+        {pageNotice ? <div className="app-feedback app-feedback-info">{pageNotice}</div> : null}
         <header className="text-center">
           <h1 className="app-page-title">Edit Tag</h1>
           <p className="text-muted-foreground mt-1">Update the tag's details and its subject associations.</p>
@@ -189,6 +194,7 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
                     <SelectValue placeholder="Select a type" />
                   </SelectTrigger>
                   <SelectContent>
+                    {tagTypes.length === 0 ? <div className="px-3 py-2 text-sm text-muted-foreground">No tag types available yet.</div> : null}
                     {tagTypes.map((type) => (
                       <SelectItem key={type._id} value={type._id} className="capitalize">{type.name}</SelectItem>
                     ))}
@@ -209,6 +215,7 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
           </CardHeader>
           <CardContent>
             <div className="max-h-60 overflow-y-auto space-y-3 pr-2">
+              {subjects.length === 0 ? <div className="text-sm text-muted-foreground">No subjects available for this school yet.</div> : null}
               {subjects.map((subject) => (
                 <div key={subject._id} className="flex items-center space-x-3">
                   <Checkbox
@@ -231,7 +238,7 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
         </Card>
 
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => router.push('/tags')} disabled={isSaving}>Cancel</Button>
+          <Button variant="outline" onClick={navigateBack} disabled={isSaving}>Cancel</Button>
           <Button onClick={handleUpdateTag} disabled={isSaving}>
             {isSaving && <Spinner />}
             Save Changes

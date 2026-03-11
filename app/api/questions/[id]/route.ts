@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { getTenantModels } from '@/lib/db-tenant';
 import mongoose from 'mongoose';
+import { buildArchiveFilter, buildArchivedUpdate, resolveIncludeArchived } from '@/lib/archive';
+import { recordTenantAudit } from '@/lib/audit';
 
 function resolveSchoolKey(req: NextRequest){
   const url = new URL(req.url);
@@ -63,7 +65,7 @@ export async function PUT(
       }
     }
 
-    const question = await QuestionModel.findById(params.id);
+    const question = await QuestionModel.findOne({ _id: params.id, ...buildArchiveFilter(false) });
     if (!question) {
       return NextResponse.json({ success: false, message: 'Question not found.' }, { status: 404 });
     }
@@ -128,12 +130,27 @@ export async function DELETE(
       return NextResponse.json({ success: false, message: 'Invalid question ID' }, { status: 400 });
     }
 
-    const deletedQuestion = await QuestionModel.findByIdAndDelete(params.id);
-    if (!deletedQuestion) {
+    const archivedQuestion = await QuestionModel.findOneAndUpdate(
+      { _id: params.id, ...buildArchiveFilter(false) },
+      buildArchivedUpdate(),
+      { new: true, runValidators: true }
+    );
+    if (!archivedQuestion) {
       return NextResponse.json({ success: false, message: 'Question not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, message: 'Question deleted successfully' });
+    await recordTenantAudit({
+      schoolKey,
+      req,
+      entityType: 'question',
+      entityId: String(archivedQuestion._id),
+      entityLabel: String(archivedQuestion.content || '').slice(0, 80),
+      action: 'archived',
+      summary: 'Archived question.',
+      details: { questionId: String(archivedQuestion._id) },
+    });
+
+    return NextResponse.json({ success: true, message: 'Question archived successfully' });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message || 'Server error' }, { status: 500 });
   }
@@ -208,8 +225,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       update.matrixAnswers = undefined;
     }
 
-    const updatedQuestion = await QuestionModel.findByIdAndUpdate(
-      params.id,
+    const updatedQuestion = await QuestionModel.findOneAndUpdate(
+      { _id: params.id, ...buildArchiveFilter(false) },
       update,
       { new: true, runValidators: true }
     )
@@ -237,7 +254,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question']);
   try {
-    const question = await QuestionModel.findById(params.id)
+    const question = await QuestionModel.findOne({ _id: params.id, ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)) })
       .populate('subject', 'name')
       .populate('class', 'name')
       .populate({ path: 'tags', populate: { path: 'type', select: 'name' } });

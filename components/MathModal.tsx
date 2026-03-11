@@ -6,7 +6,7 @@ declare global {
   }
 }
 
-import { type CSSProperties, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -43,44 +43,92 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
   const [previewHtml, setPreviewHtml] = useState('');
   const [error, setError] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
+  const [isMathLiveReady, setIsMathLiveReady] = useState(false);
+  const [mathLiveLoadError, setMathLiveLoadError] = useState('');
+
+  const updatePreview = useCallback((nextLatex: string) => {
+    setLatex(nextLatex);
+
+    if (!nextLatex) {
+      setPreviewHtml('');
+      setError('');
+      return;
+    }
+
+    try {
+      const html = katex.renderToString(nextLatex, {
+        displayMode: mode === 'block',
+        throwOnError: true,
+      });
+      setPreviewHtml(html);
+      setError('');
+    } catch (err: any) {
+      setPreviewHtml('');
+      setError(err?.message || 'Invalid LaTeX expression.');
+    }
+  }, [mode]);
+
+  const loadMathLive = useCallback(async () => {
+    if (typeof window === 'undefined') return false;
+
+    if (window.__mathlive_registered__) {
+      setIsMathLiveReady(true);
+      setMathLiveLoadError('');
+      return true;
+    }
+
+    try {
+      const { MathfieldElement } = await import('mathlive');
+      MathfieldElement.soundsDirectory = '/sounds/';
+
+      if (!customElements.get('math-field')) {
+        customElements.define('math-field', MathfieldElement);
+      }
+
+      window.__mathlive_registered__ = true;
+      setIsMathLiveReady(true);
+      setMathLiveLoadError('');
+      return true;
+    } catch (err) {
+      console.error('[MathModal] Failed to load mathlive.', err);
+      setIsMathLiveReady(false);
+      setMathLiveLoadError(
+        'The visual math keyboard could not be loaded. You can still type LaTeX manually.',
+      );
+      return false;
+    }
+  }, []);
 
   useEffect(() => {
-    const loadMathLive = async () => {
-      if (typeof window !== 'undefined' && !window.__mathlive_registered__) {
-        const { MathfieldElement } = await import('mathlive');
-        MathfieldElement.soundsDirectory = '/sounds/';
-
-        if (!customElements.get('math-field')) {
-          customElements.define('math-field', MathfieldElement);
-        }
-        window.__mathlive_registered__ = true;
-      }
-    };
-
-    loadMathLive();
-  }, []);
+    if (!open) return;
+    void loadMathLive();
+  }, [loadMathLive, open]);
 
   useEffect(() => {
     if (!open) return;
 
     const initialValue = initialLatex || '';
-    setLatex(initialValue);
     setError('');
     setPreviewHtml('');
     loadRecent();
 
-    if (mathRef.current) {
+    if (isMathLiveReady && mathRef.current?.setValue) {
       mathRef.current.setValue(initialValue);
       setTimeout(() => {
-        handleInput();
-        mathRef.current?.focus();
+        updatePreview(mathRef.current?.value || initialValue);
+        mathRef.current?.focus?.();
       }, 100);
+      return;
     }
-  }, [open, initialLatex]);
+
+    updatePreview(initialValue);
+  }, [initialLatex, isMathLiveReady, open, updatePreview]);
 
   useEffect(() => {
+    if (!isMathLiveReady) return;
+
     const field = mathRef.current;
-    if (!field) return;
+    if (!field?.addEventListener) return;
 
     const stopKey = (event: KeyboardEvent) => event.stopPropagation();
     field.addEventListener('keydown', stopKey);
@@ -90,22 +138,26 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
       field.removeEventListener('keydown', stopKey);
       field.removeEventListener('keyup', stopKey);
     };
-  }, [mathRef.current]);
+  }, [isMathLiveReady]);
 
   useEffect(() => {
-    if (open && mathRef.current) {
-      handleInput();
-    }
-  }, [mode, open]);
+    if (!open) return;
 
-  const loadRecent = () => {
-    const data = localStorage.getItem(RECENT_KEY);
-    if (!data) {
-      setRecent([]);
+    if (isMathLiveReady && mathRef.current) {
+      updatePreview(mathRef.current?.value || latex);
       return;
     }
 
+    updatePreview(latex);
+  }, [isMathLiveReady, latex, mode, open, updatePreview]);
+
+  const loadRecent = () => {
     try {
+      const data = localStorage.getItem(RECENT_KEY);
+      if (!data) {
+        setRecent([]);
+        return;
+      }
       setRecent(JSON.parse(data));
     } catch {
       setRecent([]);
@@ -115,37 +167,38 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
   const saveToRecent = (expression: string) => {
     const updated = [expression, ...recent.filter((item) => item !== expression)].slice(0, 5);
     setRecent(updated);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
-  };
-
-  const handleInput = () => {
-    const current = mathRef.current?.value || '';
-    setLatex(current);
-
-    if (!current) {
-      setPreviewHtml('');
-      setError('');
-      return;
-    }
-
     try {
-      const html = katex.renderToString(current, {
-        displayMode: mode === 'block',
-        throwOnError: true,
-      });
-      setPreviewHtml(html);
-      setError('');
-    } catch (err: any) {
-      setPreviewHtml('');
-      setError(err.message);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+    } catch {
     }
   };
+
+  const handleFieldInput = useCallback(() => {
+    updatePreview(mathRef.current?.value || '');
+  }, [updatePreview]);
+
+  const handleTextareaChange = useCallback(
+    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+      updatePreview(event.target.value);
+    },
+    [updatePreview],
+  );
 
   const handleInsert = () => {
     if (!latex || error) return;
     saveToRecent(latex);
     onInsert(latex, mode);
     onClose();
+  };
+
+  const handleRecentClick = (expression: string) => {
+    if (isMathLiveReady && mathRef.current?.setValue) {
+      mathRef.current.setValue(expression);
+      updatePreview(expression);
+      return;
+    }
+
+    updatePreview(expression);
   };
 
   return (
@@ -191,8 +244,21 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
             <div className="space-y-2">
               <label className="app-field-label">Expression</label>
               <div className="rounded-xl border border-border/60 bg-background px-3 py-3 shadow-sm">
-                <math-field ref={mathRef} onInput={handleInput} style={mathFieldStyle} />
+                {isMathLiveReady ? (
+                  <math-field ref={mathRef} onInput={handleFieldInput} style={mathFieldStyle} />
+                ) : (
+                  <textarea
+                    rows={4}
+                    className="app-form-textarea min-h-[96px] border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0"
+                    value={latex}
+                    onChange={handleTextareaChange}
+                    placeholder="e.g. \\frac{a}{b}"
+                  />
+                )}
               </div>
+              {mathLiveLoadError ? (
+                <p className="text-sm text-muted-foreground">{mathLiveLoadError}</p>
+              ) : null}
             </div>
           </div>
 
@@ -223,13 +289,7 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
                     variant="outline"
                     size="sm"
                     className="max-w-full font-mono text-xs"
-                    onClick={() => {
-                      if (mathRef.current) {
-                        mathRef.current.setValue(item);
-                        setLatex(item);
-                        handleInput();
-                      }
-                    }}
+                    onClick={() => handleRecentClick(item)}
                   >
                     {item}
                   </Button>

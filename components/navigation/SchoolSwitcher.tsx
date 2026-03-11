@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
+import { fetchApiJson } from "@/lib/client/api";
+import { getSchoolKeyFromCookie, setSchoolKeyCookie } from "@/lib/client/school";
 import { cn } from "@/lib/utils";
 
 type SchoolOption = {
@@ -58,11 +60,12 @@ export default function SchoolSwitcher({
 
   async function load() {
     try {
-      const res = await fetch("/api/schools").catch(() => null);
-      if (!res || !res.ok) return;
-
-      const json = await res.json().catch(() => null);
-      if (json?.success && Array.isArray(json.schools)) {
+      const json = await fetchApiJson<any>("/api/schools", {
+        cache: "no-store",
+        schoolKey: "",
+        fallbackMessage: "Failed to load schools.",
+      });
+      if (Array.isArray(json.schools)) {
         const nextSchools = json.schools
           .map((school: any) => ({
             key: String(school?.key || "").trim(),
@@ -80,19 +83,9 @@ export default function SchoolSwitcher({
 
   useEffect(() => {
     setMounted(true);
-    load();
-    try {
-      const match = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-      if (match?.[1]) {
-        setCurrent(decodeURIComponent(match[1]));
-      }
-    } catch {
-    }
+    void load();
+    setCurrent(getSchoolKeyFromCookie());
   }, []);
-
-  function setCookie(name: string, value: string) {
-    document.cookie = `${name}=${value}; path=/; max-age=31536000`;
-  }
 
   function handleDialogChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -103,7 +96,7 @@ export default function SchoolSwitcher({
 
   function onSelect(value: string) {
     setCurrent(value);
-    setCookie("schoolKey", value);
+    setSchoolKeyCookie(value);
     window.location.reload();
   }
 
@@ -124,32 +117,25 @@ export default function SchoolSwitcher({
 
     setCreating(true);
     try {
-      const res = await fetch("/api/schools", {
+      const json = await fetchApiJson<any>("/api/schools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        schoolKey: "",
+        fallbackMessage: "Failed to create school.",
       });
-      const json = await res.json().catch(() => ({}));
 
-      if (res.ok && json?.success) {
-        toast({
-          title: "School created",
-          description: `${json.school.displayName} is now available in the switcher.`,
-        });
-        setForm({ key: "", displayName: "" });
-        setOpen(false);
-        await load();
-      } else {
-        toast({
-          title: "Create failed",
-          description: json?.message || "Failed to create school.",
-          variant: "destructive",
-        });
-      }
-    } catch {
       toast({
-        title: "Network Error",
-        description: "Could not create the school right now.",
+        title: "School created",
+        description: `${json.school.displayName} is now available in the switcher.`,
+      });
+      setForm({ key: "", displayName: "" });
+      setOpen(false);
+      await load();
+    } catch (error: any) {
+      toast({
+        title: "Create failed",
+        description: error?.message || "Could not create the school right now.",
         variant: "destructive",
       });
     } finally {
@@ -162,20 +148,20 @@ export default function SchoolSwitcher({
   return (
     <div
       className={cn(
-        "w-full max-w-[28rem] min-w-0 rounded-2xl border border-border/60 bg-card/70 p-2 shadow-sm backdrop-blur",
+        "w-full max-w-[28rem] min-w-0 rounded-xl border border-border/60 bg-card/70 p-1.5 shadow-sm backdrop-blur",
         className,
       )}
     >
-      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Building2 className="h-4 w-4" />
             <span className="sr-only">School workspace</span>
           </div>
 
           <Select value={currentSchool?.key} onValueChange={onSelect}>
             <SelectTrigger
-              className="h-10 min-w-0 flex-1 bg-background/80"
+              className="h-9 min-w-0 flex-1 bg-background/80"
               title={
                 currentSchool
                   ? `${currentSchool.displayName} (${currentSchool.key})`
@@ -204,12 +190,12 @@ export default function SchoolSwitcher({
           </Select>
         </div>
 
-        <div className="flex gap-2 max-sm:w-full">
+        <div className="flex gap-1.5 max-sm:w-full">
           <Button
             asChild
             variant={showCreateButton ? "ghost" : "outline"}
             size="sm"
-            className="h-10 shrink-0 px-3 max-sm:flex-1"
+            className="h-9 shrink-0 px-3 max-sm:flex-1"
           >
             <Link href="/manage/schools" title="Manage schools" onClick={onManageClick}>
               <Settings2 className="h-4 w-4" />
@@ -225,7 +211,7 @@ export default function SchoolSwitcher({
           {showCreateButton ? (
             <Dialog open={open} onOpenChange={handleDialogChange}>
               <DialogTrigger asChild>
-                <Button className="h-10 shrink-0 px-3 max-sm:flex-1" variant="outline" size="sm">
+                <Button className="h-9 shrink-0 px-3 max-sm:flex-1" variant="outline" size="sm">
                   <Plus className="h-4 w-4" />
                   <span className="hidden xl:inline">New School</span>
                   <span className="xl:hidden">New</span>

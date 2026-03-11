@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import PageLoadingState from "@/components/ui/page-loading-state";
 import {
   Table,
   TableBody,
@@ -13,6 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
+import { fetchApiJson } from "@/lib/client/api";
 
 interface TeacherUser {
   _id: string;
@@ -22,13 +25,8 @@ interface TeacherUser {
   role: "teacher";
 }
 
-function getSchoolKeyFromCookie(): string | null {
-  if (typeof document === "undefined") return null;
-  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
 export default function TeachersPage() {
+  const { buildReturnHref } = useReturnHrefBuilder("/teachers");
   const [teachers, setTeachers] = useState<TeacherUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,15 +35,11 @@ export default function TeachersPage() {
     const loadTeachers = async () => {
       try {
         setLoading(true);
-        const schoolKey = getSchoolKeyFromCookie();
-        const url =
-          "/api/users?role=teacher" +
-          (schoolKey ? `&school=${encodeURIComponent(schoolKey)}` : "");
-        const res = await fetch(url, { cache: "no-store" });
-        const data = await res.json();
-        if (!data.success)
-          throw new Error(data.message || "Failed to load teachers");
-        setTeachers(data.users || []);
+        const data = await fetchApiJson<any>("/api/users?role=teacher", {
+          cache: "no-store",
+          fallbackMessage: "Failed to load teachers.",
+        });
+        setTeachers(Array.isArray(data.users) ? data.users : []);
       } catch (e: any) {
         setError(e.message || "Failed to load teachers");
       } finally {
@@ -53,7 +47,7 @@ export default function TeachersPage() {
       }
     };
 
-    loadTeachers();
+    void loadTeachers();
   }, []);
 
   return (
@@ -76,7 +70,13 @@ export default function TeachersPage() {
         </CardHeader>
         <CardContent className="app-section-body">
           {loading ? (
-            <div className="app-empty-state">Loading teachers...</div>
+            <PageLoadingState
+              title="Loading teachers"
+              description="Preparing teacher accounts and assigned access scopes."
+              className="px-0 py-0"
+              contentClassName="max-w-none"
+              dense
+            />
           ) : error ? (
             <div className="app-feedback app-feedback-error">{error}</div>
           ) : teachers.length === 0 ? (
@@ -105,7 +105,7 @@ export default function TeachersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button asChild variant="outline" size="sm">
-                        <Link href={`/teachers/${teacher._id}`}>View</Link>
+                        <Link href={buildReturnHref(`/teachers/${teacher._id}`)}>View</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

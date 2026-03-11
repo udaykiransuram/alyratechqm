@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import EditorLoadingState from '@/components/ui/editor-loading-state';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { MetadataSelector } from '@/components/MetadataSelector';
 import { Input } from '@/components/ui/input';
@@ -13,11 +14,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
-  loading: () => <div className="app-empty-state flex min-h-[210px] items-center justify-center"><Spinner /></div>,
+  loading: () => <EditorLoadingState label="Loading rich text editor" />,
 });
 const MatrixMatchConfigurator = dynamic(() => import('@/components/MatrixMatchConfigurator').then(mod => mod.default), {
   ssr: false,
-  loading: () => <div className="app-empty-state flex min-h-[210px] items-center justify-center"><Spinner /></div>,
+  loading: () => <EditorLoadingState label="Loading matrix configurator" />,
 });
 
 interface EditQuestionModalProps {
@@ -117,7 +118,6 @@ export function EditQuestionModal({
 
   // --- Option handlers ---
   const handleAddOption = () => {
-    console.log('Add Option clicked');
     if (options.length >= 5) {
       toast({ title: 'Limit Reached', description: 'You can add a maximum of 5 options.', variant: 'destructive' });
       return;
@@ -126,7 +126,6 @@ export function EditQuestionModal({
   };
 
   const handleToggleAnswer = (index: number) => {
-    console.log('Toggle Answer', index);
     setAnswerIndexes(prev =>
       prev.includes(index)
         ? prev.filter(i => i !== index)
@@ -135,7 +134,6 @@ export function EditQuestionModal({
   };
 
   const handleRemoveOption = (index: number) => {
-    console.log('Remove Option', index);
     if (options.length <= 1) {
       toast({ title: 'Cannot Remove', description: 'At least one option is required.', variant: 'destructive' });
       return;
@@ -146,7 +144,6 @@ export function EditQuestionModal({
   };
 
   const handleOptionChange = (index: number, value: string | null) => {
-    console.log('Option Change', index, value);
     const newOptions = [...options];
     newOptions[index].content = value;
     setOptions(newOptions);
@@ -154,14 +151,12 @@ export function EditQuestionModal({
 
   const handleMarksChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
-    console.log('Marks Change', val);
     setMarks(isNaN(val) ? 1 : Math.max(1, val));
   };
 
   // --- Save handler ---
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Save clicked');
     if (!content || content === '<p></p>') {
       toast({ title: 'Validation Error', description: 'Question content cannot be empty.', variant: 'destructive' });
       return;
