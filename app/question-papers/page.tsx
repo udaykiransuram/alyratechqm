@@ -542,9 +542,12 @@ export default function QuestionPapersListPage() {
     );
 
   return (
-    <div className="container py-6 space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="app-page-title">Question Papers</h1>
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+      <div className="app-page-header-row">
+        <div className="app-page-header">
+          <h1 className="app-page-title">Question Papers</h1>
+          <p className="app-page-subtitle">Browse, filter, and act on papers by class and section.</p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/question-papers/create">
             <Button>Create</Button>
@@ -554,12 +557,12 @@ export default function QuestionPapersListPage() {
 
       {supportDataNotice ? <div className="app-feedback app-feedback-info">{supportDataNotice}</div> : null}
 
-      <Card className="app-surface">
+      <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
           <CardTitle>Filters & Actions</CardTitle>
         </CardHeader>
-        <CardContent className="app-section-body">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <CardContent className="app-section-body space-y-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[220px_260px_minmax(220px,1fr)_160px] xl:items-center">
               <div className="w-full">
                 <Select value={classFilterId} onValueChange={setClassFilterId}>

@@ -186,7 +186,7 @@ export default function ViewQuestionsPage() {
   const filteredQuestions = questions;
 
   return (
-    <div className="container py-6 space-y-6">
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div>
           <h1 className="app-page-title">All Questions</h1>
@@ -202,7 +202,7 @@ export default function ViewQuestionsPage() {
 
       {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_292px]">
         <MetadataSelector
           classes={classes}
           classId={classId}
@@ -227,7 +227,7 @@ export default function ViewQuestionsPage() {
             <h2 className="text-base font-semibold text-foreground">Search</h2>
             <p className="app-page-subtitle">Search question content or reset the current filters.</p>
           </div>
-          <div className="app-section-body space-y-4">
+          <div className="app-section-body space-y-3">
             <div className="app-field-group">
               <p className="app-field-label">Search Content</p>
               <Input
@@ -324,7 +324,7 @@ export default function ViewQuestionsPage() {
         ) : null}
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {loading ? (
           Array.from({ length: 3 }).map((_, index) => <QuestionItemSkeleton key={index} />)
         ) : error ? (

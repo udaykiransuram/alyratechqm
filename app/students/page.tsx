@@ -274,7 +274,7 @@ export default function StudentsByClassPage() {
   );
 
   return (
-    <div className="container py-6 space-y-6">
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div className="app-page-header">
           <h1 className="app-page-title">Students</h1>
@@ -287,7 +287,7 @@ export default function StudentsByClassPage() {
         </Link>
       </div>
 
-      <Card className="app-surface">
+      <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
           <CardTitle>Filters</CardTitle>
         </CardHeader>
@@ -340,7 +340,7 @@ export default function StudentsByClassPage() {
       ) : groups.length === 0 ? (
         <div className="app-empty-state">No students found.</div>
       ) : (
-        <Accordion type="multiple" className="space-y-4">
+        <Accordion type="multiple" className="space-y-3">
           {groups.map((group) => {
             const page = pages[group.groupId] || 1;
             const start = (page - 1) * pageSize;
@@ -348,7 +348,7 @@ export default function StudentsByClassPage() {
             const pageItems = group.students.slice(start, end);
             const maxPage = Math.max(1, Math.ceil(group.students.length / pageSize));
             return (
-              <AccordionItem key={group.groupId} value={group.groupId} className="border rounded-md">
+              <AccordionItem key={group.groupId} value={group.groupId} className="overflow-hidden rounded-xl border border-border/60 bg-background">
                 <AccordionTrigger className="px-4">
                   <div className="flex w-full items-center justify-between">
                     <div className="flex min-w-0 flex-col text-left">
