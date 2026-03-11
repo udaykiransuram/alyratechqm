@@ -10,6 +10,10 @@ import "@/models/Subject";
 import "@/models/TagType";
 import "@/models/Tag";
 import { buildTagReport } from "@/lib/analytics/tagReport";
+import {
+  filterResponsesByAcademicSection,
+  hydrateResponsesWithStudents,
+} from "@/lib/analytics/hydrateResponses";
 import { z } from "zod";
 import { objectIdSchema, schoolKeySchema, parseOr400 } from "@/lib/validation";
 
@@ -77,12 +81,14 @@ function arraysEqual(a: number[], b: number[]) {
   return sortedA.every((val, idx) => val === sortedB[idx]);
 }
 
+function toIdString(value: any) {
+  return String(value?._id || value || "").trim();
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { paperId: string } },
 ) {
-  await connectDB();
-
   const url = new URL(req.url);
   const schoolFromHeader =
     req.headers.get("x-school-key") || req.headers.get("X-School-Key");
@@ -110,6 +116,18 @@ export async function GET(
 
   // Validate params and query
   const groupByParam = req.nextUrl.searchParams.get("groupBy");
+  const rawAcademicSectionId =
+    req.nextUrl.searchParams.get("academicSectionId")?.trim() || "";
+  if (
+    rawAcademicSectionId &&
+    !mongoose.Types.ObjectId.isValid(rawAcademicSectionId)
+  ) {
+    return NextResponse.json(
+      { success: false, message: "Invalid academicSectionId" },
+      { status: 400 },
+    );
+  }
+  const filterAcademicSectionId = rawAcademicSectionId;
   const groupByParts = groupByParam
     ? groupByParam
         .split(",")
@@ -121,25 +139,37 @@ export async function GET(
     groupBy: z.array(z.string()).max(5).optional(),
     json: z.string().optional(),
     groupFields: z.string().optional(),
+    academicSectionId: objectIdSchema.optional(),
   });
   const qRes = parseOr400(querySchema, {
     paperId: params.paperId,
     groupBy: groupByParts,
     json: req.nextUrl.searchParams.get("json"),
     groupFields: req.nextUrl.searchParams.get("groupFields"),
+    academicSectionId: filterAcademicSectionId || undefined,
   });
   // Do not block on validation; proceed with best-effort to avoid hard failures in UI
   // If invalid, Mongoose will return null on findById which we handle with 404 below
 
   try {
-    const { QuestionPaperResponse: QPRModel, QuestionPaper: QPModel } =
-      await getTenantModels(tenantKey, [
-        "QuestionPaperResponse",
-        "QuestionPaper",
-        "Question",
-        "Tag",
-        "TagType",
-      ]);
+    await connectDB();
+
+    const {
+      QuestionPaperResponse: QPRModel,
+      QuestionPaper: QPModel,
+      User: UserModel,
+      AcademicSection: AcademicSectionModel,
+      Class: ClassModel,
+    } = await getTenantModels(tenantKey, [
+      "QuestionPaperResponse",
+      "QuestionPaper",
+      "Question",
+      "Tag",
+      "TagType",
+      "User",
+      "AcademicSection",
+      "Class",
+    ]);
 
     const groupBy = groupByParts;
 
@@ -157,6 +187,12 @@ export async function GET(
           path: "tags",
           populate: { path: "type", select: "name" },
         },
+      })
+      .populate({
+        path: "assignedAcademicSections",
+        model: AcademicSectionModel,
+        select: "name class",
+        populate: { path: "class", model: ClassModel, select: "name" },
       })
       .lean();
 
@@ -180,10 +216,22 @@ export async function GET(
           populate: { path: "type", select: "name" },
         },
       })
-      .populate("student", "name rollNumber")
       .lean();
 
-    students = responses.map((r) => r.student);
+    responses = await hydrateResponsesWithStudents({
+      responses,
+      UserModel,
+      AcademicSectionModel,
+      ClassModel,
+      studentSelect: "name rollNumber academicSection",
+    });
+
+    responses = filterResponsesByAcademicSection(
+      responses,
+      filterAcademicSectionId,
+    );
+
+    students = responses.map((response: any) => response.student).filter(Boolean);
 
     // --- Aggregate per-question stats for class level ---
     let questionStats: Record<
@@ -374,7 +422,65 @@ export async function GET(
           label: type,
         })),
       ];
-      return NextResponse.json({ fields });
+      const configuredAcademicSections = Array.isArray(
+        paperObj?.assignedAcademicSections,
+      )
+        ? paperObj.assignedAcademicSections
+        : [];
+      const fallbackAcademicSections =
+        configuredAcademicSections.length === 0 && paperObj?.class
+          ? await AcademicSectionModel.find({ class: paperObj.class })
+              .select("name class")
+              .sort({ name: 1 })
+              .lean()
+          : [];
+      const responseAcademicSections = new Map<
+        string,
+        { value: string; label: string }
+      >();
+      students.forEach((student: any) => {
+        const academicSection = student?.academicSection;
+        const academicSectionId = String(
+          academicSection?._id || academicSection || "",
+        );
+        if (!academicSectionId) return;
+        responseAcademicSections.set(academicSectionId, {
+          value: academicSectionId,
+          label: academicSection?.name || "Unknown Section",
+        });
+      });
+      const configuredAcademicSectionOptions = configuredAcademicSections.map(
+        (section: any) => ({
+          value: String(section?._id || ""),
+          label: section?.name || "Unknown Section",
+        }),
+      );
+      const fallbackAcademicSectionOptions = fallbackAcademicSections.map(
+        (section: any) => ({
+          value: String(section?._id || ""),
+          label: section?.name || "Unknown Section",
+        }),
+      );
+      const academicSectionCandidates =
+        responseAcademicSections.size > 0
+          ? Array.from(responseAcademicSections.values())
+          : configuredAcademicSectionOptions.length > 0
+            ? configuredAcademicSectionOptions
+            : fallbackAcademicSectionOptions;
+
+      const academicSections = Array.from(
+        new Map(
+          academicSectionCandidates
+            .filter((section: any) => section.value)
+            .map((section: any) => [section.value, section]),
+        ).values(),
+      ).sort((a: any, b: any) => a.label.localeCompare(b.label));
+      return NextResponse.json({
+        fields,
+        filters: {
+          academicSections,
+        },
+      });
     }
 
     // PDF generation (optional, similar to student route)

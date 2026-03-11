@@ -16,8 +16,10 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
 
 export function QuestionPaperToolbar({ paper }: { paper: any }) {
+  const { buildReturnHref } = useReturnHrefBuilder("/question-papers");
   const [showModal, setShowModal] = useState(false);
   const [names, setNames] = useState("");
   const [loading, setLoading] = useState(false);
@@ -54,6 +56,9 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
       instructions: paper.instructions ?? "",
       duration: paper.duration ?? 60,
       passingMarks: paper.passingMarks ?? 0,
+      assignedAcademicSectionIds: (paper.assignedAcademicSections || []).map((section: any) =>
+        String(section?._id || section),
+      ),
     };
   }
 
@@ -123,7 +128,7 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        <Link href={`/question-paper/edit/${paper._id}`}>
+        <Link href={buildReturnHref(`/question-papers/edit/${paper._id}`)}>
           <Button variant="secondary">
             <Pencil className="mr-2 h-4 w-4" />
             Edit
@@ -134,7 +139,7 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
           onClick={() => {
             const copyPayload = buildCopyPayload("");
             sessionStorage.setItem("questionPaperCopy", JSON.stringify(copyPayload));
-            window.location.href = "/question-paper/create";
+            window.location.href = "/question-papers/create";
           }}
         >
           <Copy className="mr-2 h-4 w-4" />

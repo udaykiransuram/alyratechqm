@@ -1,11 +1,11 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
 
-import './Question'; // Ensure Question model is imported
-import './Subject'; // Ensure Subject model is imported
-import './Tag';     // Ensure Tag model is imported
-import './TagType'; // Ensure TagType model is imported
-import './Class'; 
+import './Question.ts'; // Ensure Question model is imported
+import './Subject.ts'; // Ensure Subject model is imported
+import './Tag.ts';     // Ensure Tag model is imported
+import './TagType.ts'; // Ensure TagType model is imported
+import './Class.ts'; 
 // Interface for a single answer to a question
 interface IQuestionAnswer {
   question: Types.ObjectId; // Reference to Question

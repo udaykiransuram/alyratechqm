@@ -1,32 +1,78 @@
 export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { buildArchiveFilter, buildArchivedUpdate, resolveIncludeArchived } from "@/lib/archive";
+import { recordTenantAudit } from "@/lib/audit";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
-  await connectDB();
+function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
   const schoolFromHeader =
     req.headers.get("x-school-key") || req.headers.get("X-School-Key");
   const schoolFromQuery = url.searchParams.get("school");
   const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  const schoolKey = (
-    schoolFromHeader ||
-    schoolFromQuery ||
-    schoolFromCookie ||
-    ""
-  )
+  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
     .toString()
     .trim();
-  if (!schoolKey)
+}
+
+function normalizeIds(value: unknown) {
+  if (!Array.isArray(value)) return [] as string[];
+  return Array.from(
+    new Set(value.map((item) => String(item || "").trim()).filter(Boolean)),
+  );
+}
+
+async function validateAssignedAcademicSections(
+  AcademicSectionModel: any,
+  classId: string,
+  assignedAcademicSectionIds: string[],
+) {
+  if (!assignedAcademicSectionIds.length) {
+    return { ok: true, ids: [] as string[] } as const;
+  }
+
+  const sections = await AcademicSectionModel.find({
+    _id: { $in: assignedAcademicSectionIds },
+    class: classId,
+    isActive: true,
+    ...buildArchiveFilter(false),
+  })
+    .select("_id")
+    .lean();
+
+  if (sections.length !== assignedAcademicSectionIds.length) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          success: false,
+          message:
+            "Assigned sections must exist, be active, and belong to the selected class.",
+        },
+        { status: 400 },
+      ),
+    } as const;
+  }
+
+  return { ok: true, ids: assignedAcademicSectionIds } as const;
+}
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const schoolKey = resolveSchoolKey(req);
+  if (!schoolKey) {
     return NextResponse.json(
       { success: false, message: "schoolKey required" },
       { status: 400 },
     );
+  }
+
   try {
+    await connectDB();
     const {
       QuestionPaper: QPModel,
       Question: QuestionModel,
@@ -34,6 +80,7 @@ export async function GET(
       TagType,
       Class: ClassModel,
       Subject: SubjectModel,
+      AcademicSection: AcademicSectionModel,
     } = await getTenantModels(schoolKey, [
       "QuestionPaper",
       "Question",
@@ -41,15 +88,25 @@ export async function GET(
       "TagType",
       "Class",
       "Subject",
+      "AcademicSection",
     ]);
-    let paper = await QPModel.findById(params.id)
+
+    const paper = await QPModel.findOne({ _id: params.id, ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)) })
       .populate({ path: "class", model: ClassModel })
-      .populate({ path: "subject", model: SubjectModel });
-    if (!paper)
+      .populate({ path: "subject", model: SubjectModel })
+      .populate({
+        path: "assignedAcademicSections",
+        model: AcademicSectionModel,
+        populate: { path: "class", model: ClassModel, select: "name" },
+      });
+
+    if (!paper) {
       return NextResponse.json(
         { success: false, message: "Paper not found." },
         { status: 404 },
       );
+    }
+
     await paper.populate({
       path: "sections.questions.question",
       model: QuestionModel,
@@ -59,6 +116,7 @@ export async function GET(
         populate: { path: "type", model: TagType, select: "name" },
       },
     });
+
     return NextResponse.json({ success: true, paper }, { status: 200 });
   } catch (error: any) {
     return NextResponse.json(
@@ -73,31 +131,22 @@ export async function PUT(
   { params }: { params: { id: string } },
 ) {
   await connectDB();
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  const schoolKey = (
-    schoolFromHeader ||
-    schoolFromQuery ||
-    schoolFromCookie ||
-    ""
-  )
-    .toString()
-    .trim();
-  if (!schoolKey)
+
+  const schoolKey = resolveSchoolKey(req);
+  if (!schoolKey) {
     return NextResponse.json(
       { success: false, message: "schoolKey required" },
       { status: 400 },
     );
-  const { QuestionPaper: QPModel } = await getTenantModels(schoolKey, [
-    "QuestionPaper",
-  ]);
+  }
 
   try {
-    const data = await req.json();
+    const {
+      QuestionPaper: QPModel,
+      AcademicSection: AcademicSectionModel,
+    } = await getTenantModels(schoolKey, ["QuestionPaper", "AcademicSection"]);
 
+    const data = await req.json();
     const {
       title,
       class: classId,
@@ -107,6 +156,12 @@ export async function PUT(
       examDate,
       sections,
     } = data || {};
+
+    const assignedAcademicSectionIds = normalizeIds(
+      data?.assignedAcademicSections ??
+        data?.assignedAcademicSectionIds ??
+        data?.academicSectionIds,
+    );
 
     if (
       !title ||
@@ -140,7 +195,8 @@ export async function PUT(
       }
 
       const sectionQuestionMarks = section.questions.reduce(
-        (sum: number, q: { marks?: number }) => sum + (q?.marks ?? 0),
+        (sum: number, question: { marks?: number }) =>
+          sum + (question?.marks ?? 0),
         0,
       );
 
@@ -154,12 +210,12 @@ export async function PUT(
         );
       }
 
-      for (const [qi, q] of section.questions.entries()) {
-        if (!q?.question || typeof q?.marks !== "number") {
+      for (const [questionIndex, question] of section.questions.entries()) {
+        if (!question?.question || typeof question?.marks !== "number") {
           return NextResponse.json(
             {
               success: false,
-              message: `Invalid question data in section "${section.name}" at index ${qi}.`,
+              message: `Invalid question data in section "${section.name}" at index ${questionIndex}.`,
             },
             { status: 400 },
           );
@@ -167,14 +223,31 @@ export async function PUT(
       }
     }
 
-    const updated = await QPModel.findByIdAndUpdate(params.id, data, {
-      new: true,
-    });
-    if (!updated)
+    const assignmentValidation = await validateAssignedAcademicSections(
+      AcademicSectionModel,
+      classId,
+      assignedAcademicSectionIds,
+    );
+    if (!assignmentValidation.ok) {
+      return assignmentValidation.response;
+    }
+
+    const updated = await QPModel.findOneAndUpdate(
+      { _id: params.id, ...buildArchiveFilter(false) },
+      {
+        ...data,
+        assignedAcademicSections: assignmentValidation.ids,
+      },
+      { new: true },
+    );
+
+    if (!updated) {
       return NextResponse.json(
         { success: false, message: "Question paper not found." },
         { status: 404 },
       );
+    }
+
     return NextResponse.json({ success: true, paper: updated });
   } catch (error: any) {
     return NextResponse.json(
@@ -189,41 +262,45 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   await connectDB();
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  const schoolKey = (
-    schoolFromHeader ||
-    schoolFromQuery ||
-    schoolFromCookie ||
-    ""
-  )
-    .toString()
-    .trim();
-  if (!schoolKey)
+
+  const schoolKey = resolveSchoolKey(req);
+  if (!schoolKey) {
     return NextResponse.json(
       { success: false, message: "schoolKey required" },
       { status: 400 },
     );
-  const { QuestionPaper: QPModel, QuestionPaperResponse: QPRModel } =
-    await getTenantModels(schoolKey, [
-      "QuestionPaper",
-      "QuestionPaperResponse",
-    ]);
+  }
+
+  const { QuestionPaper: QPModel } =
+    await getTenantModels(schoolKey, ["QuestionPaper"]);
 
   try {
-    const deleted = await QPModel.findByIdAndDelete(params.id);
-    if (!deleted)
+    const archived = await QPModel.findOneAndUpdate(
+      { _id: params.id, ...buildArchiveFilter(false) },
+      buildArchivedUpdate(),
+      { new: true, runValidators: true },
+    );
+    if (!archived) {
       return NextResponse.json(
         { success: false, message: "Question paper not found." },
         { status: 404 },
       );
-    await QPRModel.deleteMany({ paper: params.id });
+    }
+
+    await recordTenantAudit({
+      schoolKey,
+      req,
+      entityType: 'question_paper',
+      entityId: String(archived._id),
+      entityLabel: String(archived.title || ''),
+      action: 'archived',
+      summary: `Archived question paper ${archived.title}.`,
+      details: { paperId: String(archived._id) },
+    });
+
     return NextResponse.json({
       success: true,
-      message: "Question paper and its responses deleted.",
+      message: "Question paper archived successfully.",
     });
   } catch (error: any) {
     return NextResponse.json(

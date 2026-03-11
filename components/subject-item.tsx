@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { useReturnHrefBuilder } from '@/hooks/useReturnNavigation';
 
 interface TagType {
   _id: string;
@@ -32,6 +33,7 @@ export interface SubjectItemProps {
 }
 
 export function SubjectItem({ subject, onDelete, isLoading }: SubjectItemProps) {
+  const { buildReturnHref } = useReturnHrefBuilder('/subjects');
   return (
     <li className="h-full list-none">
       <Card className="app-surface flex h-full flex-col overflow-hidden transition-shadow duration-200 hover:shadow-md">
@@ -71,7 +73,7 @@ export function SubjectItem({ subject, onDelete, isLoading }: SubjectItemProps) 
           </div>
 
           <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-4">
-            <Link href={`/subjects/edit/${subject._id}`} className="flex-1">
+            <Link href={buildReturnHref(`/subjects/edit/${subject._id}`)} className="flex-1">
               <Button disabled={isLoading} size="sm" variant="outline" className="w-full">
                 Edit
               </Button>
@@ -83,7 +85,7 @@ export function SubjectItem({ subject, onDelete, isLoading }: SubjectItemProps) 
               size="sm"
               className="flex-1"
             >
-              {isLoading ? <Spinner /> : 'Delete'}
+              {isLoading ? <Spinner /> : 'Archive'}
             </Button>
           </div>
         </CardContent>

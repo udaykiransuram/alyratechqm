@@ -74,18 +74,18 @@ export default function ViewSubjectsPage() {
       const data = await res.json();
       if (data.success) {
         setSubjects((prev) => prev.filter((subject) => subject._id !== subjectToDeleteId));
-        toast({ title: 'Success', description: 'Subject deleted successfully!' });
+        toast({ title: 'Success', description: 'Subject archived successfully!' });
       } else {
         toast({
           title: 'Error',
-          description: data.message || 'Failed to delete subject.',
+          description: data.message || 'Failed to archive subject.',
           variant: 'destructive',
         });
       }
     } catch {
       toast({
         title: 'Error',
-        description: 'Network error when deleting subject.',
+        description: 'Network error when archiving subject.',
         variant: 'destructive',
       });
     } finally {
@@ -115,7 +115,7 @@ export default function ViewSubjectsPage() {
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
           <CardTitle>Existing Subjects</CardTitle>
-          <CardDescription>Browse, edit, or delete your current subjects.</CardDescription>
+          <CardDescription>Browse, edit, or archive your current subjects.</CardDescription>
         </CardHeader>
         <CardContent className="app-section-body">
           {fetchError ? (
@@ -160,9 +160,9 @@ export default function ViewSubjectsPage() {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogTitle>Archive subject?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the subject.
+              This action cannot be undone. This will archive the subject.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -172,7 +172,7 @@ export default function ViewSubjectsPage() {
               disabled={isDeleting}
               className="bg-destructive hover:bg-destructive/90"
             >
-              {isDeleting ? <Spinner /> : 'Delete Subject'}
+              {isDeleting ? <Spinner /> : 'Archive Subject'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

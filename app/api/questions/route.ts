@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { getTenantModels } from '@/lib/db-tenant';
+import { buildArchiveFilter, resolveIncludeArchived } from '@/lib/archive';
 
 export async function GET(req: NextRequest) {
     await connectDB();
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question','Tag','TagType','Class','Subject']);
 
 
-  const query: any = {};
+  const query: any = { ...buildArchiveFilter(resolveIncludeArchived(searchParams)) };
 
   // Filter by class
   const classId = searchParams.get('class');
@@ -84,7 +85,6 @@ export async function GET(req: NextRequest) {
     cursor = cursor.skip(skip).limit(limit);
   }
 
-  try { console.debug('[api/questions] GET', { schoolKey, query, page: pageParam || undefined, limit: limitParam || undefined }); } catch {}
   const questions = await cursor;
   return NextResponse.json({ success: true, questions, total, page, pages, limit });
 }
@@ -121,11 +121,9 @@ export async function POST(req: NextRequest) {
       matrixAnswers
     } = body;
 
-    console.log('POST /api/questions: request body =', body);
 
     // --- Server-Side Validation ---
     if (!subject || !classId || !content || !marks) {
-      console.warn('POST /api/questions: Missing required fields');
       return NextResponse.json(
         { success: false, message: 'Missing required fields: subject, class, content, and marks are required.' },
         { status: 400 }

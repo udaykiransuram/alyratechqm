@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2 } from 'lucide-react';
+import { Edit, Eye, Trash2 } from 'lucide-react';
 import { Spinner } from './ui/spinner';
 import { ContentRenderer } from './ContentRenderer';
+import { useReturnHrefBuilder } from '@/hooks/useReturnNavigation';
 
 interface TagType {
   _id: string;
@@ -41,11 +42,16 @@ export interface Question {
 
 interface QuestionItemProps {
   question: Question;
-  onDelete: (id: string) => void;
-  isDeleting: boolean;
+  onDelete?: (id: string) => void;
+  onArchive?: (id: string) => void;
+  isDeleting?: boolean;
 }
 
-export function QuestionItem({ question, onDelete, isDeleting }: QuestionItemProps) {
+export function QuestionItem({ question, onDelete, onArchive, isDeleting = false }: QuestionItemProps) {
+  const { buildReturnHref } = useReturnHrefBuilder('/questions');
+  const tags = Array.isArray(question.tags) ? question.tags : [];
+  const handleDelete = onArchive || onDelete;
+
   return (
     <Card className="app-surface overflow-hidden transition-shadow duration-200 hover:shadow-md">
       <CardHeader className="flex flex-col gap-4 border-b border-border/60 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
@@ -60,8 +66,13 @@ export function QuestionItem({ question, onDelete, isDeleting }: QuestionItemPro
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Link href={`/questions/edit/${question._id}`}>
-            <Button variant="outline" size="icon" className="h-8 w-8" disabled={isDeleting}>
+          <Link href={buildReturnHref(`/questions/view/${question._id}`)} title="View question">
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={isDeleting} aria-label="View question">
+              <Eye className="h-4 w-4" />
+            </Button>
+          </Link>
+          <Link href={buildReturnHref(`/questions/edit/${question._id}`)} title="Edit question">
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={isDeleting} aria-label="Edit question">
               <Edit className="h-4 w-4" />
             </Button>
           </Link>
@@ -69,8 +80,10 @@ export function QuestionItem({ question, onDelete, isDeleting }: QuestionItemPro
             variant="destructive"
             size="icon"
             className="h-8 w-8"
-            onClick={() => onDelete(question._id)}
-            disabled={isDeleting}
+            onClick={() => handleDelete?.(question._id)}
+            disabled={isDeleting || !handleDelete}
+            aria-label="Archive question"
+            title="Archive question"
           >
             {isDeleting ? <Spinner /> : <Trash2 className="h-4 w-4" />}
           </Button>
@@ -104,7 +117,7 @@ export function QuestionItem({ question, onDelete, isDeleting }: QuestionItemPro
 
       <CardFooter className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
-          {question.tags.map(tag => (
+          {tags.map(tag => (
             <Badge key={tag._id} variant="secondary" className="font-normal capitalize">
               {tag.type.name}: {tag.name}
             </Badge>

@@ -10,7 +10,7 @@ const excludedRouteMatchers = [
   (pathname: string) => pathname === "/manage/reports" || pathname.startsWith("/manage/reports/"),
   (pathname: string) => pathname === "/analytics" || pathname.startsWith("/analytics/"),
   (pathname: string) => pathname.includes("/report"),
-  (pathname: string) => /^\/question-paper\/[^/]+\/responses(?:\/|$)/.test(pathname),
+  (pathname: string) => /^\/question-papers\/[^/]+\/responses(?:\/|$)/.test(pathname),
 ];
 
 function shouldUseWorkspaceShell(pathname: string) {
@@ -19,10 +19,11 @@ function shouldUseWorkspaceShell(pathname: string) {
 
 export default function AppViewport({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const content = <div className="app-page-frame">{children}</div>;
 
   if (!pathname || !shouldUseWorkspaceShell(pathname)) {
-    return <>{children}</>;
+    return content;
   }
 
-  return <div className="app-workspace-shell">{children}</div>;
+  return <div className="app-workspace-shell">{content}</div>;
 }

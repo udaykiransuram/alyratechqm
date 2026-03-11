@@ -15,23 +15,13 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Spinner } from './ui/spinner';
+import { fetchApiJson, resolveClientSchoolKey } from '@/lib/client/api';
 
 interface CreateTagTypeModalProps {
   open: boolean;
   onClose: () => void;
   onTagTypeCreated: (newTagType: { _id: string; name: string }) => void;
 }
-
-const getSchoolKey = () => {
-  if (typeof document === 'undefined') return '';
-  const match = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : '';
-};
-
-const getSchoolQS = () => {
-  const schoolKey = getSchoolKey();
-  return schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : '';
-};
 
 export function CreateTagTypeModal({ open, onClose, onTagTypeCreated }: CreateTagTypeModalProps) {
   const [name, setName] = useState('');
@@ -58,28 +48,33 @@ export function CreateTagTypeModal({ open, onClose, onTagTypeCreated }: CreateTa
 
     setLoading(true);
     try {
-      const res = await fetch('/api/tag-types' + getSchoolQS(), {
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error('Please select a school in the navbar first.');
+      }
+
+      const data = await fetchApiJson<any>('/api/tag-types', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
         body: JSON.stringify({ name: trimmed }),
+        schoolKey,
+        fallbackMessage: 'Failed to create tag type.',
       });
-      const data = await res.json().catch(() => ({}));
 
-      if (res.ok && data?.success) {
-        toast({
-          title: 'Tag type created',
-          description: `"${data.tagType.name}" is ready to use.`,
-        });
-        onTagTypeCreated(data.tagType);
-        setName('');
-        onClose();
-      } else {
-        const message = data?.message || `Failed to create tag type (HTTP ${res.status}).`;
-        toast({ title: 'Error', description: message, variant: 'destructive' });
-      }
-    } catch {
-      toast({ title: 'Network Error', description: 'Failed to create tag type.', variant: 'destructive' });
+      toast({
+        title: 'Tag type created',
+        description: `"${data.tagType.name}" is ready to use.`,
+      });
+      onTagTypeCreated(data.tagType);
+      setName('');
+      onClose();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to create tag type.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }

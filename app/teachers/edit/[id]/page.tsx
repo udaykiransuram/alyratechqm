@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { useBackNavigation } from "@/hooks/useReturnNavigation";
+import MultiSelectChecklist from "@/components/multi-select-checklist";
+import { Checkbox } from "@/components/ui/checkbox";
+import PageLoadingState from "@/components/ui/page-loading-state";
 
 interface ClassItem {
   _id: string;
@@ -13,12 +17,23 @@ interface SubjectItem {
   name: string;
 }
 
+interface AcademicSectionItem {
+  _id: string;
+  name: string;
+  class?: { _id: string; name: string } | string;
+}
+
+function getSectionClassId(section: AcademicSectionItem) {
+  return typeof section.class === "string" ? section.class : section.class?._id || "";
+}
+
 export default function EditTeacherPage() {
   const params = useParams();
-  const router = useRouter();
   const id = (params?.id as string) || "";
+  const { navigateBack } = useBackNavigation(`/teachers/${id}`);
 
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
   const [subjects, setSubjects] = useState<SubjectItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,6 +46,8 @@ export default function EditTeacherPage() {
     password: "",
     mobileNumber: "",
     classIds: [] as string[],
+    academicSectionIds: [] as string[],
+    hasAllSections: true,
     subjectIds: [] as string[],
   });
 
@@ -39,27 +56,32 @@ export default function EditTeacherPage() {
     async function load() {
       try {
         setLoading(true);
-        const [uRes, cRes, sRes] = await Promise.all([
+        const [uRes, cRes, secRes, sRes] = await Promise.all([
           fetch("/api/users/" + id),
           fetch("/api/classes"),
+          fetch("/api/sections"),
           fetch("/api/subjects"),
         ]);
         const uJson = await uRes.json();
         const cJson = await cRes.json();
+        const secJson = await secRes.json();
         const sJson = await sRes.json();
         if (!mounted) return;
-        if (!uJson.success)
-          throw new Error(uJson.message || "Failed to load teacher");
-        const u = uJson.user || {};
+        if (!uJson.success) throw new Error(uJson.message || "Failed to load teacher");
+        const user = uJson.user || {};
         setForm({
-          name: u.name || "",
-          email: u.email || "",
+          name: user.name || "",
+          email: user.email || "",
           password: "",
-          mobileNumber: u.mobileNumber || "",
-          classIds: (u.classIds || []).map(String),
-          subjectIds: (u.subjectIds || []).map(String),
+          mobileNumber: user.mobileNumber || "",
+          classIds: (user.classIds || []).map(String),
+          academicSectionIds: (user.academicSectionIds || []).map(String),
+          hasAllSections:
+            typeof user.hasAllSections === "boolean" ? user.hasAllSections : true,
+          subjectIds: (user.subjectIds || []).map(String),
         });
         setClasses(cJson.classes || []);
+        setSections(secJson.sections || []);
         setSubjects(sJson.subjects || []);
       } catch (e: any) {
         setError(e.message || "Failed to load");
@@ -73,17 +95,54 @@ export default function EditTeacherPage() {
     };
   }, [id]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
+  const availableSections = useMemo(() => {
+    const selectedClassIds = new Set(form.classIds);
+    return sections.filter((section) => selectedClassIds.has(getSectionClassId(section)));
+  }, [sections, form.classIds]);
 
-  const toggleSelection = (field: "classIds" | "subjectIds", value: string) => {
+  const availableSectionIds = useMemo(
+    () => new Set(availableSections.map((section) => section._id)),
+    [availableSections],
+  );
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
-      [field]: prev[field].includes(value)
-        ? prev[field].filter((item) => item !== value)
-        : [...prev[field], value],
+      [name]: value,
     }));
+  };
+
+  const updateToggle = (field: "hasAllSections", checked: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: checked,
+      ...(field === "hasAllSections" && checked ? { academicSectionIds: [] } : {}),
+    }));
+  };
+
+  const updateSelection = (
+    field: "classIds" | "subjectIds" | "academicSectionIds",
+    nextValues: string[],
+  ) => {
+    setForm((prev) => {
+      if (field !== "classIds") {
+        return { ...prev, [field]: nextValues };
+      }
+
+      const nextClassIds = nextValues;
+      const nextClassIdSet = new Set(nextClassIds);
+      const nextAcademicSectionIds = prev.academicSectionIds.filter((sectionId) => {
+        const section = sections.find((item) => item._id === sectionId);
+        return section ? nextClassIdSet.has(getSectionClassId(section)) : false;
+      });
+
+      return {
+        ...prev,
+        classIds: nextClassIds,
+        academicSectionIds: nextAcademicSectionIds,
+      };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -102,14 +161,17 @@ export default function EditTeacherPage() {
           mobileNumber: form.mobileNumber.trim(),
           password: form.password || undefined,
           classIds: form.classIds,
+          hasAllSections: form.hasAllSections,
+          academicSectionIds: form.hasAllSections
+            ? []
+            : form.academicSectionIds.filter((sectionId) => availableSectionIds.has(sectionId)),
           subjectIds: form.subjectIds,
         }),
       });
       const data = await res.json();
-      if (!data.success)
-        throw new Error(data.message || "Failed to update teacher");
+      if (!data.success) throw new Error(data.message || "Failed to update teacher");
       setMessage("Teacher updated successfully.");
-      setTimeout(() => router.push("/teachers/" + id), 600);
+      setTimeout(() => navigateBack(), 600);
     } catch (e: any) {
       setError(e.message || "Update failed");
     } finally {
@@ -119,9 +181,10 @@ export default function EditTeacherPage() {
 
   if (loading) {
     return (
-      <div className="app-page-shell max-w-2xl px-4 py-6 sm:px-0">
-        <div className="app-feedback app-feedback-info">Loading teacher details...</div>
-      </div>
+      <PageLoadingState
+        title="Loading teacher details"
+        description="Preparing the teacher edit form and assignment controls."
+      />
     );
   }
 
@@ -139,10 +202,10 @@ export default function EditTeacherPage() {
         <div className="app-page-header">
           <h1 className="app-page-title">Edit Teacher</h1>
           <p className="app-page-subtitle">
-            Update teacher profile information and refine their class and subject access.
+            Update teacher profile information and refine class, section, and subject access.
           </p>
         </div>
-        <button type="button" onClick={() => router.push(`/teachers/${id}`)} className="app-button-secondary">
+        <button type="button" onClick={navigateBack} className="app-button-secondary">
           Back to Details
         </button>
       </div>
@@ -172,36 +235,57 @@ export default function EditTeacherPage() {
 
           <div className="app-field-group">
             <label className="app-field-label">Classes</label>
-            <div className="app-selection-list">
-              {classes.map((cls) => (
-                <label key={cls._id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-muted/40">
-                  <input
-                    type="checkbox"
-                    checked={form.classIds.includes(cls._id)}
-                    onChange={() => toggleSelection("classIds", cls._id)}
-                    className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                  />
-                  <span>{cls.name}</span>
-                </label>
-              ))}
-            </div>
+            <MultiSelectChecklist
+              items={classes.map((classItem) => ({
+                id: classItem._id,
+                label: classItem.name,
+              }))}
+              selectedIds={form.classIds}
+              onChange={(ids) => updateSelection("classIds", ids)}
+            />
           </div>
+
+          <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+            <Checkbox
+              checked={form.hasAllSections}
+              onCheckedChange={(checked) => updateToggle("hasAllSections", checked === true)}
+              className="mt-0.5"
+            />
+            <span>Access to all sections in selected classes</span>
+          </label>
+
+          {!form.hasAllSections && (
+            <div className="app-field-group">
+              <label className="app-field-label">Sections</label>
+              <MultiSelectChecklist
+                items={availableSections.map((section) => ({
+                  id: section._id,
+                  label: (
+                    <span>
+                      {section.name}
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        ({classes.find((classItem) => classItem._id === getSectionClassId(section))?.name || "Class"})
+                      </span>
+                    </span>
+                  ),
+                }))}
+                selectedIds={form.academicSectionIds}
+                onChange={(ids) => updateSelection("academicSectionIds", ids)}
+                emptyContent="Select one or more classes to choose sections."
+              />
+            </div>
+          )}
 
           <div className="app-field-group">
             <label className="app-field-label">Subjects</label>
-            <div className="app-selection-list">
-              {subjects.map((subject) => (
-                <label key={subject._id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-muted/40">
-                  <input
-                    type="checkbox"
-                    checked={form.subjectIds.includes(subject._id)}
-                    onChange={() => toggleSelection("subjectIds", subject._id)}
-                    className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                  />
-                  <span>{subject.name}</span>
-                </label>
-              ))}
-            </div>
+            <MultiSelectChecklist
+              items={subjects.map((subject) => ({
+                id: subject._id,
+                label: subject.name,
+              }))}
+              selectedIds={form.subjectIds}
+              onChange={(ids) => updateSelection("subjectIds", ids)}
+            />
           </div>
 
           <button type="submit" disabled={saving} className="app-button-primary w-full">

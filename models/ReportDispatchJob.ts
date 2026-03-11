@@ -2,10 +2,16 @@ import mongoose, { Document, Model, Schema, Types } from "mongoose";
 
 export interface IReportDispatchJob extends Document {
   schoolKey: string;
-  type: "student" | "exam";
+  type: "student" | "exam" | "teacher" | "admin";
   student?: Types.ObjectId;
+  studentName?: string;
   responseId?: Types.ObjectId;
   paperId?: Types.ObjectId;
+  paperTitle?: string;
+  classId?: Types.ObjectId;
+  className?: string;
+  academicSection?: Types.ObjectId;
+  academicSectionName?: string;
   status: "queued" | "processing" | "sent" | "failed";
   mobileNumber?: string;
   error?: string;
@@ -27,10 +33,24 @@ export interface IReportDispatchJob extends Document {
 const ReportDispatchJobSchema = new Schema<IReportDispatchJob>(
   {
     schoolKey: { type: String, required: true, trim: true, index: true },
-    type: { type: String, enum: ["student", "exam"], required: true },
+    type: {
+      type: String,
+      enum: ["student", "exam", "teacher", "admin"],
+      required: true,
+    },
     student: { type: Schema.Types.ObjectId, ref: "User" },
+    studentName: { type: String, trim: true },
     responseId: { type: Schema.Types.ObjectId, ref: "QuestionPaperResponse" },
     paperId: { type: Schema.Types.ObjectId, ref: "QuestionPaper" },
+    paperTitle: { type: String, trim: true },
+    classId: { type: Schema.Types.ObjectId, ref: "Class", index: true },
+    className: { type: String, trim: true },
+    academicSection: {
+      type: Schema.Types.ObjectId,
+      ref: "AcademicSection",
+      index: true,
+    },
+    academicSectionName: { type: String, trim: true },
     status: {
       type: String,
       enum: ["queued", "processing", "sent", "failed"],
@@ -58,8 +78,31 @@ const ReportDispatchJobSchema = new Schema<IReportDispatchJob>(
   { timestamps: true },
 );
 
+ReportDispatchJobSchema.index({
+  schoolKey: 1,
+  academicSection: 1,
+  status: 1,
+  updatedAt: -1,
+});
+
+const existingReportDispatchJobModel =
+  mongoose.models.ReportDispatchJob as Model<IReportDispatchJob> | undefined;
+
+const existingTypeValues = existingReportDispatchJobModel
+  ? ((existingReportDispatchJobModel.schema.path("type") as any)?.enumValues || [])
+  : [];
+
+if (
+  existingReportDispatchJobModel &&
+  (!existingReportDispatchJobModel.schema.path("studentName") ||
+    !existingTypeValues.includes("teacher") ||
+    !existingTypeValues.includes("admin"))
+) {
+  delete mongoose.models.ReportDispatchJob;
+}
+
 const ReportDispatchJob: Model<IReportDispatchJob> =
-  mongoose.models.ReportDispatchJob ||
+  (mongoose.models.ReportDispatchJob as Model<IReportDispatchJob>) ||
   mongoose.model<IReportDispatchJob>(
     "ReportDispatchJob",
     ReportDispatchJobSchema,

@@ -15,6 +15,10 @@ import {
 } from "@/components/analytics/helpers";
 import QuestionListModal from "@/components/analytics/QuestionListModal";
 import AnalyticsExportControls from "@/components/analytics/AnalyticsExportControls";
+import { Button } from "@/components/ui/button";
+import { useBackNavigation } from "@/hooks/useReturnNavigation";
+import { ArrowLeft } from "lucide-react";
+import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
 
 type ReportFilterOption = {
   value: string;
@@ -26,6 +30,7 @@ export default function StudentTagReportPage({
 }: {
   params: { responseId: string };
 }) {
+  const { navigateBack } = useBackNavigation("/students");
   const [stats, setStats] = useState<any>({});
   const [student, setStudent] = useState<string>("");
   const [rollNumber, setRollNumber] = useState<string>("");
@@ -42,20 +47,16 @@ export default function StudentTagReportPage({
   const [subjectOptions, setSubjectOptions] = useState<ReportFilterOption[]>(
     [],
   );
+  const [academicSectionOptions, setAcademicSectionOptions] = useState<
+    ReportFilterOption[]
+  >([]);
   const [selectedClassId, setSelectedClassId] = useState("all");
   const [selectedSubjectId, setSelectedSubjectId] = useState("all");
+  const [selectedAcademicSectionId, setSelectedAcademicSectionId] =
+    useState("all");
 
   // Track tenant (school) explicitly to make API calls DB-specific
   const [schoolKey, setSchoolKey] = useState<string>("");
-
-  function getSchoolFromCookie() {
-    try {
-      const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-      return m && m[1] ? decodeURIComponent(m[1]) : "";
-    } catch {
-      return "";
-    }
-  }
 
   const [modalData, setModalData] = useState<{
     isOpen: boolean;
@@ -265,26 +266,39 @@ export default function StudentTagReportPage({
       .filter(Boolean)
       .join(" • ") || "Core metrics only";
 
-  const hasActiveQuestionFilters =
-    selectedClassId !== "all" || selectedSubjectId !== "all";
+  const hasActiveFilters =
+    selectedClassId !== "all" ||
+    selectedSubjectId !== "all" ||
+    selectedAcademicSectionId !== "all";
 
   const activeFiltersLabel =
     [
       selectedClassId !== "all"
-        ? classOptions.find((option) => option.value === selectedClassId)
-            ?.label || "Filtered class"
+        ? `Class: ${
+            classOptions.find((option) => option.value === selectedClassId)
+              ?.label || "Filtered class"
+          }`
         : null,
       selectedSubjectId !== "all"
-        ? subjectOptions.find((option) => option.value === selectedSubjectId)
-            ?.label || "Filtered subject"
+        ? `Subject: ${
+            subjectOptions.find((option) => option.value === selectedSubjectId)
+              ?.label || "Filtered subject"
+          }`
+        : null,
+      selectedAcademicSectionId !== "all"
+        ? `Section: ${
+            academicSectionOptions.find(
+              (option) => option.value === selectedAcademicSectionId,
+            )?.label || "Filtered section"
+          }`
         : null,
     ]
       .filter(Boolean)
-      .join(" • ") || "All questions";
+      .join(" • ") || "All questions and sections";
 
   useEffect(() => {
-    (async () => {
-      const sk = getSchoolFromCookie();
+    void (async () => {
+      const sk = resolveClientSchoolKey();
       setSchoolKey(sk);
       if (!sk) {
         setLoading(false);
@@ -292,19 +306,25 @@ export default function StudentTagReportPage({
         return;
       }
       try {
-        const res = await fetch(
-          `/api/analytics/student-tag-report/${params.responseId}?groupFields=1&school=${encodeURIComponent(sk)}`,
-          { cache: "no-store" },
+        const data = await fetchApiJson<any>(
+          `/api/analytics/student-tag-report/${params.responseId}?groupFields=1`,
+          {
+            cache: "no-store",
+            schoolKey: sk,
+            fallbackMessage: "Failed to load report setup.",
+          },
         );
-        if (!res.ok)
-          throw new Error(`groupFields fetch failed: HTTP ${res.status}`);
-        const data: any = await res.json().catch(() => ({}));
         setGroupFields(Array.isArray(data?.fields) ? data.fields : []);
         setClassOptions(
           Array.isArray(data?.filters?.classes) ? data.filters.classes : [],
         );
         setSubjectOptions(
           Array.isArray(data?.filters?.subjects) ? data.filters.subjects : [],
+        );
+        setAcademicSectionOptions(
+          Array.isArray(data?.filters?.academicSections)
+            ? data.filters.academicSections
+            : [],
         );
         if (
           Array.isArray(data?.fields) &&
@@ -321,12 +341,17 @@ export default function StudentTagReportPage({
           setGroupBy(selected);
         } else if (Array.isArray(data?.fields) && data.fields.length) {
           setGroupBy(data.fields.slice(0, 3).map((f: any) => f.value));
+        } else {
+          throw new Error("No analytics fields are available for this response yet.");
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error("[student-tag-report] failed to load groupFields", e);
         setGroupFields([]);
         setClassOptions([]);
         setSubjectOptions([]);
+        setAcademicSectionOptions([]);
+        setLoading(false);
+        setError(e?.message || "Failed to load report setup.");
       }
     })();
   }, [params.responseId]);
@@ -345,7 +370,7 @@ export default function StudentTagReportPage({
   useEffect(() => {
     setCmpPage(1);
     setInsPage(1);
-  }, [groupBy, classLevel, selectedClassId, selectedSubjectId]);
+  }, [groupBy, classLevel, selectedClassId, selectedSubjectId, selectedAcademicSectionId]);
 
   const handleOpenModal = (
     title: string,
@@ -372,83 +397,101 @@ export default function StudentTagReportPage({
 
   const handleCloseOptionTagModal = () => setOptionTagModal(null);
 
-  const fetchAnalytics = (overrides?: {
+  const fetchAnalytics = async (overrides?: {
     classId?: string;
     subjectId?: string;
+    academicSectionId?: string;
   }) => {
     setLoading(true);
     setError(null);
     const resolvedClassId = overrides?.classId ?? selectedClassId;
     const resolvedSubjectId = overrides?.subjectId ?? selectedSubjectId;
+    const resolvedAcademicSectionId =
+      overrides?.academicSectionId ?? selectedAcademicSectionId;
     const searchParams = new URLSearchParams();
     searchParams.set("json", "1");
     if (groupBy.length) searchParams.set("groupBy", groupBy.join(","));
     if (classLevel) searchParams.set("classLevel", "1");
     if (resolvedClassId !== "all") searchParams.set("classId", resolvedClassId);
-    if (resolvedSubjectId !== "all")
+    if (resolvedSubjectId !== "all") {
       searchParams.set("subjectId", resolvedSubjectId);
-    // Ensure we pass the tenant explicitly
-    const sk = schoolKey || getSchoolFromCookie();
+    }
+    if (classLevel && resolvedAcademicSectionId !== "all") {
+      searchParams.set("academicSectionId", resolvedAcademicSectionId);
+    }
+    const sk = schoolKey || resolveClientSchoolKey();
     if (!sk) {
       setLoading(false);
       setError("Please select a school in the navbar to load analytics.");
       return;
     }
-    searchParams.set("school", sk);
-    // Primary fetch (student or class depending on toggle)
-    fetch(
-      `/api/analytics/student-tag-report/${params.responseId}?${searchParams.toString()}`,
-    )
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setStats(data.stats || {});
-          setStudent(data.student || "");
-          setRollNumber(data.rollNumber || "");
-          setPaper(data.paper || "");
-        } else {
-          setError(data.message || "Failed to fetch tag report");
-        }
-      })
-      .catch(() => setError("An unexpected network error occurred."))
-      .finally(() => setLoading(false));
 
-    // Always prefetch class-level stats for comparison when in single-student mode
+    try {
+      const data = await fetchApiJson<any>(
+        `/api/analytics/student-tag-report/${params.responseId}?${searchParams.toString()}`,
+        {
+          cache: "no-store",
+          schoolKey: sk,
+          fallbackMessage: "Failed to fetch tag report.",
+        },
+      );
+      setStats(data.stats || {});
+      setStudent(data.student || "");
+      setRollNumber(data.rollNumber || "");
+      setPaper(data.paper || "");
+    } catch (fetchError: any) {
+      setError(fetchError?.message || "An unexpected network error occurred.");
+    } finally {
+      setLoading(false);
+    }
+
     try {
       const classParams = new URLSearchParams();
       classParams.set("json", "1");
       if (groupBy.length) classParams.set("groupBy", groupBy.join(","));
       classParams.set("classLevel", "1");
-      if (resolvedClassId !== "all")
+      if (resolvedClassId !== "all") {
         classParams.set("classId", resolvedClassId);
-      if (resolvedSubjectId !== "all")
+      }
+      if (resolvedSubjectId !== "all") {
         classParams.set("subjectId", resolvedSubjectId);
-      classParams.set("school", sk);
-      fetch(
+      }
+      if (resolvedAcademicSectionId !== "all") {
+        classParams.set("academicSectionId", resolvedAcademicSectionId);
+      }
+      const compareData = await fetchApiJson<any>(
         `/api/analytics/student-tag-report/${params.responseId}?${classParams.toString()}`,
-      )
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.success) setClassStatsCompare(data.stats || {});
-          else setClassStatsCompare({});
-        })
-        .catch(() => setClassStatsCompare({}));
+        {
+          cache: "no-store",
+          schoolKey: sk,
+          fallbackMessage: "Failed to load class comparison.",
+        },
+      );
+      setClassStatsCompare(compareData.stats || {});
     } catch {
       setClassStatsCompare({});
     }
   };
 
-  if (loading) return <LoadingState />;
-  if (error) return <ErrorState message={error} />;
+  const backAction = (
+    <Button variant="outline" onClick={navigateBack} className="gap-2">
+      <ArrowLeft className="h-4 w-4" />
+      Back
+    </Button>
+  );
+
+  if (loading) return <LoadingState actions={backAction} />;
+  if (error) return <ErrorState message={error} actions={backAction} />;
 
   return (
     <div className="analytics-page">
-      <div className="container space-y-4 sm:space-y-5">
+      <div className="w-full space-y-4 px-4 sm:space-y-5 sm:px-5 lg:px-6">
         <ReportHeader
           student={student}
           rollNumber={rollNumber}
           paper={paper}
           variant={classLevel ? "class" : "student"}
+          actions={backAction}
         />
         <div className="analytics-card overflow-hidden">
           <div className="analytics-card-header">
@@ -469,9 +512,6 @@ export default function StudentTagReportPage({
               <div className="analytics-toolbar-row">
                 <div className="analytics-toolbar-copy">
                   <p className="analytics-toolbar-title">Quick setup</p>
-                  <p className="analytics-toolbar-note">
-                    Adjust filters, grouping, and mode.
-                  </p>
                 </div>
                 <div className="analytics-toolbar-actions">
                   <button
@@ -480,7 +520,7 @@ export default function StudentTagReportPage({
                     aria-expanded={showControls}
                     className="app-button-secondary h-9 px-3"
                   >
-                    {showControls ? "Hide full setup" : "Adjust setup"}
+                    {showControls ? "Hide setup" : "Setup"}
                   </button>
                   <button
                     type="button"
@@ -541,9 +581,6 @@ export default function StudentTagReportPage({
                       <p className="analytics-control-panel-title">
                         Analysis Mode
                       </p>
-                      <p className="analytics-control-panel-note">
-                        Choose student or class mode.
-                      </p>
                     </div>
                     <div className="analytics-mode-grid">
                       <button
@@ -556,10 +593,6 @@ export default function StudentTagReportPage({
                         <p className="text-sm font-semibold text-foreground">
                           Single student
                         </p>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                          Focus on one response and compare it against the
-                          class.
-                        </p>
                       </button>
                       <button
                         type="button"
@@ -571,10 +604,6 @@ export default function StudentTagReportPage({
                         <p className="text-sm font-semibold text-foreground">
                           Class level
                         </p>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                          Review the full class without the individual
-                          comparison layer.
-                        </p>
                       </button>
                     </div>
                   </div>
@@ -582,13 +611,10 @@ export default function StudentTagReportPage({
                   <div className="analytics-control-panel">
                     <div className="analytics-control-panel-header">
                       <p className="analytics-control-panel-title">
-                        Question filters
-                      </p>
-                      <p className="analytics-control-panel-note">
-                        Filter by class or subject.
+                        Report filters
                       </p>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       <div className="app-field-group">
                         <label className="app-field-label">Class filter</label>
                         <select
@@ -625,6 +651,25 @@ export default function StudentTagReportPage({
                           ))}
                         </select>
                       </div>
+                      <div className="app-field-group">
+                        <label className="app-field-label">
+                          Academic section filter
+                        </label>
+                        <select
+                          className="analytics-select w-full"
+                          value={selectedAcademicSectionId}
+                          onChange={(event) =>
+                            setSelectedAcademicSectionId(event.target.value)
+                          }
+                        >
+                          <option value="all">All sections</option>
+                          {academicSectionOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <span className="analytics-toolbar-chip">
@@ -645,6 +690,16 @@ export default function StudentTagReportPage({
                               )?.label || "Filtered subject"
                             }`}
                       </span>
+                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                        {selectedAcademicSectionId === "all"
+                          ? "All sections"
+                          : `Section: ${
+                              academicSectionOptions.find(
+                                (option) =>
+                                  option.value === selectedAcademicSectionId,
+                              )?.label || "Filtered section"
+                            }`}
+                      </span>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
@@ -660,17 +715,19 @@ export default function StudentTagReportPage({
                         onClick={() => {
                           setSelectedClassId("all");
                           setSelectedSubjectId("all");
-                          fetchAnalytics({ classId: "all", subjectId: "all" });
+                          setSelectedAcademicSectionId("all");
+                          fetchAnalytics({
+                            classId: "all",
+                            subjectId: "all",
+                            academicSectionId: "all",
+                          });
                         }}
-                        disabled={loading || !hasActiveQuestionFilters}
+                        disabled={loading || !hasActiveFilters}
                         className="app-button-secondary h-9 px-3"
                       >
                         Clear filters
                       </button>
                     </div>
-                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                      Active filters: {activeFiltersLabel}
-                    </p>
                   </div>
                 </div>
 
@@ -678,9 +735,6 @@ export default function StudentTagReportPage({
                   <div className="analytics-control-panel-header">
                     <p className="analytics-control-panel-title">
                       Group By (in order)
-                    </p>
-                    <p className="analytics-control-panel-note">
-                      Select and reorder fields.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 mb-3">
@@ -784,9 +838,6 @@ export default function StudentTagReportPage({
                   <h2 className="analytics-card-title">
                     Insights (Student • {lastLabel})
                   </h2>
-                  <p className="analytics-toolbar-note">
-                    Student vs class comparison.
-                  </p>
                 </div>
                 <div className="analytics-toolbar-meta">
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
@@ -948,7 +999,6 @@ export default function StudentTagReportPage({
                   <h2 className="analytics-card-title">
                     Insights ({classLevel ? "Class" : "Student"} • {lastLabel})
                   </h2>
-                  <p className="analytics-toolbar-note">Weakest areas first.</p>
                 </div>
                 <div className="analytics-toolbar-meta">
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
@@ -1076,9 +1126,6 @@ export default function StudentTagReportPage({
           <div className="analytics-toolbar-row">
             <div className="analytics-toolbar-copy">
               <p className="analytics-toolbar-title">Report view</p>
-              <p className="analytics-toolbar-note">
-                Switch between table and charts.
-              </p>
             </div>
             <div className="analytics-toolbar-meta">
               <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
@@ -1095,7 +1142,7 @@ export default function StudentTagReportPage({
                   : "text-muted-foreground hover:bg-background/70"
               }`}
             >
-              Table View
+              Table
             </button>
             <button
               onClick={() => setView("charts")}
@@ -1105,7 +1152,7 @@ export default function StudentTagReportPage({
                   : "text-muted-foreground hover:bg-background/70"
               }`}
             >
-              Chart View
+              Charts
             </button>
           </div>
         </div>
@@ -1115,9 +1162,6 @@ export default function StudentTagReportPage({
               <div className="analytics-toolbar-row gap-4">
                 <div className="analytics-toolbar-copy">
                   <h2 className="analytics-card-title">Grouped Analytics</h2>
-                  <p className="analytics-toolbar-note">
-                    Grouped performance summary.
-                  </p>
                 </div>
                 <div className="analytics-toolbar-meta">
                   <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">

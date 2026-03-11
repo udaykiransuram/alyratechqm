@@ -214,8 +214,6 @@ export function QuestionFilterPopup({
                         <div className="min-w-0 flex-1">
                           <QuestionItem
                             question={question}
-                            onDelete={() => {}}
-                            isDeleting={false}
                             classes={classes}
                             subjects={subjects}
                             allTags={allTags.map((tag) => ({

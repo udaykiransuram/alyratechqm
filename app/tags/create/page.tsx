@@ -17,9 +17,9 @@ import {
 } from "@/components/ui/select";
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
-import { ChevronLeft, PlusCircle, X } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { ArrowLeft, PlusCircle, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
 import {
   Command,
   CommandEmpty,
@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CreateTagTypeModal } from '@/components/CreateTagTypeModal';
+import { buildPartialLoadMessage, fetchApiJson, resolveClientSchoolKey } from '@/lib/client/api';
 
 interface TagType {
   _id: string;
@@ -48,15 +49,8 @@ interface Subject {
   tags: TagItem[];
 }
 
-const getSchoolKey = () => {
-  if (typeof document === 'undefined') return '';
-  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : '';
-};
-const schoolQS = (() => { const k = getSchoolKey(); return k ? `?school=${encodeURIComponent(k)}` : ''; })();
-
 export default function CreateTagPage() {
-  const router = useRouter();
+  const { navigateBack } = useBackNavigation('/tags');
   const [newTagName, setNewTagName] = useState('');
   const [selectedTagTypeId, setSelectedTagTypeId] = useState('');
   const [tagTypes, setTagTypes] = useState<TagType[]>([]);
@@ -71,91 +65,107 @@ export default function CreateTagPage() {
   const [subjectSearchOpen, setSubjectSearchOpen] = useState(false);
   const [subjectSearchInput, setSubjectSearchInput] = useState('');
   const subjectInputRef = useRef<HTMLInputElement>(null);
+  const [setupNotice, setSetupNotice] = useState<string | null>(null);
 
   const { toast } = useToast();
 
-  const fetchTagTypes = useCallback(async () => {
+  const fetchTagTypes = useCallback(async (schoolKey?: string) => {
     setTagTypesLoading(true);
     try {
-      const endpoint = '/api/tag-types'+schoolQS;
-      console.debug('[tags/create] fetchTagTypes ->', { endpoint });
-      const res = await fetch(endpoint);
-      const data = await res.json();
-      console.debug('[tags/create] fetchTagTypes <-', { ok: res.ok, status: res.status, count: Array.isArray(data?.tagTypes) ? data.tagTypes.length : undefined });
-      if (data.success) {
-        setTagTypes(data.tagTypes);
-      } else {
-        toast({ title: "Error", description: "Failed to load tag types.", variant: "destructive" });
+      const resolvedSchoolKey = schoolKey || resolveClientSchoolKey();
+      if (!resolvedSchoolKey) {
+        setTagTypes([]);
+        return;
       }
+
+      const data = await fetchApiJson<any>('/api/tag-types', {
+        cache: 'no-store',
+        schoolKey: resolvedSchoolKey,
+        fallbackMessage: 'Failed to load tag types.',
+      });
+      setTagTypes(Array.isArray(data.tagTypes) ? data.tagTypes : []);
     } catch (err) {
-      console.error('[tags/create] fetchTagTypes error', err);
       toast({ title: "Network Error", description: "Could not load tag types.", variant: "destructive" });
+      throw err;
     } finally {
       setTagTypesLoading(false);
     }
   }, [toast]);
 
-  const fetchSubjects = useCallback(async () => {
+  const fetchSubjects = useCallback(async (schoolKey?: string) => {
     setSubjectsLoading(true);
     try {
-      const endpoint = '/api/subjects'+schoolQS;
-      console.debug('[tags/create] fetchSubjects ->', { endpoint });
-      const res = await fetch(endpoint);
-      const data = await res.json();
-      console.debug('[tags/create] fetchSubjects <-', { ok: res.ok, status: res.status, count: Array.isArray(data?.subjects) ? data.subjects.length : undefined });
-      if (data.success) {
-        setAllSubjects(data.subjects);
-      } else {
-        toast({
-          title: "Error",
-          description: data.message || "Failed to load subjects for assignment.",
-          variant: "destructive",
-        });
+      const resolvedSchoolKey = schoolKey || resolveClientSchoolKey();
+      if (!resolvedSchoolKey) {
+        setAllSubjects([]);
+        return;
       }
+
+      const data = await fetchApiJson<any>('/api/subjects', {
+        cache: 'no-store',
+        schoolKey: resolvedSchoolKey,
+        fallbackMessage: 'Failed to load subjects for assignment.',
+      });
+      setAllSubjects(Array.isArray(data.subjects) ? data.subjects : []);
     } catch (err) {
-      console.error('[tags/create] fetchSubjects error', err);
       toast({
         title: "Network Error",
         description: "Could not load subjects due to a network issue.",
         variant: "destructive",
       });
+      throw err;
     } finally {
       setSubjectsLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    fetchTagTypes();
-    fetchSubjects();
+    void (async () => {
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        setTagTypesLoading(false);
+        setSubjectsLoading(false);
+        setSetupNotice('Select a school workspace to load tag types and subjects.');
+        return;
+      }
+
+      const [tagTypesResult, subjectsResult] = await Promise.allSettled([
+        fetchTagTypes(schoolKey),
+        fetchSubjects(schoolKey),
+      ]);
+
+      setSetupNotice(
+        buildPartialLoadMessage([
+          ...(tagTypesResult.status === 'rejected' ? ['Tag types'] : []),
+          ...(subjectsResult.status === 'rejected' ? ['Subjects'] : []),
+        ]),
+      );
+    })();
   }, [fetchTagTypes, fetchSubjects]);
 
   const handleCreateNewTag = useCallback(
     async (tagName: string, typeId: string, subjectIds: string[]): Promise<TagItem | null> => {
       try {
-        const endpoint = '/api/tags'+schoolQS+'';
+        const schoolKey = resolveClientSchoolKey();
+        if (!schoolKey) {
+          throw new Error('Please select a school in the navbar first.');
+        }
+
         const payload = { name: tagName, type: typeId, subjectIds };
-        console.debug('[tags/create] POST /api/tags ->', { endpoint, payload });
-        const res = await fetch(endpoint, {
+        const data = await fetchApiJson<any>('/api/tags', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+          schoolKey,
+          fallbackMessage: 'Failed to create tag.',
         });
-        const data = await res.json();
-        console.debug('[tags/create] POST /api/tags <-', { ok: res.ok, status: res.status, data });
-        if (data.success) {
-          toast({
-            title: "Tag Created",
-            description: `"${data.tag.name}" (Type: ${data.tag.type.name}) has been added.`,
-          });
-          return data.tag;
-        } else {
-          console.warn('[tags/create] tag create responded with error', data);
-          toast({ title: "Creation Failed", description: data.message, variant: "destructive" });
-          return null;
-        }
-      } catch (err) {
-        console.error('[tags/create] POST /api/tags network error', err);
-        toast({ title: "Network Error", description: "Failed to create tag.", variant: "destructive" });
+        toast({
+          title: "Tag Created",
+          description: `"${data.tag.name}" (Type: ${data.tag.type.name}) has been added.`,
+        });
+        return data.tag;
+      } catch (err: any) {
+        toast({ title: "Network Error", description: err?.message || "Failed to create tag.", variant: "destructive" });
         return null;
       }
     },
@@ -185,11 +195,6 @@ export default function CreateTagPage() {
 
     setIsCreatingTag(true);
     try {
-      console.debug('[tags/create] handleCreateAndAssignTag start', {
-        newTagName,
-        selectedTagTypeId,
-        selectedSubjects: selectedSubjects.map(s => s._id)
-      });
       const createdTag = await handleCreateNewTag(
         newTagName,
         selectedTagTypeId,
@@ -202,19 +207,17 @@ export default function CreateTagPage() {
         let successCount = 0;
         let failCount = 0;
 
-        const currentSubjectsRes = await fetch('/api/subjects'+schoolQS);
-        const currentSubjectsData = await currentSubjectsRes.json();
-        console.debug('[tags/create] refresh subjects after create', { ok: currentSubjectsRes.ok, status: currentSubjectsRes.status, count: currentSubjectsData?.subjects?.length });
-
-        if (!currentSubjectsData.success) {
-            toast({
-                title: "Assignment Interrupted",
-                description: "Could not fetch current subject data to assign tag. Please try again.",
-                variant: "destructive",
-            });
-            return;
+        const schoolKey = resolveClientSchoolKey();
+        if (!schoolKey) {
+          throw new Error('Please select a school in the navbar first.');
         }
-        const currentSubjects = currentSubjectsData.subjects as Subject[];
+
+        const currentSubjectsData = await fetchApiJson<any>('/api/subjects', {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Could not fetch current subject data to assign tag. Please try again.',
+        });
+        const currentSubjects = Array.isArray(currentSubjectsData.subjects) ? currentSubjectsData.subjects as Subject[] : [];
 
         for (const selectedSubject of selectedSubjects) {
           const currentSubject = currentSubjects.find(s => s._id === selectedSubject._id);
@@ -229,27 +232,18 @@ export default function CreateTagPage() {
             : [...currentTagIds, createdTag._id];
 
           try {
-            const endpoint = `/api/subjects/${currentSubject._id}`;
-            console.debug('[tags/create] PATCH subject assign ->', { endpoint, tagIds: updatedTagIds.length });
-            const res = await fetch(endpoint, {
+            await fetchApiJson(`/api/subjects/${currentSubject._id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ tags: updatedTagIds }),
+              schoolKey,
+              fallbackMessage: 'Failed to assign tag to subject.',
             });
-            const data = await res.json();
-            console.debug('[tags/create] PATCH subject assign <-', { ok: res.ok, status: res.status, subjectId: currentSubject._id, success: data?.success });
-            if (data.success) {
-              successCount++;
-            } else {
-              failCount++;
-            }
+            successCount++;
           } catch (err) {
-            console.error('[tags/create] PATCH subject assign error', { subjectId: currentSubject._id, err });
             failCount++;
           }
         }
-
-        console.debug('[tags/create] assignment finished', { successCount, failCount });
         if (successCount > 0) {
           toast({
             title: "Tag Assignment Complete",
@@ -269,14 +263,12 @@ export default function CreateTagPage() {
         });
       }
     } catch (err) {
-        console.error('[tags/create] handleCreateAndAssignTag error', err);
         toast({
             title: "Operation Failed",
             description: "An unexpected error occurred.",
             variant: "destructive",
         });
     } finally {
-      console.debug('[tags/create] handleCreateAndAssignTag cleanup');
       setIsCreatingTag(false);
       setNewTagName('');
       setSelectedTagTypeId('');
@@ -301,28 +293,29 @@ export default function CreateTagPage() {
           setSelectedTagTypeId(newTagType._id);
         }}
       />
-      <div className="min-h-screen bg-background text-foreground">
-        <div className="max-w-3xl mx-auto space-y-8 py-8 px-4 sm:px-6 lg:px-8">
-          <div className="space-y-2">
-            <Button
-              variant="ghost"
-              onClick={() => router.push('/tags')}
-              className="text-sm text-muted-foreground hover:text-foreground -ml-4"
-              disabled={isCreatingTag}
-            >
-              <ChevronLeft className="mr-2 h-4 w-4" />
-              Back to Tags
-            </Button>
-            <h1 className="app-page-title text-foreground">
-              Create a New Tag
-            </h1>
-            <p className="text-muted-foreground">
+      <div className="app-page-shell max-w-3xl px-4 py-6 sm:px-0">
+        <div className="app-page-header-row">
+          <div>
+            <h1 className="app-page-title">Create a New Tag</h1>
+            <p className="app-page-subtitle">
               Define a new tag, choose its type, and optionally assign it to existing subjects.
             </p>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={navigateBack}
+            disabled={isCreatingTag}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </div>
 
-          <Card className="border-border/40">
-            <CardContent className="p-6 space-y-6">
+        {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
+
+        <Card className="app-surface overflow-hidden">
+          <CardContent className="app-surface-body space-y-6">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="tagName" className="font-semibold">Tag Name</Label>
@@ -350,6 +343,7 @@ export default function CreateTagPage() {
                         <SelectValue placeholder={tagTypesLoading ? "Loading types..." : "Select a type"} />
                       </SelectTrigger>
                       <SelectContent>
+                        {tagTypes.length === 0 ? <div className="px-3 py-2 text-sm text-muted-foreground">No tag types available yet.</div> : null}
                         {tagTypes.map((type) => (
                           <SelectItem key={type._id} value={type._id} className="capitalize">
                             {type.name}
@@ -385,6 +379,8 @@ export default function CreateTagPage() {
                           <div className="flex items-center text-muted-foreground">
                               <Spinner /> <span className="ml-2">Loading subjects...</span>
                           </div>
+                      ) : !subjectsLoading && allSubjects.length === 0 ? (
+                        <span className="text-muted-foreground">No subjects available in this school yet.</span>
                       ) : selectedSubjects.length > 0 ? (
                         <div className="flex items-center gap-1.5 overflow-hidden">
                           {selectedSubjects.slice(0, 2).map((subject) => (
@@ -456,24 +452,24 @@ export default function CreateTagPage() {
             </CardContent>
           </Card>
 
-          <div className="flex justify-end gap-3 pt-4">
-            <Button
-              onClick={() => router.push('/tags')}
-              variant="outline"
-              className="h-11"
-              disabled={isCreatingTag}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateAndAssignTag}
-              disabled={isCreatingTag || !newTagName.trim() || !selectedTagTypeId}
-              className="h-11 font-semibold"
-            >
-              {isCreatingTag ? <div className="mr-2"><Spinner /></div> : null}
-              Create Tag
-            </Button>
-          </div>
+        <div className="flex justify-end gap-3 pt-4">
+          <Button
+            type="button"
+            onClick={navigateBack}
+            variant="outline"
+            className="h-11"
+            disabled={isCreatingTag}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreateAndAssignTag}
+            disabled={isCreatingTag || !newTagName.trim() || !selectedTagTypeId}
+            className="h-11 font-semibold"
+          >
+            {isCreatingTag ? <div className="mr-2"><Spinner /></div> : null}
+            Create Tag
+          </Button>
         </div>
       </div>
     </>

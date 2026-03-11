@@ -4,7 +4,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { BookOpen } from 'lucide-react';
-import { Spinner } from '@/components/ui/spinner';
+import MultiSelectChecklist from '@/components/multi-select-checklist';
+
+interface AcademicSectionItem {
+  _id: string;
+  name: string;
+}
 
 export interface PaperDetailsFormProps {
   paperTitle: string;
@@ -23,6 +28,9 @@ export interface PaperDetailsFormProps {
   setSubjectId: (v: string) => void;
   classes: any[];
   subjects: any[];
+  availableAcademicSections: AcademicSectionItem[];
+  assignedAcademicSectionIds: string[];
+  setAssignedAcademicSectionIds: (ids: string[]) => void;
   compact?: boolean;
   initialDataLoading?: boolean;
 }
@@ -44,16 +52,39 @@ export function PaperDetailsForm({
   setSubjectId,
   classes,
   subjects,
+  availableAcademicSections,
+  assignedAcademicSectionIds,
+  setAssignedAcademicSectionIds,
   initialDataLoading,
 }: PaperDetailsFormProps) {
   if (initialDataLoading) {
     return (
-      <div className="app-surface app-surface-body">
-        <div className="app-status-row justify-center">
-          <Spinner />
-          <span>Loading paper settings...</span>
-        </div>
-      </div>
+      <Card className="app-surface overflow-hidden">
+        <CardHeader className="app-section-header">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BookOpen className="h-4 w-4 text-primary" />
+            Paper Details
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="app-section-body space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="space-y-2">
+                <div className="h-4 w-24 animate-pulse rounded bg-muted/70" />
+                <div className="h-10 w-full animate-pulse rounded-xl bg-muted/60" />
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            <div className="h-4 w-40 animate-pulse rounded bg-muted/70" />
+            <div className="h-24 w-full animate-pulse rounded-2xl bg-muted/60" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-4 w-32 animate-pulse rounded bg-muted/70" />
+            <div className="h-28 w-full animate-pulse rounded-2xl bg-muted/60" />
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -99,6 +130,28 @@ export function PaperDetailsForm({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="app-field-group sm:col-span-2">
+            <Label className="app-field-label">Assigned Class Sections</Label>
+            {!classId ? (
+              <div className="rounded-xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
+                Select a class first to assign sections.
+              </div>
+            ) : availableAcademicSections.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
+                No sections for this class yet.
+              </div>
+            ) : (
+              <MultiSelectChecklist
+                items={availableAcademicSections.map((section) => ({
+                  id: section._id,
+                  label: section.name,
+                }))}
+                selectedIds={assignedAcademicSectionIds}
+                onChange={setAssignedAcademicSectionIds}
+              />
+            )}
           </div>
 
           <div className="app-field-group">

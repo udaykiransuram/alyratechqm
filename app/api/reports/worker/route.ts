@@ -29,6 +29,30 @@ function backoffMinutes(attempts: number) {
   return Math.min(60, Math.pow(2, Math.max(0, attempts - 1)) * 2);
 }
 
+function sanitizeFilePart(value: string) {
+  return String(value || "")
+    .replace(/[^a-zA-Z0-9_\-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
+}
+
+function buildClassReportPublicPath({
+  schoolKey,
+  paperId,
+  academicSectionId,
+}: {
+  schoolKey: string;
+  paperId: string;
+  academicSectionId?: string;
+}) {
+  const params = new URLSearchParams();
+  params.set("school", schoolKey);
+  if (academicSectionId) {
+    params.set("academicSectionId", academicSectionId);
+  }
+  return `/api/reports/class-analytics/${encodeURIComponent(paperId)}?${params.toString()}`;
+}
+
 export async function POST(req: NextRequest) {
   await connectDB();
   const now = new Date();
@@ -52,35 +76,73 @@ export async function POST(req: NextRequest) {
       job.attempts = (job.attempts || 0) + 1;
       await job.save();
 
-      if (!job.responseId || !job.mobileNumber) {
-        throw new Error("Invalid job payload: responseId/mobileNumber missing");
+      if (!job.mobileNumber) {
+        throw new Error("Invalid job payload: mobileNumber missing");
       }
 
-      const { QuestionPaperResponse: QPRModel } = await getTenantModels(
-        job.schoolKey,
-        ["QuestionPaperResponse", "QuestionPaper", "User"],
-      );
-      const response = await QPRModel.findById(job.responseId)
-        .populate("student", "name")
-        .populate("paper", "title")
-        .lean();
+      let reportUrl = "";
+      let filename = "report.pdf";
+      let caption = "Report";
 
-      if (!response || Array.isArray(response)) {
-        throw new Error("Response not found for queued job");
+      if (job.type === "student") {
+        if (!job.responseId) {
+          throw new Error("Invalid student job payload: responseId missing");
+        }
+
+        const { QuestionPaperResponse: QPRModel } = await getTenantModels(
+          job.schoolKey,
+          ["QuestionPaperResponse", "QuestionPaper", "User"],
+        );
+        const response = await QPRModel.findById(job.responseId)
+          .populate("student", "name")
+          .populate("paper", "title")
+          .lean();
+
+        if (!response || Array.isArray(response)) {
+          throw new Error("Response not found for queued job");
+        }
+
+        const publicPath = await generateStudentReportPdfAndGetPublicUrl({
+          origin,
+          schoolKey: job.schoolKey,
+          responseId: String(job.responseId),
+          fileLabel: (response as any).paper?.title || "student_report",
+        });
+
+        reportUrl = `${origin}${publicPath}`;
+        filename = `${sanitizeFilePart((response as any).paper?.title || "student_report") || "student_report"}.pdf`;
+        caption = `Report for ${(response as any).student?.name || "student"}`;
+      } else if (["teacher", "admin", "exam"].includes(job.type)) {
+        if (!job.paperId) {
+          throw new Error("Invalid class report job payload: paperId missing");
+        }
+
+        const publicPath = buildClassReportPublicPath({
+          schoolKey: job.schoolKey,
+          paperId: String(job.paperId),
+          academicSectionId: job.academicSection
+            ? String(job.academicSection)
+            : undefined,
+        });
+
+        reportUrl = `${origin}${publicPath}`;
+        const fileBase = [
+          sanitizeFilePart(job.paperTitle || "class_analytics"),
+          sanitizeFilePart(job.className || ""),
+          sanitizeFilePart(job.academicSectionName || ""),
+          "class_analytics",
+        ]
+          .filter(Boolean)
+          .join("_");
+        filename = `${fileBase || "class_analytics"}.xlsx`;
+        caption = `Class analytics report${job.className ? ` for ${job.className}` : ""}${job.academicSectionName ? ` • ${job.academicSectionName}` : ""}`;
+      } else {
+        throw new Error(`Unsupported job type: ${job.type}`);
       }
 
-      const publicPath = await generateStudentReportPdfAndGetPublicUrl({
-        origin,
-        schoolKey: job.schoolKey,
-        responseId: String(job.responseId),
-        fileLabel: (response as any).paper?.title || "student_report",
-      });
-
-      const reportUrl = `${origin}${publicPath}`;
       let waRes: any;
       let sentVia: "document" | "template" = "document";
 
-      // Optional modes for easier rollout/debugging in production.
       if (TEMPLATE_ONLY_MODE) {
         waRes = await sendWhatsAppTemplate({ to: job.mobileNumber });
         sentVia = "template";
@@ -94,8 +156,8 @@ export async function POST(req: NextRequest) {
           waRes = await sendWhatsAppDocument({
             to: job.mobileNumber,
             link: reportUrl,
-            filename: `${(response as any).paper?.title || "student_report"}.pdf`,
-            caption: `Report for ${(response as any).student?.name || "student"}`,
+            filename,
+            caption,
           });
         } catch (docErr: any) {
           const msg = docErr?.message || "Failed to send WhatsApp document";
@@ -103,7 +165,6 @@ export async function POST(req: NextRequest) {
             throw docErr;
           }
 
-          // Fallback: send approved template (default hello_world), useful when document send is blocked by policy/window.
           waRes = await sendWhatsAppTemplate({ to: job.mobileNumber });
           sentVia = "template";
         }

@@ -35,3 +35,27 @@ export function withSchoolHeaders(
     },
   };
 }
+
+
+export function resolveSchoolKey(schoolKey?: string | null): string {
+  return String(schoolKey ?? getSchoolKeyFromCookie() ?? '').trim();
+}
+
+
+export function setSchoolKeyCookie(
+  schoolKey: string,
+  maxAgeSeconds = 31536000,
+): void {
+  try {
+    const value = encodeURIComponent(String(schoolKey || '').trim());
+    document.cookie = `schoolKey=${value}; path=/; max-age=${maxAgeSeconds}`;
+  } catch {
+  }
+}
+
+export function clearSchoolKeyCookie(): void {
+  try {
+    document.cookie = 'schoolKey=; path=/; max-age=0';
+  } catch {
+  }
+}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import PageLoadingState from "@/components/ui/page-loading-state";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,17 +15,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { MessageCircle } from "lucide-react";
+import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
+import { useBackNavigation, useCurrentPathWithSearch } from "@/hooks/useReturnNavigation";
+import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
 
 interface ClassItem {
   _id: string;
   name: string;
 }
+
+interface AcademicSectionItem {
+  _id: string;
+  name: string;
+}
+
 interface UserItem {
   _id: string;
   name: string;
   email?: string;
   role: string;
   class?: string;
+  academicSection?: string;
   rollNumber?: string;
   enrolledAt?: string;
   createdAt?: string;
@@ -52,18 +63,19 @@ interface AttemptItem {
 export default function StudentDetailPage() {
   const params = useParams();
   const id = (params?.id as string) || "";
+  const { navigateBack } = useBackNavigation("/students");
+  const currentPath = useCurrentPathWithSearch("/students");
+  const editHref = buildHrefWithReturnTo(`/students/edit/${id}`, currentPath);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<UserItem | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
 
-  // Attempts state
   const [attempts, setAttempts] = useState<AttemptItem[]>([]);
   const [attemptsError, setAttemptsError] = useState<string | null>(null);
-  const [sendingResponseId, setSendingResponseId] = useState<string | null>(
-    null,
-  );
+  const [sendingResponseId, setSendingResponseId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -73,25 +85,61 @@ export default function StudentDetailPage() {
       try {
         setLoading(true);
         setError(null);
-        const [uRes, cRes, aRes] = await Promise.all([
-          fetch("/api/users/" + id),
-          fetch("/api/classes"),
-          fetch("/api/question-paper-response?student=" + id),
-        ]);
-        const uJson = await uRes.json();
-        const cJson = await cRes.json();
-        const aJson = await aRes.json();
+        const schoolKey = resolveClientSchoolKey();
+        if (!schoolKey) {
+          throw new Error("Please select a school in the navbar to view student details.");
+        }
+
+        const [userResult, classesResult, sectionsResult, attemptsResult] =
+          await Promise.allSettled([
+            fetchApiJson<any>(`/api/users/${id}`, {
+              cache: "no-store",
+              schoolKey,
+              fallbackMessage: "Failed to load user.",
+            }),
+            fetchApiJson<any>("/api/classes", {
+              cache: "no-store",
+              schoolKey,
+              fallbackMessage: "Failed to load classes.",
+            }),
+            fetchApiJson<any>("/api/sections", {
+              cache: "no-store",
+              schoolKey,
+              fallbackMessage: "Failed to load sections.",
+            }),
+            fetchApiJson<any>(
+              `/api/question-paper-response?student=${encodeURIComponent(id)}`,
+              {
+                cache: "no-store",
+                schoolKey,
+                fallbackMessage: "Failed to load attempts.",
+              },
+            ),
+          ]);
+
         if (!mounted) return;
-        if (!uJson.success)
-          throw new Error(uJson.message || "Failed to load user");
-        if (!cJson.success)
-          throw new Error(cJson.message || "Failed to load classes");
-        if (!aJson.success)
-          throw new Error(aJson.message || "Failed to load attempts");
-        setUser(uJson.user);
-        setClasses(cJson.classes || []);
-        setAttempts(aJson.responses || []);
-        setAttemptsError(null);
+
+        if (userResult.status !== "fulfilled") {
+          throw userResult.reason;
+        }
+        if (classesResult.status !== "fulfilled") {
+          throw classesResult.reason;
+        }
+        if (sectionsResult.status !== "fulfilled") {
+          throw sectionsResult.reason;
+        }
+
+        setUser(userResult.value.user || null);
+        setClasses(Array.isArray(classesResult.value.classes) ? classesResult.value.classes : []);
+        setSections(Array.isArray(sectionsResult.value.sections) ? sectionsResult.value.sections : []);
+
+        if (attemptsResult.status === "fulfilled") {
+          setAttempts(Array.isArray(attemptsResult.value.responses) ? attemptsResult.value.responses : []);
+          setAttemptsError(null);
+        } else {
+          setAttempts([]);
+          setAttemptsError(attemptsResult.reason?.message || "Failed to load attempts");
+        }
       } catch (e: any) {
         setError(e.message || "Failed to load");
         setAttemptsError(e.message || "Failed to load attempts");
@@ -106,11 +154,12 @@ export default function StudentDetailPage() {
   }, [id]);
 
   const className = user?.class
-    ? classes.find((c) => c._id === String(user.class))?.name ||
-      (user.class as string)
+    ? classes.find((classItem) => classItem._id === String(user.class))?.name || String(user.class)
+    : "-";
+  const academicSectionName = user?.academicSection
+    ? sections.find((section) => section._id === String(user.academicSection))?.name || String(user.academicSection)
     : "-";
 
-  // Pagination helpers for attempts
   const totalAttempts = attempts.length;
   const maxPage = Math.max(1, Math.ceil(totalAttempts / pageSize));
   const pageItems = useMemo(() => {
@@ -122,13 +171,12 @@ export default function StudentDetailPage() {
     setPage((prev) => Math.min(maxPage, Math.max(1, prev + dir)));
   };
 
-  // Score calculator (client-side fallback)
-  const calcScore = (a: AttemptItem) => {
-    if (typeof a.totalMarksAwarded === "number") return a.totalMarksAwarded;
+  const calcScore = (attempt: AttemptItem) => {
+    if (typeof attempt.totalMarksAwarded === "number") return attempt.totalMarksAwarded;
     let sum = 0;
-    a.sectionAnswers?.forEach((sec) =>
-      sec.answers.forEach((ans) => {
-        sum += ans.marksAwarded || 0;
+    attempt.sectionAnswers?.forEach((section) =>
+      section.answers.forEach((answer) => {
+        sum += answer.marksAwarded || 0;
       }),
     );
     return sum;
@@ -146,44 +194,31 @@ export default function StudentDetailPage() {
     return parts.join(" ");
   };
 
-  const getSchoolKeyFromCookie = () => {
-    const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-    return m ? decodeURIComponent(m[1]) : "";
-  };
-
   const handleSendStudentReport = async (responseId: string) => {
     try {
       setSendingResponseId(responseId);
-      const schoolKey = getSchoolKeyFromCookie();
-      const res = await fetch(
-        `/api/reports/send/student/${responseId}` +
-          (schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : ""),
-        {
-          method: "POST",
-          headers: schoolKey ? { "x-school-key": schoolKey } : {},
-        },
-      );
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        alert(data.message || "Failed to send report");
-        return;
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error("Please select a school in the navbar first.");
       }
 
-      // This endpoint queues background delivery; it does not guarantee immediate send.
+      const data = await fetchApiJson<any>(`/api/reports/send/student/${responseId}`, {
+        method: "POST",
+        schoolKey,
+        fallbackMessage: "Failed to send report",
+      });
+
       if (data.queued) {
-        const queuedMsg =
-          data.message || "Report queued for background processing.";
+        const queuedMsg = data.message || "Report queued for background processing.";
         const failureMsg = data?.lastFailure?.error
           ? `\n\nLast delivery failure: ${data.lastFailure.error}`
           : "";
-        alert(
-          `${queuedMsg}\nCurrent status: ${data.deliveryStatus || "queued"}.${failureMsg}`,
-        );
+        alert(`${queuedMsg}\nCurrent status: ${data.deliveryStatus || "queued"}.${failureMsg}`);
       } else {
         alert(data.message || "Request accepted.");
       }
-    } catch {
-      alert("Failed to send report");
+    } catch (error: any) {
+      alert(error?.message || "Failed to send report");
     } finally {
       setSendingResponseId(null);
     }
@@ -199,17 +234,21 @@ export default function StudentDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/students">
-            <Button variant="outline">Back to Students</Button>
-          </Link>
-          <Link href={"/students/edit/" + id}>
+          <Button variant="outline" onClick={navigateBack}>Back to Students</Button>
+          <Link href={editHref}>
             <Button>Edit</Button>
           </Link>
         </div>
       </div>
 
       {loading ? (
-        <div className="app-empty-state">Loading student details...</div>
+        <PageLoadingState
+          title="Loading student details"
+          description="Preparing the student profile, class section, and response summary."
+          className="px-0 py-0"
+          contentClassName="max-w-none"
+          dense
+        />
       ) : error ? (
         <div className="app-feedback app-feedback-error">{error}</div>
       ) : !user ? (
@@ -236,31 +275,29 @@ export default function StudentDetailPage() {
                   <div className="app-detail-value">{className}</div>
                 </div>
                 <div className="app-detail-item">
+                  <div className="app-detail-label">Section</div>
+                  <div className="app-detail-value">{academicSectionName}</div>
+                </div>
+                <div className="app-detail-item">
                   <div className="app-detail-label">Roll Number</div>
                   <div className="app-detail-value">{user.rollNumber || "-"}</div>
                 </div>
                 <div className="app-detail-item">
                   <div className="app-detail-label">Enrolled At</div>
                   <div className="app-detail-value">
-                    {user.enrolledAt
-                      ? new Date(user.enrolledAt).toLocaleDateString()
-                      : "-"}
+                    {user.enrolledAt ? new Date(user.enrolledAt).toLocaleDateString() : "-"}
                   </div>
                 </div>
                 <div className="app-detail-item">
                   <div className="app-detail-label">Created</div>
                   <div className="app-detail-value">
-                    {user.createdAt
-                      ? new Date(user.createdAt).toLocaleString()
-                      : "-"}
+                    {user.createdAt ? new Date(user.createdAt).toLocaleString() : "-"}
                   </div>
                 </div>
                 <div className="app-detail-item">
                   <div className="app-detail-label">Updated</div>
                   <div className="app-detail-value">
-                    {user.updatedAt
-                      ? new Date(user.updatedAt).toLocaleString()
-                      : "-"}
+                    {user.updatedAt ? new Date(user.updatedAt).toLocaleString() : "-"}
                   </div>
                 </div>
               </div>
@@ -269,26 +306,16 @@ export default function StudentDetailPage() {
 
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between text-xl font-semibold tracking-tight">
+              <CardTitle className="flex flex-col gap-3 text-xl font-semibold tracking-tight lg:flex-row lg:items-center lg:justify-between">
                 <span>Attempts ({totalAttempts})</span>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                   <span>
                     Page {page} of {maxPage}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => changePage(-1)}
-                    disabled={page <= 1}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => changePage(-1)} disabled={page <= 1}>
                     Prev
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => changePage(1)}
-                    disabled={page >= maxPage}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => changePage(1)} disabled={page >= maxPage}>
                     Next
                   </Button>
                 </div>
@@ -317,46 +344,44 @@ export default function StudentDetailPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pageItems.map((a) => {
-                        const paperId = (a.paper as any)?._id || "";
-                        const paperTitle = (a.paper as any)?.title || "-";
+                      {pageItems.map((attempt) => {
+                        const paperId = (attempt.paper as any)?._id || "";
+                        const paperTitle = (attempt.paper as any)?.title || "-";
                         const subjectName =
-                          typeof (a.paper as any)?.subject === "object"
-                            ? (a.paper as any)?.subject?.name || "-"
-                            : (a.paper as any)?.subject || "-";
+                          typeof (attempt.paper as any)?.subject === "object"
+                            ? (attempt.paper as any)?.subject?.name || "-"
+                            : (attempt.paper as any)?.subject || "-";
                         const currentClassName =
-                          typeof (a.paper as any)?.class === "object"
-                            ? (a.paper as any)?.class?.name || "-"
-                            : (a.paper as any)?.class || "-";
-                        const started = a.startedAt
-                          ? new Date(a.startedAt).toLocaleString()
+                          typeof (attempt.paper as any)?.class === "object"
+                            ? (attempt.paper as any)?.class?.name || "-"
+                            : (attempt.paper as any)?.class || "-";
+                        const started = attempt.startedAt
+                          ? new Date(attempt.startedAt).toLocaleString()
                           : "-";
-                        const submitted = a.submittedAt
-                          ? new Date(a.submittedAt).toLocaleString()
+                        const submitted = attempt.submittedAt
+                          ? new Date(attempt.submittedAt).toLocaleString()
                           : "-";
-                        const score = calcScore(a);
+                        const score = calcScore(attempt);
                         return (
-                          <TableRow key={a._id}>
+                          <TableRow key={attempt._id}>
                             <TableCell className="font-medium">{paperTitle}</TableCell>
                             <TableCell>{subjectName}</TableCell>
                             <TableCell>{currentClassName}</TableCell>
                             <TableCell>{started}</TableCell>
                             <TableCell>{submitted}</TableCell>
+                            <TableCell>{attempt.submittedAt ? "Submitted" : "In progress"}</TableCell>
                             <TableCell>
-                              {a.submittedAt ? "Submitted" : "In progress"}
-                            </TableCell>
-                            <TableCell>
-                              {a.startedAt && a.submittedAt
+                              {attempt.startedAt && attempt.submittedAt
                                 ? formatDuration(
-                                    new Date(a.submittedAt).getTime() -
-                                      new Date(a.startedAt).getTime(),
+                                    new Date(attempt.submittedAt).getTime() -
+                                      new Date(attempt.startedAt).getTime(),
                                   )
                                 : "-"}
                             </TableCell>
                             <TableCell>
-                              {Array.isArray(a.sectionAnswers)
-                                ? a.sectionAnswers.reduce(
-                                    (sum, sec) => sum + (sec.answers?.length || 0),
+                              {Array.isArray(attempt.sectionAnswers)
+                                ? attempt.sectionAnswers.reduce(
+                                    (sum, section) => sum + (section.answers?.length || 0),
                                     0,
                                   )
                                 : 0}
@@ -364,18 +389,15 @@ export default function StudentDetailPage() {
                             <TableCell>{score}</TableCell>
                             <TableCell>
                               <div className="flex flex-wrap items-center gap-2">
-                                <Link href={"/analytics/student-tag-report/" + a._id}>
+                                <Link href={buildHrefWithReturnTo(`/analytics/student-tag-report/${attempt._id}`, currentPath)}>
                                   <Button variant="outline" size="sm">
                                     Student Report
                                   </Button>
                                 </Link>
-                                <Link
-                                  href={"/analytics/class-tag-report/" + paperId}
-                                  prefetch={false}
-                                >
+                                <Link href={buildHrefWithReturnTo(`/analytics/class-tag-report/${paperId}`, currentPath)} prefetch={false}>
                                   <Button size="sm">Class Report</Button>
                                 </Link>
-                                <Link href={"/question-paper/view/" + paperId}>
+                                <Link href={buildHrefWithReturnTo(`/question-papers/view/${paperId}`, currentPath)}>
                                   <Button variant="outline" size="sm">
                                     View Paper
                                   </Button>
@@ -383,14 +405,12 @@ export default function StudentDetailPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleSendStudentReport(a._id)}
-                                  disabled={sendingResponseId === a._id}
+                                  onClick={() => handleSendStudentReport(attempt._id)}
+                                  disabled={sendingResponseId === attempt._id}
                                   className="border-green-300 text-green-700"
                                 >
                                   <MessageCircle className="mr-1 h-4 w-4" />
-                                  {sendingResponseId === a._id
-                                    ? "Sending…"
-                                    : "Send Parent Report"}
+                                  {sendingResponseId === attempt._id ? "Sending…" : "Send Parent Report"}
                                 </Button>
                               </div>
                             </TableCell>

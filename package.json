@@ -15,7 +15,9 @@
     "test:e2e": "playwright test -c local-tests/playwright.config.ts",
     "test:e2e:headed": "playwright test -c local-tests/playwright.config.ts --headed",
     "test:e2e:ui": "playwright test -c local-tests/playwright.config.ts --ui",
-    "test:seed": "ts-node scripts/seed-test-data.ts"
+    "test:seed": "ts-node scripts/seed-test-data.ts",
+    "migrate:class-sections": "ts-node --esm scripts/migrate-class-sections.ts",
+    "smoke:upload-benchmark": "node scripts/smoke-upload-benchmark.mjs"
   },
   "keywords": [
     "nextjs",

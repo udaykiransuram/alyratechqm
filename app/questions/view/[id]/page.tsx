@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Spinner } from '@/components/ui/spinner';
+import PageLoadingState from '@/components/ui/page-loading-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, CheckCircle, Info, Grid3X3 } from 'lucide-react';
 import { ContentRenderer } from '@/components/ContentRenderer';
+import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
+import { useBackNavigation, useCurrentPathWithSearch } from '@/hooks/useReturnNavigation';
 
 interface Question {
   _id: string;
@@ -27,7 +29,9 @@ interface Question {
 
 export default function ViewQuestionPage({ params }: { params: { id: string } }) {
   const { id } = params;
-  const router = useRouter();
+  const { navigateBack } = useBackNavigation('/questions');
+  const currentPath = useCurrentPathWithSearch('/questions');
+  const editHref = buildHrefWithReturnTo(`/questions/edit/${encodeURIComponent(id)}`, currentPath);
 
   const [question, setQuestion] = useState<Question | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,14 +54,10 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
 
   if (loading) {
     return (
-      <div className="app-page-shell px-4 py-6 sm:px-0">
-        <div className="app-surface app-surface-body">
-          <div className="app-status-row justify-center">
-            <Spinner />
-            <span>Loading question details...</span>
-          </div>
-        </div>
-      </div>
+      <PageLoadingState
+        title="Loading question details"
+        description="Preparing the question body, answer data, and metadata."
+      />
     );
   }
 
@@ -69,7 +69,7 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
             <h1 className="app-page-title">View Question</h1>
             <p className="app-page-subtitle">The requested question could not be loaded.</p>
           </div>
-          <Button variant="outline" onClick={() => router.push('/questions')}>
+          <Button variant="outline" onClick={navigateBack}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Questions
           </Button>
@@ -86,10 +86,15 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
           <h1 className="app-page-title">View Question</h1>
           <p className="app-page-subtitle">Detailed view of a single question and its metadata.</p>
         </div>
-        <Button variant="outline" onClick={() => router.push('/questions')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={navigateBack}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          <Button asChild>
+            <Link href={editHref}>Edit</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] items-start">

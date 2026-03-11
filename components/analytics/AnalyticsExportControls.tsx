@@ -10,6 +10,11 @@ import {
 } from "@/components/analytics/helpers";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import {
+  appendBenchmarkSheetsToWorkbook,
+  buildBenchmarkPdfBundle,
+} from "@/lib/analytics/benchmarkExport";
+import type { BenchmarkViewSettings } from "@/lib/analytics/benchmarkPresentation";
 
 interface AnalyticsExportControlsProps {
   stats: any;
@@ -21,6 +26,11 @@ interface AnalyticsExportControlsProps {
   paperTitle?: string;
   studentName?: string;
   rollNumber?: string;
+  benchmarkData?: any;
+  paperId?: string;
+  academicSectionId?: string;
+  selectedTags?: { type: string; value: string }[];
+  benchmarkViewSettings?: BenchmarkViewSettings;
 }
 
 const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
@@ -33,6 +43,11 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
   paperTitle,
   studentName,
   rollNumber,
+  benchmarkData,
+  paperId,
+  academicSectionId,
+  selectedTags = [],
+  benchmarkViewSettings,
 }) => {
   const hasData = React.useMemo(
     () => !!stats && Object.keys(stats).length > 0,
@@ -46,6 +61,23 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
       ? `${groupBy.length} grouping levels`
       : "No grouping selected";
 
+  function getFilenameFromDisposition(headerValue: string | null) {
+    if (!headerValue) return "analytics_report.xlsx";
+    const match = headerValue.match(/filename="?([^";]+)"?/i);
+    return match?.[1] || "analytics_report.xlsx";
+  }
+
+  function triggerBlobDownload(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   async function handleDownloadTableImage() {
     if (tableRef.current) {
       const dataUrl = await toPng(tableRef.current, { cacheBust: true });
@@ -58,7 +90,63 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
 
   // CSV export removed per requirements
 
-  function handleDownloadExcel() {
+  async function handleDownloadExcel() {
+    if (mode === "class" && paperId) {
+      const searchParams = new URLSearchParams();
+      if (academicSectionId && academicSectionId !== "all") {
+        searchParams.set("academicSectionId", academicSectionId);
+      }
+      if (groupBy.length > 0) {
+        searchParams.set("groupBy", groupBy.join(","));
+      }
+      selectedTags.forEach((tag) => {
+        searchParams.append("tag", `${tag.type}:${tag.value}`);
+      });
+      if (benchmarkViewSettings) {
+        searchParams.set(
+          "benchmarkMinDistractorPct",
+          String(benchmarkViewSettings.minDistractorPct),
+        );
+        searchParams.set(
+          "benchmarkMinDistractorCount",
+          String(benchmarkViewSettings.minDistractorCount),
+        );
+        searchParams.set(
+          "benchmarkDistractorSortBy",
+          benchmarkViewSettings.distractorSortBy,
+        );
+      }
+
+      try {
+        const response = await fetch(
+          `/api/reports/class-analytics/${paperId}?${searchParams.toString()}`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        if (response.ok) {
+          const blob = await response.blob();
+          const fileName = getFilenameFromDisposition(
+            response.headers.get("content-disposition"),
+          );
+          triggerBlobDownload(blob, fileName);
+          return;
+        }
+
+        let message = "Failed to generate Excel workbook.";
+        try {
+          const data = await response.json();
+          if (typeof data?.message === "string" && data.message.trim()) {
+            message = data.message.trim();
+          }
+        } catch {}
+        throw new Error(message);
+      } catch (error: any) {
+        console.error("[analytics-export] class workbook download failed", error);
+      }
+    }
+
     const consolidatedRows: any[] = [];
     const detailedRows: any[] = [];
     const studentSummaryMap: Record<
@@ -421,6 +509,14 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
       } as any;
       XLSX.utils.book_append_sheet(workbook, insightsSheet, "Insights");
     } catch {}
+
+    if (mode === "class" && benchmarkData) {
+      appendBenchmarkSheetsToWorkbook(workbook, benchmarkData, {
+        benchmarkViewSettings,
+        baseUrl: typeof window !== "undefined" ? window.location.origin : "",
+      });
+    }
+
     XLSX.writeFile(workbook, "analytics_report.xlsx");
   }
 
@@ -676,6 +772,136 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
     }
   }
 
+  async function handleDownloadBenchmarkPdf() {
+    if (mode !== "class") return;
+
+    const bundle = buildBenchmarkPdfBundle(benchmarkData, {
+      benchmarkViewSettings,
+      baseUrl: typeof window !== "undefined" ? window.location.origin : "",
+    });
+    if (!bundle.hasData) {
+      alert("Benchmark data is not available for this report yet.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    let y = 18;
+    const title = paperTitle ? `${paperTitle} • Benchmark Summary` : "Benchmark Summary";
+    doc.setFontSize(16);
+    doc.text(title, 14, y);
+    y += 8;
+
+    if (bundle.overviewRows.length > 1) {
+      autoTable(doc, {
+        head: [bundle.overviewRows[0]],
+        body: bundle.overviewRows.slice(1),
+        startY: y,
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [34, 197, 94] },
+        theme: "grid",
+        margin: { left: 14, right: 14 },
+      });
+      // @ts-ignore
+      y = (doc as any).lastAutoTable.finalY + 6;
+    }
+
+    if (bundle.cohortRows.length > 0) {
+      autoTable(doc, {
+        head: [["Section", "Accuracy", "Acc Gap", "Avg Score", "Score Gap", "Pass Rate", "Pass Gap"]],
+        body: bundle.cohortRows,
+        startY: y,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [59, 130, 246] },
+        theme: "grid",
+        margin: { left: 14, right: 14 },
+      });
+      // @ts-ignore
+      y = (doc as any).lastAutoTable.finalY + 6;
+    }
+
+    if (bundle.insightRows.length > 0) {
+      if (y > doc.internal.pageSize.getHeight() - 70) {
+        doc.addPage();
+        y = 18;
+      }
+      autoTable(doc, {
+        head: [["Insight", "Description", "Severity"]],
+        body: bundle.insightRows,
+        startY: y,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [99, 102, 241] },
+        theme: "grid",
+        margin: { left: 14, right: 14 },
+      });
+      // @ts-ignore
+      y = (doc as any).lastAutoTable.finalY + 6;
+    }
+
+    if (bundle.tagRows.length > 0) {
+      if (y > doc.internal.pageSize.getHeight() - 70) {
+        doc.addPage();
+        y = 18;
+      }
+      autoTable(doc, {
+        head: [["Q Nos", "Tag", "Section", "Accuracy", "Gap"]],
+        body: bundle.tagRows,
+        startY: y,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [244, 114, 182] },
+        theme: "grid",
+        margin: { left: 14, right: 14 },
+      });
+      // @ts-ignore
+      y = (doc as any).lastAutoTable.finalY + 6;
+    }
+
+    if (bundle.distractorRows.length > 0) {
+      if (y > doc.internal.pageSize.getHeight() - 70) {
+        doc.addPage();
+        y = 18;
+      }
+      autoTable(doc, {
+        head: bundle.distractorHead,
+        body: bundle.distractorRows,
+        startY: y,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [245, 158, 11] },
+        theme: "grid",
+        margin: { left: 14, right: 14 },
+      });
+      // @ts-ignore
+      y = (doc as any).lastAutoTable.finalY + 6;
+    }
+
+    if (bundle.questionLinkRows.length > 0) {
+      if (y > doc.internal.pageSize.getHeight() - 70) {
+        doc.addPage();
+        y = 18;
+      }
+      autoTable(doc, {
+        head: bundle.questionLinkHead,
+        body: bundle.questionLinkRows.map((row: any) => row.cells),
+        startY: y,
+        styles: { fontSize: 8.5 },
+        headStyles: { fillColor: [14, 165, 233] },
+        theme: "grid",
+        margin: { left: 14, right: 14 },
+        didDrawCell: (data: any) => {
+          if (data.section !== "body" || data.column.index !== 3) return;
+          const url = String(bundle.questionLinkRows?.[data.row.index]?.url || "").trim();
+          if (!/^https?:\/\//i.test(url)) return;
+          doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, {
+            url,
+          });
+        },
+      });
+    }
+
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const safeTitle = (paperTitle || "benchmark_summary").replace(/[^a-zA-Z0-9_\-]+/g, "_");
+    doc.save(`${safeTitle}-benchmark-${ts}.pdf`);
+  }
+
   return (
     <div className="w-full xl:max-w-[34rem]">
       <div className="analytics-toolbar">
@@ -709,6 +935,17 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
           >
             Excel workbook
           </Button>
+          {mode === "class" ? (
+            <Button
+              onClick={handleDownloadBenchmarkPdf}
+              variant="outline"
+              size="sm"
+              disabled={!benchmarkData?.baseline}
+              className="min-w-[9.5rem] justify-center"
+            >
+              Benchmark PDF
+            </Button>
+          ) : null}
           {mode === "student" ? (
             <Button
               onClick={handleDownloadRemedials}

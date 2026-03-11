@@ -1,6 +1,7 @@
 // models/Subject.ts
 import mongoose, { Schema, Document, Model } from 'mongoose';
-import { ITag } from './Tag.ts';
+import { applyArchiveFields, hasArchiveFields } from '@/lib/archive';
+import type { ITag } from './Tag.ts';
 
 export interface ISubject extends Document {
   name: string;
@@ -40,7 +41,15 @@ const SubjectSchema: Schema<ISubject> = new Schema(
 SubjectSchema.index({ name: 1 }, { unique: true });
 SubjectSchema.index({ tags: 1 }); // Optimizes queries filtering subjects by tags
 
+applyArchiveFields(SubjectSchema);
+
+const existingSubjectModel = mongoose.models.Subject as Model<ISubject> | undefined;
+
+if (existingSubjectModel && !hasArchiveFields(existingSubjectModel)) {
+  delete mongoose.models.Subject;
+}
+
 const Subject: Model<ISubject> =
-  mongoose.models.Subject || mongoose.model<ISubject>('Subject', SubjectSchema);
+  (mongoose.models.Subject as Model<ISubject>) || mongoose.model<ISubject>('Subject', SubjectSchema);
 
 export default Subject;

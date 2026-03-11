@@ -319,79 +319,96 @@
     );
   }
 
-  .app-workspace-shell .container {
+  .app-workspace-shell .container,
+  .app-workspace-shell .app-page-shell {
     width: 100%;
     max-width: var(--app-content-max-width);
     margin-inline: auto;
-    padding-inline: 1rem;
+    box-sizing: border-box;
+    padding-inline: 0.875rem;
+  }
+
+  .app-page-frame {
+    @apply w-full;
+  }
+
+  .app-page-frame > .container,
+  .app-page-frame > .app-page-shell {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+  }
+
+  .app-page-frame > .container > :not([hidden]) ~ :not([hidden]),
+  .app-page-frame > .app-page-shell > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.875rem !important;
   }
 
   .app-page-shell {
-    @apply mx-auto w-full space-y-6;
+    @apply mx-auto w-full space-y-4;
   }
 
   .app-page-header {
-    @apply space-y-2;
+    @apply space-y-1;
   }
 
   .app-page-header-row {
-    @apply flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between;
+    @apply flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between;
   }
 
   .app-page-title {
-    @apply text-3xl font-semibold tracking-tight text-foreground;
+    @apply text-2xl font-semibold tracking-tight text-foreground;
   }
 
   .app-page-subtitle {
-    @apply text-sm text-muted-foreground;
+    @apply text-[13px] leading-5 text-muted-foreground;
   }
 
   .app-surface {
-    @apply rounded-2xl border border-border/60 bg-card shadow-sm;
+    @apply rounded-xl border border-border/60 bg-card shadow-sm;
   }
 
   .app-surface-body {
-    @apply space-y-5 p-6;
+    @apply space-y-4 p-4 sm:p-5;
   }
 
   .app-section {
-    @apply space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4;
+    @apply space-y-2.5 rounded-lg border border-border/60 bg-muted/20 p-3;
   }
 
   .app-field-group {
-    @apply space-y-2;
+    @apply space-y-1.5;
   }
 
   .app-field-label {
-    @apply text-sm font-medium text-foreground;
+    @apply text-[13px] font-medium text-foreground;
   }
 
   .app-form-input {
-    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .app-form-textarea {
-    @apply min-h-[140px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply min-h-[112px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .app-form-file {
-    @apply block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border file:border-input file:bg-background file:px-4 file:py-2 file:text-sm file:font-medium file:text-foreground hover:file:bg-accent hover:file:text-accent-foreground;
+    @apply block w-full text-[13px] text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-foreground hover:file:bg-accent hover:file:text-accent-foreground;
   }
 
   .app-selection-list {
-    @apply max-h-52 space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-background p-3;
+    @apply max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-border/60 bg-background p-2.5;
   }
 
   .app-button-primary {
-    @apply inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors ring-offset-background hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex h-9 items-center justify-center rounded-md bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors ring-offset-background hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
   }
 
   .app-button-secondary {
-    @apply inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors ring-offset-background hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3.5 py-2 text-sm font-medium text-foreground shadow-sm transition-colors ring-offset-background hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
   }
 
   .app-feedback {
-    @apply rounded-xl border px-4 py-3 text-sm;
+    @apply rounded-lg border px-3 py-2.5 text-[13px];
   }
 
   .app-feedback-success {
@@ -406,7 +423,7 @@
     @apply border-border bg-background text-muted-foreground;
   }
   .app-empty-state {
-    @apply rounded-xl border border-dashed border-border/60 bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground;
+    @apply rounded-lg border border-dashed border-border/60 bg-muted/20 px-3 py-8 text-center text-sm text-muted-foreground;
   }
 
   .app-status-row {
@@ -418,11 +435,11 @@
   }
 
   .app-detail-grid {
-    @apply grid gap-3 md:grid-cols-2;
+    @apply grid gap-2.5 md:grid-cols-2;
   }
 
   .app-detail-item {
-    @apply rounded-xl border border-border/60 bg-muted/20 px-4 py-3;
+    @apply rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5;
   }
 
   .app-detail-label {
@@ -434,76 +451,76 @@
   }
 
   .app-section-header {
-    @apply space-y-1 border-b border-border/60 px-6 py-5;
+    @apply space-y-1 border-b border-border/60 px-4 py-4;
   }
 
   .app-section-body {
-    @apply p-6;
+    @apply p-4;
   }
 
 
   .analytics-page {
-    @apply min-h-screen bg-muted/20 py-4 sm:py-6;
+    @apply min-h-screen bg-muted/20 py-3 sm:py-4;
   }
 
   .analytics-card {
-    @apply rounded-2xl border border-border/60 bg-card shadow-sm;
+    @apply rounded-xl border border-border/60 bg-card shadow-sm;
   }
 
   .analytics-card-body {
-    @apply space-y-5 p-4 sm:p-6;
+    @apply space-y-4 p-3.5 sm:p-4;
   }
 
   .analytics-card-header {
-    @apply flex flex-col gap-2 border-b border-border/60 bg-muted/20 px-4 py-4 sm:px-5;
+    @apply flex flex-col gap-1.5 border-b border-border/60 bg-muted/20 px-4 py-3;
   }
 
   .analytics-card-title {
-    @apply text-xl font-semibold tracking-tight text-foreground;
+    @apply text-lg font-semibold tracking-tight text-foreground;
   }
 
   .analytics-card-description {
-    @apply text-sm text-muted-foreground;
+    @apply text-[13px] leading-5 text-muted-foreground;
   }
 
   .analytics-subsection {
-    @apply space-y-3 rounded-xl border border-border/60 bg-muted/20 p-3 sm:p-4;
+    @apply space-y-2.5 rounded-lg border border-border/60 bg-muted/20 p-3;
   }
 
   .analytics-filter-chip {
-    @apply inline-flex cursor-pointer items-center justify-center rounded-full border border-border/60 bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground;
+    @apply inline-flex cursor-pointer items-center justify-center rounded-full border border-border/60 bg-background px-2.5 py-1 text-[13px] font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground;
   }
 
   .analytics-order-item {
-    @apply flex flex-col gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between;
+    @apply flex flex-col gap-1.5 rounded-lg border border-border/60 bg-background px-3 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between;
   }
 
   .analytics-toggle {
-    @apply mx-auto flex w-full max-w-xs rounded-xl border border-border/60 bg-muted/20 p-1;
+    @apply mx-auto flex w-full max-w-xs rounded-lg border border-border/60 bg-muted/20 p-0.5;
   }
 
   .analytics-table-shell {
-    @apply overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm;
+    @apply overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm;
   }
 
   .analytics-table-wrap {
-    @apply relative max-h-[70vh] overflow-auto rounded-xl border border-border/60 bg-background;
+    @apply relative max-h-[70vh] overflow-auto rounded-lg border border-border/60 bg-background;
   }
 
   .analytics-th {
-    @apply sticky top-0 z-10 bg-muted/95 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur sm:px-4 sm:py-3;
+    @apply sticky top-0 z-10 bg-muted/95 px-2.5 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur sm:px-3 sm:py-2.5;
   }
 
   .analytics-th-center {
-    @apply sticky top-0 z-10 bg-muted/95 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur sm:px-4 sm:py-3;
+    @apply sticky top-0 z-10 bg-muted/95 px-2.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur sm:px-3 sm:py-2.5;
   }
 
   .analytics-td {
-    @apply border-b border-border/60 px-3 py-2.5 text-[13px] text-foreground sm:px-4 sm:py-3 sm:text-sm;
+    @apply border-b border-border/60 px-2.5 py-2 text-[13px] text-foreground sm:px-3 sm:py-2.5 sm:text-sm;
   }
 
   .analytics-td-center {
-    @apply border-b border-border/60 px-3 py-2.5 text-center text-[13px] text-foreground sm:px-4 sm:py-3 sm:text-sm;
+    @apply border-b border-border/60 px-2.5 py-2 text-center text-[13px] text-foreground sm:px-3 sm:py-2.5 sm:text-sm;
   }
 
   .analytics-row {
@@ -539,19 +556,19 @@
   }
 
   .analytics-toolbar {
-    @apply rounded-xl border border-border/60 bg-muted/20 p-3 sm:p-4;
+    @apply rounded-lg border border-border/60 bg-muted/20 p-2.5 sm:p-3;
   }
 
   .analytics-toolbar-row {
-    @apply flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between;
+    @apply flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between;
   }
 
   .analytics-toolbar-copy {
-    @apply space-y-1;
+    @apply space-y-0.5;
   }
 
   .analytics-toolbar-title {
-    @apply text-sm font-semibold text-foreground;
+    @apply text-[13px] font-semibold text-foreground;
   }
 
   .analytics-toolbar-note {
@@ -563,7 +580,7 @@
   }
 
   .analytics-toolbar-chip {
-    @apply inline-flex items-center rounded-full border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm;
+    @apply inline-flex items-center rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm;
   }
 
   .analytics-toolbar-chip-muted {
@@ -575,15 +592,15 @@
   }
 
   .analytics-checkbox-card {
-    @apply inline-flex items-center gap-2 rounded-full border border-border/60 bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm;
+    @apply inline-flex items-center gap-2 rounded-lg border border-border/60 bg-background px-2.5 py-1.5 text-[13px] font-medium text-foreground shadow-sm;
   }
 
   .analytics-info-grid {
-    @apply grid gap-3 sm:grid-cols-2 xl:grid-cols-4;
+    @apply grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4;
   }
 
   .analytics-info-card {
-    @apply rounded-xl border border-border/60 bg-background px-4 py-3 shadow-sm;
+    @apply rounded-lg border border-border/60 bg-background px-3 py-2.5 shadow-sm;
   }
 
   .analytics-info-label {
@@ -595,23 +612,23 @@
   }
 
   .analytics-controls-grid {
-    @apply grid gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)];
+    @apply grid gap-2.5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)];
   }
 
   .analytics-control-stack {
-    @apply space-y-3;
+    @apply space-y-2.5;
   }
 
   .analytics-control-panel {
-    @apply rounded-xl border border-border/60 bg-background p-3 sm:p-4 shadow-sm;
+    @apply rounded-lg border border-border/60 bg-background p-3 shadow-sm;
   }
 
   .analytics-control-panel-header {
-    @apply mb-3 space-y-1;
+    @apply mb-2.5 space-y-0.5;
   }
 
   .analytics-control-panel-title {
-    @apply text-sm font-semibold text-foreground;
+    @apply text-[13px] font-semibold text-foreground;
   }
 
   .analytics-control-panel-note {
@@ -619,11 +636,11 @@
   }
 
   .analytics-mode-grid {
-    @apply grid gap-2 sm:grid-cols-2;
+    @apply grid gap-1.5 sm:grid-cols-2;
   }
 
   .analytics-mode-card {
-    @apply rounded-xl border border-border/60 bg-background p-3 sm:p-4 text-left shadow-sm transition-colors hover:bg-muted/30;
+    @apply rounded-lg border border-border/60 bg-background p-2.5 sm:p-3 text-left shadow-sm transition-colors hover:bg-muted/30;
   }
 
   .analytics-mode-card-active {
@@ -632,13 +649,19 @@
 
   @media (min-width: 640px) {
     .app-workspace-shell .container {
-      padding-inline: 1.5rem;
+      padding-inline: 1.25rem;
     }
   }
 
   @media (min-width: 1024px) {
     .app-workspace-shell .container {
-      padding-inline: 2rem;
+      padding-inline: 1.5rem;
     }
+  }
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
   }
 }

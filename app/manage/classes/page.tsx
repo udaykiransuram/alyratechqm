@@ -88,13 +88,13 @@ export default function ManageClassesPage() {
     }
   };
 
-  const handleDeleteClass = async (classId: string) => {
+  const handleArchiveClass = async (classId: string) => {
     try {
       const res = await fetch(`/api/classes/${classId}`, { method: 'DELETE' });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
 
-      toast({ title: 'Success', description: 'Class deleted successfully.' });
+      toast({ title: 'Success', description: 'Class archived successfully.' });
       setClasses(prev => prev.filter(c => c._id !== classId));
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -105,7 +105,7 @@ export default function ManageClassesPage() {
     <div className="container py-6 space-y-6">
       <header className="app-page-header">
         <h1 className="app-page-title">Manage Classes</h1>
-        <p className="app-page-subtitle">Add, view, or remove classes from the system.</p>
+        <p className="app-page-subtitle">Add, view, and archive classes from the system.</p>
       </header>
 
       <div className="space-y-6">
@@ -170,16 +170,16 @@ export default function ManageClassesPage() {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogTitle>Archive class?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the class
+                                This action cannot be undone. This will archive the class
                                 <strong className="mx-1">"{c.name}"</strong>.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteClass(c._id)}>
-                                Continue
+                              <AlertDialogAction onClick={() => handleArchiveClass(c._id)}>
+                                Archive
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>

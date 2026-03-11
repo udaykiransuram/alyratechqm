@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import {
   Dialog,
@@ -22,6 +23,22 @@ export default function QuestionListModal({
   groupNode?: any;
 }) {
   const [showNames, setShowNames] = useState(false);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const questionReturnTo = useMemo(() => {
+    const query = searchParams?.toString();
+    if (!pathname) return '/questions';
+    return query ? `${pathname}?${query}` : pathname;
+  }, [pathname, searchParams]);
+
+  const getQuestionHref = (questionId?: string | number) => {
+    if (!questionId) return '/questions';
+    const params = new URLSearchParams();
+    if (questionReturnTo) params.set('returnTo', questionReturnTo);
+    const questionPath = `/questions/view/${encodeURIComponent(String(questionId))}`;
+    return params.size > 0 ? `${questionPath}?${params.toString()}` : questionPath;
+  };
 
   function getStudentCounts(key: 'correctStudents' | 'incorrectStudents' | 'unattemptedStudents') {
     const all: { name: string; rollNumber: string }[] = [];
@@ -144,7 +161,7 @@ export default function QuestionListModal({
                 <div className="analytics-card-body space-y-4">
                   <div className="space-y-2">
                     <a
-                      href={`/questions/view/${question.id}`}
+                      href={getQuestionHref(question.id)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 text-sm font-semibold text-primary underline-offset-4 hover:underline"

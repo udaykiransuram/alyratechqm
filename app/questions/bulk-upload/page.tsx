@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
 
 export default function BulkQuestionUploadPage() {
+  const { navigateBack } = useBackNavigation('/questions');
   const [jsonText, setJsonText] = useState('');
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -57,11 +60,17 @@ export default function BulkQuestionUploadPage() {
 
   return (
     <div className="app-page-shell max-w-4xl px-4 py-6 sm:px-0">
-      <div className="app-page-header">
-        <h1 className="app-page-title">Bulk Question Upload</h1>
-        <p className="app-page-subtitle">
-          Upload a JSON file or paste structured JSON to create multiple questions in one go.
-        </p>
+      <div className="app-page-header-row">
+        <div>
+          <h1 className="app-page-title">Bulk Question Upload</h1>
+          <p className="app-page-subtitle">
+            Upload a JSON file or paste structured JSON to create multiple questions in one go.
+          </p>
+        </div>
+        <Button variant="outline" onClick={navigateBack}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
       </div>
 
       <Card className="app-surface">

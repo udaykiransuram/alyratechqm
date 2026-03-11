@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-
-function getSchoolKeyFromCookie(): string | null {
-  if (typeof document === "undefined") return null;
-  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import MultiSelectChecklist from '@/components/multi-select-checklist';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import { fetchApiJson, buildPartialLoadMessage, resolveClientSchoolKey } from '@/lib/client/api';
 
 interface ClassItem {
   _id: string;
@@ -19,116 +19,218 @@ interface SubjectItem {
   name: string;
 }
 
+interface AcademicSectionItem {
+  _id: string;
+  name: string;
+  class?: { _id: string; name: string } | string;
+}
+
+function getSectionClassId(section: AcademicSectionItem) {
+  return typeof section.class === 'string' ? section.class : section.class?._id || '';
+}
+
 export default function CreateAdminPage() {
   const router = useRouter();
+  const { navigateBack } = useBackNavigation('/admins');
   const [form, setForm] = useState({
-    name: "",
-    email: "",
-    password: "",
-    mobileNumber: "",
+    name: '',
+    email: '',
+    password: '',
+    mobileNumber: '',
     hasAllClasses: true,
+    hasAllSections: true,
     hasAllSubjects: true,
     classIds: [] as string[],
+    academicSectionIds: [] as string[],
     subjectIds: [] as string[],
   });
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
   const [subjects, setSubjects] = useState<SubjectItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [setupNotice, setSetupNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    const schoolQuery = getSchoolKeyFromCookie()
-      ? `?school=${getSchoolKeyFromCookie()}`
-      : "";
+    void (async () => {
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        setSetupNotice('Select a school workspace to load admin assignment options.');
+        return;
+      }
 
-    Promise.all([
-      fetch(`/api/classes${schoolQuery}`),
-      fetch(`/api/subjects${schoolQuery}`),
-    ])
-      .then(async ([classesRes, subjectsRes]) => {
-        const classesData = await classesRes.json();
-        const subjectsData = await subjectsRes.json();
-        if (classesData.success) setClasses(classesData.classes || []);
-        if (subjectsData.success) setSubjects(subjectsData.subjects || []);
-      })
-      .catch(() => {
-        setMessage("Failed to load classes or subjects.");
-      });
+      const [classesResult, sectionsResult, subjectsResult] = await Promise.allSettled([
+        fetchApiJson<any>('/api/classes', {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load classes.',
+        }),
+        fetchApiJson<any>('/api/sections', {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load sections.',
+        }),
+        fetchApiJson<any>('/api/subjects', {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load subjects.',
+        }),
+      ]);
+
+      const nextClasses =
+        classesResult.status === 'fulfilled' && Array.isArray(classesResult.value.classes)
+          ? classesResult.value.classes
+          : [];
+      const nextSections =
+        sectionsResult.status === 'fulfilled' && Array.isArray(sectionsResult.value.sections)
+          ? sectionsResult.value.sections
+          : [];
+      const nextSubjects =
+        subjectsResult.status === 'fulfilled' && Array.isArray(subjectsResult.value.subjects)
+          ? subjectsResult.value.subjects
+          : [];
+
+      setClasses(nextClasses);
+      setSections(nextSections);
+      setSubjects(nextSubjects);
+      setSetupNotice(
+        buildPartialLoadMessage([
+          ...(classesResult.status === 'rejected' ? ['Class options'] : []),
+          ...(sectionsResult.status === 'rejected' ? ['Section options'] : []),
+          ...(subjectsResult.status === 'rejected' ? ['Subject options'] : []),
+        ]) || (!nextClasses.length && !nextSections.length && !nextSubjects.length ? 'No classes, sections, or subjects are available for this school yet.' : null),
+      );
+    })();
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
+  const availableSections = useMemo(() => {
+    if (form.hasAllClasses) {
+      return sections;
+    }
+    const selectedClassIds = new Set(form.classIds);
+    return sections.filter((section) => selectedClassIds.has(getSectionClassId(section)));
+  }, [form.classIds, form.hasAllClasses, sections]);
+
+  const availableSectionIds = useMemo(
+    () => new Set(availableSections.map((section) => section._id)),
+    [availableSections],
+  );
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
     setForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: value,
     }));
   };
 
-  const toggleSelection = (field: "classIds" | "subjectIds", value: string) => {
+  const updateToggle = (
+    field: 'hasAllClasses' | 'hasAllSections' | 'hasAllSubjects',
+    checked: boolean,
+  ) => {
     setForm((prev) => ({
       ...prev,
-      [field]: prev[field].includes(value)
-        ? prev[field].filter((item) => item !== value)
-        : [...prev[field], value],
+      [field]: checked,
+      ...(field === 'hasAllSections' && checked ? { academicSectionIds: [] } : {}),
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const updateSelection = (
+    field: 'classIds' | 'subjectIds' | 'academicSectionIds',
+    nextValues: string[],
+  ) => {
+    setForm((prev) => {
+      if (field !== 'classIds') {
+        return { ...prev, [field]: nextValues };
+      }
+
+      const nextClassIds = nextValues;
+      const nextClassIdSet = new Set(nextClassIds);
+      const nextAcademicSectionIds = prev.academicSectionIds.filter((sectionId) => {
+        if (prev.hasAllClasses) return true;
+        const section = sections.find((item) => item._id === sectionId);
+        return section ? nextClassIdSet.has(getSectionClassId(section)) : false;
+      });
+
+      return {
+        ...prev,
+        classIds: nextClassIds,
+        academicSectionIds: nextAcademicSectionIds,
+      };
+    });
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
     setMessage(null);
 
     const payload = {
       ...form,
-      role: "admin",
+      role: 'admin',
       classIds: form.hasAllClasses ? [] : form.classIds,
+      academicSectionIds: form.hasAllSections
+        ? []
+        : form.academicSectionIds.filter((sectionId) => availableSectionIds.has(sectionId)),
       subjectIds: form.hasAllSubjects ? [] : form.subjectIds,
     };
 
-    const res = await fetch(
-      "/api/users" +
-        (getSchoolKeyFromCookie() ? `?school=${getSchoolKeyFromCookie()}` : ""),
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+    try {
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error('Please select a school in the navbar first.');
+      }
+
+      await fetchApiJson<any>('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      },
-    );
+        schoolKey,
+        fallbackMessage: 'Error creating admin',
+      });
 
-    const data = await res.json();
-    setLoading(false);
-
-    if (data.success) {
-      setMessage("Admin created successfully!");
+      setMessage('Admin created successfully!');
       setForm({
-        name: "",
-        email: "",
-        password: "",
-        mobileNumber: "",
+        name: '',
+        email: '',
+        password: '',
+        mobileNumber: '',
         hasAllClasses: true,
+        hasAllSections: true,
         hasAllSubjects: true,
         classIds: [],
+        academicSectionIds: [],
         subjectIds: [],
       });
-      setTimeout(() => router.push("/manage/users"), 800);
-    } else {
-      setMessage(data.message || "Error creating admin");
+      setTimeout(() => router.push('/manage/users'), 800);
+    } catch (error: any) {
+      setMessage(error?.message || 'Error creating admin');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const messageClassName = message?.toLowerCase().includes("error") ||
-    message?.toLowerCase().includes("failed")
-    ? "app-feedback app-feedback-error"
-    : "app-feedback app-feedback-success";
+  const messageClassName =
+    message?.toLowerCase().includes('error') || message?.toLowerCase().includes('failed')
+      ? 'app-feedback app-feedback-error'
+      : 'app-feedback app-feedback-success';
 
   return (
     <div className="app-page-shell max-w-2xl px-4 py-6 sm:px-0">
-      <div className="app-page-header">
-        <h1 className="app-page-title">Create Admin</h1>
-        <p className="app-page-subtitle">
-          Create an admin account and configure class and subject access from one place.
-        </p>
+      <div className="app-page-header-row">
+        <div>
+          <h1 className="app-page-title">Create Admin</h1>
+          <p className="app-page-subtitle">
+            Create an admin account and configure class, section, and subject access from one place.
+          </p>
+        </div>
+        <Button type="button" variant="outline" onClick={navigateBack}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
       </div>
+
+      {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
 
       <div className="app-surface app-surface-body">
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -153,56 +255,87 @@ export default function CreateAdminPage() {
             <input id="password" name="password" placeholder="Create password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
           </div>
 
-          <label className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
-            <input type="checkbox" name="hasAllClasses" checked={form.hasAllClasses} onChange={handleChange} className="h-4 w-4 rounded border-input text-primary focus:ring-ring" />
-            <span>Access to all classes</span>
-          </label>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+              <Checkbox
+                checked={form.hasAllClasses}
+                onCheckedChange={(checked) => updateToggle('hasAllClasses', checked === true)}
+                className="mt-0.5"
+              />
+              <span>All Classes</span>
+            </label>
+            <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+              <Checkbox
+                checked={form.hasAllSections}
+                onCheckedChange={(checked) => updateToggle('hasAllSections', checked === true)}
+                className="mt-0.5"
+              />
+              <span>All Sections</span>
+            </label>
+            <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+              <Checkbox
+                checked={form.hasAllSubjects}
+                onCheckedChange={(checked) => updateToggle('hasAllSubjects', checked === true)}
+                className="mt-0.5"
+              />
+              <span>All Subjects</span>
+            </label>
+          </div>
 
           {!form.hasAllClasses && (
             <div className="app-field-group">
               <label className="app-field-label">Classes</label>
-              <div className="app-selection-list">
-                {classes.map((cls) => (
-                  <label key={cls._id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-muted/40">
-                    <input
-                      type="checkbox"
-                      checked={form.classIds.includes(cls._id)}
-                      onChange={() => toggleSelection("classIds", cls._id)}
-                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                    />
-                    <span>{cls.name}</span>
-                  </label>
-                ))}
-              </div>
+              <MultiSelectChecklist
+                items={classes.map((classItem) => ({
+                  id: classItem._id,
+                  label: classItem.name,
+                }))}
+                selectedIds={form.classIds}
+                onChange={(ids) => updateSelection('classIds', ids)}
+              />
             </div>
           )}
 
-          <label className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
-            <input type="checkbox" name="hasAllSubjects" checked={form.hasAllSubjects} onChange={handleChange} className="h-4 w-4 rounded border-input text-primary focus:ring-ring" />
-            <span>Access to all subjects</span>
-          </label>
+          {!form.hasAllSections && (
+            <div className="app-field-group">
+              <label className="app-field-label">Sections</label>
+              <MultiSelectChecklist
+                items={availableSections.map((section) => ({
+                  id: section._id,
+                  label: (
+                    <span>
+                      {section.name}
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        ({classes.find((classItem) => classItem._id === getSectionClassId(section))?.name || 'Class'})
+                      </span>
+                    </span>
+                  ),
+                }))}
+                selectedIds={form.academicSectionIds}
+                onChange={(ids) => updateSelection('academicSectionIds', ids)}
+                emptyContent={form.hasAllClasses
+                  ? 'No sections have been created yet.'
+                  : 'Select one or more classes to choose sections.'}
+              />
+            </div>
+          )}
 
           {!form.hasAllSubjects && (
             <div className="app-field-group">
               <label className="app-field-label">Subjects</label>
-              <div className="app-selection-list">
-                {subjects.map((subject) => (
-                  <label key={subject._id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-muted/40">
-                    <input
-                      type="checkbox"
-                      checked={form.subjectIds.includes(subject._id)}
-                      onChange={() => toggleSelection("subjectIds", subject._id)}
-                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                    />
-                    <span>{subject.name}</span>
-                  </label>
-                ))}
-              </div>
+              <MultiSelectChecklist
+                items={subjects.map((subject) => ({
+                  id: subject._id,
+                  label: subject.name,
+                }))}
+                selectedIds={form.subjectIds}
+                onChange={(ids) => updateSelection('subjectIds', ids)}
+              />
             </div>
           )}
 
           <button type="submit" disabled={loading} className="app-button-primary w-full">
-            {loading ? "Creating..." : "Create Admin"}
+            {loading ? 'Saving...' : 'Create Admin'}
           </button>
         </form>
 

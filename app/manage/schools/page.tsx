@@ -42,6 +42,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { fetchApiJson } from "@/lib/client/api";
+import { clearSchoolKeyCookie, getSchoolKeyFromCookie } from "@/lib/client/school";
 
 interface SchoolItem {
   _id: string;
@@ -78,17 +80,17 @@ export default function ManageSchoolsPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const res = await fetch("/api/schools", { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.message || "Failed to load schools.");
-      }
+      const data = await fetchApiJson<any>("/api/schools", {
+        cache: "no-store",
+        fallbackMessage: "Failed to load schools.",
+      });
       setSchools(Array.isArray(data.schools) ? data.schools : []);
     } catch (err: any) {
-      setError(err.message || "Failed to load schools.");
+      const message = err.message || "Failed to load schools.";
+      setError(message);
       toast({
         title: "Error",
-        description: "Failed to load schools.",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -101,13 +103,8 @@ export default function ManageSchoolsPage() {
   }, [loadSchools]);
 
   function clearSelectedSchoolIfDeleted(schoolKey: string) {
-    try {
-      const match = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-      const currentSchoolKey = match?.[1] ? decodeURIComponent(match[1]) : "";
-      if (currentSchoolKey === schoolKey) {
-        document.cookie = "schoolKey=; path=/; max-age=0";
-      }
-    } catch {
+    if (getSchoolKeyFromCookie() === schoolKey) {
+      clearSchoolKeyCookie();
     }
   }
 
@@ -130,15 +127,12 @@ export default function ManageSchoolsPage() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/schools", {
+      const data = await fetchApiJson<any>("/api/schools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        fallbackMessage: "Failed to create school.",
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.message || "Failed to create school.");
-      }
 
       setCreateForm(EMPTY_CREATE_FORM);
       setSchools((current) => [...current, data.school]);
@@ -176,15 +170,12 @@ export default function ManageSchoolsPage() {
 
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/schools/${editForm._id}`, {
+      const data = await fetchApiJson<any>(`/api/schools/${editForm._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        fallbackMessage: "Failed to update school.",
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.message || "Failed to update school.");
-      }
 
       setSchools((current) =>
         current.map((school) =>
@@ -211,13 +202,10 @@ export default function ManageSchoolsPage() {
   async function handleDeleteSchool(school: SchoolItem) {
     setDeletingId(school._id);
     try {
-      const res = await fetch(`/api/schools/${school._id}`, {
+      await fetchApiJson(`/api/schools/${school._id}`, {
         method: "DELETE",
+        fallbackMessage: "Failed to delete school.",
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.message || "Failed to delete school.");
-      }
 
       clearSelectedSchoolIfDeleted(school.key);
       setSchools((current) => current.filter((item) => item._id !== school._id));
@@ -237,13 +225,18 @@ export default function ManageSchoolsPage() {
   }
 
   return (
-    <div className="container py-6 space-y-6">
-      <header className="app-page-header">
-        <h1 className="app-page-title">Manage Schools</h1>
-        <p className="app-page-subtitle">
-          Create, rename, and remove school workspaces used by the tenant switcher.
-        </p>
-      </header>
+    <div className="container space-y-6">
+      <div className="app-page-header-row">
+        <div>
+          <h1 className="app-page-title">Manage Schools</h1>
+          <p className="app-page-subtitle">
+            Create, rename, and remove school workspaces used by the tenant switcher.
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => void loadSchools()} disabled={isLoading}>
+          {isLoading ? <Spinner /> : "Refresh"}
+        </Button>
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
         <Card className="app-surface overflow-hidden">
@@ -326,7 +319,12 @@ export default function ManageSchoolsPage() {
                 <Skeleton className="h-12 w-full" />
               </div>
             ) : error ? (
-              <div className="app-feedback app-feedback-error">{error}</div>
+              <div className="space-y-3">
+                <div className="app-feedback app-feedback-error">{error}</div>
+                <Button type="button" variant="outline" size="sm" onClick={() => void loadSchools()}>
+                  Retry
+                </Button>
+              </div>
             ) : (
               <div className="app-table-wrap">
                 <Table>

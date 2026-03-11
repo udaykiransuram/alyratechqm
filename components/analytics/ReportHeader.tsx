@@ -1,8 +1,11 @@
+import type { ReactNode } from "react";
+
 type ReportHeaderProps = {
   student?: string;
   rollNumber?: string;
   paper: string;
   variant?: "student" | "class";
+  actions?: ReactNode;
 };
 
 const ReportHeader = ({
@@ -10,6 +13,7 @@ const ReportHeader = ({
   rollNumber = "",
   paper,
   variant = "student",
+  actions,
 }: ReportHeaderProps) => {
   const isClass = variant === "class";
   const title = isClass ? "Class Analytics Report" : "Student Analytics Report";
@@ -31,8 +35,13 @@ const ReportHeader = ({
   return (
     <div className="analytics-card overflow-hidden">
       <div className="analytics-card-header border-l-4 border-primary bg-gradient-to-r from-primary/5 to-transparent">
-        <h1 className="app-page-title">{title}</h1>
-        <p className="app-page-subtitle">{subtitle}</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <h1 className="app-page-title">{title}</h1>
+            <p className="app-page-subtitle">{subtitle}</p>
+          </div>
+          {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        </div>
       </div>
       <div className="p-4 sm:p-5">
         <div

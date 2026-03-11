@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,6 +17,7 @@ export default function SignIn() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
     const result = await signIn('credentials', {
       redirect: true,
       email,
@@ -23,7 +25,9 @@ export default function SignIn() {
       schoolKey,
       callbackUrl: '/manage/admin/indexing',
     });
+
     setIsLoading(false);
+
     if (!result || !result.ok) {
       const errorMessage =
         result?.error || 'Login failed. Please check your credentials and try again.';
@@ -42,7 +46,7 @@ export default function SignIn() {
 
       <Card className="app-surface">
         <CardContent className="app-surface-body">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isLoading}>
             <div className="app-field-group">
               <label className="app-field-label" htmlFor="schoolKey">
                 School Key
@@ -86,8 +90,21 @@ export default function SignIn() {
             </div>
 
             <Button type="submit" disabled={isLoading} className="w-full">
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Signing in
+                </>
+              ) : (
+                'Sign In'
+              )}
             </Button>
+
+            {isLoading ? (
+              <p className="text-center text-xs text-muted-foreground">
+                Verifying the school key and credentials.
+              </p>
+            ) : null}
           </form>
         </CardContent>
       </Card>

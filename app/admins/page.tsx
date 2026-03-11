@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import PageLoadingState from "@/components/ui/page-loading-state";
 import {
   Table,
   TableBody,
@@ -13,6 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
+import { fetchApiJson } from "@/lib/client/api";
 
 interface AdminUser {
   _id: string;
@@ -22,13 +25,8 @@ interface AdminUser {
   role: "admin";
 }
 
-function getSchoolKeyFromCookie(): string | null {
-  if (typeof document === "undefined") return null;
-  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
 export default function AdminsPage() {
+  const { buildReturnHref } = useReturnHrefBuilder("/admins");
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,15 +35,11 @@ export default function AdminsPage() {
     const loadAdmins = async () => {
       try {
         setLoading(true);
-        const schoolKey = getSchoolKeyFromCookie();
-        const url =
-          "/api/users?role=admin" +
-          (schoolKey ? `&school=${encodeURIComponent(schoolKey)}` : "");
-        const res = await fetch(url, { cache: "no-store" });
-        const data = await res.json();
-        if (!data.success)
-          throw new Error(data.message || "Failed to load admins");
-        setAdmins(data.users || []);
+        const data = await fetchApiJson<any>("/api/users?role=admin", {
+          cache: "no-store",
+          fallbackMessage: "Failed to load admins.",
+        });
+        setAdmins(Array.isArray(data.users) ? data.users : []);
       } catch (e: any) {
         setError(e.message || "Failed to load admins");
       } finally {
@@ -53,7 +47,7 @@ export default function AdminsPage() {
       }
     };
 
-    loadAdmins();
+    void loadAdmins();
   }, []);
 
   return (
@@ -74,7 +68,13 @@ export default function AdminsPage() {
         </CardHeader>
         <CardContent className="app-section-body">
           {loading ? (
-            <div className="app-empty-state">Loading admins...</div>
+            <PageLoadingState
+              title="Loading admins"
+              description="Preparing admin accounts and access information."
+              className="px-0 py-0"
+              contentClassName="max-w-none"
+              dense
+            />
           ) : error ? (
             <div className="app-feedback app-feedback-error">{error}</div>
           ) : admins.length === 0 ? (
@@ -101,7 +101,7 @@ export default function AdminsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button asChild variant="outline" size="sm">
-                        <Link href={`/admins/${admin._id}`}>View</Link>
+                        <Link href={buildReturnHref(`/admins/${admin._id}`)}>View</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

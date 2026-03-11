@@ -1,68 +1,105 @@
 export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
-import { getTenantDb } from "@/lib/db-tenant";
 import { getTenantModels } from "@/lib/db-tenant";
+import { buildArchiveFilter, resolveIncludeArchived } from "@/lib/archive";
 import "@/models/QuestionPaperResponse";
 import "@/models/Class";
 import "@/models/Subject";
 import "@/models/TagType";
 import "@/models/Tag";
-import QuestionPaper from "@/models/QuestionPaper";
+import "@/models/AcademicSection";
 
-export async function POST(req: NextRequest) {
-  await connectDB();
-
+function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
   const schoolFromHeader =
     req.headers.get("x-school-key") || req.headers.get("X-School-Key");
   const schoolFromQuery = url.searchParams.get("school");
   const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  const schoolKeyPost = (
-    schoolFromHeader ||
-    schoolFromQuery ||
-    schoolFromCookie ||
-    ""
-  )
+  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
     .toString()
     .trim();
-  if (!schoolKeyPost)
+}
+
+function normalizeIds(value: unknown) {
+  if (!Array.isArray(value)) return [] as string[];
+  return Array.from(
+    new Set(value.map((item) => String(item || "").trim()).filter(Boolean)),
+  );
+}
+
+async function validateAssignedAcademicSections(
+  AcademicSectionModel: any,
+  classId: string,
+  assignedAcademicSectionIds: string[],
+) {
+  if (!assignedAcademicSectionIds.length) {
+    return { ok: true, ids: [] as string[] } as const;
+  }
+
+  const sections = await AcademicSectionModel.find({
+    _id: { $in: assignedAcademicSectionIds },
+    class: classId,
+    isActive: true,
+    ...buildArchiveFilter(false),
+  })
+    .select("_id")
+    .lean();
+
+  if (sections.length !== assignedAcademicSectionIds.length) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          success: false,
+          message:
+            "Assigned sections must exist, be active, and belong to the selected class.",
+        },
+        { status: 400 },
+      ),
+    } as const;
+  }
+
+  return { ok: true, ids: assignedAcademicSectionIds } as const;
+}
+
+export async function POST(req: NextRequest) {
+  await connectDB();
+
+  const schoolKey = resolveSchoolKey(req);
+  if (!schoolKey) {
     return NextResponse.json(
       { success: false, message: "schoolKey required" },
       { status: 400 },
     );
+  }
 
   try {
-    const { QuestionPaper: QPModel } = await getTenantModels(schoolKeyPost, [
-      "QuestionPaper",
-    ]);
+    const {
+      QuestionPaper: QPModel,
+      AcademicSection: AcademicSectionModel,
+    } = await getTenantModels(schoolKey, ["QuestionPaper", "AcademicSection"]);
 
+    const body = await req.json();
     const {
       title,
       instructions,
-      class: classId, // Rename 'class' to 'classId' here
+      class: classId,
       subject,
       duration,
       passingMarks,
       examDate,
       totalMarks,
       sections,
-    } = await req.json();
+    } = body || {};
 
-    // Log incoming data for debugging
-    console.log("Received payload:", {
-      title,
-      instructions,
-      classId, // Use the new variable name
-      subject,
-      duration,
-      passingMarks,
-      examDate,
-      totalMarks,
-      sections,
-    });
+    const assignedAcademicSectionIds = normalizeIds(
+      body?.assignedAcademicSections ??
+        body?.assignedAcademicSectionIds ??
+        body?.academicSectionIds,
+    );
 
-    // Basic validation - now this will work correctly
     if (
       !title ||
       !classId ||
@@ -76,45 +113,31 @@ export async function POST(req: NextRequest) {
       passingMarks < 0 ||
       !examDate
     ) {
-      console.error("Validation failed: Missing required fields.", {
-        title,
-        classId,
-        subject,
-        duration,
-        passingMarks,
-        examDate,
-        sections,
-      });
       return NextResponse.json(
         { success: false, message: "Missing required fields." },
         { status: 400 },
       );
     }
 
-    // Validate each section
     for (const section of sections) {
-      console.log("Validating section:", section);
       if (
-        !section.name ||
-        typeof section.marks !== "number" ||
-        !Array.isArray(section.questions)
+        !section?.name ||
+        typeof section?.marks !== "number" ||
+        !Array.isArray(section?.questions)
       ) {
-        console.error("Invalid section data:", section);
         return NextResponse.json(
           { success: false, message: "Invalid section data." },
           { status: 400 },
         );
       }
+
       const sectionQuestionMarks = section.questions.reduce(
-        (sum: number, q: { marks?: number }) => sum + (q.marks ?? 0),
+        (sum: number, question: { marks?: number }) =>
+          sum + (question?.marks ?? 0),
         0,
       );
+
       if (section.marks !== sectionQuestionMarks) {
-        console.error(`Section marks mismatch: ${section.name}`, {
-          sectionMarks: section.marks,
-          questionMarks: sectionQuestionMarks,
-          questions: section.questions,
-        });
         return NextResponse.json(
           {
             success: false,
@@ -123,16 +146,13 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         );
       }
-      for (const [qi, q] of section.questions.entries()) {
-        if (!q.question || typeof q.marks !== "number") {
-          console.error(
-            `Invalid question data in section "${section.name}" at index ${qi}:`,
-            q,
-          );
+
+      for (const [questionIndex, question] of section.questions.entries()) {
+        if (!question?.question || typeof question?.marks !== "number") {
           return NextResponse.json(
             {
               success: false,
-              message: `Invalid question data in section "${section.name}" at index ${qi}.`,
+              message: `Invalid question data in section "${section.name}" at index ${questionIndex}.`,
             },
             { status: 400 },
           );
@@ -140,8 +160,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create and save the question paper
-    console.log("Saving question paper...");
+    const assignmentValidation = await validateAssignedAcademicSections(
+      AcademicSectionModel,
+      classId,
+      assignedAcademicSectionIds,
+    );
+    if (!assignmentValidation.ok) {
+      return assignmentValidation.response;
+    }
+
     const paper = await QPModel.create({
       title,
       instructions,
@@ -152,13 +179,11 @@ export async function POST(req: NextRequest) {
       examDate,
       totalMarks,
       sections,
+      assignedAcademicSections: assignmentValidation.ids,
     });
-
-    console.log("Question paper saved:", paper);
 
     return NextResponse.json({ success: true, paper }, { status: 201 });
   } catch (error: any) {
-    console.error("Server error:", error);
     return NextResponse.json(
       { success: false, message: error.message || "Server error." },
       { status: 500 },
@@ -168,33 +193,40 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   await connectDB();
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  const schoolKeyGet = (
-    schoolFromHeader ||
-    schoolFromQuery ||
-    schoolFromCookie ||
-    ""
-  )
-    .toString()
-    .trim();
-  if (!schoolKeyGet)
+
+  const schoolKey = resolveSchoolKey(req);
+  if (!schoolKey) {
     return NextResponse.json(
       { success: false, message: "schoolKey required" },
       { status: 400 },
     );
-  const { QuestionPaper: QPModelGet } = await getTenantModels(schoolKeyGet, [
-    "QuestionPaper",
-  ]);
+  }
+
   try {
-    const papers = await QPModelGet.find({})
-      .select("title class totalMarks sections createdAt updatedAt")
-      .populate("class", "name") // <-- This will give you { class: { _id, name } }
+    const {
+      QuestionPaper: QPModel,
+      Class: ClassModel,
+      AcademicSection: AcademicSectionModel,
+    } = await getTenantModels(schoolKey, [
+      "QuestionPaper",
+      "Class",
+      "AcademicSection",
+    ]);
+
+    const papers = await QPModel.find(buildArchiveFilter(resolveIncludeArchived(req.nextUrl)))
+      .select(
+        "title class totalMarks sections assignedAcademicSections createdAt updatedAt",
+      )
+      .populate({ path: "class", model: ClassModel, select: "name" })
+      .populate({
+        path: "assignedAcademicSections",
+        model: AcademicSectionModel,
+        select: "name class",
+        populate: { path: "class", model: ClassModel, select: "name" },
+      })
       .sort({ createdAt: -1 })
       .lean();
+
     return NextResponse.json({ success: true, papers });
   } catch (error: any) {
     return NextResponse.json(

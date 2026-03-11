@@ -20,21 +20,14 @@ import { Plus } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 import { MetadataSelector } from '@/components/MetadataSelector';
 import { Input } from '@/components/ui/input';
-
-
-function getSchoolKey() {
-  try {
-    const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-    return m && m[1] ? m[1] : '';
-  } catch { return ''; }
-}
+import { buildPartialLoadMessage, fetchApiJson, resolveClientSchoolKey } from '@/lib/client/api';
 
 export default function ViewQuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [questionToArchive, setQuestionToArchive] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
@@ -46,15 +39,46 @@ export default function ViewQuestionsPage() {
   const [subjectId, setSubjectId] = useState('');
   const [selectedTags, setSelectedTags] = useState<any[]>([]);
   const [modalSearch, setModalSearch] = useState('');
+  const [setupNotice, setSetupNotice] = useState<string | null>(null);
 
   // Fetch classes and tags on mount
   useEffect(() => {
-    fetch('/api/classes', { cache: 'no-store', headers: { 'X-School-Key': getSchoolKey() } })
-      .then(res => res.json())
-      .then(data => setClasses(data.classes || []));
-    fetch('/api/tags', { cache: 'no-store', headers: { 'X-School-Key': getSchoolKey() } })
-      .then(res => res.json())
-      .then(data => setAllTags(data.tags || []));
+    void (async () => {
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        setClasses([]);
+        setAllTags([]);
+        setSetupNotice('Select a school workspace to load filters and questions.');
+        return;
+      }
+
+      const [classesResult, tagsResult] = await Promise.allSettled([
+        fetchApiJson<any>('/api/classes', {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load classes.',
+        }),
+        fetchApiJson<any>('/api/tags', {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load tags.',
+        }),
+      ]);
+
+      if (classesResult.status === 'fulfilled') {
+        setClasses(Array.isArray(classesResult.value.classes) ? classesResult.value.classes : []);
+      }
+      if (tagsResult.status === 'fulfilled') {
+        setAllTags(Array.isArray(tagsResult.value.tags) ? tagsResult.value.tags : []);
+      }
+
+      setSetupNotice(
+        buildPartialLoadMessage([
+          ...(classesResult.status === 'rejected' ? ['Class filters'] : []),
+          ...(tagsResult.status === 'rejected' ? ['Tag filters'] : []),
+        ]),
+      );
+    })();
   }, []);
 
   // Fetch subjects for selected class
@@ -64,34 +88,57 @@ export default function ViewQuestionsPage() {
       setSubjectId('');
       return;
     }
-    fetch(`/api/subjects?classId=${classId}`, { cache: 'no-store', headers: { 'X-School-Key': getSchoolKey() } })
-      .then(res => res.json())
-      .then(data => setSubjects(data.subjects || []));
+
+    void (async () => {
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        setSubjects([]);
+        return;
+      }
+
+      try {
+        const data = await fetchApiJson<any>(`/api/subjects?classId=${classId}`, {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load subjects.',
+        });
+        setSubjects(Array.isArray(data.subjects) ? data.subjects : []);
+        setSetupNotice((currentNotice) =>
+          currentNotice && currentNotice.includes('Subject options') ? null : currentNotice,
+        );
+      } catch {
+        setSubjects([]);
+        setSetupNotice('Subject options could not be loaded. You can continue with other filters and refresh to retry.');
+      }
+    })();
   }, [classId]);
 
   const fetchQuestions = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error('Select a school workspace to browse questions.');
+      }
+
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
       if (subjectId) params.set('subject', subjectId);
       if (selectedTags.length > 0) params.set('tags', selectedTags.map(t => t._id).join(','));
       if (modalSearch.trim()) params.set('search', modalSearch.trim());
-      // Use AND semantics when multiple tags are selected
       if (selectedTags.length > 1) params.set('tagsMode', 'and');
 
       const qs = params.toString();
       const endpoint = qs ? `/api/questions?${qs}` : '/api/questions';
-      const res = await fetch(endpoint, { cache: 'no-store', headers: { 'X-School-Key': getSchoolKey() } });
-      const data = await res.json();
-      if (data.success) {
-        setQuestions(data.questions);
-      } else {
-        setError(data.message || 'Failed to load questions.');
-      }
-    } catch (err) {
-      setError('A network error occurred. Please try again.');
+      const data = await fetchApiJson<any>(endpoint, {
+        cache: 'no-store',
+        schoolKey,
+        fallbackMessage: 'Failed to load questions.',
+      });
+      setQuestions(Array.isArray(data.questions) ? data.questions : []);
+    } catch (err: any) {
+      setError(err?.message || 'A network error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -101,29 +148,33 @@ export default function ViewQuestionsPage() {
     fetchQuestions();
   }, [fetchQuestions]);
 
-  const handleDeleteRequest = (id: string) => {
-    setQuestionToDelete(id);
-    setShowDeleteDialog(true);
+  const handleArchiveRequest = (id: string) => {
+    setQuestionToArchive(id);
+    setShowArchiveDialog(true);
   };
 
-  const confirmDelete = async () => {
-    if (!questionToDelete) return;
+  const confirmArchive = async () => {
+    if (!questionToArchive) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/questions/${questionToDelete}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok) {
-        setQuestions(prev => prev.filter(q => q._id !== questionToDelete));
-        toast({ title: 'Success', description: 'Question deleted successfully.' });
-      } else {
-        throw new Error(data.message || 'Failed to delete question.');
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error('Please select a school in the navbar first.');
       }
+
+      await fetchApiJson(`/api/questions/${questionToArchive}`, {
+        method: 'DELETE',
+        schoolKey,
+        fallbackMessage: 'Failed to archive question.',
+      });
+      setQuestions(prev => prev.filter(q => q._id !== questionToArchive));
+      toast({ title: 'Success', description: 'Question archived successfully.' });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setIsDeleting(false);
-      setShowDeleteDialog(false);
-      setQuestionToDelete(null);
+      setShowArchiveDialog(false);
+      setQuestionToArchive(null);
     }
   };
 
@@ -136,7 +187,7 @@ export default function ViewQuestionsPage() {
       <div className="app-page-header-row">
         <div>
           <h1 className="app-page-title">All Questions</h1>
-          <p className="app-page-subtitle">Browse, filter, edit, and remove questions from the bank.</p>
+          <p className="app-page-subtitle">Browse, filter, edit, and archive questions from the bank.</p>
         </div>
         <Link href="/questions/create">
           <Button className="gap-2">
@@ -145,6 +196,8 @@ export default function ViewQuestionsPage() {
           </Button>
         </Link>
       </div>
+
+      {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
         <MetadataSelector
@@ -207,23 +260,32 @@ export default function ViewQuestionsPage() {
             variant="destructive"
             size="sm"
             onClick={async () => {
-              if (!window.confirm(`Are you sure you want to delete all ${filteredQuestions.length} filtered questions? This cannot be undone.`)) return;
+              if (!window.confirm(`Are you sure you want to archive all ${filteredQuestions.length} filtered questions? This cannot be undone.`)) return;
               setIsDeleting(true);
               try {
+                const schoolKey = resolveClientSchoolKey();
+                if (!schoolKey) {
+                  throw new Error('Please select a school in the navbar first.');
+                }
+
                 for (const question of filteredQuestions) {
-                  await fetch(`/api/questions/${question._id}`, { method: 'DELETE' });
+                  await fetchApiJson(`/api/questions/${question._id}`, {
+                    method: 'DELETE',
+                    schoolKey,
+                    fallbackMessage: 'Failed to archive question.',
+                  });
                 }
                 setQuestions(prev => prev.filter(question => !filteredQuestions.some(filtered => filtered._id === question._id)));
-                toast({ title: 'Success', description: 'All filtered questions deleted.' });
-              } catch {
-                toast({ title: 'Error', description: 'Failed to delete all filtered questions.', variant: 'destructive' });
+                toast({ title: 'Success', description: 'All filtered questions archived.' });
+              } catch (error: any) {
+                toast({ title: 'Error', description: error?.message || 'Failed to archive filtered questions.', variant: 'destructive' });
               } finally {
                 setIsDeleting(false);
               }
             }}
             disabled={isDeleting}
           >
-            {isDeleting ? 'Deleting...' : `Delete All (${filteredQuestions.length})`}
+            {isDeleting ? 'Archiving...' : `Archive All (${filteredQuestions.length})`}
           </Button>
         ) : null}
       </div>
@@ -252,25 +314,25 @@ export default function ViewQuestionsPage() {
             <QuestionItem
               key={question._id}
               question={question}
-              onDelete={handleDeleteRequest}
-              isDeleting={isDeleting && questionToDelete === question._id}
+              onArchive={handleArchiveRequest}
+              isDeleting={isDeleting && questionToArchive === question._id}
             />
           ))
         )}
       </div>
 
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Archive question?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the question.
+              This action cannot be undone. This will archive the question.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-              {isDeleting ? <Spinner /> : 'Delete'}
+            <AlertDialogAction onClick={confirmArchive} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+              {isDeleting ? <Spinner /> : 'Archive'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

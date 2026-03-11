@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { connectDB } from '@/lib/db';
 import { getTenantDb } from '@/lib/db-tenant';
 import '@/models/Registration';
+import { getSchoolKeyFromServerCookies } from '@/lib/server/school';
 
 function SuccessState({
   title,
@@ -26,7 +27,7 @@ function SuccessState({
 
 export default async function SuccessPage({ params }: any) {
   await connectDB();
-  const schoolKey = cookies().get('schoolKey')?.value || '';
+  const schoolKey = getSchoolKeyFromServerCookies(cookies());
   if (!schoolKey) {
     return (
       <SuccessState

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, FormEvent } from "react";
+import React, { useState, useEffect, useMemo, FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +46,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import MultiSelectChecklist from "@/components/multi-select-checklist";
+import { buildPartialLoadMessage, fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
 
 interface User {
   _id: string;
@@ -53,9 +55,15 @@ interface User {
   email: string;
   role: "admin" | "teacher" | "student";
   mobileNumber?: string;
+  class?: string;
+  academicSection?: string;
+  rollNumber?: string;
+  enrolledAt?: string;
   classIds?: string[];
+  academicSectionIds?: string[];
   subjectIds?: string[];
   hasAllClasses?: boolean;
+  hasAllSections?: boolean;
   hasAllSubjects?: boolean;
 }
 
@@ -67,19 +75,25 @@ interface SubjectItem {
   _id: string;
   name: string;
 }
+interface AcademicSectionItem {
+  _id: string;
+  name: string;
+  class?: { _id: string; name: string } | string;
+}
+
+function getSectionClassId(section: AcademicSectionItem) {
+  return typeof section.class === "string" ? section.class : section.class?._id || "";
+}
 
 type Role = "teacher" | "student" | "admin";
 
-function getSchoolKeyFromCookie(): string | null {
-  if (typeof document === "undefined") return null;
-  const m = document.cookie.match(/(?:^|; )schoolKey=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
+const NO_SCHOOL_USERS_MESSAGE = "Select a school workspace to load users.";
 
 export default function ManageUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [subjects, setSubjects] = useState<SubjectItem[]>([]);
+  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
   const [formData, setFormData] = useState<{
     name: string;
     email: string;
@@ -87,11 +101,14 @@ export default function ManageUsersPage() {
     mobileNumber: string;
     role: Role;
     classId?: string;
+    academicSection?: string;
     rollNumber?: string;
     enrolledAt?: string;
     classIds: string[];
+    academicSectionIds: string[];
     subjectIds: string[];
     hasAllClasses: boolean;
+    hasAllSections: boolean;
     hasAllSubjects: boolean;
   }>({
     name: "",
@@ -100,18 +117,23 @@ export default function ManageUsersPage() {
     mobileNumber: "",
     role: "teacher",
     classId: "",
+    academicSection: "",
     rollNumber: "",
     enrolledAt: "",
     classIds: [],
+    academicSectionIds: [],
     subjectIds: [],
     hasAllClasses: false,
+    hasAllSections: true,
     hasAllSubjects: false,
   });
   const [editData, setEditData] = useState<Partial<User>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [supportDataNotice, setSupportDataNotice] = useState<string | null>(null);
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -124,25 +146,38 @@ export default function ManageUsersPage() {
   const loadUsers = async (pageNum = 1) => {
     try {
       setIsLoading(true);
-      const schoolKey = getSchoolKeyFromCookie();
-      const usersBase =
-        "/api/users" + (schoolKey ? `?school=${schoolKey}` : "");
-      const usersUrl =
-        usersBase +
-        (usersBase.includes("?") ? "&" : "?") +
-        `limit=${limit}&page=${pageNum}`;
-      const res = await fetch(usersUrl, { cache: "no-store" });
-      const data = await res.json();
-      if (!data.success)
-        throw new Error(data.message || "Failed to load users");
-      setUsers(data.users || []);
+      setListError(null);
+
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        setUsers([]);
+        setTotal(0);
+        setPages(1);
+        setPage(1);
+        setListError(NO_SCHOOL_USERS_MESSAGE);
+        return;
+      }
+
+      const data = await fetchApiJson<any>(`/api/users?limit=${limit}&page=${pageNum}`, {
+        cache: "no-store",
+        schoolKey,
+        fallbackMessage: "Failed to load users.",
+      });
+
+      setUsers(Array.isArray(data.users) ? data.users : []);
       setTotal(data.total || 0);
       setPages(data.pages || 1);
       setPage(data.page || pageNum);
     } catch (err: any) {
+      const message = err.message || "Failed to load users.";
+      setUsers([]);
+      setTotal(0);
+      setPages(1);
+      setPage(1);
+      setListError(message);
       toast({
         title: "Error",
-        description: err.message || "Failed to load users.",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -152,28 +187,89 @@ export default function ManageUsersPage() {
 
   useEffect(() => {
     const init = async () => {
-      try {
-        const schoolKey = getSchoolKeyFromCookie();
-        const classesUrl =
-          "/api/classes" + (schoolKey ? `?school=${schoolKey}` : "");
-        const subjectsUrl =
-          "/api/subjects" + (schoolKey ? `?school=${schoolKey}` : "");
-        const [cRes, sRes] = await Promise.all([
-          fetch(classesUrl, { cache: "no-store" }),
-          fetch(subjectsUrl, { cache: "no-store" }),
-        ]);
-        const cData = await cRes.json();
-        const sData = await sRes.json();
-        if (cData.success) setClasses(cData.classes);
-        if (sData.success) setSubjects(sData.subjects);
-      } catch {
-        // ignore
+      const schoolKey = resolveClientSchoolKey();
+
+      if (!schoolKey) {
+        setSupportDataNotice('Select a school workspace to load class, section, and subject options.');
+        await loadUsers(1);
+        return;
       }
+
+      const [classesResult, sectionsResult, subjectsResult] = await Promise.allSettled([
+        fetchApiJson<any>("/api/classes", {
+          cache: "no-store",
+          schoolKey,
+          fallbackMessage: "Failed to load classes.",
+        }),
+        fetchApiJson<any>("/api/sections", {
+          cache: "no-store",
+          schoolKey,
+          fallbackMessage: "Failed to load sections.",
+        }),
+        fetchApiJson<any>("/api/subjects", {
+          cache: "no-store",
+          schoolKey,
+          fallbackMessage: "Failed to load subjects.",
+        }),
+      ]);
+
+      if (classesResult.status === "fulfilled") {
+        setClasses(Array.isArray(classesResult.value.classes) ? classesResult.value.classes : []);
+      }
+      if (sectionsResult.status === "fulfilled") {
+        setSections(Array.isArray(sectionsResult.value.sections) ? sectionsResult.value.sections : []);
+      }
+      if (subjectsResult.status === "fulfilled") {
+        setSubjects(Array.isArray(subjectsResult.value.subjects) ? subjectsResult.value.subjects : []);
+      }
+
+      setSupportDataNotice(
+        buildPartialLoadMessage([
+          ...(classesResult.status === "rejected" ? ["Class scope options"] : []),
+          ...(sectionsResult.status === "rejected" ? ["Section scope options"] : []),
+          ...(subjectsResult.status === "rejected" ? ["Subject scope options"] : []),
+        ]),
+      );
+
       await loadUsers(1);
     };
-    init();
+    void init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const availableCreateSections = useMemo(() => {
+    if (formData.role === "student") {
+      if (!formData.classId) return [] as AcademicSectionItem[];
+      return sections.filter((section) => getSectionClassId(section) === formData.classId);
+    }
+    if (formData.role === "admin" && formData.hasAllClasses) {
+      return sections;
+    }
+    const selectedClassIds = new Set(formData.classIds);
+    return sections.filter((section) => selectedClassIds.has(getSectionClassId(section)));
+  }, [formData.classId, formData.classIds, formData.hasAllClasses, formData.role, sections]);
+
+  const availableCreateSectionIds = useMemo(
+    () => new Set(availableCreateSections.map((section) => section._id)),
+    [availableCreateSections],
+  );
+
+  const availableEditSections = useMemo(() => {
+    if (editData.role === "student") {
+      if (!editData.class) return [] as AcademicSectionItem[];
+      return sections.filter((section) => getSectionClassId(section) === editData.class);
+    }
+    if (editData.role === "admin" && editData.hasAllClasses === true) {
+      return sections;
+    }
+    const selectedClassIds = new Set(editData.classIds || []);
+    return sections.filter((section) => selectedClassIds.has(getSectionClassId(section)));
+  }, [editData.class, editData.classIds, editData.hasAllClasses, editData.role, sections]);
+
+  const availableEditSectionIds = useMemo(
+    () => new Set(availableEditSections.map((section) => section._id)),
+    [availableEditSections],
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -185,29 +281,70 @@ export default function ManageUsersPage() {
       ...prev,
       role: value,
       classId: value === "student" ? prev.classId : "",
+      academicSection: value === "student" ? prev.academicSection : "",
       rollNumber: value === "student" ? prev.rollNumber : "",
       enrolledAt: value === "student" ? prev.enrolledAt : "",
       classIds: value === "student" ? [] : prev.classIds,
+      academicSectionIds: value === "student" ? [] : prev.academicSectionIds,
       subjectIds: value === "student" ? [] : prev.subjectIds,
       hasAllClasses: value === "admin" ? prev.hasAllClasses : false,
+      hasAllSections: value === "student" ? false : value === "admin" ? prev.hasAllSections : true,
       hasAllSubjects: value === "admin" ? prev.hasAllSubjects : false,
     }));
   };
 
   const handleClassChange = (value: string) => {
-    setFormData((prev) => ({ ...prev, classId: value }));
+    setFormData((prev) => ({ ...prev, classId: value, academicSection: "" }));
   };
 
-  const toggleMultiValue = (
-    field: "classIds" | "subjectIds",
-    value: string,
+  const setCreateMultiValues = (
+    field: "classIds" | "subjectIds" | "academicSectionIds",
+    nextValues: string[],
   ) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: prev[field].includes(value)
-        ? prev[field].filter((item) => item !== value)
-        : [...prev[field], value],
-    }));
+    setFormData((prev) => {
+      if (field !== "classIds") {
+        return { ...prev, [field]: nextValues };
+      }
+
+      const nextClassIds = nextValues;
+      const nextClassIdSet = new Set(nextClassIds);
+      const nextAcademicSectionIds = prev.academicSectionIds.filter((sectionId) => {
+        if (prev.role === "admin" && prev.hasAllClasses) return true;
+        const section = sections.find((item) => item._id === sectionId);
+        return section ? nextClassIdSet.has(getSectionClassId(section)) : false;
+      });
+
+      return {
+        ...prev,
+        classIds: nextClassIds,
+        academicSectionIds: nextAcademicSectionIds,
+      };
+    });
+  };
+
+  const setEditMultiValues = (
+    field: "classIds" | "subjectIds" | "academicSectionIds",
+    nextValues: string[],
+  ) => {
+    setEditData((prev) => {
+      if (field !== "classIds") {
+        return { ...prev, [field]: nextValues };
+      }
+
+      const nextClassIds = nextValues;
+      const nextClassIdSet = new Set(nextClassIds);
+      const nextAcademicSectionIds = (prev.academicSectionIds || []).filter((sectionId) => {
+        if (prev.role === "admin" && prev.hasAllClasses === true) return true;
+        const section = sections.find((item) => item._id === sectionId);
+        return section ? nextClassIdSet.has(getSectionClassId(section)) : false;
+      });
+
+      return {
+        ...prev,
+        classIds: nextClassIds,
+        academicSectionIds: nextAcademicSectionIds,
+      };
+    });
   };
 
   const handleCreateUser = async (e: FormEvent) => {
@@ -234,6 +371,13 @@ export default function ManageUsersPage() {
         );
       }
       if (
+        (formData.role === "teacher" || formData.role === "admin") &&
+        !formData.hasAllSections &&
+        formData.academicSectionIds.filter((sectionId) => availableCreateSectionIds.has(sectionId)).length === 0
+      ) {
+        throw new Error("Select at least one section or enable all sections.");
+      }
+      if (
         formData.role === "admin" &&
         ((!formData.hasAllClasses && formData.classIds.length === 0) ||
           (!formData.hasAllSubjects && formData.subjectIds.length === 0))
@@ -251,32 +395,38 @@ export default function ManageUsersPage() {
       };
       if (formData.role === "student") {
         body.class = formData.classId;
+        body.academicSection = formData.academicSection || undefined;
         body.rollNumber = formData.rollNumber;
         body.enrolledAt = formData.enrolledAt
           ? new Date(formData.enrolledAt)
           : undefined;
       } else {
-        body.classIds = formData.hasAllClasses ? [] : formData.classIds;
-        body.subjectIds = formData.hasAllSubjects ? [] : formData.subjectIds;
+        body.classIds = formData.role === "admin" && formData.hasAllClasses ? [] : formData.classIds;
+        body.academicSectionIds = formData.hasAllSections
+          ? []
+          : formData.academicSectionIds.filter((sectionId) => availableCreateSectionIds.has(sectionId));
+        body.subjectIds = formData.role === "admin" && formData.hasAllSubjects ? [] : formData.subjectIds;
         body.hasAllClasses =
           formData.role === "admin" ? formData.hasAllClasses : false;
+        body.hasAllSections = formData.hasAllSections;
         body.hasAllSubjects =
           formData.role === "admin" ? formData.hasAllSubjects : false;
       }
-      const schoolKey = getSchoolKeyFromCookie();
-      const postUrl = "/api/users" + (schoolKey ? `?school=${schoolKey}` : "");
-      const res = await fetch(postUrl, {
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error(NO_SCHOOL_USERS_MESSAGE);
+      }
+      const data = await fetchApiJson<any>("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        schoolKey,
+        fallbackMessage: "Failed to create user.",
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
       toast({
         title: "Success",
         description: `User "${data.user.name}" created.`,
       });
-      // Reload current page
       await loadUsers(page);
       setFormData({
         name: "",
@@ -285,11 +435,14 @@ export default function ManageUsersPage() {
         mobileNumber: "",
         role: "teacher",
         classId: "",
+        academicSection: "",
         rollNumber: "",
         enrolledAt: "",
         classIds: [],
+        academicSectionIds: [],
         subjectIds: [],
         hasAllClasses: false,
+        hasAllSections: true,
         hasAllSubjects: false,
       });
     } catch (err: any) {
@@ -309,21 +462,75 @@ export default function ManageUsersPage() {
       !editData.name ||
       !editData.role ||
       !editData.mobileNumber
-    )
+    ) {
       return;
+    }
     setIsEditing(true);
     try {
-      const schoolKey = getSchoolKeyFromCookie();
-      const putUrl =
-        `/api/users/${editData._id}` +
-        (schoolKey ? `?school=${schoolKey}` : "");
-      const res = await fetch(putUrl, {
+      if (editData.role === "student" && (!editData.class || !editData.rollNumber)) {
+        throw new Error("For Student role, Class and Roll Number are required.");
+      }
+      if (
+        editData.role === "teacher" &&
+        ((editData.classIds || []).length === 0 || (editData.subjectIds || []).length === 0)
+      ) {
+        throw new Error("For Teacher role, select at least one class and one subject.");
+      }
+      if (
+        (editData.role === "teacher" || editData.role === "admin") &&
+        editData.hasAllSections !== true &&
+        (editData.academicSectionIds || []).filter((sectionId) =>
+          availableEditSectionIds.has(sectionId),
+        ).length === 0
+      ) {
+        throw new Error("Select at least one section or enable all sections.");
+      }
+      if (
+        editData.role === "admin" &&
+        ((!editData.hasAllClasses && (editData.classIds || []).length === 0) ||
+          (!editData.hasAllSubjects && (editData.subjectIds || []).length === 0))
+      ) {
+        throw new Error(
+          "For Admin role, enable all classes/subjects or select at least one class and one subject.",
+        );
+      }
+
+      const body: any = {
+        name: editData.name,
+        role: editData.role,
+        email: editData.email,
+        mobileNumber: editData.mobileNumber,
+      };
+
+      if (editData.role === "student") {
+        body.class = editData.class;
+        body.academicSection = editData.academicSection || undefined;
+        body.rollNumber = editData.rollNumber;
+        body.enrolledAt = editData.enrolledAt;
+      } else {
+        body.classIds = editData.role === "admin" && editData.hasAllClasses ? [] : editData.classIds;
+        body.academicSectionIds = editData.hasAllSections
+          ? []
+          : (editData.academicSectionIds || []).filter((sectionId) =>
+              availableEditSectionIds.has(sectionId),
+            );
+        body.subjectIds = editData.role === "admin" && editData.hasAllSubjects ? [] : editData.subjectIds;
+        body.hasAllClasses = editData.role === "admin" ? editData.hasAllClasses : false;
+        body.hasAllSections = editData.hasAllSections;
+        body.hasAllSubjects = editData.role === "admin" ? editData.hasAllSubjects : false;
+      }
+
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error(NO_SCHOOL_USERS_MESSAGE);
+      }
+      await fetchApiJson(`/api/users/${editData._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editData),
+        body: JSON.stringify(body),
+        schoolKey,
+        fallbackMessage: "Failed to update user.",
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
       toast({ title: "Success", description: "User updated successfully." });
       await loadUsers(page);
       setIsEditDialogOpen(false);
@@ -338,15 +545,18 @@ export default function ManageUsersPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
+  const handleArchiveUser = async (userId: string) => {
     try {
-      const schoolKey = getSchoolKeyFromCookie();
-      const delUrl =
-        `/api/users/${userId}` + (schoolKey ? `?school=${schoolKey}` : "");
-      const res = await fetch(delUrl, { method: "DELETE" });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
-      toast({ title: "Success", description: "User deleted successfully." });
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error(NO_SCHOOL_USERS_MESSAGE);
+      }
+      await fetchApiJson(`/api/users/${userId}`, {
+        method: "DELETE",
+        schoolKey,
+        fallbackMessage: "Failed to archive user.",
+      });
+      toast({ title: "Success", description: "User archived successfully." });
       await loadUsers(page);
     } catch (err: any) {
       toast({
@@ -357,17 +567,42 @@ export default function ManageUsersPage() {
     }
   };
 
-  return (
-    <div className="container py-8">
-      <header className="mb-8">
-        <h1 className="app-page-title">User Management</h1>
-        <p className="text-muted-foreground mt-1">
-          Create, view, and manage user accounts.
-        </p>
-      </header>
+  const getScopeSummary = (user: User) => {
+    if (user.role === "student") {
+      const className = classes.find((item) => item._id === user.class)?.name || user.class || "—";
+      const sectionName = sections.find((item) => item._id === user.academicSection)?.name;
+      return sectionName ? `${className} • ${sectionName}` : className;
+    }
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        <div className="lg:col-span-1 space-y-8 lg:sticky lg:top-8">
+    const classLabel =
+      user.role === "admin" && user.hasAllClasses
+        ? 'All classes'
+        : `${(user.classIds || []).length} class${(user.classIds || []).length === 1 ? '' : 'es'}`;
+    const sectionLabel =
+      user.hasAllSections
+        ? 'all sections'
+        : `${(user.academicSectionIds || []).length} section${(user.academicSectionIds || []).length === 1 ? '' : 's'}`;
+    return `${classLabel} • ${sectionLabel}`;
+  };
+
+  return (
+    <div className="container space-y-6">
+      <div className="app-page-header-row">
+        <div>
+          <h1 className="app-page-title">User Management</h1>
+          <p className="app-page-subtitle">
+            Create, view, and manage user accounts.
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => void loadUsers(page)} disabled={isLoading}>
+          {isLoading ? <Spinner /> : "Refresh"}
+        </Button>
+      </div>
+
+      {supportDataNotice ? <div className="app-feedback app-feedback-info">{supportDataNotice}</div> : null}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 items-start">
+        <div className="space-y-6 lg:col-span-1 lg:sticky lg:top-6">
           <Card>
             <CardHeader>
               <CardTitle>Create New User</CardTitle>
@@ -439,6 +674,30 @@ export default function ManageUsersPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
+                      <Label>Section</Label>
+                      <Select
+                        value={formData.academicSection || "none"}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            academicSection: value === "none" ? "" : value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Section" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No Section</SelectItem>
+                          {availableCreateSections.map((section) => (
+                            <SelectItem key={section._id} value={section._id}>
+                              {section.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
                       <Label>Roll Number</Label>
                       <Input
                         name="rollNumber"
@@ -488,46 +747,66 @@ export default function ManageUsersPage() {
                         </label>
                       </div>
                     )}
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={formData.hasAllSections}
+                        onCheckedChange={(checked) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            hasAllSections: checked === true,
+                            academicSectionIds: checked === true ? [] : prev.academicSectionIds,
+                          }))
+                        }
+                      />
+                      <span>All Sections</span>
+                    </label>
                     {!formData.hasAllClasses && (
                       <div className="space-y-2">
                         <Label>Classes</Label>
-                        <div className="max-h-40 overflow-auto rounded-md border p-3 space-y-2">
-                          {classes.map((c) => (
-                            <label
-                              key={c._id}
-                              className="flex items-center gap-2 text-sm"
-                            >
-                              <Checkbox
-                                checked={formData.classIds.includes(c._id)}
-                                onCheckedChange={() =>
-                                  toggleMultiValue("classIds", c._id)
-                                }
-                              />
-                              <span>{c.name}</span>
-                            </label>
-                          ))}
-                        </div>
+                        <MultiSelectChecklist
+                          items={classes.map((classItem) => ({
+                            id: classItem._id,
+                            label: classItem.name,
+                          }))}
+                          selectedIds={formData.classIds}
+                          onChange={(ids) => setCreateMultiValues("classIds", ids)}
+                        />
+                      </div>
+                    )}
+                    {!formData.hasAllSections && (
+                      <div className="space-y-2">
+                        <Label>Sections</Label>
+                        <MultiSelectChecklist
+                          items={availableCreateSections.map((section) => ({
+                            id: section._id,
+                            label: (
+                              <span>
+                                {section.name}
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  ({classes.find((item) => item._id === getSectionClassId(section))?.name || 'Class'})
+                                </span>
+                              </span>
+                            ),
+                          }))}
+                          selectedIds={formData.academicSectionIds}
+                          onChange={(ids) => setCreateMultiValues("academicSectionIds", ids)}
+                          emptyContent={formData.role === "admin" && formData.hasAllClasses
+                            ? "No sections created yet."
+                            : "Select classes first."}
+                        />
                       </div>
                     )}
                     {!formData.hasAllSubjects && (
                       <div className="space-y-2">
                         <Label>Subjects</Label>
-                        <div className="max-h-40 overflow-auto rounded-md border p-3 space-y-2">
-                          {subjects.map((s) => (
-                            <label
-                              key={s._id}
-                              className="flex items-center gap-2 text-sm"
-                            >
-                              <Checkbox
-                                checked={formData.subjectIds.includes(s._id)}
-                                onCheckedChange={() =>
-                                  toggleMultiValue("subjectIds", s._id)
-                                }
-                              />
-                              <span>{s.name}</span>
-                            </label>
-                          ))}
-                        </div>
+                        <MultiSelectChecklist
+                          items={subjects.map((subject) => ({
+                            id: subject._id,
+                            label: subject.name,
+                          }))}
+                          selectedIds={formData.subjectIds}
+                          onChange={(ids) => setCreateMultiValues("subjectIds", ids)}
+                        />
                       </div>
                     )}
                   </div>
@@ -556,9 +835,13 @@ export default function ManageUsersPage() {
                   <Skeleton className="h-12 w-full" />
                   <Skeleton className="h-12 w-full" />
                 </div>
+              ) : listError ? (
+                <div className={listError === NO_SCHOOL_USERS_MESSAGE ? "app-feedback app-feedback-info" : "app-feedback app-feedback-error"}>
+                  {listError}
+                </div>
               ) : (
                 <>
-                  <div className="flex items-center justify-between mb-2 text-sm text-muted-foreground">
+                  <div className="mb-2 flex items-center justify-between text-sm text-muted-foreground">
                     <div>
                       Total: {total} • Page {page} of {pages}
                     </div>
@@ -582,20 +865,28 @@ export default function ManageUsersPage() {
                       </Button>
                     </div>
                   </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead className="text-right w-[100px]">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {users.map((user) => (
+                  <div className="app-table-wrap">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Scope</TableHead>
+                          <TableHead className="text-right w-[100px]">
+                            Actions
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {users.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                              No users found for the selected school.
+                            </TableCell>
+                          </TableRow>
+                        ) : users.map((user) => (
                         <TableRow key={user._id}>
                           <TableCell className="font-medium">
                             {user.name}
@@ -612,6 +903,9 @@ export default function ManageUsersPage() {
                               {user.role}
                             </Badge>
                           </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {getScopeSummary(user)}
+                          </TableCell>
                           <TableCell className="text-right">
                             <Dialog
                               open={
@@ -627,7 +921,24 @@ export default function ManageUsersPage() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => {
-                                    setEditData(user);
+                                    setEditData({
+                                      ...user,
+                                      class: user.class || "",
+                                      academicSection: user.academicSection || "",
+                                      classIds: user.classIds || [],
+                                      academicSectionIds: user.academicSectionIds || [],
+                                      subjectIds: user.subjectIds || [],
+                                      hasAllClasses: user.hasAllClasses || false,
+                                      hasAllSections:
+                                        typeof user.hasAllSections === "boolean"
+                                          ? user.hasAllSections
+                                          : user.role === "student"
+                                            ? false
+                                            : true,
+                                      hasAllSubjects: user.hasAllSubjects || false,
+                                      rollNumber: user.rollNumber || "",
+                                      enrolledAt: user.enrolledAt || "",
+                                    });
                                     setIsEditDialogOpen(true);
                                   }}
                                 >
@@ -684,6 +995,34 @@ export default function ManageUsersPage() {
                                         setEditData((d) => ({
                                           ...d,
                                           role: value as User["role"],
+                                          class:
+                                            value === "student" ? d.class || "" : "",
+                                          academicSection:
+                                            value === "student"
+                                              ? d.academicSection || ""
+                                              : "",
+                                          classIds:
+                                            value === "student" ? [] : d.classIds || [],
+                                          academicSectionIds:
+                                            value === "student"
+                                              ? []
+                                              : d.academicSectionIds || [],
+                                          subjectIds:
+                                            value === "student" ? [] : d.subjectIds || [],
+                                          hasAllClasses:
+                                            value === "admin" ? d.hasAllClasses || false : false,
+                                          hasAllSections:
+                                            value === "student"
+                                              ? false
+                                              : value === "admin"
+                                                ? d.hasAllSections ?? true
+                                                : true,
+                                          hasAllSubjects:
+                                            value === "admin" ? d.hasAllSubjects || false : false,
+                                          rollNumber:
+                                            value === "student" ? d.rollNumber || "" : "",
+                                          enrolledAt:
+                                            value === "student" ? d.enrolledAt || "" : "",
                                         }))
                                       }
                                     >
@@ -703,6 +1042,87 @@ export default function ManageUsersPage() {
                                       </SelectContent>
                                     </Select>
                                   </div>
+                                  {editData.role === "student" && (
+                                    <div className="space-y-4 border rounded-md p-3">
+                                      <div className="space-y-2">
+                                        <Label>Class</Label>
+                                        <Select
+                                          value={editData.class || ""}
+                                          onValueChange={(value) =>
+                                            setEditData((d) => ({
+                                              ...d,
+                                              class: value,
+                                              academicSection: "",
+                                            }))
+                                          }
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select Class" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {classes.map((c) => (
+                                              <SelectItem key={c._id} value={c._id}>
+                                                {c.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <Label>Section</Label>
+                                        <Select
+                                          value={editData.academicSection || "none"}
+                                          onValueChange={(value) =>
+                                            setEditData((d) => ({
+                                              ...d,
+                                              academicSection: value === "none" ? "" : value,
+                                            }))
+                                          }
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select Section" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">No Section</SelectItem>
+                                            {availableEditSections.map((section) => (
+                                              <SelectItem key={section._id} value={section._id}>
+                                                {section.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <Label>Roll Number</Label>
+                                        <Input
+                                          value={editData.rollNumber || ""}
+                                          onChange={(e) =>
+                                            setEditData((d) => ({
+                                              ...d,
+                                              rollNumber: e.target.value,
+                                            }))
+                                          }
+                                        />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <Label>Enrolled At</Label>
+                                        <Input
+                                          type="date"
+                                          value={
+                                            editData.enrolledAt
+                                              ? String(editData.enrolledAt).slice(0, 10)
+                                              : ""
+                                          }
+                                          onChange={(e) =>
+                                            setEditData((d) => ({
+                                              ...d,
+                                              enrolledAt: e.target.value,
+                                            }))
+                                          }
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
                                   {(editData.role === "teacher" ||
                                     editData.role === "admin") && (
                                     <div className="space-y-4 border rounded-md p-3">
@@ -710,14 +1130,11 @@ export default function ManageUsersPage() {
                                         <div className="grid gap-3 sm:grid-cols-2">
                                           <label className="flex items-center gap-2 text-sm">
                                             <Checkbox
-                                              checked={
-                                                editData.hasAllClasses === true
-                                              }
+                                              checked={editData.hasAllClasses === true}
                                               onCheckedChange={(checked) =>
                                                 setEditData((d) => ({
                                                   ...d,
-                                                  hasAllClasses:
-                                                    checked === true,
+                                                  hasAllClasses: checked === true,
                                                 }))
                                               }
                                             />
@@ -725,14 +1142,11 @@ export default function ManageUsersPage() {
                                           </label>
                                           <label className="flex items-center gap-2 text-sm">
                                             <Checkbox
-                                              checked={
-                                                editData.hasAllSubjects === true
-                                              }
+                                              checked={editData.hasAllSubjects === true}
                                               onCheckedChange={(checked) =>
                                                 setEditData((d) => ({
                                                   ...d,
-                                                  hasAllSubjects:
-                                                    checked === true,
+                                                  hasAllSubjects: checked === true,
                                                 }))
                                               }
                                             />
@@ -740,82 +1154,67 @@ export default function ManageUsersPage() {
                                           </label>
                                         </div>
                                       )}
+                                      <label className="flex items-center gap-2 text-sm">
+                                        <Checkbox
+                                          checked={editData.hasAllSections === true}
+                                          onCheckedChange={(checked) =>
+                                            setEditData((d) => ({
+                                              ...d,
+                                              hasAllSections: checked === true,
+                                              academicSectionIds:
+                                                checked === true ? [] : d.academicSectionIds || [],
+                                            }))
+                                          }
+                                        />
+                                        <span>All Sections</span>
+                                      </label>
                                       {editData.hasAllClasses !== true && (
                                         <div className="space-y-2">
                                           <Label>Classes</Label>
-                                          <div className="max-h-40 overflow-auto rounded-md border p-3 space-y-2">
-                                            {classes.map((c) => (
-                                              <label
-                                                key={c._id}
-                                                className="flex items-center gap-2 text-sm"
-                                              >
-                                                <Checkbox
-                                                  checked={(
-                                                    editData.classIds || []
-                                                  ).includes(c._id)}
-                                                  onCheckedChange={() =>
-                                                    setEditData((d) => ({
-                                                      ...d,
-                                                      classIds: (
-                                                        d.classIds || []
-                                                      ).includes(c._id)
-                                                        ? (
-                                                            d.classIds || []
-                                                          ).filter(
-                                                            (id) =>
-                                                              id !== c._id,
-                                                          )
-                                                        : [
-                                                            ...(d.classIds ||
-                                                              []),
-                                                            c._id,
-                                                          ],
-                                                    }))
-                                                  }
-                                                />
-                                                <span>{c.name}</span>
-                                              </label>
-                                            ))}
-                                          </div>
+                                          <MultiSelectChecklist
+                                            items={classes.map((classItem) => ({
+                                              id: classItem._id,
+                                              label: classItem.name,
+                                            }))}
+                                            selectedIds={editData.classIds || []}
+                                            onChange={(ids) => setEditMultiValues("classIds", ids)}
+                                          />
+                                        </div>
+                                      )}
+                                      {editData.hasAllSections !== true && (
+                                        <div className="space-y-2">
+                                          <Label>Sections</Label>
+                                          <MultiSelectChecklist
+                                            items={availableEditSections.map((section) => ({
+                                              id: section._id,
+                                              label: (
+                                                <span>
+                                                  {section.name}
+                                                  <span className="ml-1 text-xs text-muted-foreground">
+                                                    ({classes.find((item) => item._id === getSectionClassId(section))?.name || 'Class'})
+                                                  </span>
+                                                </span>
+                                              ),
+                                            }))}
+                                            selectedIds={editData.academicSectionIds || []}
+                                            onChange={(ids) => setEditMultiValues("academicSectionIds", ids)}
+                                            emptyContent={editData.role === "admin" && editData.hasAllClasses === true
+                                              ? "No sections created yet."
+                                              : "Select classes first."}
+                                          />
                                         </div>
                                       )}
                                       {editData.hasAllSubjects !== true && (
                                         <div className="space-y-2">
                                           <Label>Subjects</Label>
-                                          <div className="max-h-40 overflow-auto rounded-md border p-3 space-y-2">
-                                            {subjects.map((s) => (
-                                              <label
-                                                key={s._id}
-                                                className="flex items-center gap-2 text-sm"
-                                              >
-                                                <Checkbox
-                                                  checked={(
-                                                    editData.subjectIds || []
-                                                  ).includes(s._id)}
-                                                  onCheckedChange={() =>
-                                                    setEditData((d) => ({
-                                                      ...d,
-                                                      subjectIds: (
-                                                        d.subjectIds || []
-                                                      ).includes(s._id)
-                                                        ? (
-                                                            d.subjectIds || []
-                                                          ).filter(
-                                                            (id) =>
-                                                              id !== s._id,
-                                                          )
-                                                        : [
-                                                            ...(d.subjectIds ||
-                                                              []),
-                                                            s._id,
-                                                          ],
-                                                    }))
-                                                  }
-                                                />
-                                                <span>{s.name}</span>
-                                              </label>
-                                            ))}
-                                          </div>
+                                          <MultiSelectChecklist
+                                            items={subjects.map((subject) => ({
+                                              id: subject._id,
+                                              label: subject.name,
+                                            }))}
+                                            selectedIds={editData.subjectIds || []}
+                                            onChange={(ids) => setEditMultiValues("subjectIds", ids)}
+                                          />
                                         </div>
                                       )}
                                     </div>
@@ -844,10 +1243,10 @@ export default function ManageUsersPage() {
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>
-                                    Are you sure?
+                                    Archive user?
                                   </AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This will permanently delete the user{" "}
+                                    This will archive the user{" "}
                                     <strong className="mx-1">
                                       {user.name}
                                     </strong>
@@ -857,18 +1256,19 @@ export default function ManageUsersPage() {
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => handleDeleteUser(user._id)}
+                                    onClick={() => handleArchiveUser(user._id)}
                                   >
-                                    Delete
+                                    Archive
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
                           </TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </>
               )}
             </CardContent>

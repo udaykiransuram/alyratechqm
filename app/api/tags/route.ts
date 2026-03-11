@@ -1,133 +1,201 @@
 export const dynamic = 'force-dynamic';
-// app/api/tags/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
+
 import mongoose from 'mongoose';
+import { NextRequest, NextResponse } from 'next/server';
+
+import { buildArchiveFilter, buildRestoreUpdate, resolveIncludeArchived } from '@/lib/archive';
+import { recordTenantAudit } from '@/lib/audit';
+import { connectDB } from '@/lib/db';
 import { getTenantModels } from '@/lib/db-tenant';
 import '@/models/Tag';
 import '@/models/Subject';
 
-// POST: create a tag (optionally assign to subjects)
+function resolveSchoolKey(req: NextRequest) {
+  const url = new URL(req.url);
+  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
+  const schoolFromQuery = url.searchParams.get('school');
+  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
+  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+}
+
+function normalizeIds(value: unknown) {
+  if (!Array.isArray(value)) return [] as string[];
+  return Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean)));
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export async function POST(req: NextRequest) {
   await connectDB();
 
-  // Resolve tenant
-  const url = new URL(req.url);
-  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
-  const schoolFromQuery = url.searchParams.get('school');
-  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
-  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) {
     return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   }
 
-  // Ensure TagType is compiled on the tenant connection so populate('type') works reliably
-  const { Tag: TagModel, Subject: SubjectModel, TagType: TagTypeModel } = await getTenantModels(schoolKey, ['Tag', 'Subject', 'TagType'] as const);
-
-  const { name, type, subjectIds } = await req.json();
-  try { console.debug('[api/tags] POST payload', { name, type, subjectIdsCount: Array.isArray(subjectIds) ? subjectIds.length : 0, schoolKey }); } catch {}
-  if (!name || !type) {
-    return NextResponse.json({ success: false, message: 'Tag name and type ID are required.' }, { status: 400 });
-  }
-  if (!mongoose.Types.ObjectId.isValid(String(type))) {
-    return NextResponse.json({ success: false, message: 'Invalid tag type ID.' }, { status: 400 });
-  }
-  if (Array.isArray(subjectIds) && subjectIds.length > 0) {
-    const invalidSubjectId = subjectIds.find((id: any) => !mongoose.Types.ObjectId.isValid(String(id)));
-    if (invalidSubjectId) {
-      return NextResponse.json({ success: false, message: `Invalid subject ID: ${invalidSubjectId}` }, { status: 400 });
-    }
-  }
-
-  // First try with a transaction (Atlas / replica set). If not supported, fall back to non-transactional flow.
-  let session: mongoose.ClientSession | null = null;
   try {
-    session = await mongoose.startSession();
-    session.startTransaction();
+    const { Tag: TagModel, Subject: SubjectModel } = await getTenantModels(schoolKey, ['Tag', 'Subject', 'TagType'] as const);
 
-    const newTag = new TagModel({ name, type });
-    await newTag.save({ session });
+    const { name, type, subjectIds } = await req.json();
+    const normalizedName = String(name || '').trim();
+    const normalizedType = String(type || '').trim();
+    const normalizedSubjectIds = normalizeIds(subjectIds);
 
-    if (Array.isArray(subjectIds) && subjectIds.length > 0) {
-      await SubjectModel.updateMany(
-        { _id: { $in: subjectIds } },
-        { $addToSet: { tags: newTag._id } },
-        { session }
+    if (!normalizedName || !normalizedType) {
+      return NextResponse.json({ success: false, message: 'Tag name and type ID are required.' }, { status: 400 });
+    }
+    if (!mongoose.Types.ObjectId.isValid(normalizedType)) {
+      return NextResponse.json({ success: false, message: 'Invalid tag type ID.' }, { status: 400 });
+    }
+
+    if (normalizedSubjectIds.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
+      return NextResponse.json({ success: false, message: 'One or more subject IDs are invalid.' }, { status: 400 });
+    }
+
+    if (normalizedSubjectIds.length > 0) {
+      const foundSubjects = await SubjectModel.find({
+        _id: { $in: normalizedSubjectIds },
+        ...buildArchiveFilter(false),
+      })
+        .select('_id')
+        .lean();
+      if (foundSubjects.length !== normalizedSubjectIds.length) {
+        return NextResponse.json({ success: false, message: 'One or more subject IDs are invalid.' }, { status: 400 });
+      }
+    }
+
+    const nameRegex = new RegExp(`^${escapeRegex(normalizedName)}$`, 'i');
+    const existingTag = await TagModel.findOne({
+      name: { $regex: nameRegex },
+      type: normalizedType,
+    });
+
+    if (existingTag) {
+      if (existingTag.isArchived) {
+        const restored = await TagModel.findByIdAndUpdate(
+          existingTag._id,
+          { ...buildRestoreUpdate(), name: normalizedName, type: normalizedType },
+          { new: true, runValidators: true },
+        ).populate('type');
+
+        if (normalizedSubjectIds.length > 0) {
+          await SubjectModel.updateMany(
+            { _id: { $in: normalizedSubjectIds } },
+            { $addToSet: { tags: existingTag._id } },
+          );
+        }
+
+        await recordTenantAudit({
+          schoolKey,
+          req,
+          entityType: 'tag',
+          entityId: String(existingTag._id),
+          entityLabel: normalizedName,
+          action: 'restored',
+          summary: `Restored tag ${normalizedName}.`,
+          details: {
+            typeId: normalizedType,
+            subjectIds: normalizedSubjectIds,
+          },
+        });
+
+        return NextResponse.json({ success: true, tag: restored, existed: true }, { status: 200 });
+      }
+
+      return NextResponse.json(
+        { success: false, message: 'This tag name already exists for the given type.' },
+        { status: 409 },
       );
     }
 
-    await session.commitTransaction();
-    session.endSession();
+    const newTag = await TagModel.create({ name: normalizedName, type: normalizedType });
+
+    if (normalizedSubjectIds.length > 0) {
+      await SubjectModel.updateMany(
+        { _id: { $in: normalizedSubjectIds } },
+        { $addToSet: { tags: newTag._id } },
+      );
+    }
 
     const populatedTag = await TagModel.findById(newTag._id).populate('type');
-    try { console.debug('[api/tags] POST created tag (txn)', { id: populatedTag?._id?.toString(), type: populatedTag?.type }); } catch {}
-    return NextResponse.json({ success: true, tag: populatedTag }, { status: 201 });
-  } catch (err: any) {
-    if (session) {
-      try { await session.abortTransaction(); } catch {}
-      session.endSession();
-    }
 
-    // Fallback without transaction (useful for local dev / standalone mongod)
-    try {
-      const newTag = await TagModel.create({ name, type });
-      if (Array.isArray(subjectIds) && subjectIds.length > 0) {
-        await SubjectModel.updateMany(
-          { _id: { $in: subjectIds } },
-          { $addToSet: { tags: newTag._id } }
-        );
-      }
-      const populatedTag = await TagModel.findById(newTag._id).populate('type');
-      try { console.debug('[api/tags] POST created tag (fallback)', { id: populatedTag?._id?.toString(), type: populatedTag?.type }); } catch {}
-      return NextResponse.json({ success: true, tag: populatedTag }, { status: 201 });
-    } catch (e: any) {
-      try { console.error('[api/tags] POST failed in fallback', { message: e?.message, code: e?.code, name: e?.name, stack: e?.stack }); } catch {}
-      if (e?.code === 11000) {
-        return NextResponse.json({ success: false, message: 'This tag name already exists for the given type.' }, { status: 409 });
-      }
-      return NextResponse.json({ success: false, message: e?.message || 'Server error creating tag.' }, { status: 500 });
+    await recordTenantAudit({
+      schoolKey,
+      req,
+      entityType: 'tag',
+      entityId: String(newTag._id),
+      entityLabel: normalizedName,
+      action: 'created',
+      summary: `Created tag ${normalizedName}.`,
+      details: {
+        typeId: normalizedType,
+        subjectIds: normalizedSubjectIds,
+      },
+    });
+
+    return NextResponse.json({ success: true, tag: populatedTag }, { status: 201 });
+  } catch (error: any) {
+    if (error?.code === 11000) {
+      return NextResponse.json(
+        { success: false, message: 'This tag name already exists for the given type.' },
+        { status: 409 },
+      );
     }
+    return NextResponse.json(
+      { success: false, message: error?.message || 'Server error creating tag.' },
+      { status: 500 },
+    );
   }
 }
 
-// GET: list tags (optionally by subject)
 export async function GET(req: NextRequest) {
   await connectDB();
   const url = new URL(req.url);
-  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
-  const schoolFromQuery = url.searchParams.get('school');
-  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
-  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
+  const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) {
     return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   }
 
-  // Ensure TagType is compiled for populate('type')
-  const { Tag: TagModel, Subject: SubjectModel, TagType: TagTypeModel } = await getTenantModels(schoolKey, ['Tag', 'Subject', 'TagType'] as const);
-
-  const subjectId = url.searchParams.get('subjectId');
   try {
+    const includeArchived = resolveIncludeArchived(url);
+    const { Tag: TagModel, Subject: SubjectModel } = await getTenantModels(schoolKey, ['Tag', 'Subject', 'TagType'] as const);
+
+    const subjectId = url.searchParams.get('subjectId');
     if (subjectId) {
       if (!mongoose.Types.ObjectId.isValid(subjectId)) {
         return NextResponse.json({ success: false, message: 'Invalid subject ID' }, { status: 400 });
       }
-      const subject = await SubjectModel.findById(subjectId).populate({
-        path: 'tags',
-        populate: { path: 'type' }
-      }).lean();
+
+      const subject = await SubjectModel.findOne({
+        _id: subjectId,
+        ...buildArchiveFilter(false),
+      })
+        .populate({
+          path: 'tags',
+          match: buildArchiveFilter(includeArchived),
+          populate: { path: 'type' },
+        })
+        .lean();
 
       if (!subject) {
         return NextResponse.json({ success: false, message: 'Subject not found' }, { status: 404 });
       }
 
-      return NextResponse.json({ success: true, tags: subject.tags });
-    } else {
-      const tags = await TagModel.find({}).populate('type').lean();
-      try { console.debug('[api/tags] GET list', { count: Array.isArray(tags) ? tags.length : 0 }); } catch {}
-      return NextResponse.json({ success: true, tags });
+      return NextResponse.json({ success: true, tags: subject.tags || [] });
     }
+
+    const tags = await TagModel.find(buildArchiveFilter(includeArchived))
+      .populate('type')
+      .sort({ name: 1 })
+      .lean();
+
+    return NextResponse.json({ success: true, tags });
   } catch (error: any) {
-    try { console.error('[api/tags] GET error', { message: error?.message, stack: error?.stack }); } catch {}
-    return NextResponse.json({ success: false, message: error.message || 'Server error' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: error.message || 'Server error' },
+      { status: 500 },
+    );
   }
 }
