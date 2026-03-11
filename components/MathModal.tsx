@@ -204,7 +204,7 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent
-        className="sm:max-w-2xl"
+        className="z-[80] flex h-[100dvh] w-screen max-w-none flex-col overflow-hidden p-0 sm:h-auto sm:max-h-[min(88vh,760px)] sm:w-[min(92vw,960px)] sm:max-w-[960px]"
         aria-describedby="math-dialog-description"
         onPointerDownOutside={(event) => {
           const target = event.target as HTMLElement;
@@ -213,35 +213,36 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
           }
         }}
       >
-        <DialogHeader className="text-left">
-          <DialogTitle>Insert Math</DialogTitle>
+        <DialogHeader className="border-b border-border/60 bg-muted/20 px-4 py-3.5 pr-12 text-left sm:px-5 sm:pr-14">
+          <DialogTitle className="text-lg sm:text-xl">Insert Math</DialogTitle>
           <DialogDescription id="math-dialog-description">
             Enter or edit a LaTeX expression, preview it instantly, and insert it in inline or block mode.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5">
-          <div className="app-section space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">Math Mode</p>
-                <p className="text-sm text-muted-foreground">Choose how the expression should render in the editor.</p>
+        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto bg-muted/20 p-3 sm:p-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+          <div className="app-surface overflow-hidden shadow-none">
+            <div className="app-section-header py-3.5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Math Mode</p>
+                  <p className="text-sm text-muted-foreground">Choose how the expression should render in the editor.</p>
+                </div>
+                <ToggleGroup
+                  type="single"
+                  value={mode}
+                  onValueChange={(value) => {
+                    if (value === 'inline' || value === 'block') {
+                      setMode(value);
+                    }
+                  }}
+                >
+                  <ToggleGroupItem value="inline">Inline</ToggleGroupItem>
+                  <ToggleGroupItem value="block">Block</ToggleGroupItem>
+                </ToggleGroup>
               </div>
-              <ToggleGroup
-                type="single"
-                value={mode}
-                onValueChange={(value) => {
-                  if (value === 'inline' || value === 'block') {
-                    setMode(value);
-                  }
-                }}
-              >
-                <ToggleGroupItem value="inline">Inline</ToggleGroupItem>
-                <ToggleGroupItem value="block">Block</ToggleGroupItem>
-              </ToggleGroup>
             </div>
-
-            <div className="space-y-2">
+            <div className="app-section-body space-y-2.5">
               <label className="app-field-label">Expression</label>
               <div className="rounded-xl border border-border/60 bg-background px-3 py-3 shadow-sm">
                 {isMathLiveReady ? (
@@ -252,7 +253,7 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
                     className="app-form-textarea min-h-[96px] border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0"
                     value={latex}
                     onChange={handleTextareaChange}
-                    placeholder="e.g. \\frac{a}{b}"
+                    placeholder="e.g. \frac{a}{b}"
                   />
                 )}
               </div>
@@ -262,44 +263,50 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
             </div>
           </div>
 
-          <div className="app-section space-y-3">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">Preview</p>
-              <p className="text-sm text-muted-foreground">Verify the rendered output before inserting it.</p>
+          <div className="space-y-3">
+            <div className="app-surface overflow-hidden shadow-none">
+              <div className="app-section-header py-3.5">
+                <p className="text-sm font-medium text-foreground">Preview</p>
+                <p className="text-sm text-muted-foreground">Verify the rendered output before inserting it.</p>
+              </div>
+              <div className="app-section-body space-y-2.5">
+                <div
+                  className="min-h-[104px] rounded-xl border border-border/60 bg-background px-4 py-3 text-foreground"
+                  dangerouslySetInnerHTML={{
+                    __html: previewHtml || '<span class="text-sm text-muted-foreground">Start typing to preview the expression.</span>',
+                  }}
+                />
+                {error ? <p className="text-sm text-destructive">{error}</p> : null}
+              </div>
             </div>
-            <div
-              className="min-h-[72px] rounded-xl border border-border/60 bg-background px-4 py-3 text-foreground"
-              dangerouslySetInnerHTML={{
-                __html: previewHtml || '<span class="text-sm text-muted-foreground">Start typing to preview the expression.</span>',
-              }}
-            />
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          </div>
 
-          {recent.length > 0 ? (
-            <div className="app-section space-y-3">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Recent</p>
-                <p className="text-sm text-muted-foreground">Reuse one of your recently inserted expressions.</p>
+            {recent.length > 0 ? (
+              <div className="app-surface overflow-hidden shadow-none">
+                <div className="app-section-header py-3.5">
+                  <p className="text-sm font-medium text-foreground">Recent</p>
+                  <p className="text-sm text-muted-foreground">Reuse one of your recently inserted expressions.</p>
+                </div>
+                <div className="app-section-body">
+                  <div className="flex flex-wrap gap-2">
+                    {recent.map((item) => (
+                      <Button
+                        key={item}
+                        variant="outline"
+                        size="sm"
+                        className="max-w-full truncate font-mono text-xs"
+                        onClick={() => handleRecentClick(item)}
+                      >
+                        {item}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {recent.map((item) => (
-                  <Button
-                    key={item}
-                    variant="outline"
-                    size="sm"
-                    className="max-w-full font-mono text-xs"
-                    onClick={() => handleRecentClick(item)}
-                  >
-                    {item}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
 
-        <DialogFooter className="gap-2 pt-2">
+        <DialogFooter className="border-t border-border/60 bg-muted/10 px-4 py-3 sm:px-5">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>

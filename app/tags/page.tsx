@@ -105,7 +105,7 @@ export default function TagsListPage() {
   };
 
   return (
-    <div className="container py-6 space-y-6">
+    <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div>
           <h1 className="app-page-title">All Tags</h1>
@@ -154,11 +154,11 @@ export default function TagsListPage() {
               </div>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {tags.map((tag) => (
                 <Card key={tag._id} className="app-surface flex h-full flex-col overflow-hidden">
                   <CardContent className="flex h-full flex-col p-0">
-                    <div className="flex flex-1 flex-col gap-4 p-5">
+                    <div className="flex flex-1 flex-col gap-3 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                           <h2 className="text-base font-semibold text-foreground">{tag.name}</h2>
@@ -189,7 +189,7 @@ export default function TagsListPage() {
                       </div>
                     </div>
 
-                    <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-4">
+                    <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-3">
                       <Link href={buildReturnHref(`/tags/edit/${tag._id}`)} className="flex-1">
                         <Button variant="outline" size="sm" className="w-full" disabled={deletingTagId === tag._id}>
                           Edit

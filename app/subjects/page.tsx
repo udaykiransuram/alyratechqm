@@ -96,7 +96,7 @@ export default function ViewSubjectsPage() {
   }, [subjectToDeleteId, toast]);
 
   return (
-    <div className="container py-6 space-y-6">
+    <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
       <div className="app-page-header-row">
         <div>
           <h1 className="app-page-title">All Subjects</h1>
@@ -128,7 +128,7 @@ export default function ViewSubjectsPage() {
               </div>
             </div>
           ) : pageLoading ? (
-            <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {Array.from({ length: 6 }).map((_, index) => (
                 <SubjectItemSkeleton key={index} />
               ))}
@@ -143,7 +143,7 @@ export default function ViewSubjectsPage() {
               </div>
             </div>
           ) : (
-            <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {subjects.map((subject) => (
                 <SubjectItem
                   key={subject._id}
