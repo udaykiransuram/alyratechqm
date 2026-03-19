@@ -5,6 +5,7 @@ export function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname || "";
   const isApiRoute = path.startsWith("/api/");
   const isAuthRoute = path.startsWith("/auth/signin");
+  const isRegisterRoute = path.startsWith("/register");
   const isStaticAsset =
     path.startsWith("/_next/") ||
     path.startsWith("/images/") ||
@@ -15,7 +16,13 @@ export function middleware(req: NextRequest) {
     req.cookies.get("next-auth.session-token")?.value ||
     req.cookies.get("__Secure-next-auth.session-token")?.value;
 
-  if (!sessionToken && !isApiRoute && !isAuthRoute && !isStaticAsset) {
+  if (
+    !sessionToken &&
+    !isApiRoute &&
+    !isAuthRoute &&
+    !isRegisterRoute &&
+    !isStaticAsset
+  ) {
     const signInUrl = new URL("/auth/signin", req.url);
     signInUrl.searchParams.set("callbackUrl", req.url);
     return NextResponse.redirect(signInUrl);
