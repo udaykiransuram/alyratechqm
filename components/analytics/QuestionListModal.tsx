@@ -105,7 +105,7 @@ export default function QuestionListModal({
           )
         ) : (
           <div className="text-xs italic text-muted-foreground">
-            Names hidden. Enable "Show names" to view.
+            Names hidden. Enable the Show names option to view.
           </div>
         )}
       </div>

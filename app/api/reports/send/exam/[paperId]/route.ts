@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
+import { requireTenantSession } from "@/lib/api-auth";
+import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
 
 function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
@@ -32,7 +34,9 @@ function hasExplicitSectionAccess(user: any, sectionId: string) {
   if (!sectionId) return false;
   if (user?.hasAllSections) return true;
   return Array.isArray(user?.academicSectionIds)
-    ? user.academicSectionIds.some((candidate: any) => toIdString(candidate) === sectionId)
+    ? user.academicSectionIds.some(
+        (candidate: any) => toIdString(candidate) === sectionId,
+      )
     : false;
 }
 
@@ -41,13 +45,12 @@ export async function POST(
   { params }: { params: { paperId: string } },
 ) {
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+  const { schoolKey } = auth;
+  const requestCookies = req.headers.get("cookie") || "";
 
   if (!process.env.WHATSAPP_ACCESS_TOKEN) {
     return NextResponse.json(
@@ -72,7 +75,10 @@ export async function POST(
 
   const academicSectionId =
     new URL(req.url).searchParams.get("academicSectionId")?.trim() || "";
-  if (academicSectionId && !mongoose.Types.ObjectId.isValid(academicSectionId)) {
+  if (
+    academicSectionId &&
+    !mongoose.Types.ObjectId.isValid(academicSectionId)
+  ) {
     return NextResponse.json(
       { success: false, message: "Invalid academicSectionId" },
       { status: 400 },
@@ -128,7 +134,9 @@ export async function POST(
   let selectedAcademicSectionDoc: any = null;
 
   if (academicSectionId) {
-    selectedAcademicSectionDoc = await AcademicSectionModel.findById(academicSectionId)
+    selectedAcademicSectionDoc = await AcademicSectionModel.findById(
+      academicSectionId,
+    )
       .select("name class")
       .lean();
     if (!selectedAcademicSectionDoc) {
@@ -141,7 +149,8 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          message: "Selected class section does not belong to this paper's class",
+          message:
+            "Selected class section does not belong to this paper's class",
         },
         { status: 400 },
       );
@@ -175,20 +184,28 @@ export async function POST(
   let studentQueued = 0;
   let studentAlreadyQueued = 0;
   const studentFailures: string[] = [];
+  const queuedJobIds = new Set<string>();
   const baseUrl = new URL(req.url).origin;
 
   for (const response of responses as any[]) {
     try {
       const res = await fetch(
-        `${baseUrl}/api/reports/send/student/${response._id}?school=${encodeURIComponent(schoolKey)}`,
+        `${baseUrl}/api/reports/send/student/${response._id}?school=${encodeURIComponent(schoolKey)}&triggerWorker=0`,
         {
           method: "POST",
-          headers: { "x-school-key": schoolKey },
+          headers: {
+            "x-school-key": schoolKey,
+            ...(requestCookies ? { cookie: requestCookies } : {}),
+          },
         },
       );
       const data = await res.json();
       if (res.ok && data?.success) {
-        if (data?.message === "Report already queued") studentAlreadyQueued += 1;
+        if (data?.deliveryStatus === "queued" && data?.jobId) {
+          queuedJobIds.add(String(data.jobId));
+        }
+        if (data?.message === "Report already queued")
+          studentAlreadyQueued += 1;
         else studentQueued += 1;
       } else {
         studentFailures.push(String(response._id));
@@ -198,7 +215,9 @@ export async function POST(
     }
   }
 
-  const assignedAcademicSectionIds = Array.isArray(paperObj?.assignedAcademicSections)
+  const assignedAcademicSectionIds = Array.isArray(
+    paperObj?.assignedAcademicSections,
+  )
     ? paperObj.assignedAcademicSections
         .map((section: any) => toIdString(section))
         .filter(Boolean)
@@ -265,9 +284,13 @@ export async function POST(
   const recipientFailures: string[] = [];
 
   for (const recipient of recipients as any[]) {
-    const normalizedMobile = normalizeMobileNumber(recipient?.mobileNumber || "");
+    const normalizedMobile = normalizeMobileNumber(
+      recipient?.mobileNumber || "",
+    );
     if (!normalizedMobile) {
-      recipientFailures.push(`${recipient?.role || "user"}:${recipient?._id || "unknown"}`);
+      recipientFailures.push(
+        `${recipient?.role || "user"}:${recipient?._id || "unknown"}`,
+      );
       continue;
     }
 
@@ -282,7 +305,9 @@ export async function POST(
     } else {
       const allowedSectionIds = new Set(
         Array.isArray(recipient?.academicSectionIds)
-          ? recipient.academicSectionIds.map((sectionId: any) => toIdString(sectionId))
+          ? recipient.academicSectionIds.map((sectionId: any) =>
+              toIdString(sectionId),
+            )
           : [],
       );
       scopes = paperSectionDocs.filter((sectionDoc) =>
@@ -297,7 +322,9 @@ export async function POST(
     for (const scope of scopes) {
       const isTeacher = recipient.role === "teacher";
       const queuedField = isTeacher ? "teacherQueued" : "adminQueued";
-      const alreadyField = isTeacher ? "teacherAlreadyQueued" : "adminAlreadyQueued";
+      const alreadyField = isTeacher
+        ? "teacherAlreadyQueued"
+        : "adminAlreadyQueued";
       const dedupeQuery: Record<string, any> = {
         schoolKey,
         type: recipient.role,
@@ -315,14 +342,18 @@ export async function POST(
         ];
       }
 
-      const existingQueued = await ReportDispatchJob.findOne(dedupeQuery).lean();
+      const existingQueued =
+        await ReportDispatchJob.findOne(dedupeQuery).lean();
       if (existingQueued) {
+        if (existingQueued.status === "queued" && existingQueued._id) {
+          queuedJobIds.add(String(existingQueued._id));
+        }
         if (alreadyField === "teacherAlreadyQueued") teacherAlreadyQueued += 1;
         else adminAlreadyQueued += 1;
         continue;
       }
 
-      await ReportDispatchJob.create({
+      const queuedJob = await ReportDispatchJob.create({
         schoolKey,
         type: recipient.role,
         student: recipient._id,
@@ -339,6 +370,7 @@ export async function POST(
         maxAttempts: 3,
         nextRetryAt: new Date(),
       });
+      queuedJobIds.add(String(queuedJob._id));
 
       if (queuedField === "teacherQueued") teacherQueued += 1;
       else adminQueued += 1;
@@ -349,6 +381,19 @@ export async function POST(
   const alreadyQueued =
     studentAlreadyQueued + teacherAlreadyQueued + adminAlreadyQueued;
   const failedCount = studentFailures.length + recipientFailures.length;
+  let workerResult = null;
+
+  if (queuedJobIds.size > 0) {
+    try {
+      workerResult = await runReportDispatchWorker({
+        origin: req.nextUrl.origin,
+        schoolKey,
+        jobIds: Array.from(queuedJobIds),
+      });
+    } catch (error) {
+      console.error("Failed to auto-trigger report worker", error);
+    }
+  }
 
   return NextResponse.json({
     success: queued > 0 || alreadyQueued > 0,
@@ -364,5 +409,6 @@ export async function POST(
     failedResponseIds: studentFailures,
     failedRecipients: recipientFailures,
     academicSection: academicSectionName || undefined,
+    worker: workerResult,
   });
 }

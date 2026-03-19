@@ -7,8 +7,9 @@ import {
   hydrateAcademicSectionsWithClasses,
   hydrateUsersWithAcademicContext,
 } from "@/lib/analytics/hydrateResponses";
+import { requireTenantSession } from "@/lib/api-auth";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
@@ -23,18 +24,19 @@ function resolveSchoolKey(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+  const { schoolKey } = auth;
 
   const status = req.nextUrl.searchParams.get("status");
   const academicSectionId =
     req.nextUrl.searchParams.get("academicSectionId")?.trim() || "";
-  if (academicSectionId && !mongoose.Types.ObjectId.isValid(academicSectionId)) {
+  if (
+    academicSectionId &&
+    !mongoose.Types.ObjectId.isValid(academicSectionId)
+  ) {
     return NextResponse.json(
       { success: false, message: "Invalid academicSectionId" },
       { status: 400 },
@@ -55,18 +57,11 @@ export async function GET(req: NextRequest) {
     jobs,
   ] = await Promise.all([
     getTenantModels(schoolKey, ["User", "AcademicSection", "Class"]),
-    ReportDispatchJob.find(query)
-      .sort({ updatedAt: -1 })
-      .limit(500)
-      .lean(),
+    ReportDispatchJob.find(query).sort({ updatedAt: -1 }).limit(500).lean(),
   ]);
 
   const studentIds = Array.from(
-    new Set(
-      jobs
-        .map((job: any) => String(job.student || ""))
-        .filter(Boolean),
-    ),
+    new Set(jobs.map((job: any) => String(job.student || "")).filter(Boolean)),
   );
 
   const rawUsers = studentIds.length
@@ -81,9 +76,7 @@ export async function GET(req: NextRequest) {
     ClassModel,
   });
 
-  const userMap = new Map(
-    users.map((user: any) => [String(user._id), user]),
-  );
+  const userMap = new Map(users.map((user: any) => [String(user._id), user]));
 
   const rawSections = await AcademicSectionModel.find({})
     .select("name class")

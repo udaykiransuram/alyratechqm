@@ -2,14 +2,23 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import bcrypt from "bcryptjs";
+import { NextRequest } from "next/server";
+import { requireTenantSession } from "@/lib/api-auth";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const auth = await requireTenantSession(request, {
+    allowRoles: ["admin"],
+    requireSchoolKey: false,
+  });
+  if (!auth.ok) return auth.response;
+  const { schoolKey: sessionSchoolKey } = auth;
   const {
-    schoolKey,
+    schoolKey: requestedSchoolKey,
     email,
     password,
     name = "Admin User",
   } = await request.json();
+  const schoolKey = String(requestedSchoolKey || sessionSchoolKey || "").trim();
   if (!schoolKey || !email || !password) {
     return NextResponse.json(
       { error: "Missing required fields" },

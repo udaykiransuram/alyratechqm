@@ -173,7 +173,7 @@ export default function ManageClassesPage() {
                               <AlertDialogTitle>Archive class?</AlertDialogTitle>
                               <AlertDialogDescription>
                                 This action cannot be undone. This will archive the class
-                                <strong className="mx-1">"{c.name}"</strong>.
+                                <strong className="mx-1">&ldquo;{c.name}&rdquo;</strong>.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>

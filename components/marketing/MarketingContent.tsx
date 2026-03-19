@@ -4,6 +4,7 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import React from 'react'
+import { COMPANY_NAME } from '@/lib/seo'
 
 const fadeUp = {
   initial: { opacity: 0, y: 24 },
@@ -55,7 +56,7 @@ export default function MarketingContent(){
         <div className="grid md:grid-cols-2 gap-10 items-center">
           <div>
             <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">Beyond Marks: Nurturing Growth and Understanding</h1>
-            <p className="mt-4 text-lg text-muted-foreground">Built by IITians & NITians — a precision diagnostic platform that reveals the <strong>why</strong> behind scores and drives targeted learning.</p>
+            <p className="mt-4 text-lg text-muted-foreground">Built by {COMPANY_NAME} with IITians & NITians — a precision diagnostic platform that reveals the <strong>why</strong> behind scores and drives targeted learning.</p>
             <div className="mt-6 flex gap-3">
               <Link href="#contact" className="inline-flex items-center rounded-md bg-primary px-5 py-2.5 font-medium text-primary-foreground hover:opacity-90">Talk to us</Link>
               <Link href="#framework" className="inline-flex items-center rounded-md border px-5 py-2.5 font-medium hover:bg-accent">How it works</Link>
@@ -189,7 +190,7 @@ export default function MarketingContent(){
           <h2 className="text-2xl md:text-3xl font-bold">Marks don’t build futures. Diagnosis does.</h2>
           <p className="mt-3 text-muted-foreground">Ready to transform your classrooms with precision diagnostics?</p>
           <div className="mt-6 flex flex-col md:flex-row gap-3 justify-center">
-            <a href="mailto:info@yourcompany.com" className="inline-flex items-center rounded-md bg-primary px-5 py-2.5 font-medium text-primary-foreground hover:opacity-90">Contact us</a>
+            <Link href="/" className="inline-flex items-center rounded-md bg-primary px-5 py-2.5 font-medium text-primary-foreground hover:opacity-90">Explore homepage</Link>
             <Link href="/register" className="inline-flex items-center rounded-md border px-5 py-2.5 font-medium hover:bg-accent">Get Started</Link>
           </div>
         </div>

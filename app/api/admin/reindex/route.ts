@@ -1,21 +1,24 @@
-
-export const runtime = 'nodejs';
-import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import { connectDB } from '@/lib/db';
-import School from '@/models/School';
-import { getTenantDb } from '@/lib/db-tenant';
-import { ensureIndexesForTenantDbName, dbNameForSchool } from '@/lib/admin/indexing';
+export const runtime = "nodejs";
+import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
+import { connectDB } from "@/lib/db";
+import School from "@/models/School";
+import { getTenantDb } from "@/lib/db-tenant";
+import {
+  ensureIndexesForTenantDbName,
+  dbNameForSchool,
+} from "@/lib/admin/indexing";
+import { requireTenantSession } from "@/lib/api-auth";
 export async function POST(req: NextRequest) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin"],
+    requireSchoolKey: false,
+  });
+  if (!auth.ok) return auth.response;
   await connectDB();
-  const adminSecret = process.env.ADMIN_INDEX_SECRET || process.env.ADMIN_SECRET || '';
-  const hdr = req.headers.get('x-admin-secret') || '';
-  if (!adminSecret || hdr !== adminSecret) {
-    return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
-  }
   try {
     const body = await req.json().catch(() => ({}));
-    const schoolKey = body?.schoolKey ? String(body.schoolKey) : '';
+    const schoolKey = body?.schoolKey ? String(body.schoolKey) : "";
     const all = !!body?.all;
     const out: Record<string, any> = {};
     if (all) {
@@ -29,10 +32,16 @@ export async function POST(req: NextRequest) {
       const dbn = dbNameForSchool(schoolKey);
       out[schoolKey] = await ensureIndexesForTenantDbName(dbn);
     } else {
-      return NextResponse.json({ success: false, message: 'Provide schoolKey or set all=true' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "Provide schoolKey or set all=true" },
+        { status: 400 },
+      );
     }
     return NextResponse.json({ success: true, results: out });
   } catch (e: any) {
-    return NextResponse.json({ success: false, message: e?.message || 'failed' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: e?.message || "failed" },
+      { status: 500 },
+    );
   }
 }

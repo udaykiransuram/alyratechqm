@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { buildArchiveFilter, resolveIncludeArchived } from "@/lib/archive";
+import { requireTenantSession } from "@/lib/api-auth";
+import { recordTenantAudit } from "@/lib/audit";
 import "@/models/QuestionPaperResponse";
 import "@/models/Class";
 import "@/models/Subject";
@@ -66,20 +68,16 @@ async function validateAssignedAcademicSections(
 
 export async function POST(req: NextRequest) {
   await connectDB();
-
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey as string;
+  const actorId = auth.session.user.id;
 
   try {
-    const {
-      QuestionPaper: QPModel,
-      AcademicSection: AcademicSectionModel,
-    } = await getTenantModels(schoolKey, ["QuestionPaper", "AcademicSection"]);
+    const { QuestionPaper: QPModel, AcademicSection: AcademicSectionModel } =
+      await getTenantModels(schoolKey, ["QuestionPaper", "AcademicSection"]);
 
     const body = await req.json();
     const {
@@ -180,6 +178,18 @@ export async function POST(req: NextRequest) {
       totalMarks,
       sections,
       assignedAcademicSections: assignmentValidation.ids,
+      createdBy: actorId,
+    });
+
+    await recordTenantAudit({
+      schoolKey,
+      req,
+      entityType: "question_paper",
+      entityId: String(paper._id),
+      entityLabel: String(paper.title || title),
+      action: "created",
+      summary: `Created question paper ${title}.`,
+      details: { paperId: String(paper._id) },
     });
 
     return NextResponse.json({ success: true, paper }, { status: 201 });
@@ -193,14 +203,11 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   await connectDB();
-
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey as string;
 
   try {
     const {
@@ -213,7 +220,9 @@ export async function GET(req: NextRequest) {
       "AcademicSection",
     ]);
 
-    const papers = await QPModel.find(buildArchiveFilter(resolveIncludeArchived(req.nextUrl)))
+    const papers = await QPModel.find(
+      buildArchiveFilter(resolveIncludeArchived(req.nextUrl)),
+    )
       .select(
         "title class totalMarks sections assignedAcademicSections createdAt updatedAt",
       )

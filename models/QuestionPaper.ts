@@ -146,8 +146,6 @@ const QuestionPaperSchema = new Schema<IQuestionPaper>(
       type: Schema.Types.ObjectId,
       ref: "User", // Assuming you have a 'User' model
       required: true,
-      // TODO: Remove this default value and handle createdBy in the API route with actual user data
-      default: "6699fe7922c2dcf55980630a",
     },
   },
   {

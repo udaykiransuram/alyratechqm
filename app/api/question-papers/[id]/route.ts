@@ -3,8 +3,13 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import { buildArchiveFilter, buildArchivedUpdate, resolveIncludeArchived } from "@/lib/archive";
+import {
+  buildArchiveFilter,
+  buildArchivedUpdate,
+  resolveIncludeArchived,
+} from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
+import { requireTenantSession } from "@/lib/api-auth";
 
 function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
@@ -63,13 +68,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey as string;
 
   try {
     await connectDB();
@@ -91,7 +94,10 @@ export async function GET(
       "AcademicSection",
     ]);
 
-    const paper = await QPModel.findOne({ _id: params.id, ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)) })
+    const paper = await QPModel.findOne({
+      _id: params.id,
+      ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)),
+    })
       .populate({ path: "class", model: ClassModel })
       .populate({ path: "subject", model: SubjectModel })
       .populate({
@@ -131,20 +137,15 @@ export async function PUT(
   { params }: { params: { id: string } },
 ) {
   await connectDB();
-
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey as string;
 
   try {
-    const {
-      QuestionPaper: QPModel,
-      AcademicSection: AcademicSectionModel,
-    } = await getTenantModels(schoolKey, ["QuestionPaper", "AcademicSection"]);
+    const { QuestionPaper: QPModel, AcademicSection: AcademicSectionModel } =
+      await getTenantModels(schoolKey, ["QuestionPaper", "AcademicSection"]);
 
     const data = await req.json();
     const {
@@ -248,6 +249,17 @@ export async function PUT(
       );
     }
 
+    await recordTenantAudit({
+      schoolKey,
+      req,
+      entityType: "question_paper",
+      entityId: String(updated._id),
+      entityLabel: String(updated.title || title),
+      action: "updated",
+      summary: `Updated question paper ${updated.title || title}.`,
+      details: { paperId: String(updated._id) },
+    });
+
     return NextResponse.json({ success: true, paper: updated });
   } catch (error: any) {
     return NextResponse.json(
@@ -262,17 +274,13 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   await connectDB();
+  const auth = await requireTenantSession(req, { allowRoles: ["admin"] });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey as string;
 
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
-
-  const { QuestionPaper: QPModel } =
-    await getTenantModels(schoolKey, ["QuestionPaper"]);
+  const { QuestionPaper: QPModel } = await getTenantModels(schoolKey, [
+    "QuestionPaper",
+  ]);
 
   try {
     const archived = await QPModel.findOneAndUpdate(
@@ -290,10 +298,10 @@ export async function DELETE(
     await recordTenantAudit({
       schoolKey,
       req,
-      entityType: 'question_paper',
+      entityType: "question_paper",
       entityId: String(archived._id),
-      entityLabel: String(archived.title || ''),
-      action: 'archived',
+      entityLabel: String(archived.title || ""),
+      action: "archived",
       summary: `Archived question paper ${archived.title}.`,
       details: { paperId: String(archived._id) },
     });
