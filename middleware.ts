@@ -2,6 +2,25 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(req: NextRequest) {
+  const path = req.nextUrl.pathname || "";
+  const isApiRoute = path.startsWith("/api/");
+  const isAuthRoute = path.startsWith("/auth/signin");
+  const isStaticAsset =
+    path.startsWith("/_next/") ||
+    path.startsWith("/images/") ||
+    path.startsWith("/fonts/") ||
+    path.startsWith("/public/") ||
+    /\.[a-zA-Z0-9]+$/.test(path);
+  const sessionToken =
+    req.cookies.get("next-auth.session-token")?.value ||
+    req.cookies.get("__Secure-next-auth.session-token")?.value;
+
+  if (!sessionToken && !isApiRoute && !isAuthRoute && !isStaticAsset) {
+    const signInUrl = new URL("/auth/signin", req.url);
+    signInUrl.searchParams.set("callbackUrl", req.url);
+    return NextResponse.redirect(signInUrl);
+  }
+
   const schoolKey = req.cookies.get("schoolKey")?.value;
   const headers = new Headers(req.headers);
   if (schoolKey) {
@@ -9,7 +28,6 @@ export function middleware(req: NextRequest) {
   }
   // Simple in-memory rate limiter for analytics APIs (best-effort; not durable across serverless instances)
   try {
-    const path = req.nextUrl.pathname || "";
     const shouldRateLimit =
       path.startsWith("/api/analytics/") || path.startsWith("/api/reports/");
     if (shouldRateLimit) {
@@ -47,7 +65,6 @@ export function middleware(req: NextRequest) {
     "camera=(), microphone=(), geolocation=()",
   );
   res.headers.set("Referrer-Policy", "no-referrer");
-  const path = req.nextUrl.pathname || "";
   if (!path.startsWith("/api/analytics/")) {
     const csp = [
       "default-src 'self'",
@@ -65,5 +82,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
