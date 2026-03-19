@@ -1,9 +1,20 @@
-export const dynamic = 'force-dynamic';
+import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { connectDB } from '@/lib/db';
 import { getTenantDb } from '@/lib/db-tenant';
 import '@/models/Registration';
 import { getSchoolKeyFromServerCookies } from '@/lib/server/school';
+
+export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: 'Registration Status',
+  description: 'Registration confirmation details for completed orders.',
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 function SuccessState({
   title,

@@ -3,8 +3,13 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import { buildArchiveFilter, buildArchivedUpdate, resolveIncludeArchived } from "@/lib/archive";
+import {
+  buildArchiveFilter,
+  buildArchivedUpdate,
+  resolveIncludeArchived,
+} from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
+import { requireTenantSession } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -81,13 +86,11 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey as string;
 
   try {
     const userId = params.id;
@@ -98,7 +101,10 @@ export async function GET(
       );
     }
     const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
-    const user = await UserModel.findOne({ _id: userId, ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)) }).select("-passwordHash");
+    const user = await UserModel.findOne({
+      _id: userId,
+      ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)),
+    }).select("-passwordHash");
     if (!user) {
       return NextResponse.json(
         { success: false, message: "User not found" },
@@ -119,13 +125,11 @@ export async function PUT(
   { params }: { params: { id: string } },
 ) {
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin"],
+  });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey as string;
 
   try {
     const userId = params.id;
@@ -166,9 +170,7 @@ export async function PUT(
     const normalizedSubjectIds = normalizeIds(subjectIds);
     const allowAllClasses = Boolean(hasAllClasses);
     const allowAllSections =
-      typeof hasAllSections === "boolean"
-        ? hasAllSections
-        : role !== "student";
+      typeof hasAllSections === "boolean" ? hasAllSections : role !== "student";
     const allowAllSubjects = Boolean(hasAllSubjects);
 
     if (!name || !role) {
@@ -219,10 +221,8 @@ export async function PUT(
       );
     }
 
-    const {
-      User: UserModel,
-      AcademicSection: AcademicSectionModel,
-    } = await getTenantModels(schoolKey, ["User", "AcademicSection"]);
+    const { User: UserModel, AcademicSection: AcademicSectionModel } =
+      await getTenantModels(schoolKey, ["User", "AcademicSection"]);
 
     if (role === "student" && classId && academicSectionId) {
       const sectionValidation = await validateStudentAcademicSection(
@@ -233,9 +233,15 @@ export async function PUT(
       if (!sectionValidation.ok) return sectionValidation.response;
     }
 
-    const userToUpdate = await UserModel.findOne({ _id: userId, ...buildArchiveFilter(false) });
+    const userToUpdate = await UserModel.findOne({
+      _id: userId,
+      ...buildArchiveFilter(false),
+    });
     if (userToUpdate && userToUpdate.role === "admin" && role !== "admin") {
-      const adminCount = await UserModel.countDocuments({ role: "admin", ...buildArchiveFilter(false) });
+      const adminCount = await UserModel.countDocuments({
+        role: "admin",
+        ...buildArchiveFilter(false),
+      });
       if (adminCount <= 1) {
         return NextResponse.json(
           {
@@ -314,10 +320,14 @@ export async function PUT(
       updateData.hasAllSubjects = role === "admin" ? allowAllSubjects : false;
     }
 
-    const updatedUser = await UserModel.findOneAndUpdate({ _id: userId, ...buildArchiveFilter(false) }, updateData, {
-      new: true,
-      runValidators: true,
-    }).select("-passwordHash");
+    const updatedUser = await UserModel.findOneAndUpdate(
+      { _id: userId, ...buildArchiveFilter(false) },
+      updateData,
+      {
+        new: true,
+        runValidators: true,
+      },
+    ).select("-passwordHash");
 
     if (!updatedUser) {
       return NextResponse.json(
@@ -340,13 +350,11 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin"],
+  });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey as string;
 
   try {
     const userId = params.id;
@@ -361,7 +369,10 @@ export async function DELETE(
 
     const userToDelete = await UserModel.findById(userId);
     if (userToDelete && userToDelete.role === "admin") {
-      const adminCount = await UserModel.countDocuments({ role: "admin", ...buildArchiveFilter(false) });
+      const adminCount = await UserModel.countDocuments({
+        role: "admin",
+        ...buildArchiveFilter(false),
+      });
       if (adminCount <= 1) {
         return NextResponse.json(
           { success: false, message: "Cannot delete the last administrator." },

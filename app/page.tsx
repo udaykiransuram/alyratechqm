@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import {
+  COMPANY_NAME,
+  HOME_DESCRIPTION,
+  PRODUCT_NAME,
+  SITE_KEYWORDS,
+  getAbsoluteUrl,
+} from "@/lib/seo";
 
 // Remove 'use client' for static optimization and SEO, since no client-only logic is needed
 
@@ -69,27 +76,27 @@ const uniqueFeatures = [
   },
 ];
 
-const importantDates = [
+const importantMilestones = [
   {
-    label: "Registrations Open",
-    date: "Jul 10",
-    year: "2025",
+    label: "Registration Window",
+    date: "Open Now",
+    year: "Check the latest school announcement",
     color: "border-amber-400",
     textColor: "text-amber-300",
     dateColor: "text-amber-100",
   },
   {
-    label: "Last Day to Register",
-    date: "Aug 15",
-    year: "2025",
+    label: "Exam Schedule",
+    date: "Shared After Registration",
+    year: "Exact dates are announced by the organizing team",
     color: "border-blue-400",
     textColor: "text-blue-300",
     dateColor: "text-blue-100",
   },
   {
-    label: "Test Week Commences",
-    date: "Sept 1-7",
-    year: "2025",
+    label: "Results & Insights",
+    date: "Post Assessment",
+    year: "Reports, rankings, and guidance follow completion",
     color: "border-emerald-400",
     textColor: "text-emerald-300",
     dateColor: "text-emerald-100",
@@ -98,21 +105,27 @@ const importantDates = [
 
 // Add metadata for SEO (Next.js app directory)
 export const metadata: Metadata = {
-  title: "Young Scholars Talent Test | Ignite Brilliance. Master Tomorrow.",
-  description:
-    "A national-level STEM talent assessment for Classes 1-10. Register now for holistic evaluation, AI-powered analytics, and exclusive awards.",
+  title: PRODUCT_NAME,
+  description: HOME_DESCRIPTION,
+  keywords: SITE_KEYWORDS,
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   openGraph: {
-    title: "Young Scholars Talent Test",
-    description:
-      "A national-level STEM talent assessment for Classes 1-10. Register now for holistic evaluation, AI-powered analytics, and exclusive awards.",
+    title: `${PRODUCT_NAME} | ${COMPANY_NAME}`,
+    description: HOME_DESCRIPTION,
     url: "/",
-    siteName: "Young Scholars Talent Initiative",
+    siteName: COMPANY_NAME,
     images: [
       {
-        url: "/og-image.png",
+        url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "Young Scholars Talent Test",
+        alt: `${PRODUCT_NAME} by ${COMPANY_NAME}`,
       },
     ],
     locale: "en_IN",
@@ -120,22 +133,51 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Young Scholars Talent Test",
-    description:
-      "A national-level STEM talent assessment for Classes 1-10. Register now for holistic evaluation, AI-powered analytics, and exclusive awards.",
-    images: ["/og-image.png"],
+    title: `${PRODUCT_NAME} | ${COMPANY_NAME}`,
+    description: HOME_DESCRIPTION,
+    images: ["/opengraph-image"],
   },
 };
 
 export default function TalentTestLandingPage() {
+  const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: COMPANY_NAME,
+    url: getAbsoluteUrl("/"),
+    brand: {
+      "@type": "Brand",
+      name: PRODUCT_NAME,
+    },
+    description: HOME_DESCRIPTION,
+  };
+
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: `${PRODUCT_NAME} | ${COMPANY_NAME}`,
+    url: getAbsoluteUrl("/"),
+    description: HOME_DESCRIPTION,
+  };
+
   // Remove useState/useEffect for fade-in for static optimization and SEO
   // If you want animation, use CSS only (e.g., animate-fade-in class with Tailwind or custom CSS)
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white font-inter antialiased">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([organizationSchema, websiteSchema]),
+        }}
+      />
+
       {/* Hero Section */}
       <section className="relative z-10 flex flex-col items-center justify-center min-h-[90vh] py-28 px-4 text-white bg-gradient-to-br from-blue-950 via-indigo-950 to-purple-950">
         <div className="max-w-7xl mx-auto text-center animate-fade-in">
+          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.35em] text-cyan-200">
+            {COMPANY_NAME}
+          </p>
           <h1 className="text-5xl lg:text-7xl font-extrabold mb-6 leading-tight tracking-tight">
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
               Ignite Brilliance.
@@ -145,7 +187,7 @@ export default function TalentTestLandingPage() {
             </span>
           </h1>
           <p className="text-xl lg:text-2xl mb-12">
-            A talent assessment designed for young innovators from{" "}
+            {PRODUCT_NAME} by {COMPANY_NAME} is designed for young innovators from{" "}
             <strong>Class 1st to 10th</strong>
           </p>
           <Link href="/register" prefetch>
@@ -229,10 +271,10 @@ export default function TalentTestLandingPage() {
       <section className="py-24 px-4 sm:px-8 bg-neutral-900 text-white">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-4xl font-extrabold text-center mb-16">
-            Key Dates
+            Registration Journey
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            {importantDates.map((item, index) => (
+            {importantMilestones.map((item, index) => (
               <div
                 key={index}
                 className={`p-8 rounded-2xl bg-neutral-800 shadow-xl border-t-4 ${item.color}`}
@@ -288,7 +330,7 @@ export default function TalentTestLandingPage() {
       {/* Footer */}
       <footer className="bg-neutral-900 text-white text-center py-12 px-4 border-t border-neutral-700">
         <p className="text-lg mb-3">
-          &copy; {new Date().getFullYear()} Young Scholars Talent Initiative
+          &copy; {new Date().getFullYear()} {COMPANY_NAME} • {PRODUCT_NAME}
         </p>
         <p className="text-sm text-gray-400">
           Shaping the future through foundational knowledge and innovation.

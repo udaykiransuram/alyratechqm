@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
-    .toString()
-    .trim();
-}
+import { buildArchiveFilter } from "@/lib/archive";
+import { requireTenantSession } from "@/lib/api-auth";
+import { recordTenantAudit } from "@/lib/audit";
 
 function normalizeIds(value: unknown) {
   if (!Array.isArray(value)) return [] as string[];
@@ -33,6 +25,7 @@ async function validateAssignedAcademicSections(
     _id: { $in: assignedAcademicSectionIds },
     class: classId,
     isActive: true,
+    ...buildArchiveFilter(false),
   })
     .select("_id")
     .lean();
@@ -56,14 +49,12 @@ async function validateAssignedAcademicSections(
 
 export async function POST(req: NextRequest) {
   await connectDB();
-
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey;
+  const actorId = auth.session.user.id;
 
   const {
     QuestionPaper: QPModel,
@@ -187,6 +178,18 @@ export async function POST(req: NextRequest) {
         passingMarks,
         examDate,
         assignedAcademicSections: assignmentValidation.ids,
+        createdBy: actorId,
+      });
+
+      await recordTenantAudit({
+        schoolKey,
+        req,
+        entityType: "question_paper",
+        entityId: String(newPaper._id),
+        entityLabel: String(newPaper.title || title),
+        action: "created",
+        summary: `Created question paper copy ${newPaper.title || title}.`,
+        details: { paperId: String(newPaper._id), source: "copy_multiple" },
       });
 
       createdPapers.push(newPaper);

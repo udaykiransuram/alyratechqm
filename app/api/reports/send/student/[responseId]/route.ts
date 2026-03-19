@@ -3,6 +3,8 @@ import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import ReportDispatchJob from "../../../../../../models/ReportDispatchJob";
 import { hydrateResponsesWithStudents } from "@/lib/analytics/hydrateResponses";
+import { requireTenantSession } from "@/lib/api-auth";
+import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
 
 function normalizeMobileNumber(input: string): string {
   const digits = String(input || "").replace(/\D/g, "");
@@ -31,13 +33,14 @@ export async function POST(
   { params }: { params: { responseId: string } },
 ) {
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+    allowSchoolQueryFallback: true,
+  });
+  if (!auth.ok) return auth.response;
+  const { schoolKey } = auth;
+  const shouldTriggerWorker =
+    req.nextUrl.searchParams.get("triggerWorker") !== "0";
 
   // Fast-fail config issues so UI does not show misleading "sent"/"queued" state
   if (!process.env.WHATSAPP_ACCESS_TOKEN) {
@@ -122,6 +125,18 @@ export async function POST(
     .lean();
 
   if (existingQueued) {
+    if (shouldTriggerWorker && existingQueued.status === "queued") {
+      try {
+        await runReportDispatchWorker({
+          origin: req.nextUrl.origin,
+          schoolKey,
+          jobIds: [String(existingQueued._id)],
+        });
+      } catch (error) {
+        console.error("Failed to auto-trigger report worker", error);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       queued: true,
@@ -158,6 +173,18 @@ export async function POST(
     maxAttempts: 3,
     nextRetryAt: new Date(),
   });
+
+  if (shouldTriggerWorker) {
+    try {
+      await runReportDispatchWorker({
+        origin: req.nextUrl.origin,
+        schoolKey,
+        jobIds: [String(job._id)],
+      });
+    } catch (error) {
+      console.error("Failed to auto-trigger report worker", error);
+    }
+  }
 
   return NextResponse.json({
     success: true,

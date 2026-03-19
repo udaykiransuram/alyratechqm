@@ -3,8 +3,13 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import { buildArchiveFilter, buildRestoreUpdate, resolveIncludeArchived } from "@/lib/archive";
+import {
+  buildArchiveFilter,
+  buildRestoreUpdate,
+  resolveIncludeArchived,
+} from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
+import { requireTenantSession } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -77,13 +82,11 @@ async function validateStudentAcademicSection(
 }
 
 export async function GET(req: NextRequest) {
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey as string;
 
   try {
     await connectDB();
@@ -91,7 +94,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = url;
     const limitParam = Number(searchParams.get("limit") || "100");
     const pageParam = Number(searchParams.get("page") || "");
-    const limit = Math.min(Math.max(isNaN(limitParam) ? 100 : limitParam, 1), 500);
+    const limit = Math.min(
+      Math.max(isNaN(limitParam) ? 100 : limitParam, 1),
+      500,
+    );
     const page = !isNaN(pageParam) && pageParam > 0 ? pageParam : 1;
     const skip = (page - 1) * limit;
     const role = searchParams.get("role");
@@ -99,7 +105,9 @@ export async function GET(req: NextRequest) {
     const classId = searchParams.get("classId");
     const academicSectionId = searchParams.get("academicSectionId");
 
-    const query: any = { ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)) };
+    const query: any = {
+      ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)),
+    };
     if (role) query.role = role;
     if (rollNumber) query.rollNumber = rollNumber;
     if (classId) query.class = classId;
@@ -114,7 +122,14 @@ export async function GET(req: NextRequest) {
       .limit(limit)
       .lean();
     const pages = Math.max(1, Math.ceil(total / limit));
-    return NextResponse.json({ success: true, users, total, page, pages, limit });
+    return NextResponse.json({
+      success: true,
+      users,
+      total,
+      page,
+      pages,
+      limit,
+    });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },
@@ -125,19 +140,15 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin"],
+  });
+  if (!auth.ok) return auth.response;
+  const schoolKey = auth.schoolKey as string;
 
   try {
-    const {
-      User: UserModel,
-      AcademicSection: AcademicSectionModel,
-    } = await getTenantModels(schoolKey, ["User", "AcademicSection"]);
+    const { User: UserModel, AcademicSection: AcademicSectionModel } =
+      await getTenantModels(schoolKey, ["User", "AcademicSection"]);
 
     const body = await req.json();
     const name = String(body?.name || "").trim();
@@ -185,7 +196,10 @@ export async function POST(req: NextRequest) {
       );
     }
     if (role === "teacher") {
-      if (normalizedClassIds.length === 0 || normalizedSubjectIds.length === 0) {
+      if (
+        normalizedClassIds.length === 0 ||
+        normalizedSubjectIds.length === 0
+      ) {
         return NextResponse.json(
           {
             success: false,
@@ -229,7 +243,10 @@ export async function POST(req: NextRequest) {
       if (academicSectionId) {
         studentQuery.academicSection = academicSectionId;
       }
-      const existingStudent = await UserModel.findOne({ ...studentQuery, ...buildArchiveFilter(false) });
+      const existingStudent = await UserModel.findOne({
+        ...studentQuery,
+        ...buildArchiveFilter(false),
+      });
       if (existingStudent) {
         const { passwordHash: _, ...userResponse } = existingStudent.toObject();
         return NextResponse.json(
@@ -240,7 +257,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (email) {
-      const existingUser = await UserModel.findOne({ email, ...buildArchiveFilter(false) });
+      const existingUser = await UserModel.findOne({
+        email,
+        ...buildArchiveFilter(false),
+      });
       if (existingUser) {
         return NextResponse.json(
           { success: false, message: "A user with this email already exists." },
@@ -301,15 +321,18 @@ export async function POST(req: NextRequest) {
         await recordTenantAudit({
           schoolKey,
           req,
-          entityType: 'user',
+          entityType: "user",
           entityId: String(archivedStudent._id),
           entityLabel: name,
-          action: 'restored',
+          action: "restored",
           summary: `Restored user ${name}.`,
           details: { role },
         });
 
-        return NextResponse.json({ success: true, user: restoredStudent, existed: true }, { status: 200 });
+        return NextResponse.json(
+          { success: true, user: restoredStudent, existed: true },
+          { status: 200 },
+        );
       }
     }
 
@@ -326,15 +349,29 @@ export async function POST(req: NextRequest) {
             role,
             mobileNumber,
             class: role === "student" ? classId || undefined : undefined,
-            academicSection: role === "student" ? academicSectionId || undefined : undefined,
-            classIds: role === "teacher" || role === "admin" ? normalizedClassIds : undefined,
-            academicSectionIds: role === "teacher" || role === "admin" ? (allowAllSections ? [] : normalizedAcademicSectionIds) : undefined,
-            subjectIds: role === "teacher" || role === "admin" ? normalizedSubjectIds : undefined,
+            academicSection:
+              role === "student" ? academicSectionId || undefined : undefined,
+            classIds:
+              role === "teacher" || role === "admin"
+                ? normalizedClassIds
+                : undefined,
+            academicSectionIds:
+              role === "teacher" || role === "admin"
+                ? allowAllSections
+                  ? []
+                  : normalizedAcademicSectionIds
+                : undefined,
+            subjectIds:
+              role === "teacher" || role === "admin"
+                ? normalizedSubjectIds
+                : undefined,
             hasAllClasses: role === "admin" ? allowAllClasses : false,
-            hasAllSections: role === "teacher" || role === "admin" ? allowAllSections : false,
+            hasAllSections:
+              role === "teacher" || role === "admin" ? allowAllSections : false,
             hasAllSubjects: role === "admin" ? allowAllSubjects : false,
             rollNumber: role === "student" ? rollNumber : undefined,
-            enrolledAt: role === "student" ? enrolledAt || Date.now() : undefined,
+            enrolledAt:
+              role === "student" ? enrolledAt || Date.now() : undefined,
           },
           { new: true, runValidators: true },
         ).select("-passwordHash");
@@ -342,15 +379,18 @@ export async function POST(req: NextRequest) {
         await recordTenantAudit({
           schoolKey,
           req,
-          entityType: 'user',
+          entityType: "user",
           entityId: String(archivedUser._id),
           entityLabel: name,
-          action: 'restored',
+          action: "restored",
           summary: `Restored user ${name}.`,
           details: { role },
         });
 
-        return NextResponse.json({ success: true, user: restoredUser, existed: true }, { status: 200 });
+        return NextResponse.json(
+          { success: true, user: restoredUser, existed: true },
+          { status: 200 },
+        );
       }
     }
 
@@ -364,9 +404,7 @@ export async function POST(req: NextRequest) {
       academicSection:
         role === "student" ? academicSectionId || undefined : undefined,
       classIds:
-        role === "teacher" || role === "admin"
-          ? normalizedClassIds
-          : undefined,
+        role === "teacher" || role === "admin" ? normalizedClassIds : undefined,
       academicSectionIds:
         role === "teacher" || role === "admin"
           ? allowAllSections
@@ -399,7 +437,10 @@ export async function POST(req: NextRequest) {
       details: { role },
     });
 
-    return NextResponse.json({ success: true, user: userResponse }, { status: 201 });
+    return NextResponse.json(
+      { success: true, user: userResponse },
+      { status: 201 },
+    );
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },

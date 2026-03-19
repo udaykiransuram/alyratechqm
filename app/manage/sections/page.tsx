@@ -305,7 +305,9 @@ export default function ManageSectionsPage() {
                                 <AlertDialogTitle>Archive section?</AlertDialogTitle>
                                 <AlertDialogDescription>
                                   This action cannot be undone. This will archive the section
-                                  <strong className="mx-1">\"{section.name}\"</strong>.
+                                  <strong className="mx-1">
+                                    &ldquo;{section.name}&rdquo;
+                                  </strong>.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>

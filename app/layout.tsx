@@ -3,6 +3,12 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/toaster";
+import {
+  COMPANY_NAME,
+  HOME_DESCRIPTION,
+  PRODUCT_NAME,
+  getMetadataBase,
+} from "@/lib/seo";
 import "./globals.css";
 import SiteHeader from "@/components/navigation/SiteHeader";
 import AppViewport from "@/components/layout/AppViewport";
@@ -16,23 +22,35 @@ const inter = localFont({
   style: "normal",
 });
 
-const metadataBase = (() => {
-  const candidate =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXTAUTH_URL ||
-    "http://localhost:3000";
-
-  try {
-    return new URL(candidate);
-  } catch {
-    return new URL("http://localhost:3000");
-  }
-})();
+const metadataBase = getMetadataBase();
 
 export const metadata: Metadata = {
   metadataBase,
-  title: "Talent Test Platform",
-  description: "Create, manage, and administer question papers and tests.",
+  applicationName: PRODUCT_NAME,
+  title: {
+    default: PRODUCT_NAME,
+    template: `%s | ${COMPANY_NAME}`,
+  },
+  description: HOME_DESCRIPTION,
+  category: "education",
+  creator: COMPANY_NAME,
+  publisher: COMPANY_NAME,
+  formatDetection: {
+    address: false,
+    email: false,
+    telephone: false,
+  },
+  openGraph: {
+    locale: "en_IN",
+    siteName: COMPANY_NAME,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
+  },
 };
 
 export default function RootLayout({

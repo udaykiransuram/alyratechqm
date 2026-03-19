@@ -234,8 +234,9 @@ export default function ManageReportJobsPage() {
         <div className="space-y-1">
           <h1 className="text-2xl font-bold">Report Dispatch Jobs</h1>
           <p className="text-sm text-slate-600">
-            Class jobs use benchmark workbooks.
-            Student jobs use individual PDFs.
+            Jobs start processing automatically after they are queued. Use the
+            worker button as a manual fallback for backlog or retries. Class
+            jobs use benchmark workbooks. Student jobs use individual PDFs.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -287,7 +288,7 @@ export default function ManageReportJobsPage() {
           <Button variant="outline" onClick={loadJobs} disabled={loading}>
             Refresh
           </Button>
-          <Button onClick={runWorkerNow}>Run Worker</Button>
+          <Button onClick={runWorkerNow}>Run Worker Now</Button>
         </div>
       </div>
 

@@ -170,8 +170,10 @@ const sidebarGroups: SidebarGroup[] = [
       {
         label: "Reports",
         icon: BarChart2,
-        children: [{ href: "/manage/reports", label: "Report Jobs" },
-          { href: "/manage/audit-logs", label: "Audit Logs" }],
+        children: [
+          { href: "/manage/reports", label: "Report Jobs" },
+          { href: "/manage/audit-logs", label: "Audit Logs" },
+        ],
       },
       {
         label: "Schools",
@@ -182,7 +184,20 @@ const sidebarGroups: SidebarGroup[] = [
   },
   {
     title: "Analytics",
-    items: [],
+    items: [
+      {
+        label: "Analytics",
+        icon: BarChart2,
+        children: [
+          { href: "/analytics", label: "Overview" },
+          {
+            href: "/analytics/student-tag-report/excel-upload",
+            label: "Excel Upload",
+          },
+          { href: "/manage/reports", label: "Dispatch Jobs" },
+        ],
+      },
+    ],
   },
   {
     title: "Utilities",
@@ -218,7 +233,7 @@ function Brand() {
       </div>
       <div className="min-w-0">
         <p className="text-[13px] font-semibold tracking-wide">ALYRA TECH</p>
-        <p className="text-xs text-muted-foreground">Talent Test Platform</p>
+        <p className="text-xs text-muted-foreground">Young Scholars Talent Test</p>
       </div>
     </Link>
   );

@@ -1,25 +1,29 @@
-
-export const dynamic = 'force-dynamic';
-import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import { connectDB } from '@/lib/db';
-import { getTenantDb } from '@/lib/db-tenant';
+export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
+import { connectDB } from "@/lib/db";
+import { getTenantDb } from "@/lib/db-tenant";
+import { requireTenantSession } from "@/lib/api-auth";
 
 // Map logical names to actual MongoDB collection names
 const COLLECTIONS: Record<string, string> = {
-  tagtypes: 'tagtypes',
-  tags: 'tags',
-  classes: 'classes',
-  subjects: 'subjects',
-  questions: 'questions',
-  questionpapers: 'questionpapers',
-  users: 'users',
-  questionpaperresponses: 'questionpaperresponses',
+  tagtypes: "tagtypes",
+  tags: "tags",
+  classes: "classes",
+  subjects: "subjects",
+  questions: "questions",
+  questionpapers: "questionpapers",
+  users: "users",
+  questionpaperresponses: "questionpaperresponses",
 };
 
-async function migrateCollection(globalConn: mongoose.Connection, tenantConn: mongoose.Connection, collName: string) {
-  if (!globalConn.db) throw new Error('Global database not available');
-  if (!tenantConn.db) throw new Error('Tenant database not available');
+async function migrateCollection(
+  globalConn: mongoose.Connection,
+  tenantConn: mongoose.Connection,
+  collName: string,
+) {
+  if (!globalConn.db) throw new Error("Global database not available");
+  if (!tenantConn.db) throw new Error("Tenant database not available");
   const gcol = globalConn.db.collection(collName);
   const tcol = tenantConn.db.collection(collName);
   const total = await gcol.countDocuments();
@@ -30,7 +34,13 @@ async function migrateCollection(globalConn: mongoose.Connection, tenantConn: mo
   while (await cursor.hasNext()) {
     const doc = await cursor.next();
     if (!doc) break;
-    bulkOps.push({ updateOne: { filter: { _id: doc._id }, update: { $set: doc }, upsert: true } });
+    bulkOps.push({
+      updateOne: {
+        filter: { _id: doc._id },
+        update: { $set: doc },
+        upsert: true,
+      },
+    });
     if (bulkOps.length >= batchSize) {
       await tcol.bulkWrite(bulkOps, { ordered: false });
       copied += bulkOps.length;
@@ -45,15 +55,25 @@ async function migrateCollection(globalConn: mongoose.Connection, tenantConn: mo
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin"],
+    requireSchoolKey: false,
+  });
+  if (!auth.ok) return auth.response;
   await connectDB();
   try {
     const body = await req.json();
-    const schoolKey = (body?.schoolKey || '').toString().trim();
-    if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+    const schoolKey = (body?.schoolKey || "").toString().trim();
+    if (!schoolKey)
+      return NextResponse.json(
+        { success: false, message: "schoolKey required" },
+        { status: 400 },
+      );
     const copy = body?.copy !== false;
-    const collections: string[] = Array.isArray(body?.collections) && body.collections.length
-      ? body.collections
-      : Object.keys(COLLECTIONS);
+    const collections: string[] =
+      Array.isArray(body?.collections) && body.collections.length
+        ? body.collections
+        : Object.keys(COLLECTIONS);
     const wipe = !!body?.wipe; // if true, clears tenant collections before copy
 
     const tenantConn = await getTenantDb(schoolKey);
@@ -62,7 +82,7 @@ export async function POST(req: NextRequest) {
     const results: Record<string, any> = {};
 
     if (wipe) {
-      if (!tenantConn.db) throw new Error('Tenant database not available');
+      if (!tenantConn.db) throw new Error("Tenant database not available");
       for (const key of collections) {
         const collName = COLLECTIONS[key.toLowerCase()];
         if (!collName) continue;
@@ -70,7 +90,11 @@ export async function POST(req: NextRequest) {
           await tenantConn.db.collection(collName).deleteMany({});
           results[key] = { ...(results[key] || {}), wiped: true };
         } catch (e: any) {
-          results[key] = { ...(results[key] || {}), wiped: false, error: e?.message };
+          results[key] = {
+            ...(results[key] || {}),
+            wiped: false,
+            error: e?.message,
+          };
         }
       }
     }
@@ -88,8 +112,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, schoolKey, dbName: (tenantConn as any).db?.name, results, copy });
+    return NextResponse.json({
+      success: true,
+      schoolKey,
+      dbName: (tenantConn as any).db?.name,
+      results,
+      copy,
+    });
   } catch (e: any) {
-    return NextResponse.json({ success: false, message: e?.message || 'failed' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: e?.message || "failed" },
+      { status: 500 },
+    );
   }
 }

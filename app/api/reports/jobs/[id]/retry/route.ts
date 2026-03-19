@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import ReportDispatchJob from "../../../../../../models/ReportDispatchJob";
 import mongoose from "mongoose";
+import { requireTenantSession } from "@/lib/api-auth";
+import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
 
 function normalizeMobileNumber(input: string): string {
   const digits = String(input || "").replace(/\D/g, "");
@@ -28,13 +30,11 @@ export async function POST(
   { params }: { params: { id: string } },
 ) {
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+  const { schoolKey } = auth;
   if (!mongoose.Types.ObjectId.isValid(params.id)) {
     return NextResponse.json(
       { success: false, message: "Invalid job id" },
@@ -58,5 +58,16 @@ export async function POST(
   }
   await job.save();
 
-  return NextResponse.json({ success: true, jobId: job._id });
+  let workerResult = null;
+  try {
+    workerResult = await runReportDispatchWorker({
+      origin: req.nextUrl.origin,
+      schoolKey,
+      jobIds: [String(job._id)],
+    });
+  } catch (error) {
+    console.error("Failed to auto-trigger report worker", error);
+  }
+
+  return NextResponse.json({ success: true, jobId: job._id, worker: workerResult });
 }
