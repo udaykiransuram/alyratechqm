@@ -3,8 +3,15 @@ import mongoose from "mongoose";
 
 import { hydrateResponsesWithStudents } from "@/lib/analytics/hydrateResponses";
 import { buildArchiveFilter } from "@/lib/archive";
+import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { normalizeMatrixSelections } from "@/lib/question-paper/grading";
+import {
+  findStudentsByRollNumber,
+  normalizeRollNumber,
+} from "@/lib/user-credentials";
+import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +45,10 @@ function normalizeSelectedOptions(value: unknown) {
         .filter((item) => Number.isInteger(item) && Number.isFinite(item)),
     ),
   );
+}
+
+function hasAnyMatrixSelection(value: unknown) {
+  return normalizeMatrixSelections(value).some((row) => row.length > 0);
 }
 
 async function validateAcademicSection(
@@ -102,6 +113,28 @@ async function validateAcademicSection(
   return { ok: true, section } as const;
 }
 
+function matchesStudentPlacementForUpload(
+  student: {
+    class?: unknown;
+    academicSection?: unknown;
+  },
+  classId: string,
+  academicSectionId: string,
+) {
+  if (classId && String(student?.class || "") !== String(classId)) {
+    return false;
+  }
+
+  if (
+    academicSectionId &&
+    String(student?.academicSection || "") !== String(academicSectionId)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 function buildPaperSectionMap(paperDoc: any) {
   const sectionMap = new Map<
     string,
@@ -114,6 +147,8 @@ function buildPaperSectionMap(paperDoc: any) {
           type: string;
           optionCount: number;
           optionIndexes: Set<number>;
+          matrixRowCount: number;
+          matrixColumnIndexes: Set<number>;
         }
       >;
     }
@@ -130,12 +165,35 @@ function buildPaperSectionMap(paperDoc: any) {
           const optionCount = Array.isArray(questionDoc?.options)
             ? questionDoc.options.length
             : 0;
+          const matrixOptions = Array.isArray(questionDoc?.matrixOptions)
+            ? questionDoc.matrixOptions
+            : [];
+          const matrixAnswers = normalizeMatrixSelections(questionDoc?.matrixAnswers);
+          const matrixRows = matrixOptions
+            .map((option: any) => String(option?.left || "").trim())
+            .filter(Boolean);
+          const matrixColumns = matrixOptions
+            .map((option: any) => String(option?.right || "").trim())
+            .filter(Boolean);
+          const maxMatrixColumnIndex = matrixAnswers.reduce((max, row) => {
+            const rowMax = Array.isArray(row) && row.length > 0 ? Math.max(...row) : -1;
+            return Math.max(max, rowMax);
+          }, -1);
           questionMap.set(questionId, {
             questionId,
             type: String(questionDoc?.type || "single").trim() || "single",
             optionCount,
             optionIndexes: new Set(
               Array.from({ length: optionCount }, (_value, index) => index),
+            ),
+            matrixRowCount: Math.max(matrixRows.length, matrixAnswers.length),
+            matrixColumnIndexes: new Set(
+              Array.from(
+                {
+                  length: Math.max(matrixColumns.length, maxMatrixColumnIndex + 1),
+                },
+                (_value, index) => index,
+              ),
             ),
           });
         },
@@ -208,13 +266,25 @@ function validateAndNormalizeSectionAnswers(
       }
 
       const selectedOptions = normalizeSelectedOptions(answer?.selectedOptions);
+      const rawMatrixSelections = Array.isArray(answer?.matrixSelections)
+        ? answer.matrixSelections
+        : [];
+      const matrixSelections = normalizeMatrixSelections(rawMatrixSelections, {
+        rowCount: questionMeta.matrixRowCount,
+      });
       const answerText = String(answer?.answerText || "").trim();
       const marksAwarded =
         typeof answer?.marksAwarded === "number" && Number.isFinite(answer.marksAwarded)
           ? Number(answer.marksAwarded)
           : undefined;
+      const hasMatrixSelections = hasAnyMatrixSelection(matrixSelections);
 
-      if (selectedOptions.length === 0 && !answerText) {
+      if (selectedOptions.length === 0 && !answerText && !hasMatrixSelections) {
+        return;
+      }
+
+      if ((questionMeta.type === "single" || questionMeta.type === "multiple") && hasMatrixSelections) {
+        issues.push(`Section ${sectionName}: question ${questionId} cannot store matrix selections.`);
         return;
       }
 
@@ -240,10 +310,46 @@ function validateAndNormalizeSectionAnswers(
         return;
       }
 
+      if (questionMeta.type === "descriptive" && hasMatrixSelections) {
+        issues.push(`Section ${sectionName}: descriptive question ${questionId} cannot store matrix selections.`);
+        return;
+      }
+
+      if (questionMeta.type === "matrix-match") {
+        if (selectedOptions.length > 0) {
+          issues.push(`Section ${sectionName}: matrix match question ${questionId} cannot store selected options.`);
+          return;
+        }
+
+        if (answerText) {
+          issues.push(`Section ${sectionName}: matrix match question ${questionId} cannot store text answers.`);
+          return;
+        }
+
+        const extraAnsweredRows = rawMatrixSelections
+          .slice(questionMeta.matrixRowCount)
+          .some((row: unknown) => normalizeSelectedOptions(row).length > 0);
+        if (extraAnsweredRows) {
+          issues.push(`Section ${sectionName}: question ${questionId} has answers for unknown matrix rows.`);
+          return;
+        }
+
+        const invalidOption = matrixSelections
+          .flat()
+          .find((optionIndex) => !questionMeta.matrixColumnIndexes.has(optionIndex));
+        if (invalidOption !== undefined) {
+          issues.push(
+            `Section ${sectionName}: question ${questionId} has invalid matrix option index ${invalidOption}.`,
+          );
+          return;
+        }
+      }
+
       seenQuestionIds.add(`${sectionName}:${questionId}`);
       normalizedAnswers.push({
         question: questionId,
         selectedOptions,
+        ...(hasMatrixSelections ? { matrixSelections } : {}),
         ...(answerText ? { answerText } : {}),
         ...(typeof marksAwarded === "number" ? { marksAwarded } : {}),
       });
@@ -314,6 +420,7 @@ async function resolveStudentDocument({
       } as const;
     }
   } else if (bodyStudent && bodyStudent.rollNumber) {
+    const requestedRollNumber = normalizeRollNumber(bodyStudent.rollNumber);
     const classId = normalizeId(
       bodyStudent.class ?? bodyStudent.classId ?? paperClassId,
     );
@@ -333,23 +440,63 @@ async function resolveStudentDocument({
       return sectionValidation;
     }
 
-    const studentQuery: any = {
-      role: "student",
-      rollNumber: String(bodyStudent.rollNumber).trim(),
-      class: classId,
-      ...buildArchiveFilter(false),
-    };
-    if (academicSectionId) {
-      studentQuery.academicSection = academicSectionId;
+    if (!requestedRollNumber) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { success: false, message: "Student roll number is required." },
+          { status: 400 },
+        ),
+      } as const;
     }
 
-    studentDoc = await UserModel.findOne(studentQuery);
+    const matchingStudents = await findStudentsByRollNumber(
+      UserModel,
+      requestedRollNumber,
+      { limit: 10 },
+    );
+    const compatibleStudents = matchingStudents.filter((candidate: any) =>
+      matchesStudentPlacementForUpload(
+        candidate,
+        classId,
+        academicSectionId,
+      ),
+    );
+
+    if (compatibleStudents.length > 1) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            success: false,
+            message: `Multiple active students already use roll number "${requestedRollNumber}". Resolve duplicate student usernames before uploading more responses for this roll number.`,
+          },
+          { status: 409 },
+        ),
+      } as const;
+    }
+
+    if (compatibleStudents.length === 1) {
+      studentDoc = compatibleStudents[0];
+    } else if (matchingStudents.length > 0) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            success: false,
+            message: `Roll number "${requestedRollNumber}" already belongs to another active student in this school. Update the existing student record or choose a different roll number before uploading.`,
+          },
+          { status: 409 },
+        ),
+      } as const;
+    }
+
     if (!studentDoc) {
       const mobileNumber = String(
         bodyStudent.mobileNumber ??
           bodyStudent.phone ??
           bodyStudent.contactNumber ??
-          bodyStudent.rollNumber ??
+          requestedRollNumber ??
           "",
       ).trim();
 
@@ -368,9 +515,10 @@ async function resolveStudentDocument({
       }
 
       studentDoc = await UserModel.create({
-        name: String(bodyStudent.name || bodyStudent.rollNumber || "Student").trim(),
+        name: String(bodyStudent.name || requestedRollNumber || "Student").trim(),
         mobileNumber,
-        rollNumber: String(bodyStudent.rollNumber).trim(),
+        passwordHash: await bcrypt.hash(requestedRollNumber, 10),
+        rollNumber: requestedRollNumber,
         class: classId || undefined,
         academicSection: academicSectionId || undefined,
         role: "student",
@@ -453,14 +601,11 @@ async function resolveStudentDocument({
 export async function POST(req: NextRequest) {
   try {
     await connectDB();
-
-    const schoolKey = resolveSchoolKey(req);
-    if (!schoolKey) {
-      return NextResponse.json(
-        { success: false, message: "schoolKey required" },
-        { status: 400 },
-      );
-    }
+    const auth = await requireTenantSession(req, {
+      allowRoles: ["admin", "teacher"],
+    });
+    if (!auth.ok) return auth.response;
+    const schoolKey = auth.schoolKey as string;
 
     const {
       QuestionPaperResponse: QPRModel,
@@ -501,7 +646,7 @@ export async function POST(req: NextRequest) {
       .populate({
         path: "sections.questions.question",
         model: QuestionModel,
-        select: "options answerIndexes type content",
+        select: "options answerIndexes type content matrixOptions matrixAnswers",
       })
       .lean();
 
@@ -566,6 +711,10 @@ export async function POST(req: NextRequest) {
       existingResponse.sectionAnswers = normalizedSectionAnswers.sectionAnswers;
       existingResponse.startedAt = normalizedStartedAt || existingResponse.startedAt;
       existingResponse.submittedAt = normalizedSubmittedAt || existingResponse.submittedAt;
+      existingResponse.status = normalizedSubmittedAt
+        ? "submitted"
+        : "submitted";
+      existingResponse.lastSavedAt = new Date();
       if (typeof normalizedTotalMarksAwarded === "number") {
         existingResponse.totalMarksAwarded = normalizedTotalMarksAwarded;
       }
@@ -586,6 +735,8 @@ export async function POST(req: NextRequest) {
       sectionAnswers: normalizedSectionAnswers.sectionAnswers,
       startedAt: normalizedStartedAt,
       submittedAt: normalizedSubmittedAt,
+      status: "submitted",
+      lastSavedAt: new Date(),
       totalMarksAwarded: normalizedTotalMarksAwarded,
     });
 
@@ -611,13 +762,11 @@ export async function GET(req: NextRequest) {
   await connectDB();
 
   try {
-    const schoolKey = resolveSchoolKey(req);
-    if (!schoolKey) {
-      return NextResponse.json(
-        { success: false, message: "schoolKey required" },
-        { status: 400 },
-      );
-    }
+    const auth = await requireTenantSession(req, {
+      allowRoles: ["admin", "teacher"],
+    });
+    if (!auth.ok) return auth.response;
+    const schoolKey = auth.schoolKey as string;
 
     const {
       QuestionPaperResponse: QPRModel,

@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
 
   // Build base query
   let cursor = QuestionModel.find(query)
-    .select('subject class tags content marks type createdAt options answerIndexes')
+    .select('subject class tags content marks type createdAt options answerIndexes matrixOptions matrixAnswers explanation')
     .populate('subject', 'name')
     .populate('class', 'name')
     .populate({ path: 'tags', populate: { path: 'type', select: 'name' } })

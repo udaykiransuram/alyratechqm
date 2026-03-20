@@ -59,7 +59,7 @@ export function EditQuestionModal({
   toast,
 }: EditQuestionModalProps) {
   // --- Form State ---
-  const [type, setType] = useState<'single' | 'multiple' | 'matrix-match'>('single');
+  const [type, setType] = useState<'single' | 'multiple' | 'matrix-match' | 'descriptive'>('single');
   const [classId, setClassId] = useState('');
   const [subjectId, setSubjectId] = useState('');
   const [selectedTags, setSelectedTags] = useState<TagItem[]>([]);
@@ -338,6 +338,22 @@ export function EditQuestionModal({
                 </Card>
               ) : null}
 
+              {type === 'descriptive' ? (
+                <Card className="app-surface overflow-hidden shadow-none">
+                  <CardHeader className="app-section-header py-3.5">
+                    <CardTitle>Written Response</CardTitle>
+                    <CardDescription>
+                      Descriptive answers are written by students directly and reviewed manually later.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="app-section-body">
+                    <div className="rounded-2xl border border-dashed border-border/60 bg-muted/10 px-4 py-4 text-sm text-muted-foreground">
+                      This question type does not use predefined options.
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : null}
+
               <Card className="app-surface overflow-hidden shadow-none">
                 <CardHeader className="app-section-header py-3.5">
                   <CardTitle>Explanation</CardTitle>
@@ -395,7 +411,13 @@ export function EditQuestionModal({
                   <div className="app-field-group">
                     <span className="app-field-label">Question Type</span>
                     <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-sm font-medium text-foreground">
-                      {type === 'single' ? 'Single Choice' : type === 'multiple' ? 'Multiple Choice' : 'Matrix Match'}
+                      {type === 'single'
+                        ? 'Single Choice'
+                        : type === 'multiple'
+                          ? 'Multiple Choice'
+                          : type === 'matrix-match'
+                            ? 'Matrix Match'
+                            : 'Descriptive'}
                     </div>
                   </div>
                 </CardContent>
@@ -417,4 +439,3 @@ export function EditQuestionModal({
   );
 
 }
-

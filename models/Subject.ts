@@ -1,6 +1,7 @@
 // models/Subject.ts
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import { applyArchiveFields, hasArchiveFields } from '@/lib/archive';
+import { getModelRegistry } from '@/lib/mongoose-models';
 import type { ITag } from './Tag.ts';
 
 export interface ISubject extends Document {
@@ -43,13 +44,16 @@ SubjectSchema.index({ tags: 1 }); // Optimizes queries filtering subjects by tag
 
 applyArchiveFields(SubjectSchema);
 
-const existingSubjectModel = mongoose.models.Subject as Model<ISubject> | undefined;
+const modelRegistry = getModelRegistry();
+
+const existingSubjectModel = modelRegistry.Subject as Model<ISubject> | undefined;
 
 if (existingSubjectModel && !hasArchiveFields(existingSubjectModel)) {
-  delete mongoose.models.Subject;
+  delete modelRegistry.Subject;
 }
 
 const Subject: Model<ISubject> =
-  (mongoose.models.Subject as Model<ISubject>) || mongoose.model<ISubject>('Subject', SubjectSchema);
+  (modelRegistry.Subject as Model<ISubject>) ||
+  mongoose.model<ISubject>('Subject', SubjectSchema);
 
 export default Subject;

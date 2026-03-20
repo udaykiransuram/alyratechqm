@@ -59,15 +59,20 @@ export default function MultiSelectChecklist({
   };
 
   return (
-    <div className={cn("space-y-3 rounded-xl border border-border/60 bg-muted/10 p-3", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2">
-        <div className="text-xs font-medium text-muted-foreground">
+    <div
+      className={cn(
+        "space-y-3 rounded-2xl border border-border/70 bg-background/85 p-3 shadow-sm",
+        className,
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2.5">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {visibleSelectedCount} of {items.length} {countLabel}
         </div>
         {items.length > 1 ? (
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={allSelected ? clearAll : selectAll}
               disabled={selectableIds.length === 0}
@@ -75,7 +80,7 @@ export default function MultiSelectChecklist({
               {allSelected ? "Unselect all" : "Select all"}
             </Button>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={clearAll}
               disabled={visibleSelectedCount === 0}
@@ -93,7 +98,7 @@ export default function MultiSelectChecklist({
       ) : (
         <div
           className={cn(
-            "max-h-52 space-y-1 overflow-y-auto rounded-lg border border-border/60 bg-background p-2",
+            "max-h-56 space-y-1.5 overflow-y-auto rounded-xl border border-border/60 bg-background p-2.5",
             listClassName,
           )}
         >
@@ -103,7 +108,10 @@ export default function MultiSelectChecklist({
               <label
                 key={item.id}
                 className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 text-sm text-foreground transition-colors hover:bg-muted/40",
+                  "flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-sm text-foreground transition-all duration-200",
+                  checked
+                    ? "border-primary/25 bg-primary/5 shadow-sm"
+                    : "border-transparent hover:border-border/60 hover:bg-accent/45",
                   item.disabled ? "cursor-not-allowed opacity-60" : "",
                   itemClassName,
                 )}

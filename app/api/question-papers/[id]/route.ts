@@ -10,6 +10,7 @@ import {
 } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
 import { requireTenantSession } from "@/lib/api-auth";
+import { isOnlineQuestionType } from "@/lib/question-paper/grading";
 
 function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
@@ -27,6 +28,70 @@ function normalizeIds(value: unknown) {
   return Array.from(
     new Set(value.map((item) => String(item || "").trim()).filter(Boolean)),
   );
+}
+
+function normalizeDate(value: unknown) {
+  if (!value) return undefined;
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+async function validateQuestionSelection(
+  QuestionModel: any,
+  sections: any[],
+  onlineEnabled: boolean,
+) {
+  const questionIds = Array.from(
+    new Set(
+      (Array.isArray(sections) ? sections : []).flatMap((section: any) =>
+        (Array.isArray(section?.questions) ? section.questions : []).map(
+          (question: any) => String(question?.question || "").trim(),
+        ),
+      ),
+    ),
+  ).filter(Boolean);
+
+  const questions = await QuestionModel.find({
+    _id: { $in: questionIds },
+    ...buildArchiveFilter(false),
+  })
+    .select("_id type")
+    .lean();
+
+  if (questions.length !== questionIds.length) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          success: false,
+          message: "One or more selected questions could not be found.",
+        },
+        { status: 400 },
+      ),
+    } as const;
+  }
+
+  if (onlineEnabled) {
+    const unsupportedQuestion = questions.find(
+      (question: any) => !isOnlineQuestionType(question?.type),
+    );
+
+    if (unsupportedQuestion) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            success: false,
+            message:
+              "This paper contains a question type that is not supported for online delivery.",
+          },
+          { status: 400 },
+        ),
+      } as const;
+    }
+  }
+
+  return { ok: true } as const;
 }
 
 async function validateAssignedAcademicSections(
@@ -144,8 +209,15 @@ export async function PUT(
   const schoolKey = auth.schoolKey as string;
 
   try {
-    const { QuestionPaper: QPModel, AcademicSection: AcademicSectionModel } =
-      await getTenantModels(schoolKey, ["QuestionPaper", "AcademicSection"]);
+    const {
+      QuestionPaper: QPModel,
+      AcademicSection: AcademicSectionModel,
+      Question: QuestionModel,
+    } = await getTenantModels(schoolKey, [
+      "QuestionPaper",
+      "AcademicSection",
+      "Question",
+    ]);
 
     const data = await req.json();
     const {
@@ -155,8 +227,15 @@ export async function PUT(
       duration,
       passingMarks,
       examDate,
+      onlineEnabled: rawOnlineEnabled,
+      onlineStartsAt: rawOnlineStartsAt,
+      onlineEndsAt: rawOnlineEndsAt,
       sections,
     } = data || {};
+    const onlineEnabled = Boolean(rawOnlineEnabled);
+    const onlineStartsAt = normalizeDate(rawOnlineStartsAt);
+    const onlineEndsAt = normalizeDate(rawOnlineEndsAt);
+    const effectiveOnlineStart = onlineStartsAt || normalizeDate(examDate);
 
     const assignedAcademicSectionIds = normalizeIds(
       data?.assignedAcademicSections ??
@@ -179,6 +258,20 @@ export async function PUT(
     ) {
       return NextResponse.json(
         { success: false, message: "Missing required fields." },
+        { status: 400 },
+      );
+    }
+    if (
+      onlineEnabled &&
+      effectiveOnlineStart &&
+      onlineEndsAt &&
+      onlineEndsAt.getTime() <= effectiveOnlineStart.getTime()
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Online end time must be after the online start time.",
+        },
         { status: 400 },
       );
     }
@@ -233,10 +326,22 @@ export async function PUT(
       return assignmentValidation.response;
     }
 
+    const questionValidation = await validateQuestionSelection(
+      QuestionModel,
+      sections,
+      onlineEnabled,
+    );
+    if (!questionValidation.ok) {
+      return questionValidation.response;
+    }
+
     const updated = await QPModel.findOneAndUpdate(
       { _id: params.id, ...buildArchiveFilter(false) },
       {
         ...data,
+        onlineEnabled,
+        onlineStartsAt,
+        onlineEndsAt,
         assignedAcademicSections: assignmentValidation.ids,
       },
       { new: true },

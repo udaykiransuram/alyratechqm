@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
 import { applyArchiveFields, hasArchiveFields } from "@/lib/archive";
+import { getModelRegistry } from "@/lib/mongoose-models";
 
 export interface IUser extends Document {
   name: string;
@@ -104,24 +105,27 @@ UserSchema.pre("validate", function (next) {
   }
 
   if (this.role === "admin") {
-    const hasClasses =
-      this.hasAllClasses ||
-      (Array.isArray(this.classIds) && this.classIds.length > 0);
-    const hasSubjects =
-      this.hasAllSubjects ||
-      (Array.isArray(this.subjectIds) && this.subjectIds.length > 0);
+    const hasSelectedClasses =
+      Array.isArray(this.classIds) && this.classIds.length > 0;
+    const hasSelectedSubjects =
+      Array.isArray(this.subjectIds) && this.subjectIds.length > 0;
 
-    if (!hasClasses) {
-      this.invalidate(
-        "classIds",
-        "Admins must have all classes or at least one selected class.",
-      );
+    if (
+      !this.hasAllClasses &&
+      !this.hasAllSubjects &&
+      !hasSelectedClasses &&
+      !hasSelectedSubjects
+    ) {
+      this.hasAllClasses = true;
+      this.hasAllSections = true;
+      this.hasAllSubjects = true;
+      this.classIds = [];
+      this.academicSectionIds = [];
+      this.subjectIds = [];
     }
-    if (!hasSubjects) {
-      this.invalidate(
-        "subjectIds",
-        "Admins must have all subjects or at least one selected subject.",
-      );
+
+    if (typeof this.hasAllSections !== "boolean") {
+      this.hasAllSections = true;
     }
   }
 
@@ -143,7 +147,9 @@ UserSchema.index({ academicSection: 1 });
 
 applyArchiveFields(UserSchema);
 
-const existingUserModel = mongoose.models.User as Model<IUser> | undefined;
+const modelRegistry = getModelRegistry();
+
+const existingUserModel = modelRegistry.User as Model<IUser> | undefined;
 
 if (
   existingUserModel &&
@@ -153,11 +159,11 @@ if (
     !existingUserModel.schema.path("hasAllSections") ||
     !hasArchiveFields(existingUserModel))
 ) {
-  delete mongoose.models.User;
+  delete modelRegistry.User;
 }
 
 const User: Model<IUser> =
-  (mongoose.models.User as Model<IUser>) ||
+  (modelRegistry.User as Model<IUser>) ||
   mongoose.model<IUser>("User", UserSchema);
 
 export default User;

@@ -1,3 +1,8 @@
+import {
+  buildPaperQuestionLookup,
+  evaluateQuestionAnswer,
+} from "@/lib/question-paper/grading";
+
 export function buildTagReport({
   responses,
   paperSections,
@@ -16,13 +21,6 @@ export function buildTagReport({
     subjectId?: string;
   };
 }) {
-  function arraysEqual(a: number[], b: number[]) {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-    const sortedA = [...a].sort();
-    const sortedB = [...b].sort();
-    return sortedA.every((val, idx) => val === sortedB[idx]);
-  }
-
   function getTagValue(tags: any[], type: string) {
     const tag = tags.find((t: any) => t.type?.name?.toLowerCase() === type.toLowerCase());
     return tag?.name || `Unknown ${type.charAt(0).toUpperCase() + type.slice(1)}`;
@@ -49,6 +47,7 @@ export function buildTagReport({
   }
 
   const stats: any = {};
+  const questionLookup = buildPaperQuestionLookup({ sections: paperSections });
 
   for (const response of responses) {
     const answerMap: Record<string, Record<string, any>> = {};
@@ -74,9 +73,13 @@ export function buildTagReport({
         if (filters.subjectId && questionSubjectId !== filters.subjectId) continue;
 
         const ans = answerMap[sectionName]?.[String(question._id)];
-        const attempted = ans && Array.isArray(ans.selectedOptions) && ans.selectedOptions.length > 0;
-        const isCorrect = attempted && arraysEqual(ans.selectedOptions, question.answerIndexes || []);
         const questionIdStr = String(question._id);
+        const evaluation = evaluateQuestionAnswer(
+          questionLookup.get(`${sectionName}::${questionIdStr}`),
+          ans,
+        );
+        const attempted = evaluation.attempted;
+        const isCorrect = evaluation.isCorrect;
 
         // Compose question object for frontend
         const questionObj = {
@@ -130,8 +133,8 @@ export function buildTagReport({
         }
 
         // --- Option tags with student info ---
-        if (attempted && Array.isArray(ans.selectedOptions)) {
-          ans.selectedOptions.forEach((optIdx: number) => {
+        if (attempted && evaluation.selectedOptions.length > 0) {
+          evaluation.selectedOptions.forEach((optIdx: number) => {
             const optionTagType = `option ${String.fromCharCode(97 + optIdx)}`;
             const tagsForOption = (question.tags || []).filter(
               (tag: any) => tag.type?.name?.toLowerCase() === optionTagType

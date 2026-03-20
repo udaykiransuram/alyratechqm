@@ -1,11 +1,10 @@
 import { getServerSession, type Session } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
-
-export type AppRole = "admin" | "teacher" | "student";
+import type { AccountType, AppRole, SchoolUserRole } from "@/lib/auth-types";
 
 type RequireTenantSessionOptions = {
-  allowRoles?: AppRole[];
+  allowRoles?: SchoolUserRole[];
   allowSchoolQueryFallback?: boolean;
   requireSchoolKey?: boolean;
 };
@@ -25,6 +24,11 @@ type RequireTenantSessionSuccessWithoutSchoolKey = {
   ok: true;
   session: Session;
   schoolKey: string | undefined;
+};
+
+type RequireCompanyAdminSessionSuccess = {
+  ok: true;
+  session: Session;
 };
 
 function extractRequestedSchoolKey(
@@ -68,12 +72,29 @@ export async function requireTenantSession(
   const resolvedOptions = options ?? {};
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.id || !session.user.role) {
+  if (
+    !session?.user?.id ||
+    !session.user.role ||
+    !session.user.accountType
+  ) {
     return {
       ok: false as const,
       response: NextResponse.json(
         { success: false, message: "Authentication required." },
         { status: 401 },
+      ),
+    };
+  }
+
+  if (session.user.accountType !== "school_user") {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        {
+          success: false,
+          message: "School workspace session required.",
+        },
+        { status: 403 },
       ),
     };
   }
@@ -150,5 +171,30 @@ export async function requireTenantSession(
     ok: true as const,
     session,
     schoolKey: resolvedSchoolKey,
+  };
+}
+
+export async function requireCompanyAdminSession(
+  _req: NextRequest,
+): Promise<RequireCompanyAdminSessionSuccess | RequireTenantSessionFailure> {
+  const session = await getServerSession(authOptions);
+
+  if (
+    !session?.user?.id ||
+    session.user.accountType !== "company_admin" ||
+    session.user.role !== "company_admin"
+  ) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { success: false, message: "Company admin authentication required." },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return {
+    ok: true as const,
+    session,
   };
 }

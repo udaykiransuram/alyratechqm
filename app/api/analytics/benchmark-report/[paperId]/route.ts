@@ -127,7 +127,7 @@ export async function GET(
       .populate({ path: "subject", model: SubjectModel, select: "name" })
       .populate({
         path: "sections.questions.question",
-        select: "tags content answerIndexes options subject class type",
+        select: "tags content answerIndexes options subject class type matrixAnswers",
         populate: [
           {
             path: "tags",

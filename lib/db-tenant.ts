@@ -13,7 +13,6 @@ import '@/models/Question';
 import '@/models/QuestionPaper';
 import '@/models/QuestionPaperResponse';
 import '@/models/User';
-import '@/models/Registration';
 import '@/models/AuditLog';
 import '@/models/ResponseUploadHistory';
 

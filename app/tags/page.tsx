@@ -3,12 +3,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
+
+import PageHero from '@/components/layout/PageHero';
+import { useReturnHrefBuilder } from '@/hooks/useReturnNavigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
-import { useReturnHrefBuilder } from '@/hooks/useReturnNavigation';
+import { useToast } from '@/components/ui/use-toast';
 
 interface TagItem {
   _id: string;
@@ -106,18 +108,44 @@ export default function TagsListPage() {
 
   return (
     <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">All Tags</h1>
-          <p className="app-page-subtitle">Browse, edit, and assign tags across your subjects.</p>
-        </div>
-        <Link href="/tags/create">
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create New Tag
+      <PageHero
+        eyebrow="Curriculum"
+        title="Tags"
+        description="Browse, edit, and assign tags across subjects so question authoring and analytics stay aligned."
+        actions={
+          <Button asChild className="gap-2">
+            <Link href="/tags/create">
+              <Plus className="h-4 w-4" />
+              Create Tag
+            </Link>
           </Button>
-        </Link>
-      </div>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Cross-subject labels</span>
+            <span className="app-meta-chip">Analytics-ready structure</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Total tags',
+            value: String(tags.length),
+            meta: 'Tags available for question authoring and subject organization.',
+          },
+          {
+            label: 'Linked subjects',
+            value: String(tags.reduce((sum, tag) => sum + (tag.subjects?.length ?? 0), 0)),
+            meta: 'Total subject associations currently stored across the tag library.',
+          },
+          {
+            label: 'Library state',
+            value: fetchError ? 'Needs attention' : tagsLoading ? 'Loading' : 'Ready',
+            meta: fetchError
+              ? 'Refresh and retry if tags or subject links did not load cleanly.'
+              : 'Use this page to maintain reusable curriculum labels.',
+          },
+        ]}
+      />
 
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">

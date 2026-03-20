@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { getTenantDb } from "@/lib/db-tenant";
-import { requireTenantSession } from "@/lib/api-auth";
+import { requireCompanyAdminSession } from "@/lib/api-auth";
 
 // Map logical names to actual MongoDB collection names
 const COLLECTIONS: Record<string, string> = {
@@ -55,10 +55,7 @@ async function migrateCollection(
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireTenantSession(req, {
-    allowRoles: ["admin"],
-    requireSchoolKey: false,
-  });
+  const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
   await connectDB();
   try {

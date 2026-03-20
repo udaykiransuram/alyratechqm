@@ -14,6 +14,10 @@ import {
   filterResponsesByAcademicSection,
   hydrateResponsesWithStudents,
 } from "@/lib/analytics/hydrateResponses";
+import {
+  buildPaperQuestionLookup,
+  evaluateQuestionAnswer,
+} from "@/lib/question-paper/grading";
 import { z } from "zod";
 import { objectIdSchema, schoolKeySchema, parseOr400 } from "@/lib/validation";
 
@@ -71,14 +75,6 @@ function dedupeStatsArrays(obj: any) {
   if (obj && typeof obj === "object") {
     Object.values(obj).forEach(dedupeStatsArrays);
   }
-}
-
-function arraysEqual(a: number[], b: number[]) {
-  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
-    return false;
-  const sortedA = [...a].sort();
-  const sortedB = [...b].sort();
-  return sortedA.every((val, idx) => val === sortedB[idx]);
 }
 
 function toIdString(value: any) {
@@ -182,7 +178,7 @@ export async function GET(
     const paper = await QPModel.findById(params.paperId)
       .populate({
         path: "sections.questions.question",
-        select: "tags content answerIndexes options",
+        select: "tags content answerIndexes options type matrixOptions matrixAnswers",
         populate: {
           path: "tags",
           populate: { path: "type", select: "name" },
@@ -206,11 +202,12 @@ export async function GET(
     const paperObj: any = Array.isArray(paper) ? paper[0] : paper;
     paperTitle = paperObj.title || "";
     paperSections = paperObj.sections || [];
+    const questionLookup = buildPaperQuestionLookup({ sections: paperSections });
 
     responses = await QPRModel.find({ paper: params.paperId })
       .populate({
         path: "sectionAnswers.answers.question",
-        select: "answerIndexes tags content options",
+        select: "answerIndexes tags content options type matrixOptions matrixAnswers",
         populate: {
           path: "tags",
           populate: { path: "type", select: "name" },
@@ -273,13 +270,12 @@ export async function GET(
           if (!question || !question.tags || !question._id) continue;
           const qid = String(question._id);
           const ans = answerMap[sectionName]?.[qid];
-          const attempted =
-            ans &&
-            Array.isArray(ans.selectedOptions) &&
-            ans.selectedOptions.length > 0;
-          const isCorrect =
-            attempted &&
-            arraysEqual(ans.selectedOptions, question.answerIndexes || []);
+          const evaluation = evaluateQuestionAnswer(
+            questionLookup.get(`${sectionName}::${qid}`),
+            ans,
+          );
+          const attempted = evaluation.attempted;
+          const isCorrect = evaluation.isCorrect;
           if (!questionStats[qid])
             questionStats[qid] = {
               correct: 0,

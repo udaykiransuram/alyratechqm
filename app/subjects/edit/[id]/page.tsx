@@ -3,16 +3,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ChevronLeft } from 'lucide-react';
 
-import { Input } from '@/components/ui/input';
+import PageHero from '@/components/layout/PageHero';
+import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import { MultiSelectTags, TagItem } from '@/components/ui/multi-select-tags';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
-import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MultiSelectTags, TagItem } from '@/components/ui/multi-select-tags';
-import { Spinner } from '@/components/ui/spinner';
 import PageLoadingState from '@/components/ui/page-loading-state';
-import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/components/ui/use-toast';
 
 interface Subject {
   _id: string;
@@ -191,65 +192,62 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
 
   if (pageLoading) {
     return (
-      <div className="app-page-shell max-w-3xl px-4 py-5 sm:px-0">
-          <PageLoadingState
-            title="Loading subject details"
-            description="Preparing the subject form, linked tags, and school data."
-            className="px-0 py-0"
-            contentClassName="max-w-none"
-            dense
-          />
+      <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+        <PageLoadingState
+          title="Loading subject details"
+          description="Preparing the subject form, linked tags, and school data."
+          className="px-0 py-0"
+          contentClassName="max-w-none"
+          dense
+        />
       </div>
     );
   }
 
   if (fetchError) {
     return (
-      <div className="app-page-shell max-w-3xl px-4 py-5 sm:px-0">
-          <div className="app-page-header-row">
-            <div className="app-page-header">
-              <h1 className="app-page-title">Edit Subject</h1>
-              <p className="app-page-subtitle">We couldn’t load the subject details for editing.</p>
-            </div>
-
+      <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+        <PageHero
+          eyebrow="Curriculum"
+          title="Edit Subject"
+          description="We couldn’t load the subject details for editing."
+          actions={
             <Button type="button" variant="outline" className="gap-2" onClick={navigateBack}>
               <ChevronLeft className="h-4 w-4" />
               Back to Subjects
             </Button>
-          </div>
+          }
+        />
 
-          <Card className="app-surface">
-            <CardContent className="app-surface-body">
-              <div className="app-feedback app-feedback-error space-y-4">
-                <div>
-                  <p className="font-medium">Loading Error</p>
-                  <p className="mt-1">{fetchError}</p>
-                </div>
-                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                  <Button type="button" variant="outline" onClick={navigateBack}>
-                    Go Back to Subjects
-                  </Button>
-                  <Button type="button" onClick={fetchSubjectDetailsAndAllTags}>
-                    Try Again
-                  </Button>
-                </div>
+        <Card className="app-surface overflow-hidden">
+          <CardContent className="app-surface-body">
+            <div className="app-feedback app-feedback-error space-y-4">
+              <div>
+                <p className="font-medium">Loading Error</p>
+                <p className="mt-1">{fetchError}</p>
               </div>
-            </CardContent>
-          </Card>
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={navigateBack}>
+                  Go Back to Subjects
+                </Button>
+                <Button type="button" onClick={fetchSubjectDetailsAndAllTags}>
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="app-page-shell max-w-3xl px-4 py-5 sm:px-0">
-        <div className="app-page-header-row">
-          <div className="app-page-header">
-            <h1 className="app-page-title">Edit Subject</h1>
-            <p className="app-page-subtitle">
-              Update the subject details and keep related tags organized.
-            </p>
-          </div>
-
+    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+      <PageHero
+        eyebrow="Curriculum"
+        title="Edit Subject"
+        description="Update the subject details and keep related tags organized across your question and paper setup."
+        actions={
           <Button
             type="button"
             variant="outline"
@@ -260,103 +258,148 @@ export default function EditSubjectPage({ params }: { params: { id: string } }) 
             <ChevronLeft className="h-4 w-4" />
             Back to Subjects
           </Button>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Subject maintenance</span>
+            <span className="app-meta-chip">Tag-aware updates</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Subject code',
+            value: subjectCode.trim() || 'Not set',
+            meta: 'Codes stay optional, but they help with reporting and authoring clarity.',
+          },
+          {
+            label: 'Linked tags',
+            value: String(selectedTags.length),
+            meta: 'Adjust associated tags here or create a new one inline.',
+          },
+        ]}
+      />
+
+      <div className="app-editor-grid">
+        <div className="app-editor-main">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Subject Details</CardTitle>
+              <CardDescription>
+                Review the current values, then save the updates when you’re ready.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="app-section-body space-y-5">
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="app-field-group">
+                  <Label htmlFor="subjectName" className="app-field-label">
+                    Subject Name
+                  </Label>
+                  <Input
+                    id="subjectName"
+                    placeholder="e.g., Algebra I"
+                    value={subjectName}
+                    onChange={(event) => setSubjectName(event.target.value)}
+                    aria-label="Subject Name"
+                    required
+                    disabled={isSaving}
+                  />
+                </div>
+
+                <div className="app-field-group">
+                  <Label htmlFor="subjectCode" className="app-field-label">
+                    Subject Code
+                  </Label>
+                  <Input
+                    id="subjectCode"
+                    placeholder="e.g., MATH101"
+                    value={subjectCode}
+                    onChange={(event) => setSubjectCode(event.target.value)}
+                    aria-label="Subject Code"
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+
+              <div className="app-field-group">
+                <Label htmlFor="subjectDescription" className="app-field-label">
+                  Description
+                </Label>
+                <Textarea
+                  id="subjectDescription"
+                  placeholder="Provide a brief description of the subject."
+                  value={subjectDescription}
+                  onChange={(event) => setSubjectDescription(event.target.value)}
+                  className="min-h-[120px]"
+                  aria-label="Subject Description"
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="app-section space-y-3.5">
+                <div className="space-y-1">
+                  <Label htmlFor="tag-select" className="app-field-label">
+                    Associated Tags
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Adjust related tags here, or create a new tag without leaving the page.
+                  </p>
+                </div>
+
+                <MultiSelectTags
+                  selectedTags={selectedTags}
+                  allTags={allAvailableTags}
+                  onSelectedTagsChange={setSelectedTags}
+                  onCreateNewTag={handleCreateNewTag}
+                  isLoading={isSaving}
+                />
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="sm:min-w-[140px]"
+                  onClick={navigateBack}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  className="sm:min-w-[160px]"
+                  onClick={handleUpdateSubject}
+                  disabled={isSaving || !subjectName.trim()}
+                >
+                  {isSaving ? <Spinner /> : 'Save Changes'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <Card className="app-surface overflow-hidden">
-          <CardHeader className="app-section-header">
-            <CardTitle>Subject Details</CardTitle>
-            <CardDescription>
-              Review the current values, then save the updates when you’re ready.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="app-section-body space-y-5">
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="app-field-group">
-                <Label htmlFor="subjectName" className="app-field-label">
-                  Subject Name
-                </Label>
-                <Input
-                  id="subjectName"
-                  placeholder="e.g., Algebra I"
-                  value={subjectName}
-                  onChange={(event) => setSubjectName(event.target.value)}
-                  aria-label="Subject Name"
-                  required
-                  disabled={isSaving}
-                />
+        <aside className="app-editor-aside">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Update Guidance</CardTitle>
+              <CardDescription>Keep downstream authoring and reporting consistent.</CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <div className="app-note-list">
+                <div className="app-note-item">
+                  Renaming a subject affects how staff discover it while building questions and papers.
+                </div>
+                <div className="app-note-item">
+                  Tag changes here shape recommended filters later in the question bank and paper builder.
+                </div>
+                <div className="app-note-item">
+                  If the code is used operationally, update it carefully so exports stay easy to read.
+                </div>
               </div>
-
-              <div className="app-field-group">
-                <Label htmlFor="subjectCode" className="app-field-label">
-                  Subject Code
-                </Label>
-                <Input
-                  id="subjectCode"
-                  placeholder="e.g., MATH101"
-                  value={subjectCode}
-                  onChange={(event) => setSubjectCode(event.target.value)}
-                  aria-label="Subject Code"
-                  disabled={isSaving}
-                />
-              </div>
-            </div>
-
-            <div className="app-field-group">
-              <Label htmlFor="subjectDescription" className="app-field-label">
-                Description
-              </Label>
-              <Textarea
-                id="subjectDescription"
-                placeholder="Provide a brief description of the subject."
-                value={subjectDescription}
-                onChange={(event) => setSubjectDescription(event.target.value)}
-                className="min-h-[120px]"
-                aria-label="Subject Description"
-                disabled={isSaving}
-              />
-            </div>
-
-            <div className="app-section space-y-3.5">
-              <div className="space-y-1">
-                <Label htmlFor="tag-select" className="app-field-label">
-                  Associated Tags
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Adjust related tags here, or create a new tag without leaving the page.
-                </p>
-              </div>
-
-              <MultiSelectTags
-                selectedTags={selectedTags}
-                allTags={allAvailableTags}
-                onSelectedTagsChange={setSelectedTags}
-                onCreateNewTag={handleCreateNewTag}
-                isLoading={isSaving}
-              />
-            </div>
-
-            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                className="sm:min-w-[140px]"
-                onClick={navigateBack}
-                disabled={isSaving}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                className="sm:min-w-[160px]"
-                onClick={handleUpdateSubject}
-                disabled={isSaving || !subjectName.trim()}
-              >
-                {isSaving ? <Spinner /> : 'Save Changes'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
     </div>
   );
 }

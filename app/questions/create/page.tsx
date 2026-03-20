@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic';
 import { TagItem } from '@/components/ui/multi-select-tags';
 import { Spinner } from '@/components/ui/spinner';
 import EditorLoadingState from '@/components/ui/editor-loading-state';
+import PageHero from '@/components/layout/PageHero';
 import {
   Card,
   CardContent,
@@ -58,7 +59,7 @@ export default function CreateQuestionPage() {
   const [content, setContent] = useState<string | null>('');
   const [explanation, setExplanation] = useState<string | null>('');
   const [marks, setMarks] = useState<number>(1);
-  const [questionType, setQuestionType] = useState<'single' | 'multiple' | 'matrix-match'>('single');
+  const [questionType, setQuestionType] = useState<'single' | 'multiple' | 'matrix-match' | 'descriptive'>('single');
 
   const [loading, setLoading] = useState(false);
   const [initialDataLoading, setInitialDataLoading] = useState(true);
@@ -216,10 +217,10 @@ export default function CreateQuestionPage() {
         return;
       }
 
-      // Build matrixOptions for API
-      questionData.matrixOptions = filteredRows.map((row, i) => ({
-        left: row,
-        right: filteredCols[i] || '', // If you want to pair them, otherwise adjust structure
+      const maxLen = Math.max(filteredRows.length, filteredCols.length);
+      questionData.matrixOptions = Array.from({ length: maxLen }, (_, index) => ({
+        left: filteredRows[index] || '',
+        right: filteredCols[index] || '',
       }));
 
       questionData.matrixAnswers = matrixAnswers.slice(0, filteredRows.length).map((rowAnswers, i) =>
@@ -294,19 +295,50 @@ export default function CreateQuestionPage() {
 
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">Create New Question</h1>
-          <p className="app-page-subtitle">Fill out the form below to add a new question to the database.</p>
-        </div>
-        <Button variant="outline" onClick={navigateBack}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-      </div>
+      <PageHero
+        eyebrow="Question Bank"
+        title="Create Question"
+        description="Write the question body, set answer logic, and connect the item to the right class, subject, and tags before it enters the bank."
+        actions={
+          <Button variant="outline" onClick={navigateBack} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Authoring workspace</span>
+            <span className="app-meta-chip">Metadata-first flow</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Question type',
+            value:
+              questionType === 'single'
+                ? 'Single choice'
+                : questionType === 'multiple'
+                  ? 'Multiple choice'
+                  : questionType === 'matrix-match'
+                    ? 'Matrix match'
+                    : 'Descriptive',
+            meta: 'Switch types from the side rail before saving.',
+          },
+          {
+            label: 'Selected tags',
+            value: String(selectedTags.length),
+            meta: 'Tags help reuse the question across filters, papers, and analytics.',
+          },
+          {
+            label: 'Marks',
+            value: String(marks),
+            meta: 'Set the question value before adding it to a paper.',
+          },
+        ]}
+      />
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-5">
+      <div className="app-editor-grid">
+        <div className="app-editor-main">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Question Content</CardTitle>
@@ -319,7 +351,7 @@ export default function CreateQuestionPage() {
             </CardContent>
           </Card>
 
-          {questionType !== 'matrix-match' ? (
+          {questionType === 'single' || questionType === 'multiple' ? (
             <Card className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
                 <CardTitle>Answer Options</CardTitle>
@@ -385,6 +417,22 @@ export default function CreateQuestionPage() {
             </Card>
           ) : null}
 
+          {questionType === 'descriptive' ? (
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Written Response</CardTitle>
+                <CardDescription>
+                  Students will answer this question in their own words. Online submissions are saved normally, but grading happens during review.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="app-section-body">
+                <div className="rounded-2xl border border-dashed border-border/60 bg-muted/10 px-4 py-4 text-sm text-muted-foreground">
+                  Descriptive questions do not need answer options or matrix selections.
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Explanation</CardTitle>
@@ -396,7 +444,7 @@ export default function CreateQuestionPage() {
           </Card>
         </div>
 
-        <div className="space-y-4 xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
+        <aside className="app-editor-aside xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
           <MetadataSelector
             classes={classes}
             classId={classId}
@@ -439,11 +487,31 @@ export default function CreateQuestionPage() {
 
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
+              <CardTitle>Authoring Notes</CardTitle>
+              <CardDescription>Small choices here make the bank easier to manage later.</CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <div className="app-note-list">
+                <div className="app-note-item">
+                  Pick the class and subject first so recommended tags stay meaningful.
+                </div>
+                <div className="app-note-item">
+                  Objective questions are the safest option if the item may also be used in online tests.
+                </div>
+                <div className="app-note-item">
+                  Add a clean explanation now so review screens and analytics have context later.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
               <CardTitle>Question Type</CardTitle>
               <CardDescription>Select how students should answer this question.</CardDescription>
             </CardHeader>
             <CardContent className="app-section-body">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Button variant={questionType === 'single' ? 'default' : 'outline'} onClick={() => setQuestionType('single')} className="w-full">
                   Single
                 </Button>
@@ -452,6 +520,9 @@ export default function CreateQuestionPage() {
                 </Button>
                 <Button variant={questionType === 'matrix-match' ? 'default' : 'outline'} onClick={() => setQuestionType('matrix-match')} className="w-full">
                   Matrix
+                </Button>
+                <Button variant={questionType === 'descriptive' ? 'default' : 'outline'} onClick={() => setQuestionType('descriptive')} className="w-full">
+                  Descriptive
                 </Button>
               </div>
             </CardContent>
@@ -468,9 +539,8 @@ export default function CreateQuestionPage() {
               </Button>
             </CardContent>
           </Card>
-        </div>
+        </aside>
       </div>
     </div>
   );
 }
-

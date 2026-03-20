@@ -5,6 +5,14 @@ import { ArrowLeft } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { Button } from "@/components/ui/button";
+import PageHero from "@/components/layout/PageHero";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { fetchApiJson, buildPartialLoadMessage, resolveClientSchoolKey } from "@/lib/client/api";
 
@@ -268,114 +276,185 @@ export default function CreateStudentPage() {
       : "app-feedback app-feedback-success";
 
   return (
-    <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">Create Student</h1>
-          <p className="app-page-subtitle">
-            Add individual students or bulk upload them with separate class and section assignment.
-          </p>
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+      <PageHero
+        eyebrow="People"
+        title="Create Student"
+        description="Add one student at a time or import a class list with the same credential and placement rules used by the student test portal."
+        actions={
+          <Button type="button" variant="outline" onClick={navigateBack}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Students
+          </Button>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Roll number username</span>
+            <span className="app-meta-chip">Default password = roll number</span>
+          </>
+        }
+        stats={[
+          {
+            label: "Classes loaded",
+            value: String(classes.length),
+            meta: "Available class placements in the current school workspace.",
+          },
+          {
+            label: "Sections loaded",
+            value: String(sections.length),
+            meta: "Sections available for class-based student assignment.",
+          },
+          {
+            label: "Bulk import",
+            value: bulkLoading ? "Uploading" : "Ready",
+            meta: "CSV and Excel imports are supported here.",
+          },
+          {
+            label: "Credential model",
+            value: "Roll number + password",
+            meta: "Students sign in with roll number as the username.",
+          },
+        ]}
+      />
+
+      {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
+      {message ? <div className={messageClassName}>{message}</div> : null}
+
+      <div className="app-editor-grid">
+        <div className="app-editor-main">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Student Profile</CardTitle>
+              <CardDescription>
+                Capture the student’s identity, class placement, and initial sign-in credentials.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="app-field-group">
+                  <label className="app-field-label" htmlFor="name">Name</label>
+                  <input id="name" name="name" placeholder="Enter student name" value={form.name} onChange={handleChange} required className="app-form-input" />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="email">Email (Optional)</label>
+                    <input id="email" name="email" placeholder="Enter email" value={form.email} onChange={handleChange} type="email" className="app-form-input" />
+                  </div>
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="mobileNumber">Parent Mobile Number</label>
+                    <input id="mobileNumber" name="mobileNumber" placeholder="Enter WhatsApp number" value={form.mobileNumber} onChange={handleChange} className="app-form-input" />
+                  </div>
+                </div>
+
+                <div className="app-field-group">
+                  <label className="app-field-label" htmlFor="password">Password</label>
+                  <input id="password" name="password" placeholder="Leave blank to use roll number" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
+                  <p className="text-xs text-muted-foreground">
+                    If you leave this blank, the student&apos;s first password will be the same as the roll number.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="class">Class</label>
+                    <select id="class" name="class" value={form.class} onChange={handleChange} required className="app-form-input">
+                      <option value="">Select Class</option>
+                      {classes.map((classItem) => (
+                        <option key={classItem._id} value={classItem._id}>
+                          {classItem.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="academicSection">Section</label>
+                    <select
+                      id="academicSection"
+                      name="academicSection"
+                      value={form.academicSection}
+                      onChange={handleChange}
+                      required
+                      disabled={!form.class}
+                      className="app-form-input"
+                    >
+                      <option value="">Select Section</option>
+                      {filteredSections.map((section) => (
+                        <option key={section._id} value={section._id}>
+                          {section.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="rollNumber">Roll Number / Username</label>
+                    <input id="rollNumber" name="rollNumber" placeholder="Enter roll number" value={form.rollNumber} onChange={handleChange} required className="app-form-input" />
+                    <p className="text-xs text-muted-foreground">
+                      Students use this value as their username when they sign in.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="app-field-group">
+                  <label className="app-field-label" htmlFor="enrolledAt">Enrollment Date</label>
+                  <input id="enrolledAt" name="enrolledAt" value={form.enrolledAt} onChange={handleChange} type="date" className="app-form-input" />
+                </div>
+
+                <button type="submit" disabled={loading} className="app-button-primary w-full">
+                  {loading ? "Creating..." : "Create Student"}
+                </button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
-        <Button type="button" variant="outline" onClick={navigateBack}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-      </div>
 
-      <div className="app-surface app-surface-body space-y-6">
-        {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
+        <div className="app-editor-aside">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Student Sign-in Rules</CardTitle>
+              <CardDescription>
+                Keep the setup predictable for schools and students.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <div className="app-note-list">
+                <div className="app-note-item">
+                  Roll number is the student username in the portal.
+                </div>
+                <div className="app-note-item">
+                  Leaving password blank sets the first password to the roll number.
+                </div>
+                <div className="app-note-item">
+                  Class and section placement determine which online tests the student can see.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="app-field-group">
-            <label className="app-field-label" htmlFor="name">Name</label>
-            <input id="name" name="name" placeholder="Enter student name" value={form.name} onChange={handleChange} required className="app-form-input" />
-          </div>
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Bulk Upload Students</CardTitle>
+              <CardDescription>
+                CSV or Excel columns: <code>name,email,password,mobileNumber,class,section,rollNumber,enrolledAt</code>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body space-y-4">
+              <p className="text-sm text-muted-foreground">
+                If the <code>password</code> column is blank, the import will use each student&apos;s <code>rollNumber</code> as the default password.
+              </p>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="email">Email</label>
-              <input id="email" name="email" placeholder="Enter email" value={form.email} onChange={handleChange} type="email" className="app-form-input" />
-            </div>
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="mobileNumber">Parent Mobile Number</label>
-              <input id="mobileNumber" name="mobileNumber" placeholder="Enter WhatsApp number" value={form.mobileNumber} onChange={handleChange} className="app-form-input" />
-            </div>
-          </div>
+              <input
+                type="file"
+                accept=".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                onChange={handleBulkUpload}
+                disabled={bulkLoading}
+                className="app-form-file"
+              />
 
-          <div className="app-field-group">
-            <label className="app-field-label" htmlFor="password">Password</label>
-            <input id="password" name="password" placeholder="Create password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="class">Class</label>
-              <select id="class" name="class" value={form.class} onChange={handleChange} required className="app-form-input">
-                <option value="">Select Class</option>
-                {classes.map((classItem) => (
-                  <option key={classItem._id} value={classItem._id}>
-                    {classItem.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="academicSection">Section</label>
-              <select
-                id="academicSection"
-                name="academicSection"
-                value={form.academicSection}
-                onChange={handleChange}
-                required
-                disabled={!form.class}
-                className="app-form-input"
-              >
-                <option value="">Select Section</option>
-                {filteredSections.map((section) => (
-                  <option key={section._id} value={section._id}>
-                    {section.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="rollNumber">Roll Number</label>
-              <input id="rollNumber" name="rollNumber" placeholder="Enter roll number" value={form.rollNumber} onChange={handleChange} required className="app-form-input" />
-            </div>
-          </div>
-
-          <div className="app-field-group">
-            <label className="app-field-label" htmlFor="enrolledAt">Enrollment Date</label>
-            <input id="enrolledAt" name="enrolledAt" value={form.enrolledAt} onChange={handleChange} type="date" className="app-form-input" />
-          </div>
-
-          <button type="submit" disabled={loading} className="app-button-primary w-full">
-            {loading ? "Creating..." : "Create Student"}
-          </button>
-        </form>
-
-        <div className="app-section">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold tracking-tight text-foreground">
-              Bulk Upload Students
-            </h2>
-            <p className="app-page-subtitle">
-              CSV or Excel columns: <code>name,email,password,mobileNumber,class,section,rollNumber,enrolledAt</code>
-            </p>
-          </div>
-
-          <input
-            type="file"
-            accept=".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            onChange={handleBulkUpload}
-            disabled={bulkLoading}
-            className="app-form-file"
-          />
-
-          {bulkLoading ? <p className="app-page-subtitle">Uploading...</p> : null}
+              {bulkLoading ? <p className="app-page-subtitle">Uploading...</p> : null}
+            </CardContent>
+          </Card>
         </div>
-
-        {message ? <div className={messageClassName}>{message}</div> : null}
       </div>
     </div>
   );

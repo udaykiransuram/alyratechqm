@@ -5,6 +5,7 @@ import { Button }  from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Plus, X } from 'lucide-react';
+import PageHero from '@/components/layout/PageHero';
 import { PaperDetailsForm } from '@/components/PaperDetailsForm';
 import { PaperSummary } from '@/components/PaperSummary';
 import { SectionEditor } from '@/components/SectionEditor';
@@ -54,6 +55,15 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
   const [examDate, setExamDate] = useState(
     initialData?.examDate ? new Date(initialData.examDate) : new Date()
   );
+  const [onlineEnabled, setOnlineEnabled] = useState(
+    Boolean(initialData?.onlineEnabled),
+  );
+  const [onlineStartsAt, setOnlineStartsAt] = useState<Date | null>(
+    initialData?.onlineStartsAt ? new Date(initialData.onlineStartsAt) : null,
+  );
+  const [onlineEndsAt, setOnlineEndsAt] = useState<Date | null>(
+    initialData?.onlineEndsAt ? new Date(initialData.onlineEndsAt) : null,
+  );
   const [sections, setSections] = useState<Section[]>(initialData?.sections || []);
   const [classId, setClassId] = useState(initialData?.classId || '');
   const [subjectId, setSubjectId] = useState(initialData?.subjectId || '');
@@ -67,6 +77,13 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
       setDuration(initialData.duration ?? 60);
       setPassingMarks(initialData.passingMarks ?? 0);
       setExamDate(initialData.examDate ? new Date(initialData.examDate) : new Date());
+      setOnlineEnabled(Boolean(initialData.onlineEnabled));
+      setOnlineStartsAt(
+        initialData.onlineStartsAt ? new Date(initialData.onlineStartsAt) : null,
+      );
+      setOnlineEndsAt(
+        initialData.onlineEndsAt ? new Date(initialData.onlineEndsAt) : null,
+      );
       setClassId(initialData.classId || '');
       setSubjectId(initialData.subjectId || '');
       setAssignedAcademicSectionIds(initialData.assignedAcademicSectionIds || []);
@@ -368,6 +385,20 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
       toast({ title: 'Validation Error', description: 'Exam date is required.', variant: 'destructive' });
       return;
     }
+    const effectiveOnlineStart = onlineStartsAt || examDate;
+    if (
+      onlineEnabled &&
+      onlineEndsAt &&
+      effectiveOnlineStart &&
+      onlineEndsAt.getTime() <= effectiveOnlineStart.getTime()
+    ) {
+      toast({
+        title: 'Validation Error',
+        description: 'Online end time must be after the online start time.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (sections.length === 0) {
       toast({ title: 'Validation Error', description: 'Add at least one section.', variant: 'destructive' });
       return;
@@ -421,6 +452,9 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
         duration,
         passingMarks,
         examDate,
+        onlineEnabled,
+        onlineStartsAt: onlineStartsAt ? onlineStartsAt.toISOString() : undefined,
+        onlineEndsAt: onlineEndsAt ? onlineEndsAt.toISOString() : undefined,
         totalMarks: totalPaperMarks,
         assignedAcademicSections: assignedAcademicSectionIds,
         sections: sections.map(s => ({
@@ -475,29 +509,42 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
   // --- Render ---
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">{pageTitle}</h1>
-          <p className="app-page-subtitle">{pageSubtitle}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHero
+        eyebrow="Assessments"
+        title={pageTitle}
+        description={pageSubtitle}
+        actions={
           <Button type="button" variant="outline" onClick={navigateBack}>
             {isEditMode ? 'Back' : 'Cancel'}
           </Button>
-          <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm text-muted-foreground">
-            {sections.length} section{sections.length === 1 ? '' : 's'}
-          </span>
-          <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm text-muted-foreground">
-            {totalQuestions} question{totalQuestions === 1 ? '' : 's'}
-          </span>
-          <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm font-medium text-foreground">
-            {totalPaperMarks} marks
-          </span>
-        </div>
-      </div>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">{isEditMode ? 'Paper maintenance' : 'Paper builder'}</span>
+            <span className="app-meta-chip">{onlineEnabled ? 'Online delivery enabled' : 'Offline / manual delivery'}</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Sections',
+            value: String(sections.length),
+            meta: 'Each section can carry its own defaults and selected question set.',
+          },
+          {
+            label: 'Questions',
+            value: String(totalQuestions),
+            meta: 'Current total across every section in the paper.',
+          },
+          {
+            label: 'Total marks',
+            value: String(totalPaperMarks),
+            meta: 'Marks update automatically as you refine the paper structure.',
+          },
+        ]}
+      />
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <main className="min-w-0">
+      <div className="app-editor-grid">
+        <main className="app-editor-main">
           <div className="app-surface overflow-hidden">
             <div className="app-section-header">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -672,7 +719,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
           </div>
         </main>
 
-        <aside className="space-y-4 xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
+        <aside className="app-editor-aside xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
           <PaperDetailsForm
             paperTitle={paperTitle}
             setPaperTitle={setPaperTitle}
@@ -684,6 +731,12 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
             setPassingMarks={setPassingMarks}
             examDate={examDate ? new Date(examDate) : new Date()}
             setExamDate={date => setExamDate(date ? new Date(date) : new Date())}
+            onlineEnabled={onlineEnabled}
+            setOnlineEnabled={setOnlineEnabled}
+            onlineStartsAt={onlineStartsAt}
+            setOnlineStartsAt={setOnlineStartsAt}
+            onlineEndsAt={onlineEndsAt}
+            setOnlineEndsAt={setOnlineEndsAt}
             classId={classId}
             setClassId={setClassId}
             subjectId={subjectId}
@@ -702,7 +755,29 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
             duration={duration}
             passingMarks={passingMarks}
             examDate={examDate ? examDate.toISOString() : ''}
+            onlineEnabled={onlineEnabled}
+            onlineStartsAt={onlineStartsAt ? onlineStartsAt.toISOString() : null}
+            onlineEndsAt={onlineEndsAt ? onlineEndsAt.toISOString() : null}
           />
+          <div className="app-section">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-foreground">Builder Notes</h3>
+              <p className="text-sm text-muted-foreground">
+                Keep the paper structure stable before publishing it to classes and sections.
+              </p>
+            </div>
+            <div className="app-note-list">
+              <div className="app-note-item">
+                Select the paper class and subject before adding questions so the bank filter stays precise.
+              </div>
+              <div className="app-note-item">
+                Section names and default marks should be final before bulk-adding questions.
+              </div>
+              <div className="app-note-item">
+                Online timing is enforced server-side, so confirm start and end windows carefully.
+              </div>
+            </div>
+          </div>
           <Button size="lg" className="w-full" onClick={handleSavePaper} disabled={saving}>
             {saving ? <Spinner /> : isEditMode ? 'Update Question Paper' : 'Save Question Paper'}
           </Button>

@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import PageHero from "@/components/layout/PageHero";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
 import { fetchApiJson } from "@/lib/client/api";
 
@@ -52,15 +53,44 @@ export default function AdminsPage() {
 
   return (
     <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">Admins</h1>
-          <p className="app-page-subtitle">View and manage admins.</p>
-        </div>
-        <Button asChild>
-          <Link href="/admins/create">Create Admin</Link>
-        </Button>
-      </div>
+      <PageHero
+        eyebrow="People"
+        title="Admins"
+        description="Review school admin accounts and keep high-access users on a dedicated, predictable management path."
+        actions={
+          <Button asChild>
+            <Link href="/admins/create">Create Admin</Link>
+          </Button>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Dedicated admin page</span>
+            <span className="app-meta-chip">School-scoped access</span>
+          </>
+        }
+        stats={[
+          {
+            label: "Admin accounts",
+            value: String(admins.length),
+            meta: "Admins loaded for the active school workspace.",
+          },
+          {
+            label: "Access model",
+            value: "Configurable",
+            meta: "Admins can keep full access or be limited by class, section, and subject.",
+          },
+          {
+            label: "Navigation",
+            value: "Dedicated",
+            meta: "Admins remain separate from students and teachers for faster management.",
+          },
+          {
+            label: "Management flow",
+            value: "Create + View",
+            meta: "Use this page for browsing and the detail flow for edits.",
+          },
+        ]}
+      />
 
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">

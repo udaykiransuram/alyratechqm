@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import { applyArchiveFields, hasArchiveFields } from '@/lib/archive';
+import { getModelRegistry } from '@/lib/mongoose-models';
 
 import './Class.ts'; 
 import './Subject.ts';
@@ -176,15 +177,18 @@ QuestionSchema.index({ marks: 1 });
 
 applyArchiveFields(QuestionSchema);
 
-const existingQuestionModel = mongoose.models.Question as Model<IQuestion> | undefined;
+const modelRegistry = getModelRegistry();
+
+const existingQuestionModel = modelRegistry.Question as Model<IQuestion> | undefined;
 
 if (existingQuestionModel && !hasArchiveFields(existingQuestionModel)) {
-  delete mongoose.models.Question;
+  delete modelRegistry.Question;
 }
 
 // Create and export the Question model
 const Question: Model<IQuestion> =
-  (mongoose.models.Question as Model<IQuestion>) || mongoose.model<IQuestion>('Question', QuestionSchema);
+  (modelRegistry.Question as Model<IQuestion>) ||
+  mongoose.model<IQuestion>('Question', QuestionSchema);
 
 export default Question;
 

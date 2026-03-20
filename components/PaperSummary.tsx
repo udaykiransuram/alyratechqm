@@ -34,12 +34,26 @@ function formatExamDate(value: string | null | undefined) {
   return format(date, 'PPP');
 }
 
-export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks, examDate }: {
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return '-';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+
+  return format(date, 'PPP p');
+}
+
+export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks, examDate, onlineEnabled, onlineStartsAt, onlineEndsAt }: {
   sections: Section[];
   totalPaperMarks: number;
   duration: number;
   passingMarks: number;
   examDate: string;
+  onlineEnabled: boolean;
+  onlineStartsAt?: string | null;
+  onlineEndsAt?: string | null;
 }) {
   const totalQuestions = sections.reduce((sum, section) => sum + section.questions.length, 0);
 
@@ -82,6 +96,45 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
               <div className="app-detail-value">{value}</div>
             </div>
           ))}
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Delivery Mode
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {onlineEnabled
+                  ? 'Online delivery enabled for student logins. Descriptive answers will still require manual review.'
+                  : 'Offline/manual workflow only.'}
+              </p>
+            </div>
+            <Badge variant={onlineEnabled ? 'default' : 'secondary'}>
+              {onlineEnabled ? 'Online' : 'Offline'}
+            </Badge>
+          </div>
+
+          {onlineEnabled ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-border/60 bg-background/70 px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Online Start
+                </p>
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  {formatDateTime(onlineStartsAt || examDate)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-background/70 px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Online End
+                </p>
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  {formatDateTime(onlineEndsAt)}
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-3 border-t border-border/60 pt-4">

@@ -3,6 +3,15 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { requireTenantSession } from "@/lib/api-auth";
+import {
+  findStudentsByRollNumber,
+  isSameStudentPlacement,
+  normalizeEmail,
+  normalizeRollNumber,
+  resolveUserPasswordInput,
+  validatePasswordInput,
+} from "@/lib/user-credentials";
 
 function normalizeIds(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -11,6 +20,58 @@ function normalizeIds(value: unknown) {
 
 function normalizeId(value: unknown) {
   return value ? String(value).trim() : "";
+}
+
+function resolveUserScope({
+  role,
+  classIds,
+  academicSectionIds,
+  subjectIds,
+  hasAllClasses,
+  hasAllSections,
+  hasAllSubjects,
+}: {
+  role: string;
+  classIds?: unknown;
+  academicSectionIds?: unknown;
+  subjectIds?: unknown;
+  hasAllClasses?: unknown;
+  hasAllSections?: unknown;
+  hasAllSubjects?: unknown;
+}) {
+  const normalizedClassIds = normalizeIds(classIds);
+  const normalizedAcademicSectionIds = normalizeIds(academicSectionIds);
+  const normalizedSubjectIds = normalizeIds(subjectIds);
+  let allowAllClasses = Boolean(hasAllClasses);
+  let allowAllSections =
+    typeof hasAllSections === "boolean" ? hasAllSections : role !== "student";
+  let allowAllSubjects = Boolean(hasAllSubjects);
+
+  if (
+    role === "admin" &&
+    !allowAllClasses &&
+    !allowAllSubjects &&
+    normalizedClassIds.length === 0 &&
+    normalizedSubjectIds.length === 0
+  ) {
+    allowAllClasses = true;
+    allowAllSections = true;
+    allowAllSubjects = true;
+  }
+
+  return {
+    normalizedClassIds,
+    normalizedAcademicSectionIds,
+    normalizedSubjectIds,
+    allowAllClasses,
+    allowAllSections,
+    allowAllSubjects,
+    scopedClassIds: role === "admin" && allowAllClasses ? [] : normalizedClassIds,
+    scopedAcademicSectionIds:
+      role !== "student" && allowAllSections ? [] : normalizedAcademicSectionIds,
+    scopedSubjectIds:
+      role === "admin" && allowAllSubjects ? [] : normalizedSubjectIds,
+  };
 }
 
 async function validateStudentAcademicSection(
@@ -50,28 +111,14 @@ async function validateStudentAcademicSection(
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireTenantSession(request, {
+    allowRoles: ["admin"],
+  });
+  if (!auth.ok) return auth.response;
+
   await connectDB();
   try {
-    const url = new URL(request.url);
-    const schoolFromHeader =
-      request.headers.get("x-school-key") ||
-      request.headers.get("X-School-Key");
-    const schoolFromQuery = url.searchParams.get("school");
-    const schoolFromCookie = request.cookies?.get?.("schoolKey")?.value;
-    const schoolKey = (
-      schoolFromHeader ||
-      schoolFromQuery ||
-      schoolFromCookie ||
-      ""
-    )
-      .toString()
-      .trim();
-    if (!schoolKey) {
-      return NextResponse.json(
-        { success: false, message: "schoolKey required" },
-        { status: 400 },
-      );
-    }
+    const schoolKey = auth.schoolKey as string;
 
     const {
       User,
@@ -94,9 +141,7 @@ export async function POST(request: NextRequest) {
       });
 
       const name = String(normalizedStudent.name || "").trim();
-      const email = normalizedStudent.email
-        ? String(normalizedStudent.email).trim()
-        : undefined;
+      const email = normalizeEmail(normalizedStudent.email);
       const password = normalizedStudent.password
         ? String(normalizedStudent.password)
         : undefined;
@@ -108,21 +153,31 @@ export async function POST(request: NextRequest) {
           normalizedStudent.sectionid ??
           normalizedStudent.section,
       );
-      const finalRollNumber =
-        normalizedStudent.rollnumber || normalizedStudent.rollNumber;
+      const finalRollNumber = normalizeRollNumber(
+        normalizedStudent.rollnumber || normalizedStudent.rollNumber,
+      );
       const finalMobileNumber =
         normalizedStudent.mobilenumber || normalizedStudent.mobileNumber;
-      const normalizedClassIds = normalizeIds(normalizedStudent.classids);
-      const normalizedAcademicSectionIds = normalizeIds(
-        normalizedStudent.academicsectionids ?? normalizedStudent.sectionids,
-      );
-      const normalizedSubjectIds = normalizeIds(normalizedStudent.subjectids);
-      const allowAllClasses = Boolean(normalizedStudent.hasallclasses);
-      const allowAllSections =
-        typeof normalizedStudent.hasallsections === "boolean"
-          ? normalizedStudent.hasallsections
-          : role !== "student";
-      const allowAllSubjects = Boolean(normalizedStudent.hasallsubjects);
+      const {
+        normalizedClassIds,
+        normalizedAcademicSectionIds,
+        normalizedSubjectIds,
+        allowAllClasses,
+        allowAllSections,
+        allowAllSubjects,
+        scopedClassIds,
+        scopedAcademicSectionIds,
+        scopedSubjectIds,
+      } = resolveUserScope({
+        role,
+        classIds: normalizedStudent.classids,
+        academicSectionIds:
+          normalizedStudent.academicsectionids ?? normalizedStudent.sectionids,
+        subjectIds: normalizedStudent.subjectids,
+        hasAllClasses: normalizedStudent.hasallclasses,
+        hasAllSections: normalizedStudent.hasallsections,
+        hasAllSubjects: normalizedStudent.hasallsubjects,
+      });
 
       if (!name || !role) {
         results.push({
@@ -159,20 +214,6 @@ export async function POST(request: NextRequest) {
         });
         continue;
       }
-      if (
-        role === "admin" &&
-        ((!allowAllClasses && normalizedClassIds.length === 0) ||
-          (!allowAllSubjects && normalizedSubjectIds.length === 0))
-      ) {
-        results.push({
-          success: false,
-          message:
-            "Admins must have all classes/subjects enabled or choose at least one class and one subject.",
-          student,
-        });
-        continue;
-      }
-
       if (role === "student" && classId && academicSectionId) {
         const sectionValidation = await validateStudentAcademicSection(
           AcademicSectionModel,
@@ -189,18 +230,35 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (role === "student" && finalRollNumber && classId) {
-        const studentQuery: any = {
-          role: "student",
-          rollNumber: finalRollNumber,
-          class: classId,
-        };
-        if (academicSectionId) {
-          studentQuery.academicSection = academicSectionId;
-        }
-        const existingStudent = await User.findOne(studentQuery);
-        if (existingStudent) {
-          results.push({ success: true, user: existingStudent, existed: true });
+      if (role === "student" && finalRollNumber) {
+        const existingStudents = await findStudentsByRollNumber(
+          User,
+          finalRollNumber,
+          { limit: 2 },
+        );
+        if (existingStudents.length > 0) {
+          if (
+            existingStudents.length === 1 &&
+            isSameStudentPlacement(
+              existingStudents[0],
+              classId,
+              academicSectionId,
+            )
+          ) {
+            results.push({
+              success: true,
+              user: existingStudents[0],
+              existed: true,
+            });
+            continue;
+          }
+
+          results.push({
+            success: false,
+            message:
+              "Roll number must be unique within the school because students use it to sign in.",
+            student,
+          });
           continue;
         }
       }
@@ -217,17 +275,28 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const effectivePassword = resolveUserPasswordInput({
+        role,
+        rollNumber: finalRollNumber,
+        password,
+      });
+      const passwordValidation = validatePasswordInput({
+        role,
+        rollNumber: finalRollNumber,
+        password: effectivePassword,
+      });
+      if (!passwordValidation.ok) {
+        results.push({
+          success: false,
+          message: passwordValidation.message,
+          student,
+        });
+        continue;
+      }
+
       let passwordHash: string | undefined;
-      if (password) {
-        if (String(password).length < 6) {
-          results.push({
-            success: false,
-            message: "Password must be at least 6 characters long.",
-            student,
-          });
-          continue;
-        }
-        passwordHash = await bcrypt.hash(String(password), 10);
+      if (effectivePassword) {
+        passwordHash = await bcrypt.hash(String(effectivePassword), 10);
       }
 
       const newUser = new User({
@@ -241,17 +310,15 @@ export async function POST(request: NextRequest) {
           role === "student" ? academicSectionId || undefined : undefined,
         classIds:
           role === "teacher" || role === "admin"
-            ? normalizedClassIds
+            ? scopedClassIds
             : undefined,
         academicSectionIds:
           role === "teacher" || role === "admin"
-            ? allowAllSections
-              ? []
-              : normalizedAcademicSectionIds
+            ? scopedAcademicSectionIds
             : undefined,
         subjectIds:
           role === "teacher" || role === "admin"
-            ? normalizedSubjectIds
+            ? scopedSubjectIds
             : undefined,
         hasAllClasses: role === "admin" ? allowAllClasses : false,
         hasAllSections:

@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { BookOpen } from 'lucide-react';
 import MultiSelectChecklist from '@/components/multi-select-checklist';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface AcademicSectionItem {
   _id: string;
@@ -22,6 +23,12 @@ export interface PaperDetailsFormProps {
   setPassingMarks: (v: number) => void;
   examDate: Date;
   setExamDate: (v: Date) => void;
+  onlineEnabled: boolean;
+  setOnlineEnabled: (v: boolean) => void;
+  onlineStartsAt: Date | null;
+  setOnlineStartsAt: (v: Date | null) => void;
+  onlineEndsAt: Date | null;
+  setOnlineEndsAt: (v: Date | null) => void;
   classId: string;
   setClassId: (v: string) => void;
   subjectId: string;
@@ -35,6 +42,14 @@ export interface PaperDetailsFormProps {
   initialDataLoading?: boolean;
 }
 
+function formatDateTimeLocal(value: Date | null | undefined) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const localValue = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localValue.toISOString().slice(0, 16);
+}
+
 export function PaperDetailsForm({
   paperTitle,
   setPaperTitle,
@@ -46,6 +61,12 @@ export function PaperDetailsForm({
   setPassingMarks,
   examDate,
   setExamDate,
+  onlineEnabled,
+  setOnlineEnabled,
+  onlineStartsAt,
+  setOnlineStartsAt,
+  onlineEndsAt,
+  setOnlineEndsAt,
   classId,
   setClassId,
   subjectId,
@@ -186,6 +207,64 @@ export function PaperDetailsForm({
               onChange={e => setPassingMarks(Number(e.target.value))}
               placeholder="e.g., 33"
             />
+          </div>
+
+          <div className="app-field-group sm:col-span-2 rounded-2xl border border-border/60 bg-muted/20 p-4">
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="onlineEnabled"
+                checked={onlineEnabled}
+                onCheckedChange={(checked) => setOnlineEnabled(checked === true)}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="onlineEnabled" className="app-field-label">
+                  Enable Online Test Delivery
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Objective and matrix questions are auto-graded online.
+                  Descriptive questions are allowed, but they still need manual review after submission.
+                </p>
+              </div>
+            </div>
+
+            {onlineEnabled ? (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="app-field-group">
+                  <Label htmlFor="onlineStartsAt" className="app-field-label">
+                    Online Start
+                  </Label>
+                  <Input
+                    id="onlineStartsAt"
+                    type="datetime-local"
+                    value={formatDateTimeLocal(onlineStartsAt)}
+                    onChange={e =>
+                      setOnlineStartsAt(e.target.value ? new Date(e.target.value) : null)
+                    }
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Leave blank to start from the paper exam date.
+                  </p>
+                </div>
+
+                <div className="app-field-group">
+                  <Label htmlFor="onlineEndsAt" className="app-field-label">
+                    Online End
+                  </Label>
+                  <Input
+                    id="onlineEndsAt"
+                    type="datetime-local"
+                    value={formatDateTimeLocal(onlineEndsAt)}
+                    onChange={e =>
+                      setOnlineEndsAt(e.target.value ? new Date(e.target.value) : null)
+                    }
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Optional global cutoff. Student timers still respect the
+                    paper duration.
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 

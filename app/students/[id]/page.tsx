@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { Button } from "@/components/ui/button";
+import PageHero from "@/components/layout/PageHero";
 import {
   Table,
   TableBody,
@@ -226,20 +227,49 @@ export default function StudentDetailPage() {
 
   return (
     <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div className="app-page-header">
-          <h1 className="app-page-title">Student Details</h1>
-          <p className="app-page-subtitle">
-            View student profile information, enrollment data, and exam attempts.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={navigateBack}>Back to Students</Button>
-          <Link href={editHref}>
-            <Button>Edit</Button>
-          </Link>
-        </div>
-      </div>
+      <PageHero
+        eyebrow="People"
+        title={user?.name || "Student Details"}
+        description="Review student profile information, class placement, credentials context, and all recorded paper attempts from one page."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={navigateBack}>Back to Students</Button>
+            <Link href={editHref}>
+              <Button>Edit Student</Button>
+            </Link>
+          </div>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Student account</span>
+            <span className="app-meta-chip">
+              {user?.rollNumber ? `Username: ${user.rollNumber}` : "Roll number pending"}
+            </span>
+          </>
+        }
+        stats={[
+          {
+            label: "Class",
+            value: loading ? "—" : className,
+            meta: "Current class placement for eligibility and reporting.",
+          },
+          {
+            label: "Section",
+            value: loading ? "—" : academicSectionName,
+            meta: "Current section placement for paper targeting.",
+          },
+          {
+            label: "Attempts",
+            value: loading ? "—" : String(totalAttempts),
+            meta: "All recorded paper responses for this student.",
+          },
+          {
+            label: "Profile state",
+            value: loading ? "Loading" : error ? "Needs review" : "Ready",
+            meta: error ? "Student details could not be loaded cleanly." : "Student profile and attempts loaded successfully.",
+          },
+        ]}
+      />
 
       {loading ? (
         <PageLoadingState
@@ -255,6 +285,50 @@ export default function StudentDetailPage() {
         <div className="app-empty-state">User not found.</div>
       ) : (
         <>
+          <div className="app-spotlight-grid">
+            <div className="app-spotlight-card app-spotlight-card-strong">
+              <p className="app-spotlight-label">Student summary</p>
+              <h2 className="app-spotlight-title">{user.name}</h2>
+              <p className="app-spotlight-copy">
+                This page keeps profile details, portal identity, and paper
+                attempts together so school admins can review the full student
+                trail from one place.
+              </p>
+              <div className="app-inline-stat-grid">
+                <div className="app-inline-stat">
+                  <p className="app-inline-stat-label">Username</p>
+                  <p className="app-inline-stat-value">{user.rollNumber || "-"}</p>
+                </div>
+                <div className="app-inline-stat">
+                  <p className="app-inline-stat-label">Class</p>
+                  <p className="app-inline-stat-value">{className}</p>
+                </div>
+                <div className="app-inline-stat">
+                  <p className="app-inline-stat-label">Section</p>
+                  <p className="app-inline-stat-value">{academicSectionName}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="app-surface app-surface-body">
+              <p className="app-spotlight-label">Student notes</p>
+              <h2 className="text-lg font-semibold text-foreground">
+                What to verify before changing this student
+              </h2>
+              <div className="mt-4 space-y-2">
+                <div className="app-note-item">
+                  Roll number acts as the portal username for student sign-in and online tests.
+                </div>
+                <div className="app-note-item">
+                  Class and section placement determine which online tests appear on the student dashboard.
+                </div>
+                <div className="app-note-item">
+                  Parent report delivery is triggered from the recorded attempt rows below.
+                </div>
+              </div>
+            </div>
+          </div>
+
           <Card className="app-surface">
             <CardHeader className="app-section-header">
               <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-xl font-semibold tracking-tight">
@@ -305,21 +379,23 @@ export default function StudentDetailPage() {
           </Card>
 
           <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <CardTitle className="flex flex-col gap-3 text-xl font-semibold tracking-tight lg:flex-row lg:items-center lg:justify-between">
-                <span>Attempts ({totalAttempts})</span>
-                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                  <span>
+            <CardHeader className="app-section-header space-y-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-1">
+                  <CardTitle>Attempts ({totalAttempts})</CardTitle>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    View submission history, jump to analytics, open the source paper, or trigger parent-report delivery from the same table.
+                  </p>
+                </div>
+                <div className="app-chip-cloud">
+                  <span className="app-meta-chip">
                     Page {page} of {maxPage}
                   </span>
-                  <Button variant="outline" size="sm" onClick={() => changePage(-1)} disabled={page <= 1}>
-                    Prev
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => changePage(1)} disabled={page >= maxPage}>
-                    Next
-                  </Button>
+                  <span className="app-meta-chip">
+                    {attemptsError ? "Attempt load issue" : "Attempt history ready"}
+                  </span>
                 </div>
-              </CardTitle>
+              </div>
             </CardHeader>
             <CardContent className="app-section-body">
               {attemptsError ? (
@@ -327,98 +403,133 @@ export default function StudentDetailPage() {
               ) : totalAttempts === 0 ? (
                 <div className="app-empty-state">No attempts found.</div>
               ) : (
-                <div className="app-table-wrap">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Paper</TableHead>
-                        <TableHead>Subject</TableHead>
-                        <TableHead>Class</TableHead>
-                        <TableHead>Attempted</TableHead>
-                        <TableHead>Submitted</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Duration</TableHead>
-                        <TableHead>Questions</TableHead>
-                        <TableHead>Score</TableHead>
-                        <TableHead className="w-[360px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {pageItems.map((attempt) => {
-                        const paperId = (attempt.paper as any)?._id || "";
-                        const paperTitle = (attempt.paper as any)?.title || "-";
-                        const subjectName =
-                          typeof (attempt.paper as any)?.subject === "object"
-                            ? (attempt.paper as any)?.subject?.name || "-"
-                            : (attempt.paper as any)?.subject || "-";
-                        const currentClassName =
-                          typeof (attempt.paper as any)?.class === "object"
-                            ? (attempt.paper as any)?.class?.name || "-"
-                            : (attempt.paper as any)?.class || "-";
-                        const started = attempt.startedAt
-                          ? new Date(attempt.startedAt).toLocaleString()
-                          : "-";
-                        const submitted = attempt.submittedAt
-                          ? new Date(attempt.submittedAt).toLocaleString()
-                          : "-";
-                        const score = calcScore(attempt);
-                        return (
-                          <TableRow key={attempt._id}>
-                            <TableCell className="font-medium">{paperTitle}</TableCell>
-                            <TableCell>{subjectName}</TableCell>
-                            <TableCell>{currentClassName}</TableCell>
-                            <TableCell>{started}</TableCell>
-                            <TableCell>{submitted}</TableCell>
-                            <TableCell>{attempt.submittedAt ? "Submitted" : "In progress"}</TableCell>
-                            <TableCell>
-                              {attempt.startedAt && attempt.submittedAt
-                                ? formatDuration(
-                                    new Date(attempt.submittedAt).getTime() -
-                                      new Date(attempt.startedAt).getTime(),
-                                  )
-                                : "-"}
-                            </TableCell>
-                            <TableCell>
-                              {Array.isArray(attempt.sectionAnswers)
-                                ? attempt.sectionAnswers.reduce(
-                                    (sum, section) => sum + (section.answers?.length || 0),
-                                    0,
-                                  )
-                                : 0}
-                            </TableCell>
-                            <TableCell>{score}</TableCell>
-                            <TableCell>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Link href={buildHrefWithReturnTo(`/analytics/student-tag-report/${attempt._id}`, currentPath)}>
-                                  <Button variant="outline" size="sm">
-                                    Student Report
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          Attempt navigation
+                        </p>
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          Use pagination to move through the student&apos;s full recorded attempt history.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => changePage(-1)}
+                          disabled={page <= 1}
+                        >
+                          Prev
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => changePage(1)}
+                          disabled={page >= maxPage}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="app-table-wrap">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Paper</TableHead>
+                          <TableHead>Subject</TableHead>
+                          <TableHead>Class</TableHead>
+                          <TableHead>Attempted</TableHead>
+                          <TableHead>Submitted</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Duration</TableHead>
+                          <TableHead>Questions</TableHead>
+                          <TableHead>Score</TableHead>
+                          <TableHead className="w-[360px]">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pageItems.map((attempt) => {
+                          const paperId = (attempt.paper as any)?._id || "";
+                          const paperTitle = (attempt.paper as any)?.title || "-";
+                          const subjectName =
+                            typeof (attempt.paper as any)?.subject === "object"
+                              ? (attempt.paper as any)?.subject?.name || "-"
+                              : (attempt.paper as any)?.subject || "-";
+                          const currentClassName =
+                            typeof (attempt.paper as any)?.class === "object"
+                              ? (attempt.paper as any)?.class?.name || "-"
+                              : (attempt.paper as any)?.class || "-";
+                          const started = attempt.startedAt
+                            ? new Date(attempt.startedAt).toLocaleString()
+                            : "-";
+                          const submitted = attempt.submittedAt
+                            ? new Date(attempt.submittedAt).toLocaleString()
+                            : "-";
+                          const score = calcScore(attempt);
+                          return (
+                            <TableRow key={attempt._id}>
+                              <TableCell className="font-medium">{paperTitle}</TableCell>
+                              <TableCell>{subjectName}</TableCell>
+                              <TableCell>{currentClassName}</TableCell>
+                              <TableCell>{started}</TableCell>
+                              <TableCell>{submitted}</TableCell>
+                              <TableCell>
+                                {attempt.submittedAt ? "Submitted" : "In progress"}
+                              </TableCell>
+                              <TableCell>
+                                {attempt.startedAt && attempt.submittedAt
+                                  ? formatDuration(
+                                      new Date(attempt.submittedAt).getTime() -
+                                        new Date(attempt.startedAt).getTime(),
+                                    )
+                                  : "-"}
+                              </TableCell>
+                              <TableCell>
+                                {Array.isArray(attempt.sectionAnswers)
+                                  ? attempt.sectionAnswers.reduce(
+                                      (sum, section) => sum + (section.answers?.length || 0),
+                                      0,
+                                    )
+                                  : 0}
+                              </TableCell>
+                              <TableCell>{score}</TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Link href={buildHrefWithReturnTo(`/analytics/student-tag-report/${attempt._id}`, currentPath)}>
+                                    <Button variant="outline" size="sm">
+                                      Student Report
+                                    </Button>
+                                  </Link>
+                                  <Link href={buildHrefWithReturnTo(`/analytics/class-tag-report/${paperId}`, currentPath)} prefetch={false}>
+                                    <Button size="sm">Class Report</Button>
+                                  </Link>
+                                  <Link href={buildHrefWithReturnTo(`/question-papers/view/${paperId}`, currentPath)}>
+                                    <Button variant="outline" size="sm">
+                                      View Paper
+                                    </Button>
+                                  </Link>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSendStudentReport(attempt._id)}
+                                    disabled={sendingResponseId === attempt._id}
+                                    className="border-green-300 text-green-700"
+                                  >
+                                    <MessageCircle className="mr-1 h-4 w-4" />
+                                    {sendingResponseId === attempt._id ? "Sending…" : "Send Parent Report"}
                                   </Button>
-                                </Link>
-                                <Link href={buildHrefWithReturnTo(`/analytics/class-tag-report/${paperId}`, currentPath)} prefetch={false}>
-                                  <Button size="sm">Class Report</Button>
-                                </Link>
-                                <Link href={buildHrefWithReturnTo(`/question-papers/view/${paperId}`, currentPath)}>
-                                  <Button variant="outline" size="sm">
-                                    View Paper
-                                  </Button>
-                                </Link>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleSendStudentReport(attempt._id)}
-                                  disabled={sendingResponseId === attempt._id}
-                                  className="border-green-300 text-green-700"
-                                >
-                                  <MessageCircle className="mr-1 h-4 w-4" />
-                                  {sendingResponseId === attempt._id ? "Sending…" : "Send Parent Report"}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               )}
             </CardContent>

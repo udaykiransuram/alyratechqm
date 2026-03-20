@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import { TagItem } from '@/components/ui/multi-select-tags';
 import { Spinner } from '@/components/ui/spinner';
 import EditorLoadingState from '@/components/ui/editor-loading-state';
+import PageHero from '@/components/layout/PageHero';
 import {
   Card,
   CardContent,
@@ -39,7 +40,7 @@ export default function EditQuestionPage() {
   const { toast } = useToast();
 
   // Form state
-  const [type, setType] = useState<'single' | 'multiple' | 'matrix-match'>('single');
+  const [type, setType] = useState<'single' | 'multiple' | 'matrix-match' | 'descriptive'>('single');
   const [classId, setClassId] = useState('');
   const [subjectId, setSubjectId] = useState('');
   const [classes, setClasses] = useState<any[]>([]);
@@ -276,18 +277,49 @@ export default function EditQuestionPage() {
 
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div className="app-page-header">
-          <h1 className="app-page-title">Edit Question</h1>
-          <p className="app-page-subtitle">Update the question content, metadata, and answer configuration below.</p>
-        </div>
-        <Button type="button" variant="outline" onClick={navigateBack}>
-          Back
-        </Button>
-      </div>
+      <PageHero
+        eyebrow="Question Bank"
+        title="Edit Question"
+        description="Update the question content, metadata, and answer configuration without leaving the dedicated authoring flow."
+        actions={
+          <Button type="button" variant="outline" onClick={navigateBack}>
+            Back
+          </Button>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Question maintenance</span>
+            <span className="app-meta-chip">Metadata-aware editing</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Question type',
+            value:
+              type === 'single'
+                ? 'Single choice'
+                : type === 'multiple'
+                  ? 'Multiple choice'
+                  : type === 'matrix-match'
+                    ? 'Matrix match'
+                    : 'Descriptive',
+            meta: 'Existing question type stays fixed on this edit screen.',
+          },
+          {
+            label: 'Selected tags',
+            value: String(selectedTags.length),
+            meta: 'Keep tags aligned with how the question should be discovered later.',
+          },
+          {
+            label: 'Marks',
+            value: String(marks),
+            meta: 'Marks edits affect paper-building and reporting expectations.',
+          },
+        ]}
+      />
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-5">
+      <div className="app-editor-grid">
+        <div className="app-editor-main">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Question Content</CardTitle>
@@ -300,7 +332,7 @@ export default function EditQuestionPage() {
             </CardContent>
           </Card>
 
-          {type !== 'matrix-match' ? (
+          {type === 'single' || type === 'multiple' ? (
             <Card className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
                 <CardTitle>Answer Options</CardTitle>
@@ -363,6 +395,22 @@ export default function EditQuestionPage() {
             </Card>
           ) : null}
 
+          {type === 'descriptive' ? (
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Written Response</CardTitle>
+                <CardDescription>
+                  Students answer this question in free text and the response can be reviewed later.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="app-section-body">
+                <div className="rounded-2xl border border-dashed border-border/60 bg-muted/10 px-4 py-4 text-sm text-muted-foreground">
+                  This descriptive question does not use answer options or matrix selections.
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Explanation</CardTitle>
@@ -374,7 +422,7 @@ export default function EditQuestionPage() {
           </Card>
         </div>
 
-        <div className="space-y-4 xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
+        <aside className="app-editor-aside xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
           <MetadataSelector
             classes={classes}
             classId={classId}
@@ -417,12 +465,38 @@ export default function EditQuestionPage() {
 
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
+              <CardTitle>Edit Notes</CardTitle>
+              <CardDescription>Use this side rail as a quick review checklist before saving.</CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <div className="app-note-list">
+                <div className="app-note-item">
+                  If you change class or subject, make sure the selected tags still describe the question accurately.
+                </div>
+                <div className="app-note-item">
+                  Objective question edits should keep option order and correct answers in sync.
+                </div>
+                <div className="app-note-item">
+                  Save only after rechecking marks and explanation so analytics stay trustworthy.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
               <CardTitle>Question Type</CardTitle>
               <CardDescription>Question type is fixed for this existing item.</CardDescription>
             </CardHeader>
             <CardContent className="app-section-body">
               <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-sm font-medium text-foreground">
-                {type === 'single' ? 'Single Choice' : type === 'multiple' ? 'Multiple Choice' : 'Matrix Match'}
+                {type === 'single'
+                  ? 'Single Choice'
+                  : type === 'multiple'
+                    ? 'Multiple Choice'
+                    : type === 'matrix-match'
+                      ? 'Matrix Match'
+                      : 'Descriptive'}
               </div>
             </CardContent>
           </Card>
@@ -438,9 +512,8 @@ export default function EditQuestionPage() {
               </Button>
             </CardContent>
           </Card>
-        </div>
+        </aside>
       </div>
     </div>
   );
 }
-

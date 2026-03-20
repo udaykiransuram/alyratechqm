@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import PageHero from '@/components/layout/PageHero';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -59,105 +60,144 @@ export default function BulkQuestionUploadPage() {
   };
 
   return (
-    <div className="app-page-shell max-w-4xl px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">Bulk Question Upload</h1>
-          <p className="app-page-subtitle">
-            Upload a JSON file or paste structured JSON to create multiple questions in one go.
-          </p>
+    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+      <PageHero
+        eyebrow="Question Bank"
+        title="Bulk Question Upload"
+        description="Upload a JSON file or paste structured JSON to create multiple questions in one go."
+        actions={
+          <Button variant="outline" onClick={navigateBack} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">JSON import flow</span>
+            <span className="app-meta-chip">Batch authoring</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Source mode',
+            value: jsonText.trim() ? 'Ready to upload' : 'Waiting for JSON',
+            meta: 'Load a file or paste JSON directly into the editor.',
+          },
+          {
+            label: 'Result state',
+            value: result ? 'Uploaded' : error ? 'Needs attention' : 'Idle',
+            meta: 'Review the summary and raw response after each run.',
+          },
+        ]}
+      />
+
+      <div className="app-editor-grid">
+        <div className="app-editor-main">
+          <Card className="app-surface overflow-hidden">
+            <CardContent className="app-surface-body">
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="app-field-group">
+                  <label className="app-field-label" htmlFor="bulkJsonFile">
+                    Upload JSON File
+                  </label>
+                  <input
+                    id="bulkJsonFile"
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={handleFileChange}
+                    className="app-form-file"
+                  />
+                </div>
+
+                <div className="app-field-group">
+                  <label className="app-field-label" htmlFor="bulkJsonText">
+                    Or Paste / Edit JSON
+                  </label>
+                  <Textarea
+                    id="bulkJsonText"
+                    rows={12}
+                    className="font-mono"
+                    value={jsonText}
+                    onChange={(e) => setJsonText(e.target.value)}
+                    placeholder="Paste or edit your JSON here"
+                  />
+                </div>
+
+                <Button type="submit" disabled={uploading}>
+                  {uploading ? 'Uploading...' : 'Upload'}
+                </Button>
+              </form>
+
+              {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+
+              {result ? (
+                <div className="app-section">
+                  <div className="space-y-1">
+                    <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                      Bulk Creation Summary
+                    </h2>
+                    <p className="app-page-subtitle">Review the counts below and inspect the raw response if needed.</p>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-border/60 bg-background">
+                    <table className="min-w-[360px] w-full text-sm">
+                      <tbody>
+                        <tr className="border-b">
+                          <td className="px-4 py-3 font-medium text-foreground">Questions created</td>
+                          <td className="px-4 py-3 text-muted-foreground">{result.createdQuestions?.length ?? 0}</td>
+                        </tr>
+                        <tr className="border-b">
+                          <td className="px-4 py-3 font-medium text-foreground">Tags created</td>
+                          <td className="px-4 py-3 text-muted-foreground">{result.createdTags?.length ?? 0}</td>
+                        </tr>
+                        <tr className="border-b">
+                          <td className="px-4 py-3 font-medium text-foreground">Tag types created</td>
+                          <td className="px-4 py-3 text-muted-foreground">{result.createdTagTypes?.length ?? 0}</td>
+                        </tr>
+                        <tr className="border-b">
+                          <td className="px-4 py-3 font-medium text-foreground">Subjects created</td>
+                          <td className="px-4 py-3 text-muted-foreground">{result.createdSubjects?.length ?? 0}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-3 font-medium text-foreground">Classes created</td>
+                          <td className="px-4 py-3 text-muted-foreground">{result.createdClasses?.length ?? 0}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <details className="rounded-xl border border-border/60 bg-background p-4">
+                    <summary className="cursor-pointer text-sm font-medium text-foreground">
+                      Show raw response
+                    </summary>
+                    <pre className="mt-3 overflow-x-auto rounded-lg bg-muted/40 p-3 text-xs text-foreground">
+                      {JSON.stringify(result, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
         </div>
-        <Button variant="outline" onClick={navigateBack}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
+
+        <aside className="app-editor-aside">
+          <Card className="app-surface overflow-hidden">
+            <CardContent className="app-surface-body">
+              <div className="app-note-list">
+                <div className="app-note-item">
+                  Use this flow for batch imports only when the JSON shape already matches your API expectations.
+                </div>
+                <div className="app-note-item">
+                  Review the raw response after each run so any partial creation is visible immediately.
+                </div>
+                <div className="app-note-item">
+                  If you need spreadsheet conversion first, use the import builder in the upload workspace instead.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
-
-      <Card className="app-surface">
-        <CardContent className="app-surface-body">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="bulkJsonFile">
-                Upload JSON File
-              </label>
-              <input
-                id="bulkJsonFile"
-                type="file"
-                accept=".json,application/json"
-                onChange={handleFileChange}
-                className="app-form-file"
-              />
-            </div>
-
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="bulkJsonText">
-                Or Paste / Edit JSON
-              </label>
-              <Textarea
-                id="bulkJsonText"
-                rows={12}
-                className="font-mono"
-                value={jsonText}
-                onChange={(e) => setJsonText(e.target.value)}
-                placeholder="Paste or edit your JSON here"
-              />
-            </div>
-
-            <Button type="submit" disabled={uploading}>
-              {uploading ? 'Uploading...' : 'Upload'}
-            </Button>
-          </form>
-
-          {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
-
-          {result ? (
-            <div className="app-section">
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold tracking-tight text-foreground">
-                  Bulk Creation Summary
-                </h2>
-                <p className="app-page-subtitle">Review the counts below and inspect the raw response if needed.</p>
-              </div>
-
-              <div className="overflow-x-auto rounded-xl border border-border/60 bg-background">
-                <table className="min-w-[360px] w-full text-sm">
-                  <tbody>
-                    <tr className="border-b">
-                      <td className="px-4 py-3 font-medium text-foreground">Questions created</td>
-                      <td className="px-4 py-3 text-muted-foreground">{result.createdQuestions?.length ?? 0}</td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="px-4 py-3 font-medium text-foreground">Tags created</td>
-                      <td className="px-4 py-3 text-muted-foreground">{result.createdTags?.length ?? 0}</td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="px-4 py-3 font-medium text-foreground">Tag types created</td>
-                      <td className="px-4 py-3 text-muted-foreground">{result.createdTagTypes?.length ?? 0}</td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="px-4 py-3 font-medium text-foreground">Subjects created</td>
-                      <td className="px-4 py-3 text-muted-foreground">{result.createdSubjects?.length ?? 0}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 font-medium text-foreground">Classes created</td>
-                      <td className="px-4 py-3 text-muted-foreground">{result.createdClasses?.length ?? 0}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <details className="rounded-xl border border-border/60 bg-background p-4">
-                <summary className="cursor-pointer text-sm font-medium text-foreground">
-                  Show raw response
-                </summary>
-                <pre className="mt-3 overflow-x-auto rounded-lg bg-muted/40 p-3 text-xs text-foreground">
-                  {JSON.stringify(result, null, 2)}
-                </pre>
-              </details>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
     </div>
   );
 }

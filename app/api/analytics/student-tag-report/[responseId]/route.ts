@@ -19,16 +19,12 @@ import {
   getStudentAcademicSectionId,
   hydrateResponsesWithStudents,
 } from "@/lib/analytics/hydrateResponses";
+import {
+  buildPaperQuestionLookup,
+  evaluateQuestionAnswer,
+} from "@/lib/question-paper/grading";
 import { z } from "zod";
 import { objectIdSchema, schoolKeySchema, parseOr400 } from "@/lib/validation";
-
-function arraysEqual(a: number[], b: number[]) {
-  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
-    return false;
-  const sortedA = [...a].sort();
-  const sortedB = [...b].sort();
-  return sortedA.every((val, idx) => val === sortedB[idx]);
-}
 
 function getTagValue(tags: any[], type: string) {
   const tag = tags.find(
@@ -360,7 +356,7 @@ export async function GET(
       const paper = await QPModel.findById(paperId)
         .populate({
           path: "sections.questions.question",
-          select: "tags content answerIndexes options subject class",
+          select: "tags content answerIndexes options subject class type matrixOptions matrixAnswers",
           populate: [
             {
               path: "tags",
@@ -375,7 +371,7 @@ export async function GET(
       responses = await QPRModel.find({ paper: paperId })
         .populate({
           path: "sectionAnswers.answers.question",
-          select: "answerIndexes tags content options subject class",
+          select: "answerIndexes tags content options subject class type matrixOptions matrixAnswers",
           populate: [
             {
               path: "tags",
@@ -403,6 +399,7 @@ export async function GET(
       paperSections = Array.isArray(paper)
         ? paper[0]?.sections || []
         : paper?.sections || [];
+      const questionLookup = buildPaperQuestionLookup({ sections: paperSections });
 
       // --- Aggregate per-question stats for class level ---
       for (const response of responses) {
@@ -428,13 +425,12 @@ export async function GET(
             if (!question || !question.tags || !question._id) continue;
             const qid = String(question._id);
             const ans = answerMap[sectionName]?.[qid];
-            const attempted =
-              ans &&
-              Array.isArray(ans.selectedOptions) &&
-              ans.selectedOptions.length > 0;
-            const isCorrect =
-              attempted &&
-              arraysEqual(ans.selectedOptions, question.answerIndexes || []);
+            const evaluation = evaluateQuestionAnswer(
+              questionLookup.get(`${sectionName}::${qid}`),
+              ans,
+            );
+            const attempted = evaluation.attempted;
+            const isCorrect = evaluation.isCorrect;
             if (!questionStats[qid])
               questionStats[qid] = {
                 correct: 0,
@@ -461,7 +457,7 @@ export async function GET(
       const rawResponse = await QPRModel.findById(params.responseId)
         .populate({
           path: "sectionAnswers.answers.question",
-          select: "answerIndexes tags content options subject class",
+          select: "answerIndexes tags content options subject class type matrixOptions matrixAnswers",
           populate: [
             {
               path: "tags",
@@ -476,7 +472,7 @@ export async function GET(
           select: "title subject sections",
           populate: {
             path: "sections.questions.question",
-            select: "tags content answerIndexes options subject class",
+            select: "tags content answerIndexes options subject class type matrixOptions matrixAnswers",
             populate: [
               {
                 path: "tags",

@@ -6,6 +6,14 @@ import { useRouter } from 'next/navigation';
 import MultiSelectChecklist from '@/components/multi-select-checklist';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import PageHero from '@/components/layout/PageHero';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
 import { fetchApiJson, buildPartialLoadMessage, resolveClientSchoolKey } from '@/lib/client/api';
 
@@ -216,130 +224,192 @@ export default function CreateAdminPage() {
       : 'app-feedback app-feedback-success';
 
   return (
-    <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">Create Admin</h1>
-          <p className="app-page-subtitle">
-            Create an admin account and configure class, section, and subject access from one place.
-          </p>
-        </div>
-        <Button type="button" variant="outline" onClick={navigateBack}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-      </div>
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+      <PageHero
+        eyebrow="People"
+        title="Create Admin"
+        description="Create a school-admin account and decide whether it should keep full-school access or operate within a restricted scope."
+        actions={
+          <Button type="button" variant="outline" onClick={navigateBack}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Admins
+          </Button>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">School admin access</span>
+            <span className="app-meta-chip">Full or restricted scope</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Class scope',
+            value: form.hasAllClasses ? 'All' : String(form.classIds.length),
+            meta: form.hasAllClasses ? 'Admin will see every class.' : 'Admin is limited to the selected classes.',
+          },
+          {
+            label: 'Section scope',
+            value: form.hasAllSections ? 'All' : String(form.academicSectionIds.length),
+            meta: form.hasAllSections ? 'Section access is broad inside the allowed class scope.' : 'Only selected sections are enabled.',
+          },
+          {
+            label: 'Subject scope',
+            value: form.hasAllSubjects ? 'All' : String(form.subjectIds.length),
+            meta: form.hasAllSubjects ? 'Admin will see every subject.' : 'Only selected subjects are enabled.',
+          },
+          {
+            label: 'Form state',
+            value: loading ? 'Saving' : 'Ready',
+            meta: 'New admin accounts are created inside the current school tenant.',
+          },
+        ]}
+      />
 
       {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
+      {message ? <div className={messageClassName}>{message}</div> : null}
 
-      <div className="app-surface app-surface-body">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="app-field-group">
-            <label className="app-field-label" htmlFor="name">Name</label>
-            <input id="name" name="name" placeholder="Enter name" value={form.name} onChange={handleChange} required className="app-form-input" />
-          </div>
+      <div className="app-editor-grid">
+        <div className="app-editor-main">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Admin Profile</CardTitle>
+              <CardDescription>
+                Set up the account first, then choose whether this admin should have full or restricted school access.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="app-field-group">
+                  <label className="app-field-label" htmlFor="name">Name</label>
+                  <input id="name" name="name" placeholder="Enter name" value={form.name} onChange={handleChange} required className="app-form-input" />
+                </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="email">Email</label>
-              <input id="email" name="email" placeholder="Enter email" value={form.email} onChange={handleChange} type="email" className="app-form-input" />
-            </div>
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="mobileNumber">Phone Number</label>
-              <input id="mobileNumber" name="mobileNumber" placeholder="Enter phone number" value={form.mobileNumber} onChange={handleChange} required className="app-form-input" />
-            </div>
-          </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="email">Email</label>
+                    <input id="email" name="email" placeholder="Enter email" value={form.email} onChange={handleChange} type="email" className="app-form-input" />
+                  </div>
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="mobileNumber">Phone Number</label>
+                    <input id="mobileNumber" name="mobileNumber" placeholder="Enter phone number" value={form.mobileNumber} onChange={handleChange} required className="app-form-input" />
+                  </div>
+                </div>
 
-          <div className="app-field-group">
-            <label className="app-field-label" htmlFor="password">Password</label>
-            <input id="password" name="password" placeholder="Create password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
-          </div>
+                <div className="app-field-group">
+                  <label className="app-field-label" htmlFor="password">Password</label>
+                  <input id="password" name="password" placeholder="Create password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
+                </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
-              <Checkbox
-                checked={form.hasAllClasses}
-                onCheckedChange={(checked) => updateToggle('hasAllClasses', checked === true)}
-                className="mt-0.5"
-              />
-              <span>All Classes</span>
-            </label>
-            <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
-              <Checkbox
-                checked={form.hasAllSections}
-                onCheckedChange={(checked) => updateToggle('hasAllSections', checked === true)}
-                className="mt-0.5"
-              />
-              <span>All Sections</span>
-            </label>
-            <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
-              <Checkbox
-                checked={form.hasAllSubjects}
-                onCheckedChange={(checked) => updateToggle('hasAllSubjects', checked === true)}
-                className="mt-0.5"
-              />
-              <span>All Subjects</span>
-            </label>
-          </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+                    <Checkbox
+                      checked={form.hasAllClasses}
+                      onCheckedChange={(checked) => updateToggle('hasAllClasses', checked === true)}
+                      className="mt-0.5"
+                    />
+                    <span>All Classes</span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+                    <Checkbox
+                      checked={form.hasAllSections}
+                      onCheckedChange={(checked) => updateToggle('hasAllSections', checked === true)}
+                      className="mt-0.5"
+                    />
+                    <span>All Sections</span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+                    <Checkbox
+                      checked={form.hasAllSubjects}
+                      onCheckedChange={(checked) => updateToggle('hasAllSubjects', checked === true)}
+                      className="mt-0.5"
+                    />
+                    <span>All Subjects</span>
+                  </label>
+                </div>
 
-          {!form.hasAllClasses && (
-            <div className="app-field-group">
-              <label className="app-field-label">Classes</label>
-              <MultiSelectChecklist
-                items={classes.map((classItem) => ({
-                  id: classItem._id,
-                  label: classItem.name,
-                }))}
-                selectedIds={form.classIds}
-                onChange={(ids) => updateSelection('classIds', ids)}
-              />
-            </div>
-          )}
+                {!form.hasAllClasses && (
+                  <div className="app-field-group">
+                    <label className="app-field-label">Classes</label>
+                    <MultiSelectChecklist
+                      items={classes.map((classItem) => ({
+                        id: classItem._id,
+                        label: classItem.name,
+                      }))}
+                      selectedIds={form.classIds}
+                      onChange={(ids) => updateSelection('classIds', ids)}
+                    />
+                  </div>
+                )}
 
-          {!form.hasAllSections && (
-            <div className="app-field-group">
-              <label className="app-field-label">Sections</label>
-              <MultiSelectChecklist
-                items={availableSections.map((section) => ({
-                  id: section._id,
-                  label: (
-                    <span>
-                      {section.name}
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        ({classes.find((classItem) => classItem._id === getSectionClassId(section))?.name || 'Class'})
-                      </span>
-                    </span>
-                  ),
-                }))}
-                selectedIds={form.academicSectionIds}
-                onChange={(ids) => updateSelection('academicSectionIds', ids)}
-                emptyContent={form.hasAllClasses
-                  ? 'No sections have been created yet.'
-                  : 'Select one or more classes to choose sections.'}
-              />
-            </div>
-          )}
+                {!form.hasAllSections && (
+                  <div className="app-field-group">
+                    <label className="app-field-label">Sections</label>
+                    <MultiSelectChecklist
+                      items={availableSections.map((section) => ({
+                        id: section._id,
+                        label: (
+                          <span>
+                            {section.name}
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({classes.find((classItem) => classItem._id === getSectionClassId(section))?.name || 'Class'})
+                            </span>
+                          </span>
+                        ),
+                      }))}
+                      selectedIds={form.academicSectionIds}
+                      onChange={(ids) => updateSelection('academicSectionIds', ids)}
+                      emptyContent={form.hasAllClasses
+                        ? 'No sections have been created yet.'
+                        : 'Select one or more classes to choose sections.'}
+                    />
+                  </div>
+                )}
 
-          {!form.hasAllSubjects && (
-            <div className="app-field-group">
-              <label className="app-field-label">Subjects</label>
-              <MultiSelectChecklist
-                items={subjects.map((subject) => ({
-                  id: subject._id,
-                  label: subject.name,
-                }))}
-                selectedIds={form.subjectIds}
-                onChange={(ids) => updateSelection('subjectIds', ids)}
-              />
-            </div>
-          )}
+                {!form.hasAllSubjects && (
+                  <div className="app-field-group">
+                    <label className="app-field-label">Subjects</label>
+                    <MultiSelectChecklist
+                      items={subjects.map((subject) => ({
+                        id: subject._id,
+                        label: subject.name,
+                      }))}
+                      selectedIds={form.subjectIds}
+                      onChange={(ids) => updateSelection('subjectIds', ids)}
+                    />
+                  </div>
+                )}
 
-          <button type="submit" disabled={loading} className="app-button-primary w-full">
-            {loading ? 'Saving...' : 'Create Admin'}
-          </button>
-        </form>
+                <button type="submit" disabled={loading} className="app-button-primary w-full">
+                  {loading ? 'Saving...' : 'Create Admin'}
+                </button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
 
-        {message ? <div className={messageClassName}>{message}</div> : null}
+        <div className="app-editor-aside">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Access Strategy</CardTitle>
+              <CardDescription>
+                Use these toggles to keep admin permissions intentional.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <div className="app-note-list">
+                <div className="app-note-item">
+                  Leaving all three toggles enabled creates a full-school admin.
+                </div>
+                <div className="app-note-item">
+                  Restrict classes first, then refine sections and subjects only if the admin needs narrower visibility.
+                </div>
+                <div className="app-note-item">
+                  This page is for school-admin accounts only. Company-admin access stays separate.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

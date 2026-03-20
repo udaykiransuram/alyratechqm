@@ -1,109 +1,99 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
+  ArrowRight,
+  BarChart2,
+  BookOpen,
+  GraduationCap,
+  MessageSquareText,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
+import {
   COMPANY_NAME,
   HOME_DESCRIPTION,
   PRODUCT_NAME,
   SITE_KEYWORDS,
-  getAbsoluteUrl,
 } from "@/lib/seo";
+import PageHero from "@/components/layout/PageHero";
 
-// Remove 'use client' for static optimization and SEO, since no client-only logic is needed
-
-const benefits = [
+const workspaceCards = [
   {
-    icon: "🌟",
-    title: "Holistic STEM Assessment",
+    title: "Question Papers",
     description:
-      "Comprehensive evaluation in Maths, Physics, and Chemistry for all-round growth.",
+      "Create papers, review responses, and manage the assessment library from one place.",
+    href: "/question-papers",
+    cta: "Open papers",
+    icon: BookOpen,
   },
   {
-    icon: "💡",
-    title: "Insightful Performance Analytics",
+    title: "Analytics",
     description:
-      "Detailed reports pinpointing strengths and areas for development with actionable insights.",
+      "Inspect class trends, student tag reports, and workbook upload workflows.",
+    href: "/analytics",
+    cta: "Open analytics",
+    icon: BarChart2,
   },
   {
-    icon: "🏆",
-    title: "Prestigious Recognition & Awards",
+    title: "Report Delivery",
     description:
-      "Certificates of excellence, medals, and scholarships for top-tier achievements.",
+      "Monitor dispatch jobs, retry failures, and track WhatsApp delivery state.",
+    href: "/manage/reports",
+    cta: "Open report jobs",
+    icon: MessageSquareText,
+  },
+  {
+    title: "Users & Access",
+    description:
+      "Create admins, teachers, and students, then keep password and access management in one place.",
+    href: "/manage/users",
+    cta: "Open users",
+    icon: Users,
   },
 ];
 
-const uniqueFeatures = [
+const roleAreaLinks = [
   {
-    icon: "🔬",
-    title: "Deep Conceptual Testing",
+    title: "Students",
     description:
-      "Beyond rote learning — our questions assess conceptual depth, application ability, and reasoning skills in core STEM subjects.",
-    border: "border-blue-500",
+      "Manage enrollment, roll-number usernames, and student test access from a dedicated area.",
+    href: "/students",
+    icon: GraduationCap,
   },
   {
-    icon: "📊",
-    title: "Personalized Insights",
+    title: "Teachers",
     description:
-      "Get AI-powered reports that show exact skill gaps, learning pace, and comparative performance — a true diagnostic tool.",
-    border: "border-purple-500",
+      "Review teacher records, academic scope, and classroom assignments without mixing student workflows.",
+    href: "/teachers",
+    icon: Users,
   },
   {
-    icon: "🧑‍🔬",
-    title: "Focused for Future Innovators",
+    title: "Admins",
     description:
-      "Crafted to foster critical thinking, problem-solving, and early interest in STEM careers — aligned with NEP 2020 goals.",
-    border: "border-emerald-500",
-  },
-  {
-    icon: "📚",
-    title: "Free Study Materials & Past Papers",
-    description:
-      "All registered students get access to free downloadable resources, including previous year papers and curated mock sets.",
-    border: "border-rose-500",
-  },
-  {
-    icon: "🏫",
-    title: "School & District Level Ranks",
-    description:
-      "Recognition at multiple levels — not just national — so more students get rewarded and motivated to improve.",
-    border: "border-orange-500",
-  },
-  {
-    icon: "📞",
-    title: "Mentorship + Career Guidance",
-    description:
-      "Top performers receive mentorship sessions with experts to guide their learning journey and career planning.",
-    border: "border-cyan-500",
+      "Keep school admins and operational access separate from teacher and learner records.",
+    href: "/admins",
+    icon: ShieldCheck,
   },
 ];
 
-const importantMilestones = [
+const setupSteps = [
   {
-    label: "Registration Window",
-    date: "Open Now",
-    year: "Check the latest school announcement",
-    color: "border-amber-400",
-    textColor: "text-amber-300",
-    dateColor: "text-amber-100",
+    title: "Set up the academic structure",
+    description:
+      "Create classes, sections, and subjects first so user onboarding and papers stay clean.",
   },
   {
-    label: "Exam Schedule",
-    date: "Shared After Registration",
-    year: "Exact dates are announced by the organizing team",
-    color: "border-blue-400",
-    textColor: "text-blue-300",
-    dateColor: "text-blue-100",
+    title: "Onboard the right people",
+    description:
+      "Add admins, teachers, and students in their own management areas before assignments begin.",
   },
   {
-    label: "Results & Insights",
-    date: "Post Assessment",
-    year: "Reports, rankings, and guidance follow completion",
-    color: "border-emerald-400",
-    textColor: "text-emerald-300",
-    dateColor: "text-emerald-100",
+    title: "Run assessments and review outcomes",
+    description:
+      "Move from question papers into analytics, workbook uploads, and report delivery without changing context.",
   },
 ];
 
-// Add metadata for SEO (Next.js app directory)
 export const metadata: Metadata = {
   title: PRODUCT_NAME,
   description: HOME_DESCRIPTION,
@@ -112,24 +102,15 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
   },
   openGraph: {
     title: `${PRODUCT_NAME} | ${COMPANY_NAME}`,
     description: HOME_DESCRIPTION,
     url: "/",
     siteName: COMPANY_NAME,
-    images: [
-      {
-        url: "/opengraph-image",
-        width: 1200,
-        height: 630,
-        alt: `${PRODUCT_NAME} by ${COMPANY_NAME}`,
-      },
-    ],
-    locale: "en_IN",
-    type: "website",
+    images: ["/opengraph-image"],
   },
   twitter: {
     card: "summary_large_image",
@@ -139,203 +120,215 @@ export const metadata: Metadata = {
   },
 };
 
-export default function TalentTestLandingPage() {
-  const organizationSchema = {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    name: COMPANY_NAME,
-    url: getAbsoluteUrl("/"),
-    brand: {
-      "@type": "Brand",
-      name: PRODUCT_NAME,
-    },
-    description: HOME_DESCRIPTION,
-  };
-
-  const websiteSchema = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: `${PRODUCT_NAME} | ${COMPANY_NAME}`,
-    url: getAbsoluteUrl("/"),
-    description: HOME_DESCRIPTION,
-  };
-
-  // Remove useState/useEffect for fade-in for static optimization and SEO
-  // If you want animation, use CSS only (e.g., animate-fade-in class with Tailwind or custom CSS)
-
+export default function WorkspaceHomePage() {
   return (
-    <div className="min-h-screen bg-neutral-950 text-white font-inter antialiased">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify([organizationSchema, websiteSchema]),
-        }}
+    <div className="app-page-shell max-w-6xl px-4 py-6 sm:px-0">
+      <PageHero
+        eyebrow="Workspace"
+        title={PRODUCT_NAME}
+        description={HOME_DESCRIPTION}
+        actions={
+          <>
+            <Link href="/question-papers/create" className="app-button-primary">
+              Create question paper
+            </Link>
+            <Link href="/manage/users" className="app-button-secondary">
+              Manage users
+            </Link>
+          </>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">ALYRA TECH</span>
+            <span className="app-meta-chip">Tenant-aware operations</span>
+            <span className="app-meta-chip">Student online test ready</span>
+          </>
+        }
+        stats={[
+          {
+            label: "Core modules",
+            value: String(workspaceCards.length),
+            meta: "Papers, analytics, reports, and user operations.",
+          },
+          {
+            label: "People surfaces",
+            value: "3",
+            meta: "Dedicated students, teachers, and admins pages stay separate.",
+          },
+          {
+            label: "School model",
+            value: "Tenant scoped",
+            meta: "Each school keeps its own workspace, users, and data.",
+          },
+          {
+            label: "Assessment mode",
+            value: "Hybrid",
+            meta: "Manual uploads and student online tests share the same response stack.",
+          },
+        ]}
       />
 
-      {/* Hero Section */}
-      <section className="relative z-10 flex flex-col items-center justify-center min-h-[90vh] py-28 px-4 text-white bg-gradient-to-br from-blue-950 via-indigo-950 to-purple-950">
-        <div className="max-w-7xl mx-auto text-center animate-fade-in">
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.35em] text-cyan-200">
-            {COMPANY_NAME}
-          </p>
-          <h1 className="text-5xl lg:text-7xl font-extrabold mb-6 leading-tight tracking-tight">
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
-              Ignite Brilliance.
-            </span>
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-              Master Tomorrow.
-            </span>
-          </h1>
-          <p className="text-xl lg:text-2xl mb-12">
-            {PRODUCT_NAME} by {COMPANY_NAME} is designed for young innovators from{" "}
-            <strong>Class 1st to 10th</strong>
-          </p>
-          <Link href="/register" prefetch>
-            <button className="bg-gradient-to-r from-teal-500 to-green-600 px-10 py-4 rounded-full text-xl font-semibold shadow-lg hover:scale-105 transition-transform focus:outline-none focus:ring-2 focus:ring-green-400">
-              Enroll Now ✨
-            </button>
-          </Link>
-        </div>
-      </section>
-
-      {/* Unique Features Section */}
-      <section className="py-24 px-4 sm:px-8 bg-white text-gray-900">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-4xl font-extrabold text-center mb-16">
-            What Makes Our Test Unique?
+      <div className="app-spotlight-grid">
+        <div className="app-spotlight-card app-spotlight-card-strong">
+          <p className="app-spotlight-label">Standardized workspace</p>
+          <h2 className="app-spotlight-title">
+            Move from school setup to assessment delivery without losing the thread
           </h2>
-          <div className="lg:grid lg:grid-cols-12 lg:gap-10 items-center">
-            <div className="lg:col-span-7">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
-                {uniqueFeatures.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className={`bg-gray-100 p-8 rounded-xl shadow-lg border-l-4 ${item.border} hover:scale-[1.02] transition-transform`}
-                  >
-                    <h3 className="text-xl font-semibold mb-3">
-                      {item.icon} {item.title}
-                    </h3>
-                    <p>{item.description}</p>
-                  </div>
-                ))}
-              </div>
+          <p className="app-spotlight-copy">
+            The main screens now share the same lighter visual rhythm so teams can
+            move between structure setup, people management, papers, analytics,
+            and delivery with less friction.
+          </p>
+          <div className="app-inline-stat-grid">
+            <div className="app-inline-stat">
+              <p className="app-inline-stat-label">Academic setup</p>
+              <p className="app-inline-stat-value">Classes, sections, subjects</p>
+              <p className="app-inline-stat-copy">
+                Start here when a new school or term is being prepared.
+              </p>
             </div>
-            <div className="lg:col-span-5 mt-10 lg:mt-0 hidden md:block">
-              <img
-                src="/images/learning-illustration.svg"
-                alt="STEM learning illustration"
-                className="w-full h-auto rounded-2xl shadow-2xl ring-1 ring-gray-200"
-                loading="lazy"
-              />
+            <div className="app-inline-stat">
+              <p className="app-inline-stat-label">People operations</p>
+              <p className="app-inline-stat-value">Admins, teachers, students</p>
+              <p className="app-inline-stat-copy">
+                Dedicated pages remain separate for cleaner day-to-day navigation.
+              </p>
+            </div>
+            <div className="app-inline-stat">
+              <p className="app-inline-stat-label">Delivery modes</p>
+              <p className="app-inline-stat-value">Manual and online</p>
+              <p className="app-inline-stat-copy">
+                Offline uploads and online tests still converge into the same reporting stack.
+              </p>
             </div>
           </div>
+          <div className="app-spotlight-actions">
+            <Link href="/manage/classes" className="app-button-secondary">
+              Manage classes
+            </Link>
+            <Link href="/manage/sections" className="app-button-secondary">
+              Manage sections
+            </Link>
+            <Link href="/subjects" className="app-button-secondary">
+              Manage subjects
+            </Link>
+          </div>
         </div>
-      </section>
 
-      {/* Benefits Section */}
-      <section className="py-24 px-4 sm:px-8 bg-gray-50 text-gray-900">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-4xl font-extrabold text-center mb-16">
-            Core Benefits
+        <div className="app-surface app-surface-body">
+          <p className="app-spotlight-label">Dedicated people areas</p>
+          <h2 className="text-lg font-semibold text-foreground">
+            Student, teacher, and admin workflows stay separate
           </h2>
-          <div className="lg:grid lg:grid-cols-12 lg:gap-10 items-center">
-            <div className="lg:col-span-5 mb-10 lg:mb-0 hidden md:block">
-              <img
-                src="/images/learning-illustration.svg"
-                alt="Young learners exploring STEM concepts"
-                className="w-full h-auto rounded-2xl shadow-xl ring-1 ring-gray-300"
-                loading="lazy"
-              />
-            </div>
-            <div className="lg:col-span-7">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {benefits.map((benefit, index) => (
-                  <div
-                    key={index}
-                    className="bg-white p-8 rounded-2xl shadow-lg border hover:scale-[1.02] transition-transform"
-                  >
-                    <div className="text-4xl mb-4 text-blue-600">
-                      {benefit.icon}
+          <p className="text-sm leading-6 text-muted-foreground">
+            The workspace keeps role-specific pages intact so operations teams can
+            jump into the right records quickly.
+          </p>
+          <div className="app-link-grid">
+            {roleAreaLinks.map((area) => {
+              const Icon = area.icon;
+              return (
+                <Link key={area.title} href={area.href} className="app-link-card">
+                  <div className="flex min-w-0 gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Icon className="h-5 w-5" />
                     </div>
-                    <h3 className="text-2xl font-bold mb-2">{benefit.title}</h3>
-                    <p>{benefit.description}</p>
+                    <div className="min-w-0">
+                      <p className="app-link-card-title">{area.title}</p>
+                      <p className="app-link-card-copy">{area.description}</p>
+                    </div>
                   </div>
-                ))}
+                  <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-primary" />
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {workspaceCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.title} className="app-spotlight-card flex h-full flex-col gap-4">
+              <p className="app-spotlight-label">Core module</p>
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold text-foreground">
+                    {card.title}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {card.description}
+                  </p>
+                </div>
               </div>
+
+              <Link
+                href={card.href}
+                className="mt-auto inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80"
+              >
+                {card.cta}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="app-surface app-surface-body">
+          <p className="app-spotlight-label">Recommended operating flow</p>
+          <h2 className="text-lg font-semibold text-foreground">
+            Follow the same setup path across every school workspace
+          </h2>
+          <div className="app-flow-list">
+            {setupSteps.map((step, index) => (
+              <div key={step.title} className="app-flow-item">
+                <div className="app-flow-index">{index + 1}</div>
+                <div className="app-flow-copy">
+                  <p className="app-flow-title">{step.title}</p>
+                  <p className="app-flow-note">{step.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="app-surface app-surface-body">
+          <p className="app-spotlight-label">Operator notes</p>
+          <h2 className="text-lg font-semibold text-foreground">
+            Small checks that keep the workspace predictable
+          </h2>
+          <div className="mt-4 space-y-2">
+            <div className="app-note-item">
+              Confirm the school workspace badge before creating or reviewing
+              tenant-specific records.
+            </div>
+            <div className="app-note-item">
+              Keep academic structure and user setup complete before opening
+              papers to students or teachers.
+            </div>
+            <div className="app-note-item">
+              Use analytics and report jobs once responses or workbook uploads
+              are available.
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Important Dates */}
-      <section className="py-24 px-4 sm:px-8 bg-neutral-900 text-white">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-4xl font-extrabold text-center mb-16">
-            Registration Journey
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            {importantMilestones.map((item, index) => (
-              <div
-                key={index}
-                className={`p-8 rounded-2xl bg-neutral-800 shadow-xl border-t-4 ${item.color}`}
-              >
-                <p className={`text-xl font-bold mb-3 ${item.textColor}`}>
-                  {item.label}
-                </p>
-                <p className={`text-5xl font-extrabold ${item.dateColor}`}>
-                  {item.date}
-                </p>
-                <p className={`text-lg mt-2 ${item.textColor}`}>{item.year}</p>
-              </div>
-            ))}
+          <div className="app-spotlight-actions">
+            <Link href="/manage/users" className="app-button-secondary">
+              Manage users
+            </Link>
+            <Link href="/manage/classes" className="app-button-secondary">
+              Manage classes
+            </Link>
+            <Link href="/analytics" className="app-button-secondary">
+              Open analytics
+            </Link>
           </div>
         </div>
-      </section>
-
-      {/* Previous Papers */}
-      <section className="py-24 px-4 sm:px-8 bg-white text-gray-900">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-4xl font-extrabold text-center mb-12">
-            Download Previous Year Question Papers
-          </h2>
-          <div className="space-y-6">
-            {[
-              {
-                title: "Grade 5 Sample Paper",
-                href: "/papers/sample-grade-5.pdf",
-              },
-              {
-                title: "Grade 8 Science + Math",
-                href: "/papers/sample-grade-8.pdf",
-              },
-              {
-                title: "Grade 10 Talent Paper",
-                href: "/papers/sample-grade-10.pdf",
-              },
-            ].map((paper, idx) => (
-              <a
-                key={idx}
-                href={paper.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block bg-gray-100 hover:bg-gray-200 rounded-lg p-4 font-medium shadow-md transition"
-              >
-                ⬇️ {paper.title}
-              </a>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-neutral-900 text-white text-center py-12 px-4 border-t border-neutral-700">
-        <p className="text-lg mb-3">
-          &copy; {new Date().getFullYear()} {COMPANY_NAME} • {PRODUCT_NAME}
-        </p>
-        <p className="text-sm text-gray-400">
-          Shaping the future through foundational knowledge and innovation.
-        </p>
-      </footer>
+      </div>
     </div>
   );
 }

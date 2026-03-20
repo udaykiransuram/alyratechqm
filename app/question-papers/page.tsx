@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import JSZip from "jszip";
 import { downloadDefaultClassAnalyticsExcel } from "@/components/analytics/helpers";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,13 +30,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+import PageHero from "@/components/layout/PageHero";
+import PageLoadingState from "@/components/ui/page-loading-state";
 import { MessageCircle } from "lucide-react";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
 import { buildPartialLoadMessage, fetchApiJson } from "@/lib/client/api";
 import { getSchoolKeyFromCookie } from "@/lib/client/school";
 
 const NO_SCHOOL_PAPERS_MESSAGE = "Select a school workspace to load question papers.";
+
+function getPaperQuestionCount(paper: any) {
+  return Array.isArray(paper?.sections)
+    ? paper.sections.reduce(
+        (total: number, section: any) =>
+          total +
+          (Array.isArray(section?.questions) ? section.questions.length : 0),
+        0,
+      )
+    : 0;
+}
+
+function getPaperClassId(paper: any) {
+  return String(paper?.class?._id || paper?.class || "");
+}
+
+function getSectionClassId(section: any) {
+  return String(section?.class?._id || section?.class || "");
+}
 
 export default function QuestionPapersListPage() {
   const { buildReturnHref } = useReturnHrefBuilder("/question-papers");
@@ -122,38 +148,41 @@ export default function QuestionPapersListPage() {
     void loadPageData();
   }, []);
 
-  const getPaperClassId = (paper: any) =>
-    String(paper?.class?._id || paper?.class || "");
+  const getClassNameById = useCallback(
+    (classId: string) => {
+      if (!classId) return "";
+      return (
+        classes.find(
+          (classItem: any) => String(classItem?._id || "") === String(classId),
+        )?.name || ""
+      );
+    },
+    [classes],
+  );
 
-  const getClassNameById = (classId: string) => {
-    if (!classId) return "";
-    return (
-      classes.find(
-        (classItem: any) => String(classItem?._id || "") === String(classId),
-      )?.name || ""
-    );
-  };
+  const getPaperClassName = useCallback(
+    (paper: any) => {
+      if (typeof paper?.class === "object" && paper?.class?.name) {
+        return String(paper.class.name);
+      }
+      const paperClassId = getPaperClassId(paper);
+      return getClassNameById(paperClassId) || (paperClassId ? "Unknown class" : "-");
+    },
+    [getClassNameById],
+  );
 
-  const getPaperClassName = (paper: any) => {
-    if (typeof paper?.class === "object" && paper?.class?.name) {
-      return String(paper.class.name);
-    }
-    const paperClassId = getPaperClassId(paper);
-    return getClassNameById(paperClassId) || (paperClassId ? "Unknown class" : "-");
-  };
+  const getSectionClassName = useCallback(
+    (section: any, fallbackClassId = "") => {
+      if (typeof section?.class === "object" && section?.class?.name) {
+        return String(section.class.name);
+      }
+      const classId = getSectionClassId(section) || fallbackClassId;
+      return getClassNameById(classId) || "";
+    },
+    [getClassNameById],
+  );
 
-  const getSectionClassId = (section: any) =>
-    String(section?.class?._id || section?.class || "");
-
-  const getSectionClassName = (section: any, fallbackClassId = "") => {
-    if (typeof section?.class === "object" && section?.class?.name) {
-      return String(section.class.name);
-    }
-    const classId = getSectionClassId(section) || fallbackClassId;
-    return getClassNameById(classId) || "";
-  };
-
-  const getPaperSectionOptions = (paper: any) => {
+  const getPaperSectionOptions = useCallback((paper: any) => {
     const paperClassId = getPaperClassId(paper);
     const paperClassName = getPaperClassName(paper);
     const assignedSections = Array.isArray(paper?.assignedAcademicSections)
@@ -184,9 +213,9 @@ export default function QuestionPapersListPage() {
         className: getSectionClassName(section, paperClassId) || paperClassName,
       }))
       .filter((section: any) => section._id);
-  };
+  }, [academicSections, getPaperClassName, getSectionClassName]);
 
-  const getSelectedAcademicSectionId = (paper: any) => {
+  const getSelectedAcademicSectionId = useCallback((paper: any) => {
     if (
       sectionFilterId !== "all" &&
       getPaperSectionOptions(paper).some(
@@ -204,9 +233,9 @@ export default function QuestionPapersListPage() {
       )
       ? selectedAcademicSectionId
       : "all";
-  };
+  }, [getPaperSectionOptions, sectionFilterId, selectedAcademicSectionIds]);
 
-  const getSelectedAcademicSectionName = (paper: any) => {
+  const getSelectedAcademicSectionName = useCallback((paper: any) => {
     const selectedAcademicSectionId = getSelectedAcademicSectionId(paper);
     if (selectedAcademicSectionId === "all") {
       return "";
@@ -216,7 +245,7 @@ export default function QuestionPapersListPage() {
         (section: any) => section._id === selectedAcademicSectionId,
       )?.name || ""
     );
-  };
+  }, [getPaperSectionOptions, getSelectedAcademicSectionId]);
 
   const handleArchive = async (id: string) => {
     if (!window.confirm("Are you sure you want to archive this question paper?"))
@@ -438,7 +467,7 @@ export default function QuestionPapersListPage() {
     return Array.from(optionMap.values()).sort((a, b) =>
       a.name.localeCompare(b.name),
     );
-  }, [classes, paperClassIds, papers]);
+  }, [classes, getPaperClassName, paperClassIds, papers]);
 
   const sectionFilterOptions = useMemo(() => {
     const optionMap = new Map<
@@ -485,7 +514,7 @@ export default function QuestionPapersListPage() {
       (a, b) =>
         a.className.localeCompare(b.className) || a.name.localeCompare(b.name),
     );
-  }, [academicSections, classFilterId, paperClassIds, classes]);
+  }, [academicSections, classFilterId, getSectionClassName, paperClassIds]);
 
   useEffect(() => {
     if (
@@ -516,55 +545,216 @@ export default function QuestionPapersListPage() {
     }
 
     return list;
-  }, [papers, classFilterId, sectionFilterId, search, academicSections, classes]);
+  }, [classFilterId, getPaperSectionOptions, papers, search, sectionFilterId]);
 
   const allFilteredChecked =
     filteredPapers.length > 0 &&
     filteredPapers.every((paper) => selectedPaperIds.includes(paper._id));
+  const hasActiveFilters =
+    classFilterId !== "all" || sectionFilterId !== "all" || search.trim().length > 0;
+  const totalQuestionCount = useMemo(
+    () => papers.reduce((total, paper) => total + getPaperQuestionCount(paper), 0),
+    [papers],
+  );
+  const filteredQuestionCount = useMemo(
+    () =>
+      filteredPapers.reduce(
+        (total, paper) => total + getPaperQuestionCount(paper),
+        0,
+      ),
+    [filteredPapers],
+  );
+  const onlineEnabledCount = useMemo(
+    () => papers.filter((paper) => paper?.onlineEnabled).length,
+    [papers],
+  );
 
-  if (loading)
+  const resetFilters = () => {
+    setClassFilterId("all");
+    setSectionFilterId("all");
+    setSearch("");
+  };
+
+  if (loading) {
     return (
-      <div className="container mx-auto p-8 flex justify-center items-center gap-2 text-muted-foreground">
-        <Spinner /> Loading question papers…
+      <PageLoadingState
+        title="Loading question papers"
+        description="Preparing papers, class filters, section filters, and report actions."
+      />
+    );
+  }
+  if (error) {
+    return (
+      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+        <div
+          className={
+            error === NO_SCHOOL_PAPERS_MESSAGE
+              ? "app-feedback app-feedback-info"
+              : "app-feedback app-feedback-error"
+          }
+        >
+          {error}
+        </div>
       </div>
     );
-  if (error)
+  }
+  if (!papers.length) {
     return (
-      <div className="container mx-auto p-8 text-center">
-        <div className={error === NO_SCHOOL_PAPERS_MESSAGE ? 'app-feedback app-feedback-info' : 'app-feedback app-feedback-error'}>{error}</div>
+      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+        <div className="app-empty-state">No question papers found.</div>
       </div>
     );
-  if (!papers.length)
-    return (
-      <div className="container mx-auto p-8 text-center">
-        No question papers found.
-      </div>
-    );
+  }
 
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div className="app-page-header">
-          <h1 className="app-page-title">Question Papers</h1>
-          <p className="app-page-subtitle">Browse, filter, and act on papers by class and section.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/question-papers/create">
-            <Button>Create</Button>
-          </Link>
-        </div>
-      </div>
+      <PageHero
+        eyebrow="Assessments"
+        title="Question Papers"
+        description="Browse, filter, and act on papers by class and section from one standardized assessment workspace."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/question-papers/create">
+              <Button>Create</Button>
+            </Link>
+          </div>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">
+              {classFilterId === "all"
+                ? "All classes"
+                : classOptions.find((item) => item._id === classFilterId)?.name ||
+                  "Selected class"}
+            </span>
+            <span className="app-meta-chip">
+              {sectionFilterId === "all"
+                ? "All sections"
+                : sectionFilterOptions.find((item) => item._id === sectionFilterId)?.label ||
+                  "Selected section"}
+            </span>
+          </>
+        }
+        stats={[
+          {
+            label: "Total papers",
+            value: String(papers.length),
+            meta: "All question papers available for the current school.",
+          },
+          {
+            label: "Filtered papers",
+            value: String(filteredPapers.length),
+            meta: "Current result set after class, section, and search filters.",
+          },
+          {
+            label: "Online ready",
+            value: String(onlineEnabledCount),
+            meta: "Papers currently marked for student online delivery.",
+          },
+          {
+            label: "Selected for ZIP",
+            value: String(selectedPaperIds.length),
+            meta: "Papers queued for batch Excel export.",
+          },
+        ]}
+      />
 
       {supportDataNotice ? <div className="app-feedback app-feedback-info">{supportDataNotice}</div> : null}
 
+      <div className="app-spotlight-grid">
+        <div className="app-spotlight-card app-spotlight-card-strong">
+          <p className="app-spotlight-label">Assessment operations</p>
+          <h2 className="app-spotlight-title">
+            Filter once, then move cleanly into analytics, responses, and delivery
+          </h2>
+          <p className="app-spotlight-copy">
+            Use class and section scope to keep downloads, report sends, and
+            analytics tied to the exact paper group you mean to operate on.
+          </p>
+          <div className="app-inline-stat-grid">
+            <div className="app-inline-stat">
+              <p className="app-inline-stat-label">Questions in library</p>
+              <p className="app-inline-stat-value">{totalQuestionCount}</p>
+              <p className="app-inline-stat-copy">
+                Objective and offline papers still live in the same library.
+              </p>
+            </div>
+            <div className="app-inline-stat">
+              <p className="app-inline-stat-label">Questions in view</p>
+              <p className="app-inline-stat-value">{filteredQuestionCount}</p>
+              <p className="app-inline-stat-copy">
+                This updates as you narrow by class, section, or title search.
+              </p>
+            </div>
+            <div className="app-inline-stat">
+              <p className="app-inline-stat-label">Excel tag depth</p>
+              <p className="app-inline-stat-value">{numTags}</p>
+              <p className="app-inline-stat-copy">
+                Current tag count used for analytics spreadsheet generation.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="app-surface app-surface-body">
+          <p className="app-spotlight-label">Working rhythm</p>
+          <h2 className="text-lg font-semibold text-foreground">
+            Keep paper review and downstream actions predictable
+          </h2>
+          <div className="app-flow-list">
+            <div className="app-flow-item">
+              <div className="app-flow-index">1</div>
+              <div className="app-flow-copy">
+                <p className="app-flow-title">Pick the academic scope</p>
+                <p className="app-flow-note">
+                  Use the filters first so section-level downloads and report sends stay precise.
+                </p>
+              </div>
+            </div>
+            <div className="app-flow-item">
+              <div className="app-flow-index">2</div>
+              <div className="app-flow-copy">
+                <p className="app-flow-title">Open the next workflow from the same row</p>
+                <p className="app-flow-note">
+                  Jump straight to view, responses, analytics, Excel upload, or report delivery.
+                </p>
+              </div>
+            </div>
+            <div className="app-flow-item">
+              <div className="app-flow-index">3</div>
+              <div className="app-flow-copy">
+                <p className="app-flow-title">Use batch export only after final selection</p>
+                <p className="app-flow-note">
+                  ZIP export follows the paper checkboxes and respects your current section targeting.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
-          <CardTitle>Filters & Actions</CardTitle>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-1">
+              <CardTitle>Filters & Actions</CardTitle>
+              <CardDescription>
+                Narrow the paper list, then export, upload, review, or queue report delivery from the same workspace.
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">{filteredPapers.length} visible</Badge>
+              <Badge variant="outline">{selectedPaperIds.length} selected</Badge>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="app-section-body space-y-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[220px_260px_minmax(220px,1fr)_160px] xl:items-center">
-              <div className="w-full">
+          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_7.5rem] xl:items-end">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Class
+                </p>
                 <Select value={classFilterId} onValueChange={setClassFilterId}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Classes" />
@@ -579,7 +769,10 @@ export default function QuestionPapersListPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="w-full">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Section
+                </p>
                 <Select value={sectionFilterId} onValueChange={setSectionFilterId}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Class Sections" />
@@ -594,46 +787,93 @@ export default function QuestionPapersListPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by title…"
-                className="w-full"
-              />
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                  Tags for Excel
-                </span>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Search
+                </p>
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by title..."
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Excel tags
+                </p>
                 <Input
                   type="number"
                   min={1}
                   max={10}
                   value={numTags}
                   onChange={(e) => setNumTags(Number(e.target.value || 1))}
-                  className="w-24 sm:w-20"
+                  className="w-full sm:w-24"
                 />
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
-              <Button
-                onClick={handleDownloadAllZip}
-                disabled={zipLoading || selectedPaperIds.length === 0}
-              >
-                {zipLoading
-                  ? "Zipping…"
-                  : `Download Selected (${selectedPaperIds.length})`}
-              </Button>
+
+            <div className="app-section space-y-3 2xl:self-start">
+              <div>
+                <p className="app-spotlight-label">Current scope</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="app-meta-chip">
+                    {classFilterId === "all"
+                      ? "All classes"
+                      : classOptions.find((item) => item._id === classFilterId)?.name ||
+                        "Selected class"}
+                  </span>
+                  <span className="app-meta-chip">
+                    {sectionFilterId === "all"
+                      ? "All sections"
+                      : sectionFilterOptions.find((item) => item._id === sectionFilterId)
+                          ?.label || "Selected section"}
+                  </span>
+                  <span className="app-meta-chip">
+                    {search.trim() ? `Search: ${search.trim()}` : "No title search"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={handleDownloadAllZip}
+                  disabled={zipLoading || selectedPaperIds.length === 0}
+                >
+                  {zipLoading
+                    ? "Zipping..."
+                    : `Download Selected (${selectedPaperIds.length})`}
+                </Button>
+                {hasActiveFilters ? (
+                  <Button variant="outline" onClick={resetFilters}>
+                    Clear filters
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {sectionFilterId !== "all"
+                  ? "Selected section also applies to row actions and Excel output."
+                  : "Pick a section when you want row actions and exports to target a narrower academic scope."}
+              </p>
             </div>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            {sectionFilterId !== "all"
-              ? "Selected section applies to row actions and Excel."
-              : "Select a section to narrow papers and actions."}
-          </p>
         </CardContent>
       </Card>
 
       <Card className="app-surface overflow-hidden">
+        <CardHeader className="app-section-header">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-1">
+              <CardTitle>Paper Library</CardTitle>
+              <CardDescription>
+                Open the right downstream workflow for each paper without leaving the assessment list.
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">{papers.length} total</Badge>
+              <Badge variant="outline">{filteredPapers.length} in view</Badge>
+            </div>
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
           <div className="app-table-wrap rounded-none border-x-0 border-b-0">
             <Table>
@@ -702,13 +942,7 @@ export default function QuestionPapersListPage() {
                         ? `?academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
                         : ""
                     }`;
-                    const paperQuestionCount = Array.isArray(paper.sections)
-                      ? paper.sections.reduce(
-                          (total: number, section: any) =>
-                            total + (Array.isArray(section?.questions) ? section.questions.length : 0),
-                          0,
-                        )
-                      : 0;
+                    const paperQuestionCount = getPaperQuestionCount(paper);
                     const showGlobalSectionScope = sectionFilterId !== "all";
 
                     return (
@@ -726,7 +960,23 @@ export default function QuestionPapersListPage() {
                             aria-label={`Select ${paper.title}`}
                           />
                         </TableCell>
-                        <TableCell className="font-medium">{paper.title}</TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <div className="font-medium">{paper.title}</div>
+                            <div className="flex flex-wrap gap-1.5">
+                              <Badge
+                                variant={paper.onlineEnabled ? "secondary" : "outline"}
+                                className={paper.onlineEnabled ? "bg-primary/10 text-primary" : ""}
+                              >
+                                {paper.onlineEnabled ? "Online enabled" : "Offline/manual"}
+                              </Badge>
+                              <Badge variant="outline">
+                                {paperSectionOptions.length} section
+                                {paperSectionOptions.length === 1 ? "" : "s"}
+                              </Badge>
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell>{getPaperClassName(paper)}</TableCell>
                         <TableCell>{paper.totalMarks}</TableCell>
                         <TableCell>
@@ -828,6 +1078,11 @@ export default function QuestionPapersListPage() {
                               <Link href={buildReturnHref(`/question-papers/view/${paper._id}`)}>
                                 <Button variant="outline" size="sm">
                                   View
+                                </Button>
+                              </Link>
+                              <Link href={buildReturnHref(`/question-papers/edit/${paper._id}`)}>
+                                <Button variant="outline" size="sm">
+                                  Edit
                                 </Button>
                               </Link>
                               <Link href={buildReturnHref(responsesHref)}>
