@@ -8,12 +8,9 @@ import {
   ensureIndexesForTenantDbName,
   dbNameForSchool,
 } from "@/lib/admin/indexing";
-import { requireTenantSession } from "@/lib/api-auth";
+import { requireCompanyAdminSession } from "@/lib/api-auth";
 export async function POST(req: NextRequest) {
-  const auth = await requireTenantSession(req, {
-    allowRoles: ["admin"],
-    requireSchoolKey: false,
-  });
+  const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
   await connectDB();
   try {

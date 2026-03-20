@@ -2,11 +2,10 @@
 
 import { type ComponentType, useEffect, useState } from "react";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { fetchApiJson } from "@/lib/client/api";
 import { getSchoolKeyFromCookie } from "@/lib/client/school";
-import SchoolSwitcher from "@/components/navigation/SchoolSwitcher";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,7 +29,6 @@ import {
   GraduationCap,
   Layers,
   Menu,
-  Megaphone,
   Settings2,
   Tags,
   Upload,
@@ -58,9 +56,26 @@ const SIDEBAR_EXPANDED_WIDTH = "var(--app-sidebar-expanded-width)";
 const SIDEBAR_COLLAPSED_WIDTH = "var(--app-sidebar-collapsed-width)";
 const SIDEBAR_STORAGE_KEY = "app-sidebar-collapsed";
 
-const sidebarGroups: SidebarGroup[] = [
+function isCompanyRoute(pathname: string) {
+  return (
+    pathname === "/manage/schools" ||
+    pathname.startsWith("/manage/schools/") ||
+    pathname === "/manage/admin/indexing" ||
+    pathname.startsWith("/manage/admin/indexing/")
+  );
+}
+
+function isStudentRoute(pathname: string) {
+  return pathname === "/student" || pathname.startsWith("/student/");
+}
+
+function isAuthRoute(pathname: string) {
+  return pathname === "/auth/signin" || pathname === "/auth/company-signin";
+}
+
+const schoolSidebarGroups: SidebarGroup[] = [
   {
-    title: "Overview",
+    title: "Workspace",
     items: [
       {
         label: "Home",
@@ -70,31 +85,18 @@ const sidebarGroups: SidebarGroup[] = [
     ],
   },
   {
-    title: "Public",
+    title: "Assessments",
     items: [
       {
-        label: "Public",
-        icon: Megaphone,
-        children: [
-          { href: "/register", label: "Register" },
-          { href: "/marketing", label: "Product" },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Assessment",
-    items: [
-      {
-        label: "Papers",
+        label: "Question Papers",
         icon: BookOpen,
         children: [
-          { href: "/question-papers", label: "All Papers" },
-          { href: "/question-papers/create", label: "Create Paper" },
+          { href: "/question-papers", label: "All Question Papers" },
+          { href: "/question-papers/create", label: "Create Question Paper" },
         ],
       },
       {
-        label: "Questions",
+        label: "Question Bank",
         icon: FileQuestion,
         children: [
           { href: "/questions", label: "All Questions" },
@@ -102,6 +104,11 @@ const sidebarGroups: SidebarGroup[] = [
           { href: "/questions/bulk-upload", label: "Bulk Upload" },
         ],
       },
+    ],
+  },
+  {
+    title: "People",
+    items: [
       {
         label: "Students",
         icon: GraduationCap,
@@ -109,6 +116,27 @@ const sidebarGroups: SidebarGroup[] = [
           { href: "/students", label: "All Students" },
           { href: "/students/create", label: "Create Student" },
         ],
+      },
+      {
+        label: "Teachers",
+        icon: UserCog,
+        children: [
+          { href: "/teachers", label: "All Teachers" },
+          { href: "/teachers/create", label: "Create Teacher" },
+        ],
+      },
+      {
+        label: "Admins",
+        icon: Settings2,
+        children: [
+          { href: "/admins", label: "All Admins" },
+          { href: "/admins/create", label: "Create Admin" },
+        ],
+      },
+      {
+        label: "User Directory",
+        icon: Users,
+        children: [{ href: "/manage/users", label: "Manage School Users" }],
       },
     ],
   },
@@ -132,7 +160,7 @@ const sidebarGroups: SidebarGroup[] = [
         ],
       },
       {
-        label: "Classes",
+        label: "Classes & Sections",
         icon: Layers,
         children: [
           { href: "/manage/classes", label: "All Classes" },
@@ -144,27 +172,17 @@ const sidebarGroups: SidebarGroup[] = [
     ],
   },
   {
-    title: "Administration",
+    title: "Insights",
     items: [
       {
-        label: "Users",
-        icon: Users,
-        children: [{ href: "/manage/users", label: "Users" }],
-      },
-      {
-        label: "Teachers",
-        icon: UserCog,
+        label: "Analytics",
+        icon: BarChart2,
         children: [
-          { href: "/teachers", label: "Teachers List" },
-          { href: "/teachers/create", label: "Create Teacher" },
-        ],
-      },
-      {
-        label: "Admins",
-        icon: Settings2,
-        children: [
-          { href: "/admins", label: "Admins List" },
-          { href: "/admins/create", label: "Create Admin" },
+          { href: "/analytics", label: "Overview" },
+          {
+            href: "/analytics/student-tag-report/excel-upload",
+            label: "Student Tag Upload",
+          },
         ],
       },
       {
@@ -175,32 +193,10 @@ const sidebarGroups: SidebarGroup[] = [
           { href: "/manage/audit-logs", label: "Audit Logs" },
         ],
       },
-      {
-        label: "Schools",
-        icon: Building2,
-        children: [{ href: "/manage/schools", label: "Manage Schools" }],
-      },
     ],
   },
   {
-    title: "Analytics",
-    items: [
-      {
-        label: "Analytics",
-        icon: BarChart2,
-        children: [
-          { href: "/analytics", label: "Overview" },
-          {
-            href: "/analytics/student-tag-report/excel-upload",
-            label: "Excel Upload",
-          },
-          { href: "/manage/reports", label: "Dispatch Jobs" },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Utilities",
+    title: "Tools",
     items: [
       {
         label: "Upload Tools",
@@ -208,6 +204,26 @@ const sidebarGroups: SidebarGroup[] = [
         children: [
           { href: "/upload", label: "Upload" },
           { href: "/upload/getjson", label: "Get JSON" },
+        ],
+      },
+    ],
+  },
+];
+
+const companySidebarGroups: SidebarGroup[] = [
+  {
+    title: "Company Operations",
+    items: [
+      {
+        label: "Schools",
+        icon: Building2,
+        children: [{ href: "/manage/schools", label: "Manage Schools" }],
+      },
+      {
+        label: "Maintenance",
+        icon: BarChart2,
+        children: [
+          { href: "/manage/admin/indexing", label: "Maintenance Console" },
         ],
       },
     ],
@@ -226,14 +242,16 @@ function Brand() {
   return (
     <Link
       href="/"
-      className="flex min-w-0 items-center gap-2.5 rounded-xl px-1.5 py-1.5 transition-colors hover:bg-accent/70"
+      className="app-nav-brand flex min-w-0 items-center gap-2.5 px-1.5 py-1.5"
     >
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+      <div className="app-nav-logo flex h-9 w-9 items-center justify-center rounded-xl">
         <Layers className="h-5 w-5" />
       </div>
       <div className="min-w-0">
         <p className="text-[13px] font-semibold tracking-wide">ALYRA TECH</p>
-        <p className="text-xs text-muted-foreground">Young Scholars Talent Test</p>
+        <p className="text-xs text-muted-foreground">
+          Quality Management Workspace
+        </p>
       </div>
     </Link>
   );
@@ -254,72 +272,59 @@ function getSchoolInitials(label: string, key: string) {
 }
 
 function CollapsedSchoolBadge() {
-  const [school, setSchool] = useState<{ key: string; displayName: string } | null>(null);
+  const [schoolKey, setSchoolKey] = useState("");
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadSchool() {
-      try {
-        const schoolKey = getSchoolKeyFromCookie();
-
-        if (!schoolKey) {
-          if (!cancelled) setSchool(null);
-          return;
-        }
-
-        try {
-          const json = await fetchApiJson<any>("/api/schools", {
-            cache: "no-store",
-            schoolKey: "",
-            fallbackMessage: "Failed to load schools.",
-          });
-          const currentSchool = Array.isArray(json.schools)
-            ? json.schools.find((entry: any) => String(entry?.key || "") === schoolKey)
-            : null;
-
-          if (!cancelled) {
-            setSchool(
-              currentSchool
-                ? {
-                    key: String(currentSchool.key || schoolKey),
-                    displayName: String(currentSchool.displayName || currentSchool.key || schoolKey),
-                  }
-                : { key: schoolKey, displayName: schoolKey },
-            );
-          }
-        } catch {
-          if (!cancelled) {
-            setSchool({ key: schoolKey, displayName: schoolKey });
-          }
-        }
-      } catch {
-        if (!cancelled) setSchool(null);
-      }
-    }
-
-    loadSchool();
-
-    return () => {
-      cancelled = true;
-    };
+    setSchoolKey(getSchoolKeyFromCookie());
   }, []);
 
-  if (!school) return null;
+  if (!schoolKey) return null;
 
-  const initials = getSchoolInitials(school.displayName, school.key);
+  const initials = getSchoolInitials(schoolKey, schoolKey);
 
   return (
-    <Link
-      href="/manage/schools"
-      title={`${school.displayName} (${school.key})`}
-      aria-label={`Current school: ${school.displayName}`}
-      className="mt-2.5 flex items-center justify-center rounded-xl border border-border/60 bg-card/60 p-1.5 shadow-sm transition-colors hover:bg-accent/60"
+    <div
+      title={schoolKey}
+      aria-label={`Current school: ${schoolKey}`}
+      className="app-nav-chip mt-2.5 flex items-center justify-center p-1.5"
     >
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold tracking-[0.08em] text-primary">
+      <div className="app-nav-logo flex h-9 w-9 items-center justify-center rounded-xl text-xs font-semibold tracking-[0.08em]">
         {initials}
       </div>
-    </Link>
+    </div>
+  );
+}
+
+function CurrentSchoolBadge({
+  compact = false,
+}: {
+  compact?: boolean;
+}) {
+  const [schoolKey, setSchoolKey] = useState("");
+
+  useEffect(() => {
+    setSchoolKey(getSchoolKeyFromCookie());
+  }, []);
+
+  return (
+    <div
+      className={cn(
+        "app-nav-chip flex items-center gap-2",
+        compact ? "px-3 py-2" : "px-3 py-2.5",
+      )}
+    >
+      <div className="app-nav-logo flex h-8 w-8 items-center justify-center rounded-xl">
+        <Building2 className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          School Workspace
+        </p>
+        <p className="truncate text-sm font-medium text-foreground">
+          {schoolKey || "No school selected"}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -341,11 +346,9 @@ function DesktopSidebarItem({
   }, [pathname]);
 
   const triggerClassName = cn(
-    "flex w-full items-center rounded-xl text-sm transition-colors",
+    "app-sidebar-item flex w-full items-center rounded-xl text-sm transition-colors",
     collapsed ? "justify-center px-0 py-2" : "justify-between gap-3 px-3 py-2",
-    isActive
-      ? "bg-primary text-primary-foreground shadow-sm"
-      : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
+    isActive ? "app-sidebar-item-active" : null,
   );
 
   const content = (
@@ -402,10 +405,8 @@ function DesktopSidebarItem({
                 href={child.href}
                 onClick={() => setOpen(false)}
                 className={cn(
-                  "block rounded-lg px-3 py-1.5 text-sm transition-colors",
-                  childActive
-                    ? "bg-primary/10 font-medium text-primary"
-                    : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
+                  "app-sidebar-subitem block rounded-lg px-3 py-1.5 text-sm transition-colors",
+                  childActive ? "app-sidebar-subitem-active font-medium" : null,
                 )}
               >
                 {child.label}
@@ -419,15 +420,25 @@ function DesktopSidebarItem({
 }
 
 function SidebarNav({ collapsed }: { collapsed: boolean }) {
+  return <SidebarNavGroups collapsed={collapsed} groups={schoolSidebarGroups} />;
+}
+
+function SidebarNavGroups({
+  collapsed,
+  groups,
+}: {
+  collapsed: boolean;
+  groups: SidebarGroup[];
+}) {
   return (
     <div className="flex h-full flex-col gap-4">
-      {sidebarGroups
+      {groups
         .filter((group) => group.items.length > 0)
         .map((group) => (
           <div key={group.title}>
             {collapsed ? (
-              <div className="mb-2 px-2" aria-hidden="true">
-                <div className="h-px rounded-full bg-border" />
+                <div className="mb-2 px-2" aria-hidden="true">
+                <div className="app-nav-divider h-px rounded-full" />
               </div>
             ) : (
               <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -449,7 +460,13 @@ function SidebarNav({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function MobileSidebar() {
+function MobileSidebar({
+  groups,
+  showSchoolWorkspace,
+}: {
+  groups: SidebarGroup[];
+  showSchoolWorkspace: boolean;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -465,23 +482,18 @@ function MobileSidebar() {
           <span className="sr-only">Open menu</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="inset-0 h-[100dvh] w-screen translate-x-0 translate-y-0 rounded-none p-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:w-full sm:max-w-sm sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl">
-        <DialogHeader className="border-b px-5 py-4">
+      <DialogContent className="app-nav-mobile-dialog inset-0 h-[100dvh] w-screen translate-x-0 translate-y-0 rounded-none p-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:w-full sm:max-w-sm sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl">
+        <DialogHeader className="border-b border-[hsl(var(--app-nav-border)/0.85)] px-5 py-4">
           <DialogTitle>Navigation</DialogTitle>
         </DialogHeader>
         <div className="max-h-[calc(100dvh-80px)] overflow-y-auto px-4 py-4">
-          <div className="mb-5 rounded-2xl border border-border/60 bg-card/40 p-3">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              School Workspace
-            </p>
-            <SchoolSwitcher
-              className="max-w-none border-0 bg-transparent p-0 shadow-none backdrop-blur-0"
-              showCreateButton={false}
-              onManageClick={() => setOpen(false)}
-            />
-          </div>
+          {showSchoolWorkspace ? (
+            <div className="mb-5">
+              <CurrentSchoolBadge compact />
+            </div>
+          ) : null}
           <div className="flex h-full flex-col gap-4">
-            {sidebarGroups
+            {groups
               .filter((group) => group.items.length > 0)
               .map((group) => (
                 <div key={group.title}>
@@ -502,10 +514,8 @@ function MobileSidebar() {
                             href={directChild.href}
                             onClick={() => setOpen(false)}
                             className={cn(
-                              "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
-                              isActive
-                                ? "bg-primary text-primary-foreground shadow-sm"
-                                : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
+                              "app-sidebar-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
+                              isActive ? "app-sidebar-item-active" : null,
                             )}
                           >
                             <Icon className="h-4 w-4 shrink-0" />
@@ -517,7 +527,7 @@ function MobileSidebar() {
                       return (
                         <div
                           key={item.label}
-                          className="rounded-xl border bg-card/40 p-1.5"
+                          className="app-nav-panel p-1.5"
                         >
                           <div className="flex items-center gap-3 px-2 py-1.5 text-sm font-medium">
                             <Icon className="h-4 w-4 shrink-0" />
@@ -533,10 +543,8 @@ function MobileSidebar() {
                                   href={child.href}
                                   onClick={() => setOpen(false)}
                                   className={cn(
-                                    "block rounded-lg px-3 py-1.5 text-sm transition-colors",
-                                    childActive
-                                      ? "bg-primary/10 font-medium text-primary"
-                                      : "text-foreground/75 hover:bg-accent hover:text-accent-foreground",
+                                    "app-sidebar-subitem block rounded-lg px-3 py-1.5 text-sm transition-colors",
+                                    childActive ? "app-sidebar-subitem-active font-medium" : null,
                                   )}
                                 >
                                   {child.label}
@@ -558,7 +566,24 @@ function MobileSidebar() {
 }
 
 export default function SiteHeader() {
+  const pathname = usePathname() || "/";
   const [collapsed, setCollapsed] = useState(false);
+  const schoolWorkspaceRoute =
+    !isAuthRoute(pathname) && !isCompanyRoute(pathname) && !isStudentRoute(pathname);
+  const companyRoute = isCompanyRoute(pathname);
+  const studentRoute = isStudentRoute(pathname);
+  const authRoute = isAuthRoute(pathname);
+  const hasSidebar = !authRoute && !studentRoute;
+  const activeSidebarGroups = companyRoute
+    ? companySidebarGroups
+    : schoolSidebarGroups;
+  const showMobileContextBar = schoolWorkspaceRoute;
+  const authSwitchHref = pathname === "/auth/company-signin"
+    ? "/auth/signin"
+    : "/auth/company-signin";
+  const authSwitchLabel = pathname === "/auth/company-signin"
+    ? "School Sign In"
+    : "Company Sign In";
 
   useEffect(() => {
     try {
@@ -573,37 +598,96 @@ export default function SiteHeader() {
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--app-sidebar-width",
-      collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH,
+      hasSidebar
+        ? collapsed
+          ? SIDEBAR_COLLAPSED_WIDTH
+          : SIDEBAR_EXPANDED_WIDTH
+        : "0px",
+    );
+    document.documentElement.style.setProperty(
+      "--app-mobile-school-switcher-height",
+      showMobileContextBar ? "5rem" : "0px",
     );
 
     try {
       window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
     } catch {
     }
-  }, [collapsed]);
+  }, [collapsed, hasSidebar, showMobileContextBar]);
+
+  async function handleSignOut() {
+    await signOut({
+      callbackUrl: companyRoute ? "/auth/company-signin" : "/auth/signin",
+    });
+  }
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-50 h-[var(--app-header-height)] border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+      <header className="app-nav-shell fixed inset-x-0 top-0 z-50 h-[var(--app-header-height)] border-b backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--app-nav-surface)/0.82)]">
         <div className="flex h-full items-center justify-between gap-3 px-3 lg:px-4">
           <div className="flex min-w-0 items-center gap-3">
-            <MobileSidebar />
+            {hasSidebar ? (
+              <MobileSidebar
+                groups={activeSidebarGroups}
+                showSchoolWorkspace={schoolWorkspaceRoute}
+              />
+            ) : null}
             <Brand />
           </div>
 
           <div className="hidden min-w-0 flex-1 items-center justify-end md:flex">
-            <SchoolSwitcher className="max-w-[24rem] xl:max-w-[28rem]" />
+            <div className="flex items-center gap-3">
+              {schoolWorkspaceRoute ? <CurrentSchoolBadge /> : null}
+              {companyRoute ? (
+                <div className="app-nav-chip px-3 py-2.5 text-sm font-medium text-foreground">
+                  Company Admin Portal
+                </div>
+              ) : null}
+              {studentRoute ? (
+                <>
+                  <div className="app-nav-chip px-3 py-2.5 text-sm font-medium text-foreground">
+                    Student Test Portal
+                  </div>
+                  <Button
+                    asChild
+                    variant={pathname.startsWith("/student/tests") ? "default" : "outline"}
+                    size="sm"
+                  >
+                    <Link href="/student/tests">Tests</Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant={pathname.startsWith("/student/account") ? "default" : "outline"}
+                    size="sm"
+                  >
+                    <Link href="/student/account">Account</Link>
+                  </Button>
+                </>
+              ) : null}
+              {authRoute ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={authSwitchHref}>{authSwitchLabel}</Link>
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => void handleSignOut()}>
+                  Sign out
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="fixed inset-x-0 top-[var(--app-header-height)] z-40 border-b bg-background/95 px-3 py-2.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75 md:hidden">
-        <SchoolSwitcher className="max-w-none" showCreateButton={false} />
-      </div>
+      {showMobileContextBar ? (
+        <div className="app-nav-shell fixed inset-x-0 top-[var(--app-header-height)] z-40 border-b px-3 py-2.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--app-nav-surface)/0.82)] md:hidden">
+          <CurrentSchoolBadge compact />
+        </div>
+      ) : null}
 
-      <aside className="fixed bottom-0 left-0 top-[var(--app-header-height)] hidden w-[var(--app-sidebar-width)] border-r bg-background transition-[width] duration-200 ease-in-out lg:block">
+      {hasSidebar ? (
+        <aside className="app-sidebar-shell fixed bottom-0 left-0 top-[var(--app-header-height)] hidden w-[var(--app-sidebar-width)] border-r transition-[width] duration-200 ease-in-out lg:block">
         <div className="flex h-full flex-col">
-          <div className={cn("border-b py-2.5", collapsed ? "px-1.5" : "px-3")}>
+          <div className={cn("border-b border-[hsl(var(--app-nav-border)/0.85)] py-2.5", collapsed ? "px-1.5" : "px-3")}>
             <div
               className={cn(
                 "flex items-center",
@@ -621,7 +705,7 @@ export default function SiteHeader() {
                 size="icon"
                 title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                className="h-8 w-8 rounded-xl"
+                className="h-8 w-8 rounded-xl hover:bg-[hsl(var(--app-nav-hover)/0.72)]"
                 onClick={() => setCollapsed((value) => !value)}
               >
                 {collapsed ? (
@@ -634,7 +718,7 @@ export default function SiteHeader() {
                 </span>
               </Button>
             </div>
-            {collapsed ? <CollapsedSchoolBadge /> : null}
+            {collapsed && schoolWorkspaceRoute ? <CollapsedSchoolBadge /> : null}
           </div>
 
           <div
@@ -643,10 +727,11 @@ export default function SiteHeader() {
               collapsed ? "px-1.5" : "px-3",
             )}
           >
-            <SidebarNav collapsed={collapsed} />
+            <SidebarNavGroups collapsed={collapsed} groups={activeSidebarGroups} />
           </div>
         </div>
-      </aside>
+        </aside>
+      ) : null}
     </>
   );
 }

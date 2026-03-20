@@ -7,6 +7,7 @@ import PageLoadingState from '@/components/ui/page-loading-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, CheckCircle, Info, Grid3X3 } from 'lucide-react';
+import PageHero from '@/components/layout/PageHero';
 import { ContentRenderer } from '@/components/ContentRenderer';
 import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
 import { useBackNavigation, useCurrentPathWithSearch } from '@/hooks/useReturnNavigation';
@@ -14,7 +15,7 @@ import { useBackNavigation, useCurrentPathWithSearch } from '@/hooks/useReturnNa
 interface Question {
   _id: string;
   content: string;
-  type: 'single' | 'multiple' | 'matrix-match';
+  type: 'single' | 'multiple' | 'matrix-match' | 'descriptive';
   tags?: { _id: string; name: string; type?: { name: string } }[];
   subjects?: { _id: string; name: string; code?: string }[];
   options?: { content: string }[];
@@ -64,16 +65,17 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
   if (error || !question) {
     return (
       <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
-        <div className="app-page-header-row">
-          <div>
-            <h1 className="app-page-title">View Question</h1>
-            <p className="app-page-subtitle">The requested question could not be loaded.</p>
-          </div>
-          <Button variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Questions
-          </Button>
-        </div>
+        <PageHero
+          eyebrow="Question Bank"
+          title="View Question"
+          description="The requested question could not be loaded."
+          actions={
+            <Button variant="outline" onClick={navigateBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Questions
+            </Button>
+          }
+        />
         <div className="app-feedback app-feedback-error text-center">{error || 'Question not found.'}</div>
       </div>
     );
@@ -81,21 +83,45 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
 
   return (
     <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">View Question</h1>
-          <p className="app-page-subtitle">Detailed view of a single question and its metadata.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <Button asChild>
-            <Link href={editHref}>Edit</Link>
-          </Button>
-        </div>
-      </div>
+      <PageHero
+        eyebrow="Question Bank"
+        title="View Question"
+        description="Detailed view of a single question, its answer data, and the metadata used across paper building."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={navigateBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <Button asChild>
+              <Link href={editHref}>Edit</Link>
+            </Button>
+          </div>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">{question.class?.name || 'No class assigned'}</span>
+            <span className="app-meta-chip">{question.subject?.name || 'No subject assigned'}</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Question type',
+            value: question.type,
+            meta: 'This determines how the item behaves in authoring and delivery flows.',
+          },
+          {
+            label: 'Marks',
+            value: String(question.marks ?? '-'),
+            meta: 'Current mark value stored for this question.',
+          },
+          {
+            label: 'Linked tags',
+            value: String(question.tags?.length ?? 0),
+            meta: 'Tags help the question appear in filters, papers, and analytics.',
+          },
+        ]}
+      />
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">

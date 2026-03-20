@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { Spinner } from '@/components/ui/spinner';
+import PageHero from '@/components/layout/PageHero';
 import { Trash2 } from 'lucide-react';
 import {
   AlertDialog,
@@ -102,11 +103,42 @@ export default function ManageClassesPage() {
   };
 
   return (
-    <div className="container py-6 space-y-6">
-      <header className="app-page-header">
-        <h1 className="app-page-title">Manage Classes</h1>
-        <p className="app-page-subtitle">Add, view, and archive classes from the system.</p>
-      </header>
+    <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
+      <PageHero
+        eyebrow="Academic Setup"
+        title="Manage Classes"
+        description="Create the class structure your school uses for student enrollment, question papers, analytics, and reports."
+        meta={
+          <>
+            <span className="app-meta-chip">Foundation data</span>
+            <span className="app-meta-chip">Used across papers and users</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Total classes',
+            value: String(classes.length),
+            meta: 'All active classes currently available in this school workspace.',
+          },
+          {
+            label: 'Create status',
+            value: isSubmitting ? 'Saving' : 'Ready',
+            meta: 'Add a new class without leaving this page.',
+          },
+          {
+            label: 'Data health',
+            value: error ? 'Needs review' : 'Good',
+            meta: error
+              ? 'One or more class operations failed to load.'
+              : 'Class records loaded successfully.',
+          },
+          {
+            label: 'Flow',
+            value: 'Create + Archive',
+            meta: 'Class maintenance stays in one standardized workspace.',
+          },
+        ]}
+      />
 
       <div className="space-y-6">
         <Card className="app-surface overflow-hidden">

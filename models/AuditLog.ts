@@ -1,4 +1,5 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
+import { getModelRegistry } from "@/lib/mongoose-models";
 
 export interface IAuditLog extends Document {
   entityType: string;
@@ -39,8 +40,10 @@ AuditLogSchema.index({ createdAt: -1 });
 AuditLogSchema.index({ entityType: 1, createdAt: -1 });
 AuditLogSchema.index({ action: 1, createdAt: -1 });
 
+const modelRegistry = getModelRegistry();
+
 const AuditLog: Model<IAuditLog> =
-  (mongoose.models.AuditLog as Model<IAuditLog>) ||
+  (modelRegistry.AuditLog as Model<IAuditLog>) ||
   mongoose.model<IAuditLog>("AuditLog", AuditLogSchema);
 
 export default AuditLog;

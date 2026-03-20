@@ -1,5 +1,6 @@
 import React from "react";
 import { cookies, headers } from "next/headers";
+import PageHero from "@/components/layout/PageHero";
 import QuestionPaperForm from "@/components/QuestionPaperForm";
 import { getSchoolKeyFromServerCookies } from "@/lib/server/school";
 
@@ -14,12 +15,14 @@ async function getQuestionPaper(id: string) {
     "localhost:3000";
   const protocol = headerStore.get("x-forwarded-proto") || "http";
   const baseUrl = `${protocol}://${host}`;
+  const requestCookieHeader = headerStore.get("cookie") || "";
 
   const res = await fetch(
     `${baseUrl}/api/question-papers/${id}${schoolKey ? `?school=${encodeURIComponent(schoolKey)}` : ""}`,
     {
       cache: "no-store",
       headers: {
+        ...(requestCookieHeader ? { cookie: requestCookieHeader } : {}),
         ...(schoolKey ? { "x-school-key": schoolKey } : {}),
       },
     },
@@ -43,10 +46,11 @@ export default async function EditQuestionPaperPage({
   if (!rawData) {
     return (
       <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-        <div className="app-page-header">
-          <h1 className="app-page-title">Edit Question Paper</h1>
-          <p className="app-page-subtitle">The requested paper could not be loaded.</p>
-        </div>
+        <PageHero
+          eyebrow="Assessments"
+          title="Edit Question Paper"
+          description="The requested paper could not be loaded."
+        />
         <div className="app-empty-state">Question paper not found.</div>
       </div>
     );
@@ -59,6 +63,9 @@ export default async function EditQuestionPaperPage({
     duration: rawData.duration ?? 60,
     passingMarks: rawData.passingMarks ?? 0,
     examDate: rawData.examDate ?? "",
+    onlineEnabled: Boolean(rawData.onlineEnabled),
+    onlineStartsAt: rawData.onlineStartsAt ?? "",
+    onlineEndsAt: rawData.onlineEndsAt ?? "",
     classId: rawData.class?._id ?? "",
     subjectId: rawData.subject?._id ?? "",
     assignedAcademicSectionIds: (rawData.assignedAcademicSections || []).map((section: any) =>

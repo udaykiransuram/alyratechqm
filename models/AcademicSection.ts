@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
 import { applyArchiveFields, hasArchiveFields } from "@/lib/archive";
+import { getModelRegistry } from "@/lib/mongoose-models";
 
 import "./Class.ts";
 
@@ -42,16 +43,18 @@ AcademicSectionSchema.index(
 
 applyArchiveFields(AcademicSectionSchema);
 
-const existingAcademicSectionModel = mongoose.models.AcademicSection as
+const modelRegistry = getModelRegistry();
+
+const existingAcademicSectionModel = modelRegistry.AcademicSection as
   | Model<IAcademicSection>
   | undefined;
 
 if (existingAcademicSectionModel && !hasArchiveFields(existingAcademicSectionModel)) {
-  delete mongoose.models.AcademicSection;
+  delete modelRegistry.AcademicSection;
 }
 
 const AcademicSection: Model<IAcademicSection> =
-  (mongoose.models.AcademicSection as Model<IAcademicSection>) ||
+  (modelRegistry.AcademicSection as Model<IAcademicSection>) ||
   mongoose.model<IAcademicSection>("AcademicSection", AcademicSectionSchema);
 
 export default AcademicSection;

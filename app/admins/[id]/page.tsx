@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import PageHero from '@/components/layout/PageHero';
 import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
 import { useBackNavigation, useCurrentPathWithSearch } from '@/hooks/useReturnNavigation';
 import PageLoadingState from '@/components/ui/page-loading-state';
@@ -134,18 +135,51 @@ export default function AdminDetailPage() {
 
   return (
     <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div className="app-page-header">
-          <h1 className="app-page-title">Admin Details</h1>
-          <p className="app-page-subtitle">View admin profile and class, section, and subject access settings.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={navigateBack}>Back</Button>
-          <Link href={editHref}>
-            <Button>Edit</Button>
-          </Link>
-        </div>
-      </div>
+      <PageHero
+        eyebrow="People"
+        title={user?.name || "Admin Details"}
+        description="Inspect school-admin profile information and the exact access envelope configured across classes, sections, and subjects."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={navigateBack}>Back to Admins</Button>
+            <Link href={editHref}>
+              <Button>Edit Admin</Button>
+            </Link>
+          </div>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Admin account</span>
+            <span className="app-meta-chip">
+              {user?.hasAllClasses && user?.hasAllSections && user?.hasAllSubjects
+                ? "Full school access"
+                : "Restricted scope"}
+            </span>
+          </>
+        }
+        stats={[
+          {
+            label: "Class access",
+            value: loading ? "—" : String(classNames.length),
+            meta: user?.hasAllClasses ? "All classes are enabled." : "Specific class assignments only.",
+          },
+          {
+            label: "Section access",
+            value: loading ? "—" : String(academicSectionNames.length),
+            meta: user?.hasAllSections ? "Section access is broad within scope." : "Only selected sections are enabled.",
+          },
+          {
+            label: "Subject access",
+            value: loading ? "—" : String(subjectNames.length),
+            meta: user?.hasAllSubjects ? "All subjects are available." : "Only selected subjects are enabled.",
+          },
+          {
+            label: "Profile state",
+            value: loading ? "Loading" : error ? "Needs review" : "Ready",
+            meta: error ? "Admin details could not be loaded cleanly." : "Admin profile loaded successfully.",
+          },
+        ]}
+      />
 
       {loading ? (
         <PageLoadingState

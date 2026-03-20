@@ -1,32 +1,19 @@
 export const COMPANY_NAME = "ALYRA TECH";
-export const PRODUCT_NAME = "Young Scholars Talent Test";
+export const PRODUCT_NAME = "School Quality Management Workspace";
 export const SITE_TITLE = `${PRODUCT_NAME}`;
 
 export const HOME_DESCRIPTION =
-  "Young Scholars Talent Test by ALYRA TECH is a national STEM talent assessment with registration, performance analytics, awards, and school-level insights for classes 1-10.";
-
-export const MARKETING_DESCRIPTION =
-  "ALYRA TECH helps schools go beyond marks with precision diagnostic assessments, class heatmaps, targeted reteach, and measurable student growth.";
-
-export const REGISTER_DESCRIPTION =
-  "Register for the Young Scholars Talent Test by ALYRA TECH and complete secure online payment for student enrollment.";
+  "ALYRA TECH provides a secure school quality management workspace for academic setup, assessment operations, analytics, and report delivery.";
 
 export const SITE_KEYWORDS = [
   "ALYRA TECH",
-  "Young Scholars Talent Test",
-  "talent test registration",
-  "STEM assessment",
-  "student talent test",
+  "school quality management",
+  "assessment operations",
   "school analytics",
-  "diagnostic assessment",
-  "classes 1 to 10",
+  "question paper management",
+  "report delivery",
+  "academic setup",
 ];
-
-export const PUBLIC_SITEMAP_ROUTES = [
-  { path: "/", changeFrequency: "weekly", priority: 1 },
-  { path: "/marketing", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/register", changeFrequency: "weekly", priority: 0.9 },
-] as const;
 
 export function getMetadataBase() {
   const candidate =

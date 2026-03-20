@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import PageHero from "@/components/layout/PageHero";
 import { Button } from "@/components/ui/button";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
 
@@ -66,18 +67,40 @@ export default function AuditLogsPage() {
   }, [entityTypeFilter, actionFilter]);
 
   return (
-    <div className="app-page-shell px-4 py-6 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">Audit Logs</h1>
-          <p className="app-page-subtitle">
-            Review archived items and upload batch activity for the selected school.
-          </p>
-        </div>
-        <Button type="button" variant="outline" onClick={() => void loadLogs()} disabled={loading}>
-          {loading ? "Refreshing…" : "Refresh"}
-        </Button>
-      </div>
+    <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
+      <PageHero
+        eyebrow="Operations"
+        title="Audit Logs"
+        description="Review archived items and upload batch activity for the selected school from one consistent operations view."
+        actions={
+          <Button type="button" variant="outline" onClick={() => void loadLogs()} disabled={loading}>
+            {loading ? "Refreshing…" : "Refresh"}
+          </Button>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">{schoolKey ? "School selected" : "School required"}</span>
+            <span className="app-meta-chip">{entityTypeFilter === "all" ? "All entities" : entityTypeFilter}</span>
+          </>
+        }
+        stats={[
+          {
+            label: "Loaded entries",
+            value: String(logs.length),
+            meta: "Current log count after the selected filters are applied.",
+          },
+          {
+            label: "Entity filters",
+            value: String(entityTypes.length),
+            meta: "Distinct entity types available for filtering in this school workspace.",
+          },
+          {
+            label: "Action filters",
+            value: String(actions.length),
+            meta: "Distinct audit actions available in the current response.",
+          },
+        ]}
+      />
 
       {!schoolKey ? (
         <div className="app-feedback app-feedback-info">

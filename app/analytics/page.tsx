@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BarChart2, BookOpen, FileSpreadsheet, MessageSquareText } from "lucide-react";
+import PageHero from "@/components/layout/PageHero";
 
 const analyticsCards = [
   {
@@ -31,15 +32,24 @@ const analyticsCards = [
 export default function AnalyticsHubPage() {
   return (
     <div className="app-page-shell max-w-6xl px-4 py-6 sm:px-0">
-      <div className="app-page-header-row">
-        <div className="app-page-header">
-          <h1 className="app-page-title">Analytics Hub</h1>
-          <p className="app-page-subtitle">
-            Use this workspace to enter the class analytics flow, upload response sheets,
-            and monitor report delivery.
-          </p>
-        </div>
-      </div>
+      <PageHero
+        eyebrow="Analytics"
+        title="Analytics Hub"
+        description="Use this workspace to enter the class analytics flow, upload response sheets, and monitor report delivery."
+        meta={
+          <>
+            <span className="app-meta-chip">Assessment analytics</span>
+            <span className="app-meta-chip">Delivery monitoring</span>
+          </>
+        }
+        stats={[
+          {
+            label: "Entry points",
+            value: String(analyticsCards.length),
+            meta: "Use these shortcuts to jump into the main analytics flows.",
+          },
+        ]}
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
         {analyticsCards.map((card) => {

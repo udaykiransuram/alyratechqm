@@ -28,7 +28,7 @@ export interface Question {
   explanation?: string;
   marks: number;
   createdAt: string;
-  type: 'single' | 'multiple' | 'matrix-match';
+  type: 'single' | 'multiple' | 'matrix-match' | 'descriptive';
 }
 
 export interface QuestionItemProps {

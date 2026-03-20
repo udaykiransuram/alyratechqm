@@ -3,9 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
+
+import PageHero from '@/components/layout/PageHero';
+import { SubjectItem, SubjectItemSkeleton, type Subject } from '@/components/subject-item';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,8 +16,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { SubjectItem, SubjectItemSkeleton, type Subject } from '@/components/subject-item';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function ViewSubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -97,20 +99,44 @@ export default function ViewSubjectsPage() {
 
   return (
     <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">All Subjects</h1>
-          <p className="app-page-subtitle">
-            Browse, update, and organize subject definitions and linked tags.
-          </p>
-        </div>
-        <Link href="/subjects/create">
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Subject
+      <PageHero
+        eyebrow="Curriculum"
+        title="Subjects"
+        description="Browse, update, and organize subject definitions and the tags used across your paper-authoring flow."
+        actions={
+          <Button asChild className="gap-2">
+            <Link href="/subjects/create">
+              <Plus className="h-4 w-4" />
+              Add Subject
+            </Link>
           </Button>
-        </Link>
-      </div>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Dedicated subject library</span>
+            <span className="app-meta-chip">Tag-linked setup</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Total subjects',
+            value: String(subjects.length),
+            meta: 'Subject definitions available in the current school workspace.',
+          },
+          {
+            label: 'Tagged subjects',
+            value: String(subjects.filter((subject) => subject.tags?.length).length),
+            meta: 'Subjects already connected to one or more curriculum tags.',
+          },
+          {
+            label: 'Library state',
+            value: fetchError ? 'Needs attention' : pageLoading ? 'Loading' : 'Ready',
+            meta: fetchError
+              ? 'Refresh or retry if the subject list did not load cleanly.'
+              : 'Use this page to keep subject metadata aligned with question authoring.',
+          },
+        ]}
+      />
 
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">

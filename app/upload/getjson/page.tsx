@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 
+import PageHero from '@/components/layout/PageHero';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -209,18 +210,40 @@ export default function ImportQuestionsPage() {
     <main className="py-6">
       <div className="container">
         <div className="app-page-shell">
-          <div className="app-page-header-row">
-            <div>
-              <h1 className="app-page-title">Question Import &amp; Test Builder</h1>
-              <p className="app-page-subtitle">
-                Convert spreadsheet uploads, review the generated artifacts, and publish directly to the question bank.
-              </p>
-            </div>
-            <Button type="button" variant="outline" onClick={navigateBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          </div>
+          <PageHero
+            eyebrow="Import Tools"
+            title="Question Import & Test Builder"
+            description="Convert spreadsheet uploads, review the generated artifacts, and publish directly to the question bank."
+            actions={
+              <Button type="button" variant="outline" onClick={navigateBack} className="gap-2">
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+            }
+            meta={
+              <>
+                <span className="app-meta-chip">Spreadsheet conversion</span>
+                <span className="app-meta-chip">Question bank publishing</span>
+              </>
+            }
+            stats={[
+              {
+                label: 'Current file',
+                value: file?.name || 'No file selected',
+                meta: 'Start by selecting the spreadsheet you want to convert.',
+              },
+              {
+                label: 'Generated questions',
+                value: String(payload.questions?.length ?? 0),
+                meta: 'Question count currently available for preview and upload.',
+              },
+              {
+                label: 'Upload state',
+                value: uploadResult ? 'Uploaded' : uploadError ? 'Needs attention' : hasData ? 'Ready to upload' : 'Waiting for conversion',
+                meta: 'The final step becomes available after a successful conversion.',
+              },
+            ]}
+          />
 
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">

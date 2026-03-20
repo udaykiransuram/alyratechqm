@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import SignInClient from "./SignInClient";
 
 export const metadata: Metadata = {
-  title: "Admin Sign In",
-  description: "Admin login for the ALYRA TECH talent test platform.",
+  title: "Quality Management Sign In",
+  description: "Secure login for the school quality management workspace.",
   robots: {
     index: false,
     follow: false,

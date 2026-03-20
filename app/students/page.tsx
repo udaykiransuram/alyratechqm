@@ -27,7 +27,6 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
-import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +35,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import PageHero from "@/components/layout/PageHero";
+import PageLoadingState from "@/components/ui/page-loading-state";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
 
 interface StudentItem {
@@ -164,6 +165,23 @@ export default function StudentsByClassPage() {
     () => groups.reduce((sum, group) => sum + (group.count || 0), 0),
     [groups],
   );
+  const selectedClassLabel = useMemo(() => {
+    if (selectedClass === "all") return "All Classes";
+    return classes.find((classItem) => classItem._id === selectedClass)?.name || "Selected Class";
+  }, [classes, selectedClass]);
+  const selectedSectionLabel = useMemo(() => {
+    if (selectedSection === "all") return "All Sections";
+    return (
+      sections.find((section) => section._id === selectedSection)?.name ||
+      "Selected Section"
+    );
+  }, [sections, selectedSection]);
+  const activeFilterCount = [
+    selectedClass !== "all",
+    selectedSection !== "all",
+    Boolean(appliedQuery),
+    includeEmpty,
+  ].filter(Boolean).length;
 
   const onSearch = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -185,6 +203,14 @@ export default function StudentsByClassPage() {
       const next = Math.min(maxPage, Math.max(1, current + dir));
       return { ...prev, [groupId]: next };
     });
+  };
+
+  const resetFilters = () => {
+    setSelectedClass("all");
+    setSelectedSection("all");
+    setQuery("");
+    setAppliedQuery("");
+    setIncludeEmpty(false);
   };
 
   const exportCSV = (group: StudentGroup) => {
@@ -275,24 +301,70 @@ export default function StudentsByClassPage() {
 
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div className="app-page-header">
-          <h1 className="app-page-title">Students</h1>
-          <p className="app-page-subtitle">
-            Browse students by class and section, then update assignments.
-          </p>
-        </div>
-        <Link href="/students/create">
-          <Button>Create Student</Button>
-        </Link>
-      </div>
+      <PageHero
+        eyebrow="People"
+        title="Students"
+        description="Browse students by class and section, then update assignments from a consistent school workspace."
+        actions={
+          <Link href="/students/create">
+            <Button>Create Student</Button>
+          </Link>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">{selectedClassLabel}</span>
+            <span className="app-meta-chip">{selectedSectionLabel}</span>
+            {includeEmpty ? <span className="app-meta-chip">Showing empty groups</span> : null}
+          </>
+        }
+        stats={[
+          {
+            label: "Total students",
+            value: String(totalStudents),
+            meta: "Students currently returned by the active filters.",
+          },
+          {
+            label: "Visible groups",
+            value: String(groups.length),
+            meta: "Class and section groupings in the current result set.",
+          },
+          {
+            label: "Search query",
+            value: appliedQuery || "None",
+            meta: "Name, email, and roll-number search across student groups.",
+          },
+          {
+            label: "Edit mode",
+            value: "Inline ready",
+            meta: "View, edit, export, and archive directly from the grouped list.",
+          },
+        ]}
+      />
 
       <Card className="app-surface overflow-hidden">
-        <CardHeader className="app-section-header">
-          <CardTitle>Filters</CardTitle>
+        <CardHeader className="app-section-header space-y-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-1">
+              <CardTitle>Student Filters</CardTitle>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Search across student groups, narrow by class and section, or include empty groups when reviewing setup coverage.
+              </p>
+            </div>
+            <div className="app-chip-cloud">
+              <span className="app-meta-chip">
+                {activeFilterCount > 0 ? `${activeFilterCount} active filters` : "No active filters"}
+              </span>
+              <span className="app-meta-chip">
+                {groups.length} grouped result{groups.length === 1 ? "" : "s"}
+              </span>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="app-section-body">
-          <form onSubmit={onSearch} className="grid gap-3 lg:grid-cols-[1fr_180px_180px_auto_auto]">
+        <CardContent className="app-section-body space-y-4">
+          <form
+            onSubmit={onSearch}
+            className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px_auto_auto]"
+          >
             <Input
               placeholder="Search by name, email, or roll number"
               value={query}
@@ -325,16 +397,40 @@ export default function StudentsByClassPage() {
               </SelectContent>
             </Select>
             <Button type="submit">Apply</Button>
-            <Button type="button" variant="outline" onClick={() => setIncludeEmpty((prev) => !prev)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIncludeEmpty((prev) => !prev)}
+            >
               {includeEmpty ? "Hide Empty" : "Show Empty"}
             </Button>
           </form>
-          <p className="mt-3 text-sm text-muted-foreground">Total students: {totalStudents}</p>
+          <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                {totalStudents} student{totalStudents === 1 ? "" : "s"} across {groups.length} group{groups.length === 1 ? "" : "s"}
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Students remain grouped by class and section so exports and quick edits stay predictable.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" onClick={resetFilters}>
+                Clear Filters
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       {loading ? (
-        <div className="app-empty-state"><Spinner /> Loading students...</div>
+        <PageLoadingState
+          title="Loading students"
+          description="Preparing grouped student results for the current class and section filters."
+          className="px-0 py-0"
+          contentClassName="max-w-none"
+          dense
+        />
       ) : error ? (
         <div className="app-feedback app-feedback-error">{error}</div>
       ) : groups.length === 0 ? (
@@ -348,30 +444,63 @@ export default function StudentsByClassPage() {
             const pageItems = group.students.slice(start, end);
             const maxPage = Math.max(1, Math.ceil(group.students.length / pageSize));
             return (
-              <AccordionItem key={group.groupId} value={group.groupId} className="overflow-hidden rounded-xl border border-border/60 bg-background">
-                <AccordionTrigger className="px-4">
-                  <div className="flex w-full items-center justify-between">
-                    <div className="flex min-w-0 flex-col text-left">
-                      <span className="font-medium">Section: {group.academicSectionName || "Unassigned"}</span>
-                      <span className="text-xs text-muted-foreground">Class: {group.className}</span>
+              <AccordionItem
+                key={group.groupId}
+                value={group.groupId}
+                className="app-surface overflow-hidden"
+              >
+                <AccordionTrigger className="px-4 py-4 no-underline hover:no-underline sm:px-5">
+                  <div className="flex w-full items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-col gap-1 text-left">
+                      <span className="text-base font-semibold text-foreground">
+                        {group.academicSectionName || "Unassigned Section"}
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span>Class: {group.className}</span>
+                        <span>•</span>
+                        <span>{group.count} student{group.count === 1 ? "" : "s"}</span>
+                      </div>
                     </div>
-                    <span className="text-sm text-muted-foreground">{group.count} students</span>
+                    <span className="app-meta-chip">{group.groupName}</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className="px-4 pb-4">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <div className="text-sm text-muted-foreground">
-                        Page {page} of {maxPage}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => changePage(group.groupId, -1)} disabled={page <= 1}>Prev</Button>
-                        <Button variant="outline" size="sm" onClick={() => changePage(group.groupId, 1)} disabled={page >= maxPage}>Next</Button>
-                        <Separator orientation="vertical" className="h-6" />
-                        <Button size="sm" onClick={() => exportCSV(group)}>Export CSV</Button>
+                  <div className="space-y-4 px-4 pb-4 sm:px-5">
+                    <div className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-foreground">
+                            Section actions
+                          </p>
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            Page {page} of {maxPage}. Export uses the same student grouping shown here.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => changePage(group.groupId, -1)}
+                            disabled={page <= 1}
+                          >
+                            Prev
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => changePage(group.groupId, 1)}
+                            disabled={page >= maxPage}
+                          >
+                            Next
+                          </Button>
+                          <Separator orientation="vertical" className="hidden h-6 sm:block" />
+                          <Button size="sm" onClick={() => exportCSV(group)}>
+                            Export CSV
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                    <div className="overflow-x-auto rounded-md border">
+                    <div className="app-table-wrap">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -405,10 +534,19 @@ export default function StudentsByClassPage() {
                                     <Link href={buildReturnHref(`/students/${student._id}`)}>
                                       <Button variant="outline" size="sm">View</Button>
                                     </Link>
-                                    <Button variant="outline" size="sm" onClick={() => openEditModal(student, group.classId)}>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openEditModal(student, group.classId)}
+                                    >
                                       Edit
                                     </Button>
-                                    <Button variant="destructive" size="sm" disabled={deleteLoading} onClick={() => deleteStudent(student._id)}>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      disabled={deleteLoading}
+                                      onClick={() => deleteStudent(student._id)}
+                                    >
                                       {deleteLoading ? "Archiving…" : "Archive"}
                                     </Button>
                                   </div>

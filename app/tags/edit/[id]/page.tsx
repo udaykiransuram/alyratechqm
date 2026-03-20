@@ -1,22 +1,28 @@
-// app/tags/edit/[id]/page.tsx
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from '@/components/ui/spinner';
-import PageLoadingState from '@/components/ui/page-loading-state';
-import { CreateTagTypeModal } from '@/components/CreateTagTypeModal'; // Import the modal
-import { PlusCircle } from 'lucide-react';
+import { ArrowLeft, PlusCircle } from 'lucide-react';
+
+import PageHero from '@/components/layout/PageHero';
+import { CreateTagTypeModal } from '@/components/CreateTagTypeModal';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
 import { buildPartialLoadMessage, fetchApiJson, resolveClientSchoolKey } from '@/lib/client/api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import PageLoadingState from '@/components/ui/page-loading-state';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
+import { useToast } from '@/components/ui/use-toast';
 
-// Updated interfaces to reflect the new data structure
 interface TagType {
   _id: string;
   name: string;
@@ -25,8 +31,8 @@ interface TagType {
 interface TagItem {
   _id: string;
   name: string;
-  type: TagType; // Type is now an object
-  subjects?: { _id: string; name: string; code?: string; }[];
+  type: TagType;
+  subjects?: { _id: string; name: string; code?: string }[];
 }
 
 interface Subject {
@@ -41,11 +47,11 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
   const { navigateBack } = useBackNavigation('/tags');
 
   const [tagName, setTagName] = useState('');
-  const [selectedTagTypeId, setSelectedTagTypeId] = useState(''); // State now holds the ID
+  const [selectedTagTypeId, setSelectedTagTypeId] = useState('');
   const [tagTypes, setTagTypes] = useState<TagType[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-  
+
   const [isSaving, setIsSaving] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,7 +95,7 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
       const tag = tagData.tag as TagItem;
       setTagName(tag.name);
       setSelectedTagTypeId(tag.type._id);
-      setSelectedSubjects(tag.subjects?.map(sub => sub._id) || []);
+      setSelectedSubjects(tag.subjects?.map((subject) => subject._id) || []);
       setSubjects(subjectsResult.status === 'fulfilled' && Array.isArray(subjectsResult.value.subjects) ? subjectsResult.value.subjects as Subject[] : []);
       setTagTypes(tagTypesResult.status === 'fulfilled' && Array.isArray(tagTypesResult.value.tagTypes) ? tagTypesResult.value.tagTypes as TagType[] : []);
       setPageNotice(
@@ -111,9 +117,10 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
 
   const handleUpdateTag = async () => {
     if (!tagName.trim() || !selectedTagTypeId) {
-      toast({ title: "Validation Error", description: "Tag Name and Type are required.", variant: "destructive" });
+      toast({ title: 'Validation Error', description: 'Tag Name and Type are required.', variant: 'destructive' });
       return;
     }
+
     setIsSaving(true);
     try {
       const schoolKey = resolveClientSchoolKey();
@@ -133,10 +140,10 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
         schoolKey,
         fallbackMessage: 'Failed to update tag.',
       });
-      toast({ title: "Success", description: `Tag "${data.tag.name}" updated successfully.` });
+      toast({ title: 'Success', description: `Tag "${data.tag.name}" updated successfully.` });
       navigateBack();
     } catch (error: any) {
-      toast({ title: "Network Error", description: error?.message || "Failed to update tag.", variant: "destructive" });
+      toast({ title: 'Network Error', description: error?.message || 'Failed to update tag.', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -153,7 +160,18 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
 
   if (pageError) {
     return (
-      <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
+      <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+        <PageHero
+          eyebrow="Curriculum"
+          title="Edit Tag"
+          description="The requested tag could not be loaded for editing."
+          actions={
+            <Button variant="outline" onClick={navigateBack} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Tags
+            </Button>
+          }
+        />
         <div className="app-feedback app-feedback-error">{pageError}</div>
       </div>
     );
@@ -169,85 +187,136 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
           setSelectedTagTypeId(newTagType._id);
         }}
       />
-      <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
+
+      <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+        <PageHero
+          eyebrow="Curriculum"
+          title="Edit Tag"
+          description="Update the tag details and subject associations without leaving the dedicated tag management flow."
+          actions={
+            <Button variant="outline" onClick={navigateBack} disabled={isSaving} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Tags
+            </Button>
+          }
+          meta={
+            <>
+              <span className="app-meta-chip">Dedicated tag maintenance</span>
+              <span className="app-meta-chip">Subject association editor</span>
+            </>
+          }
+          stats={[
+            {
+              label: 'Current type',
+              value: tagTypes.find((type) => type._id === selectedTagTypeId)?.name || 'Not set',
+              meta: 'Type grouping helps keep tag filters readable across the workspace.',
+            },
+            {
+              label: 'Assigned subjects',
+              value: String(selectedSubjects.length),
+              meta: 'Update the subject checklist below to change where this tag is available.',
+            },
+          ]}
+        />
+
         {pageNotice ? <div className="app-feedback app-feedback-info">{pageNotice}</div> : null}
-        <div className="app-page-header-row">
-          <div className="app-page-header">
-            <h1 className="app-page-title">Edit Tag</h1>
-            <p className="app-page-subtitle">Update the tag details and subject associations.</p>
-          </div>
-          <Button variant="outline" onClick={navigateBack} disabled={isSaving}>
-            Back
-          </Button>
-        </div>
 
-        <Card className="app-surface overflow-hidden">
-          <CardHeader className="app-section-header">
-            <CardTitle>Tag Details</CardTitle>
-          </CardHeader>
-          <CardContent className="app-section-body space-y-5">
-            <div className="app-field-group">
-              <Label htmlFor="tagName" className="app-field-label">Tag Name</Label>
-              <Input id="tagName" value={tagName} onChange={(e) => setTagName(e.target.value)} disabled={isSaving} />
-            </div>
-
-            <div className="app-field-group">
-              <Label htmlFor="tagType" className="app-field-label">Tag Type</Label>
-              <div className="flex items-center gap-2">
-                <Select onValueChange={setSelectedTagTypeId} value={selectedTagTypeId} disabled={isSaving}>
-                  <SelectTrigger id="tagType">
-                    <SelectValue placeholder="Select a type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tagTypes.length === 0 ? <div className="px-3 py-2 text-sm text-muted-foreground">No tag types available yet.</div> : null}
-                    {tagTypes.map((type) => (
-                      <SelectItem key={type._id} value={type._id} className="capitalize">{type.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="icon" onClick={() => setIsModalOpen(true)} disabled={isSaving} className="h-10 w-10">
-                  <PlusCircle className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="app-surface overflow-hidden">
-          <CardHeader className="app-section-header">
-            <CardTitle>Subject Associations</CardTitle>
-            <CardDescription>Assign or unassign this tag from subjects.</CardDescription>
-          </CardHeader>
-          <CardContent className="app-section-body">
-            <div className="max-h-60 space-y-3 overflow-y-auto pr-2">
-              {subjects.length === 0 ? <div className="text-sm text-muted-foreground">No subjects available for this school yet.</div> : null}
-              {subjects.map((subject) => (
-                <div key={subject._id} className="flex items-center space-x-3">
-                  <Checkbox
-                    id={`subject-${subject._id}`}
-                    checked={selectedSubjects.includes(subject._id)}
-                    onCheckedChange={(checked) => {
-                      setSelectedSubjects((prev) =>
-                        checked ? [...prev, subject._id] : prev.filter((id) => id !== subject._id)
-                      );
-                    }}
-                    disabled={isSaving}
-                  />
-                  <Label htmlFor={`subject-${subject._id}`} className="font-normal">
-                    {subject.name} {subject.code ? `(${subject.code})` : ''}
-                  </Label>
+        <div className="app-editor-grid">
+          <div className="app-editor-main">
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Tag Details</CardTitle>
+                <CardDescription>Update the label and the tag type used across the school workspace.</CardDescription>
+              </CardHeader>
+              <CardContent className="app-section-body space-y-5">
+                <div className="app-field-group">
+                  <Label htmlFor="tagName" className="app-field-label">Tag Name</Label>
+                  <Input id="tagName" value={tagName} onChange={(event) => setTagName(event.target.value)} disabled={isSaving} />
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={navigateBack} disabled={isSaving}>Cancel</Button>
-          <Button onClick={handleUpdateTag} disabled={isSaving}>
-            {isSaving && <Spinner />}
-            Save Changes
-          </Button>
+                <div className="app-field-group">
+                  <Label htmlFor="tagType" className="app-field-label">Tag Type</Label>
+                  <div className="flex items-center gap-2">
+                    <Select onValueChange={setSelectedTagTypeId} value={selectedTagTypeId} disabled={isSaving}>
+                      <SelectTrigger id="tagType">
+                        <SelectValue placeholder="Select a type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tagTypes.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">No tag types available yet.</div>
+                        ) : null}
+                        {tagTypes.map((type) => (
+                          <SelectItem key={type._id} value={type._id} className="capitalize">{type.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="icon" onClick={() => setIsModalOpen(true)} disabled={isSaving} className="h-10 w-10">
+                      <PlusCircle className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Subject Associations</CardTitle>
+                <CardDescription>Assign or unassign this tag from subjects in the current school.</CardDescription>
+              </CardHeader>
+              <CardContent className="app-section-body">
+                <div className="max-h-60 space-y-3 overflow-y-auto pr-2">
+                  {subjects.length === 0 ? <div className="text-sm text-muted-foreground">No subjects available for this school yet.</div> : null}
+                  {subjects.map((subject) => (
+                    <div key={subject._id} className="flex items-center space-x-3">
+                      <Checkbox
+                        id={`subject-${subject._id}`}
+                        checked={selectedSubjects.includes(subject._id)}
+                        onCheckedChange={(checked) => {
+                          setSelectedSubjects((prev) =>
+                            checked ? [...prev, subject._id] : prev.filter((id) => id !== subject._id),
+                          );
+                        }}
+                        disabled={isSaving}
+                      />
+                      <Label htmlFor={`subject-${subject._id}`} className="font-normal">
+                        {subject.name} {subject.code ? `(${subject.code})` : ''}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={navigateBack} disabled={isSaving}>Cancel</Button>
+              <Button onClick={handleUpdateTag} disabled={isSaving}>
+                {isSaving && <Spinner />}
+                Save Changes
+              </Button>
+            </div>
+          </div>
+
+          <aside className="app-editor-aside">
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Update Notes</CardTitle>
+                <CardDescription>Keep label changes deliberate so filters stay predictable.</CardDescription>
+              </CardHeader>
+              <CardContent className="app-section-body">
+                <div className="app-note-list">
+                  <div className="app-note-item">
+                    Renaming a tag changes how staff discover questions and interpret analytics filters.
+                  </div>
+                  <div className="app-note-item">
+                    Moving a tag to a different type can reshape reporting groupings across existing content.
+                  </div>
+                  <div className="app-note-item">
+                    Subject associations should mirror where authors are actually expected to use this label.
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </aside>
         </div>
       </div>
     </>

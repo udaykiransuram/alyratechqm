@@ -10,6 +10,14 @@ import {
 } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
 import { requireTenantSession } from "@/lib/api-auth";
+import {
+  findStudentsByRollNumber,
+  isSameStudentPlacement,
+  normalizeEmail,
+  normalizeRollNumber,
+  resolveUserPasswordInput,
+  validatePasswordInput,
+} from "@/lib/user-credentials";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +39,58 @@ function normalizeIds(value: unknown) {
 
 function normalizeId(value: unknown) {
   return value ? String(value).trim() : "";
+}
+
+function resolveUserScope({
+  role,
+  classIds,
+  academicSectionIds,
+  subjectIds,
+  hasAllClasses,
+  hasAllSections,
+  hasAllSubjects,
+}: {
+  role: string;
+  classIds?: unknown;
+  academicSectionIds?: unknown;
+  subjectIds?: unknown;
+  hasAllClasses?: unknown;
+  hasAllSections?: unknown;
+  hasAllSubjects?: unknown;
+}) {
+  const normalizedClassIds = normalizeIds(classIds);
+  const normalizedAcademicSectionIds = normalizeIds(academicSectionIds);
+  const normalizedSubjectIds = normalizeIds(subjectIds);
+  let allowAllClasses = Boolean(hasAllClasses);
+  let allowAllSections =
+    typeof hasAllSections === "boolean" ? hasAllSections : role !== "student";
+  let allowAllSubjects = Boolean(hasAllSubjects);
+
+  if (
+    role === "admin" &&
+    !allowAllClasses &&
+    !allowAllSubjects &&
+    normalizedClassIds.length === 0 &&
+    normalizedSubjectIds.length === 0
+  ) {
+    allowAllClasses = true;
+    allowAllSections = true;
+    allowAllSubjects = true;
+  }
+
+  return {
+    normalizedClassIds,
+    normalizedAcademicSectionIds,
+    normalizedSubjectIds,
+    allowAllClasses,
+    allowAllSections,
+    allowAllSubjects,
+    scopedClassIds: role === "admin" && allowAllClasses ? [] : normalizedClassIds,
+    scopedAcademicSectionIds:
+      role !== "student" && allowAllSections ? [] : normalizedAcademicSectionIds,
+    scopedSubjectIds:
+      role === "admin" && allowAllSubjects ? [] : normalizedSubjectIds,
+  };
 }
 
 async function validateStudentAcademicSection(
@@ -152,7 +212,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const name = String(body?.name || "").trim();
-    const email = body?.email ? String(body.email).trim() : undefined;
+    const email = normalizeEmail(body?.email);
     const password = body?.password ? String(body.password) : undefined;
     const role = String(body?.role || "").trim();
     const classId = normalizeId(body?.classId ?? body?.class);
@@ -162,20 +222,28 @@ export async function POST(req: NextRequest) {
         body?.sectionId ??
         body?.section,
     );
-    const rollNumber = body?.rollNumber ? String(body.rollNumber).trim() : "";
+    const rollNumber = normalizeRollNumber(body?.rollNumber);
     const enrolledAt = body?.enrolledAt;
     const mobileNumber = String(body?.mobileNumber || "").trim();
-    const normalizedClassIds = normalizeIds(body?.classIds);
-    const normalizedAcademicSectionIds = normalizeIds(
-      body?.academicSectionIds ?? body?.sectionIds,
-    );
-    const normalizedSubjectIds = normalizeIds(body?.subjectIds);
-    const allowAllClasses = Boolean(body?.hasAllClasses);
-    const allowAllSections =
-      typeof body?.hasAllSections === "boolean"
-        ? body.hasAllSections
-        : role !== "student";
-    const allowAllSubjects = Boolean(body?.hasAllSubjects);
+    const {
+      normalizedClassIds,
+      normalizedAcademicSectionIds,
+      normalizedSubjectIds,
+      allowAllClasses,
+      allowAllSections,
+      allowAllSubjects,
+      scopedClassIds,
+      scopedAcademicSectionIds,
+      scopedSubjectIds,
+    } = resolveUserScope({
+      role,
+      classIds: body?.classIds,
+      academicSectionIds: body?.academicSectionIds ?? body?.sectionIds,
+      subjectIds: body?.subjectIds,
+      hasAllClasses: body?.hasAllClasses,
+      hasAllSections: body?.hasAllSections,
+      hasAllSubjects: body?.hasAllSubjects,
+    });
 
     if (!name || !role) {
       return NextResponse.json(
@@ -209,22 +277,6 @@ export async function POST(req: NextRequest) {
         );
       }
     }
-    if (role === "admin") {
-      if (
-        (!allowAllClasses && normalizedClassIds.length === 0) ||
-        (!allowAllSubjects && normalizedSubjectIds.length === 0)
-      ) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "Admins must have all classes/subjects enabled or choose at least one class and one subject.",
-          },
-          { status: 400 },
-        );
-      }
-    }
-
     if (role === "student" && classId && academicSectionId) {
       const sectionValidation = await validateStudentAcademicSection(
         AcademicSectionModel,
@@ -234,24 +286,36 @@ export async function POST(req: NextRequest) {
       if (!sectionValidation.ok) return sectionValidation.response;
     }
 
-    if (role === "student" && rollNumber && classId) {
-      const studentQuery: any = {
-        role: "student",
+    if (role === "student" && rollNumber) {
+      const existingStudents = await findStudentsByRollNumber(
+        UserModel,
         rollNumber,
-        class: classId,
-      };
-      if (academicSectionId) {
-        studentQuery.academicSection = academicSectionId;
-      }
-      const existingStudent = await UserModel.findOne({
-        ...studentQuery,
-        ...buildArchiveFilter(false),
-      });
-      if (existingStudent) {
-        const { passwordHash: _, ...userResponse } = existingStudent.toObject();
+        { limit: 2 },
+      );
+      if (existingStudents.length > 0) {
+        if (
+          existingStudents.length === 1 &&
+          isSameStudentPlacement(
+            existingStudents[0],
+            classId,
+            academicSectionId,
+          )
+        ) {
+          const { passwordHash: _, ...userResponse } =
+            existingStudents[0].toObject();
+          return NextResponse.json(
+            { success: true, user: userResponse, existed: true },
+            { status: 200 },
+          );
+        }
+
         return NextResponse.json(
-          { success: true, user: userResponse, existed: true },
-          { status: 200 },
+          {
+            success: false,
+            message:
+              "Roll number must be unique within the school because students use it to sign in.",
+          },
+          { status: 409 },
         );
       }
     }
@@ -269,31 +333,40 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let passwordHash: string | undefined;
-    if (password) {
-      if (password.length < 6) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Password must be at least 6 characters long.",
-          },
-          { status: 400 },
-        );
-      }
-      passwordHash = await bcrypt.hash(password, 10);
+    const effectivePassword = resolveUserPasswordInput({
+      role,
+      rollNumber,
+      password,
+    });
+    const passwordValidation = validatePasswordInput({
+      role,
+      rollNumber,
+      password: effectivePassword,
+    });
+    if (!passwordValidation.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: passwordValidation.message,
+        },
+        { status: 400 },
+      );
     }
 
-    if (role === "student" && rollNumber && classId) {
-      const archivedStudentQuery: any = {
-        role: "student",
-        rollNumber,
-        class: classId,
-        isArchived: true,
-      };
-      if (academicSectionId) {
-        archivedStudentQuery.academicSection = academicSectionId;
-      }
-      const archivedStudent = await UserModel.findOne(archivedStudentQuery);
+    let passwordHash: string | undefined;
+    if (effectivePassword) {
+      passwordHash = await bcrypt.hash(effectivePassword, 10);
+    }
+
+    if (role === "student" && rollNumber) {
+      const studentMatches = await findStudentsByRollNumber(UserModel, rollNumber, {
+        includeArchived: true,
+      });
+      const archivedStudent = studentMatches.find(
+        (candidate: any) =>
+          candidate.isArchived === true &&
+          isSameStudentPlacement(candidate, classId, academicSectionId),
+      );
       if (archivedStudent) {
         const restoredStudent = await UserModel.findByIdAndUpdate(
           archivedStudent._id,
@@ -353,17 +426,15 @@ export async function POST(req: NextRequest) {
               role === "student" ? academicSectionId || undefined : undefined,
             classIds:
               role === "teacher" || role === "admin"
-                ? normalizedClassIds
+                ? scopedClassIds
                 : undefined,
             academicSectionIds:
               role === "teacher" || role === "admin"
-                ? allowAllSections
-                  ? []
-                  : normalizedAcademicSectionIds
+                ? scopedAcademicSectionIds
                 : undefined,
             subjectIds:
               role === "teacher" || role === "admin"
-                ? normalizedSubjectIds
+                ? scopedSubjectIds
                 : undefined,
             hasAllClasses: role === "admin" ? allowAllClasses : false,
             hasAllSections:
@@ -404,16 +475,14 @@ export async function POST(req: NextRequest) {
       academicSection:
         role === "student" ? academicSectionId || undefined : undefined,
       classIds:
-        role === "teacher" || role === "admin" ? normalizedClassIds : undefined,
+        role === "teacher" || role === "admin" ? scopedClassIds : undefined,
       academicSectionIds:
         role === "teacher" || role === "admin"
-          ? allowAllSections
-            ? []
-            : normalizedAcademicSectionIds
+          ? scopedAcademicSectionIds
           : undefined,
       subjectIds:
         role === "teacher" || role === "admin"
-          ? normalizedSubjectIds
+          ? scopedSubjectIds
           : undefined,
       hasAllClasses: role === "admin" ? allowAllClasses : false,
       hasAllSections:

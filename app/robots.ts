@@ -6,26 +6,9 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/marketing", "/register"],
-        disallow: [
-          "/api/",
-          "/auth/",
-          "/admins/",
-          "/analytics/",
-          "/manage/",
-          "/question-papers/",
-          "/questions/",
-          "/students/",
-          "/subject/",
-          "/subjects/",
-          "/success/",
-          "/tags/",
-          "/teachers/",
-          "/upload/",
-        ],
+        disallow: ["/"],
       },
     ],
-    sitemap: getAbsoluteUrl("/sitemap.xml"),
     host: getAbsoluteUrl("/").replace(/\/$/, ""),
   };
 }

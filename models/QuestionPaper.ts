@@ -2,6 +2,7 @@
 
 import mongoose, { Schema, Document, Types } from "mongoose";
 import { applyArchiveFields, hasArchiveFields } from "@/lib/archive";
+import { getModelRegistry } from "@/lib/mongoose-models";
 
 // --- FORCE MODEL REGISTRATION ---
 // Import the actual models (default export) to ensure they are registered
@@ -45,6 +46,9 @@ export interface IQuestionPaper extends Document {
   duration: number;
   passingMarks: number;
   examDate: Date;
+  onlineEnabled: boolean;
+  onlineStartsAt?: Date;
+  onlineEndsAt?: Date;
   totalMarks: number;
   sections: ISection[];
   assignedAcademicSections?: Types.ObjectId[];
@@ -134,6 +138,18 @@ const QuestionPaperSchema = new Schema<IQuestionPaper>(
       type: Date,
       required: true,
     },
+    onlineEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    onlineStartsAt: {
+      type: Date,
+      default: undefined,
+    },
+    onlineEndsAt: {
+      type: Date,
+      default: undefined,
+    },
     totalMarks: {
       type: Number,
       required: true,
@@ -155,7 +171,9 @@ const QuestionPaperSchema = new Schema<IQuestionPaper>(
 
 applyArchiveFields(QuestionPaperSchema);
 
-const existingQuestionPaperModel = mongoose.models.QuestionPaper as
+const modelRegistry = getModelRegistry();
+
+const existingQuestionPaperModel = modelRegistry.QuestionPaper as
   | mongoose.Model<IQuestionPaper>
   | undefined;
 
@@ -164,12 +182,15 @@ if (
   (!existingQuestionPaperModel.schema.path("duration") ||
     !existingQuestionPaperModel.schema.path("passingMarks") ||
     !existingQuestionPaperModel.schema.path("examDate") ||
+    !existingQuestionPaperModel.schema.path("onlineEnabled") ||
+    !existingQuestionPaperModel.schema.path("onlineStartsAt") ||
+    !existingQuestionPaperModel.schema.path("onlineEndsAt") ||
     !existingQuestionPaperModel.schema.path("assignedAcademicSections") ||
     !hasArchiveFields(existingQuestionPaperModel))
 ) {
-  delete mongoose.models.QuestionPaper;
+  delete modelRegistry.QuestionPaper;
 }
 
-export default (mongoose.models
+export default (modelRegistry
   .QuestionPaper as mongoose.Model<IQuestionPaper>) ||
   mongoose.model<IQuestionPaper>("QuestionPaper", QuestionPaperSchema);

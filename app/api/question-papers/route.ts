@@ -6,6 +6,7 @@ import { getTenantModels } from "@/lib/db-tenant";
 import { buildArchiveFilter, resolveIncludeArchived } from "@/lib/archive";
 import { requireTenantSession } from "@/lib/api-auth";
 import { recordTenantAudit } from "@/lib/audit";
+import { isOnlineQuestionType } from "@/lib/question-paper/grading";
 import "@/models/QuestionPaperResponse";
 import "@/models/Class";
 import "@/models/Subject";
@@ -29,6 +30,70 @@ function normalizeIds(value: unknown) {
   return Array.from(
     new Set(value.map((item) => String(item || "").trim()).filter(Boolean)),
   );
+}
+
+function normalizeDate(value: unknown) {
+  if (!value) return undefined;
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+async function validateQuestionSelection(
+  QuestionModel: any,
+  sections: any[],
+  onlineEnabled: boolean,
+) {
+  const questionIds = Array.from(
+    new Set(
+      (Array.isArray(sections) ? sections : []).flatMap((section: any) =>
+        (Array.isArray(section?.questions) ? section.questions : []).map(
+          (question: any) => String(question?.question || "").trim(),
+        ),
+      ),
+    ),
+  ).filter(Boolean);
+
+  const questions = await QuestionModel.find({
+    _id: { $in: questionIds },
+    ...buildArchiveFilter(false),
+  })
+    .select("_id type")
+    .lean();
+
+  if (questions.length !== questionIds.length) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          success: false,
+          message: "One or more selected questions could not be found.",
+        },
+        { status: 400 },
+      ),
+    } as const;
+  }
+
+  if (onlineEnabled) {
+    const unsupportedQuestion = questions.find(
+      (question: any) => !isOnlineQuestionType(question?.type),
+    );
+
+    if (unsupportedQuestion) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            success: false,
+            message:
+              "This paper contains a question type that is not supported for online delivery.",
+          },
+          { status: 400 },
+        ),
+      } as const;
+    }
+  }
+
+  return { ok: true } as const;
 }
 
 async function validateAssignedAcademicSections(
@@ -76,8 +141,15 @@ export async function POST(req: NextRequest) {
   const actorId = auth.session.user.id;
 
   try {
-    const { QuestionPaper: QPModel, AcademicSection: AcademicSectionModel } =
-      await getTenantModels(schoolKey, ["QuestionPaper", "AcademicSection"]);
+    const {
+      QuestionPaper: QPModel,
+      AcademicSection: AcademicSectionModel,
+      Question: QuestionModel,
+    } = await getTenantModels(schoolKey, [
+      "QuestionPaper",
+      "AcademicSection",
+      "Question",
+    ]);
 
     const body = await req.json();
     const {
@@ -88,9 +160,16 @@ export async function POST(req: NextRequest) {
       duration,
       passingMarks,
       examDate,
+      onlineEnabled: rawOnlineEnabled,
+      onlineStartsAt: rawOnlineStartsAt,
+      onlineEndsAt: rawOnlineEndsAt,
       totalMarks,
       sections,
     } = body || {};
+    const onlineEnabled = Boolean(rawOnlineEnabled);
+    const onlineStartsAt = normalizeDate(rawOnlineStartsAt);
+    const onlineEndsAt = normalizeDate(rawOnlineEndsAt);
+    const effectiveOnlineStart = onlineStartsAt || normalizeDate(examDate);
 
     const assignedAcademicSectionIds = normalizeIds(
       body?.assignedAcademicSections ??
@@ -113,6 +192,20 @@ export async function POST(req: NextRequest) {
     ) {
       return NextResponse.json(
         { success: false, message: "Missing required fields." },
+        { status: 400 },
+      );
+    }
+    if (
+      onlineEnabled &&
+      effectiveOnlineStart &&
+      onlineEndsAt &&
+      onlineEndsAt.getTime() <= effectiveOnlineStart.getTime()
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Online end time must be after the online start time.",
+        },
         { status: 400 },
       );
     }
@@ -167,6 +260,15 @@ export async function POST(req: NextRequest) {
       return assignmentValidation.response;
     }
 
+    const questionValidation = await validateQuestionSelection(
+      QuestionModel,
+      sections,
+      onlineEnabled,
+    );
+    if (!questionValidation.ok) {
+      return questionValidation.response;
+    }
+
     const paper = await QPModel.create({
       title,
       instructions,
@@ -175,6 +277,9 @@ export async function POST(req: NextRequest) {
       duration,
       passingMarks,
       examDate,
+      onlineEnabled,
+      onlineStartsAt,
+      onlineEndsAt,
       totalMarks,
       sections,
       assignedAcademicSections: assignmentValidation.ids,
@@ -213,10 +318,12 @@ export async function GET(req: NextRequest) {
     const {
       QuestionPaper: QPModel,
       Class: ClassModel,
+      Subject: SubjectModel,
       AcademicSection: AcademicSectionModel,
     } = await getTenantModels(schoolKey, [
       "QuestionPaper",
       "Class",
+      "Subject",
       "AcademicSection",
     ]);
 
@@ -224,9 +331,10 @@ export async function GET(req: NextRequest) {
       buildArchiveFilter(resolveIncludeArchived(req.nextUrl)),
     )
       .select(
-        "title class totalMarks sections assignedAcademicSections createdAt updatedAt",
+        "title class subject totalMarks sections assignedAcademicSections duration examDate onlineEnabled onlineStartsAt onlineEndsAt createdAt updatedAt",
       )
       .populate({ path: "class", model: ClassModel, select: "name" })
+      .populate({ path: "subject", model: SubjectModel, select: "name" })
       .populate({
         path: "assignedAcademicSections",
         model: AcademicSectionModel,

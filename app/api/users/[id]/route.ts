@@ -10,6 +10,13 @@ import {
 } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
 import { requireTenantSession } from "@/lib/api-auth";
+import {
+  findStudentsByRollNumber,
+  normalizeEmail,
+  normalizeRollNumber,
+  resolveUserPasswordInput,
+  validatePasswordInput,
+} from "@/lib/user-credentials";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +38,58 @@ function normalizeIds(value: unknown) {
 
 function normalizeId(value: unknown) {
   return value ? String(value).trim() : "";
+}
+
+function resolveUserScope({
+  role,
+  classIds,
+  academicSectionIds,
+  subjectIds,
+  hasAllClasses,
+  hasAllSections,
+  hasAllSubjects,
+}: {
+  role: string;
+  classIds?: unknown;
+  academicSectionIds?: unknown;
+  subjectIds?: unknown;
+  hasAllClasses?: unknown;
+  hasAllSections?: unknown;
+  hasAllSubjects?: unknown;
+}) {
+  const normalizedClassIds = normalizeIds(classIds);
+  const normalizedAcademicSectionIds = normalizeIds(academicSectionIds);
+  const normalizedSubjectIds = normalizeIds(subjectIds);
+  let allowAllClasses = Boolean(hasAllClasses);
+  let allowAllSections =
+    typeof hasAllSections === "boolean" ? hasAllSections : role !== "student";
+  let allowAllSubjects = Boolean(hasAllSubjects);
+
+  if (
+    role === "admin" &&
+    !allowAllClasses &&
+    !allowAllSubjects &&
+    normalizedClassIds.length === 0 &&
+    normalizedSubjectIds.length === 0
+  ) {
+    allowAllClasses = true;
+    allowAllSections = true;
+    allowAllSubjects = true;
+  }
+
+  return {
+    normalizedClassIds,
+    normalizedAcademicSectionIds,
+    normalizedSubjectIds,
+    allowAllClasses,
+    allowAllSections,
+    allowAllSubjects,
+    scopedClassIds: role === "admin" && allowAllClasses ? [] : normalizedClassIds,
+    scopedAcademicSectionIds:
+      role !== "student" && allowAllSections ? [] : normalizedAcademicSectionIds,
+    scopedSubjectIds:
+      role === "admin" && allowAllSubjects ? [] : normalizedSubjectIds,
+  };
 }
 
 async function validateStudentAcademicSection(
@@ -165,13 +224,27 @@ export async function PUT(
       rawAcademicSectionId ?? rawAcademicSection,
     );
     const normalizedMobileNumber = String(mobileNumber || "").trim();
-    const normalizedClassIds = normalizeIds(classIds);
-    const normalizedAcademicSectionIds = normalizeIds(academicSectionIds);
-    const normalizedSubjectIds = normalizeIds(subjectIds);
-    const allowAllClasses = Boolean(hasAllClasses);
-    const allowAllSections =
-      typeof hasAllSections === "boolean" ? hasAllSections : role !== "student";
-    const allowAllSubjects = Boolean(hasAllSubjects);
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedRollNumber = normalizeRollNumber(rollNumber);
+    const {
+      normalizedClassIds,
+      normalizedAcademicSectionIds,
+      normalizedSubjectIds,
+      allowAllClasses,
+      allowAllSections,
+      allowAllSubjects,
+      scopedClassIds,
+      scopedAcademicSectionIds,
+      scopedSubjectIds,
+    } = resolveUserScope({
+      role,
+      classIds,
+      academicSectionIds,
+      subjectIds,
+      hasAllClasses,
+      hasAllSections,
+      hasAllSubjects,
+    });
 
     if (!name || !role) {
       return NextResponse.json(
@@ -185,7 +258,7 @@ export async function PUT(
         { status: 400 },
       );
     }
-    if (role === "student" && (!classId || !rollNumber)) {
+    if (role === "student" && (!classId || !normalizedRollNumber)) {
       return NextResponse.json(
         {
           success: false,
@@ -206,21 +279,6 @@ export async function PUT(
         { status: 400 },
       );
     }
-    if (
-      role === "admin" &&
-      ((!allowAllClasses && normalizedClassIds.length === 0) ||
-        (!allowAllSubjects && normalizedSubjectIds.length === 0))
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Admins must have all classes/subjects enabled or choose at least one class and one subject.",
-        },
-        { status: 400 },
-      );
-    }
-
     const { User: UserModel, AcademicSection: AcademicSectionModel } =
       await getTenantModels(schoolKey, ["User", "AcademicSection"]);
 
@@ -260,9 +318,9 @@ export async function PUT(
     };
 
     if (typeof email !== "undefined") {
-      if (email) {
+      if (normalizedEmail) {
         const existingEmailUser = await UserModel.findOne({
-          email,
+          email: normalizedEmail,
           _id: { $ne: userId },
         });
         if (existingEmailUser) {
@@ -274,26 +332,56 @@ export async function PUT(
             { status: 409 },
           );
         }
-        updateData.email = email;
+        updateData.email = normalizedEmail;
       } else {
         updateData.email = undefined;
       }
     }
 
-    if (password) {
-      if (password.length < 6) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Password must be at least 6 characters long.",
-          },
-          { status: 400 },
-        );
-      }
-      updateData.passwordHash = await bcrypt.hash(password, 10);
+    const effectivePassword = resolveUserPasswordInput({
+      role,
+      rollNumber: normalizedRollNumber,
+      password,
+    });
+    const passwordValidation = validatePasswordInput({
+      role,
+      rollNumber: normalizedRollNumber,
+      password: effectivePassword,
+    });
+    if (!passwordValidation.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: passwordValidation.message,
+        },
+        { status: 400 },
+      );
+    }
+
+    if (typeof password === "string" && password.trim() && effectivePassword) {
+      updateData.passwordHash = await bcrypt.hash(effectivePassword, 10);
     }
 
     if (role === "student") {
+      const rollNumberMatches = await findStudentsByRollNumber(
+        UserModel,
+        normalizedRollNumber,
+        {
+          excludeUserId: userId,
+          limit: 1,
+        },
+      );
+      if (rollNumberMatches.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Roll number must be unique within the school because students use it to sign in.",
+          },
+          { status: 409 },
+        );
+      }
+
       updateData.class = classId;
       updateData.academicSection = academicSectionId || undefined;
       updateData.classIds = undefined;
@@ -302,18 +390,16 @@ export async function PUT(
       updateData.hasAllClasses = false;
       updateData.hasAllSections = false;
       updateData.hasAllSubjects = false;
-      updateData.rollNumber = rollNumber;
+      updateData.rollNumber = normalizedRollNumber;
       updateData.enrolledAt = enrolledAt || undefined;
     } else {
       updateData.class = undefined;
       updateData.academicSection = undefined;
       updateData.rollNumber = undefined;
       updateData.enrolledAt = undefined;
-      updateData.classIds = normalizedClassIds;
-      updateData.academicSectionIds = allowAllSections
-        ? []
-        : normalizedAcademicSectionIds;
-      updateData.subjectIds = normalizedSubjectIds;
+      updateData.classIds = scopedClassIds;
+      updateData.academicSectionIds = scopedAcademicSectionIds;
+      updateData.subjectIds = scopedSubjectIds;
       updateData.hasAllClasses = role === "admin" ? allowAllClasses : false;
       updateData.hasAllSections =
         role === "teacher" || role === "admin" ? allowAllSections : false;

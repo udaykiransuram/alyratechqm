@@ -1,4 +1,5 @@
 import mongoose, { Document, Model, Schema, Types } from "mongoose";
+import { getModelRegistry } from "@/lib/mongoose-models";
 
 export interface IReportDispatchJob extends Document {
   schoolKey: string;
@@ -85,8 +86,10 @@ ReportDispatchJobSchema.index({
   updatedAt: -1,
 });
 
+const modelRegistry = getModelRegistry();
+
 const existingReportDispatchJobModel =
-  mongoose.models.ReportDispatchJob as Model<IReportDispatchJob> | undefined;
+  modelRegistry.ReportDispatchJob as Model<IReportDispatchJob> | undefined;
 
 const existingTypeValues = existingReportDispatchJobModel
   ? ((existingReportDispatchJobModel.schema.path("type") as any)?.enumValues || [])
@@ -98,11 +101,11 @@ if (
     !existingTypeValues.includes("teacher") ||
     !existingTypeValues.includes("admin"))
 ) {
-  delete mongoose.models.ReportDispatchJob;
+  delete modelRegistry.ReportDispatchJob;
 }
 
 const ReportDispatchJob: Model<IReportDispatchJob> =
-  (mongoose.models.ReportDispatchJob as Model<IReportDispatchJob>) ||
+  (modelRegistry.ReportDispatchJob as Model<IReportDispatchJob>) ||
   mongoose.model<IReportDispatchJob>(
     "ReportDispatchJob",
     ReportDispatchJobSchema,

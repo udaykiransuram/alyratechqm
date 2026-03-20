@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import PageHero from '@/components/layout/PageHero';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
@@ -44,54 +45,90 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="app-page-shell max-w-4xl px-4 py-6 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">Upload Question PDF</h1>
-          <p className="app-page-subtitle">
-            Upload a PDF and extract question content into a structured format.
-          </p>
+    <div className="app-page-shell max-w-6xl px-4 py-6 sm:px-0">
+      <PageHero
+        eyebrow="Import Tools"
+        title="Upload Question PDF"
+        description="Upload a PDF and extract question content into a structured format before deciding how to clean or publish it."
+        actions={
+          <Button variant="outline" onClick={navigateBack} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">PDF extraction</span>
+            <span className="app-meta-chip">Pre-processing step</span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Current file',
+            value: pdfFile?.name || 'No file selected',
+            meta: 'Choose a PDF to begin the extraction process.',
+          },
+          {
+            label: 'Status',
+            value: status || 'Idle',
+            meta: 'The status message updates as the file is uploaded and processed.',
+          },
+        ]}
+      />
+
+      <div className="app-editor-grid">
+        <div className="app-editor-main">
+          <Card className="app-surface">
+            <CardContent className="app-surface-body">
+              <div className="app-field-group">
+                <label className="app-field-label" htmlFor="questionPdf">
+                  PDF File
+                </label>
+                <input
+                  id="questionPdf"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                  className="app-form-file"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button onClick={handleUpload} disabled={uploading || !pdfFile}>
+                  {uploading ? 'Uploading...' : 'Extract Questions'}
+                </Button>
+                {status ? <p className="app-page-subtitle">{status}</p> : null}
+              </div>
+
+              {response ? (
+                <div className="app-section">
+                  <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                    Extracted Response
+                  </h2>
+                  <pre className="max-h-[520px] overflow-auto rounded-xl bg-background p-4 text-sm text-foreground">
+                    {JSON.stringify(response, null, 2)}
+                  </pre>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
         </div>
-        <Button variant="outline" onClick={navigateBack}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
+
+        <aside className="app-editor-aside">
+          <Card className="app-surface overflow-hidden">
+            <CardContent className="app-surface-body">
+              <div className="app-note-list">
+                <div className="app-note-item">
+                  Use this screen when the source document is still a PDF and has not been normalized into spreadsheet or JSON formats.
+                </div>
+                <div className="app-note-item">
+                  Review the extracted response before moving it into any downstream question-bank import flow.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
-
-      <Card className="app-surface">
-        <CardContent className="app-surface-body">
-          <div className="app-field-group">
-            <label className="app-field-label" htmlFor="questionPdf">
-              PDF File
-            </label>
-            <input
-              id="questionPdf"
-              type="file"
-              accept="application/pdf"
-              onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-              className="app-form-file"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={handleUpload} disabled={uploading || !pdfFile}>
-              {uploading ? 'Uploading...' : 'Extract Questions'}
-            </Button>
-            {status ? <p className="app-page-subtitle">{status}</p> : null}
-          </div>
-
-          {response ? (
-            <div className="app-section">
-              <h2 className="text-lg font-semibold tracking-tight text-foreground">
-                Extracted Response
-              </h2>
-              <pre className="max-h-[520px] overflow-auto rounded-xl bg-background p-4 text-sm text-foreground">
-                {JSON.stringify(response, null, 2)}
-              </pre>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
     </div>
   );
 }

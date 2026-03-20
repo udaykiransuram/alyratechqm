@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 
+import PageHero from "@/components/layout/PageHero";
 import { PaperSummary } from "@/components/PaperSummary";
 import { PrintEditToolbar } from "@/components/PrintEditToolbar";
 import { QuestionPaperToolbar } from "@/components/QuestionPaperToolbar";
@@ -117,18 +118,17 @@ export default function ViewQuestionPaperPage({
   if (!schoolKey) {
     return (
       <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-        <div className="app-page-header-row">
-          <div>
-            <h1 className="app-page-title">No School Selected</h1>
-            <p className="app-page-subtitle">
-              Select a school workspace before viewing question papers.
-            </p>
-          </div>
-          <Button variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-        </div>
+        <PageHero
+          eyebrow="Assessments"
+          title="No School Selected"
+          description="Select a school workspace before viewing question papers."
+          actions={
+            <Button variant="outline" onClick={navigateBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+          }
+        />
         <div className="app-empty-state">
           A school context is required before this paper can be viewed.
         </div>
@@ -148,16 +148,17 @@ export default function ViewQuestionPaperPage({
   if (error) {
     return (
       <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-        <div className="app-page-header-row">
-          <div>
-            <h1 className="app-page-title">Question Paper</h1>
-            <p className="app-page-subtitle">The requested paper could not be loaded.</p>
-          </div>
-          <Button variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Papers
-          </Button>
-        </div>
+        <PageHero
+          eyebrow="Assessments"
+          title="Question Paper"
+          description="The requested paper could not be loaded."
+          actions={
+            <Button variant="outline" onClick={navigateBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Papers
+            </Button>
+          }
+        />
         <div className="app-feedback app-feedback-error text-center">{error}</div>
       </div>
     );
@@ -166,16 +167,17 @@ export default function ViewQuestionPaperPage({
   if (!paper) {
     return (
       <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-        <div className="app-page-header-row">
-          <div>
-            <h1 className="app-page-title">Question Paper</h1>
-            <p className="app-page-subtitle">This paper may not belong to the currently selected school.</p>
-          </div>
-          <Button variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Papers
-          </Button>
-        </div>
+        <PageHero
+          eyebrow="Assessments"
+          title="Question Paper"
+          description="This paper may not belong to the currently selected school."
+          actions={
+            <Button variant="outline" onClick={navigateBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Papers
+            </Button>
+          }
+        />
         <div className="app-empty-state">Question paper not found.</div>
       </div>
     );
@@ -183,21 +185,52 @@ export default function ViewQuestionPaperPage({
 
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">{paper.title || "Question Paper"}</h1>
-          <p className="app-page-subtitle">
-            Review paper details, sections, question composition, and scoring rules.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <PrintEditToolbar paperId={paper._id} />
-        </div>
-      </div>
+      <PageHero
+        eyebrow="Assessments"
+        title={paper.title || "Question Paper"}
+        description="Review paper details, sections, question composition, and scoring rules from one consistent assessment workspace."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={navigateBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <PrintEditToolbar paperId={paper._id} />
+          </div>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">{paper.class?.name || "No class assigned"}</span>
+            <span className="app-meta-chip">{paper.subject?.name || "No subject assigned"}</span>
+          </>
+        }
+        stats={[
+          {
+            label: "Sections",
+            value: String(paperSections.length),
+            meta: "Total sections currently included in this paper.",
+          },
+          {
+            label: "Total marks",
+            value: String(paper.totalMarks ?? 0),
+            meta: "Overall marks configured for the full paper.",
+          },
+          {
+            label: "Delivery",
+            value: paper.onlineEnabled ? "Online" : "Offline",
+            meta: paper.onlineEnabled
+              ? "Online windows are configured for student delivery."
+              : "This paper is currently treated as offline or manual.",
+          },
+          {
+            label: "Assigned sections",
+            value: assignedAcademicSectionNames.length ? String(assignedAcademicSectionNames.length) : "All",
+            meta: assignedAcademicSectionNames.length
+              ? assignedAcademicSectionNames.join(", ")
+              : "Available to all sections in the selected class.",
+          },
+        ]}
+      />
 
       <QuestionPaperToolbar paper={paper} />
 
@@ -235,6 +268,32 @@ export default function ViewQuestionPaperPage({
                 <div className="app-detail-item">
                   <p className="app-detail-label">Passing Marks</p>
                   <div className="app-detail-value">{paper.passingMarks ?? "-"}</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Delivery</p>
+                  <div className="app-detail-value">
+                    {paper.onlineEnabled ? "Online" : "Offline / Manual"}
+                  </div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Online Start</p>
+                  <div className="app-detail-value">
+                    {paper.onlineEnabled
+                      ? paper.onlineStartsAt
+                        ? new Date(paper.onlineStartsAt).toLocaleString()
+                        : paper.examDate
+                          ? new Date(paper.examDate).toLocaleString()
+                          : "-"
+                      : "-"}
+                  </div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Online End</p>
+                  <div className="app-detail-value">
+                    {paper.onlineEnabled && paper.onlineEndsAt
+                      ? new Date(paper.onlineEndsAt).toLocaleString()
+                      : "-"}
+                  </div>
                 </div>
                 <div className="app-detail-item md:col-span-2">
                   <p className="app-detail-label">Assigned Sections</p>
@@ -336,6 +395,9 @@ export default function ViewQuestionPaperPage({
             duration={Number(paper.duration ?? 0)}
             passingMarks={Number(paper.passingMarks ?? 0)}
             examDate={paper.examDate}
+            onlineEnabled={Boolean(paper.onlineEnabled)}
+            onlineStartsAt={paper.onlineStartsAt ?? null}
+            onlineEndsAt={paper.onlineEndsAt ?? null}
           />
         </aside>
       </div>

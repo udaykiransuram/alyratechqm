@@ -1,4 +1,5 @@
 import mongoose, { Document, Model, Schema, Types } from "mongoose";
+import { getModelRegistry } from "@/lib/mongoose-models";
 
 import "./QuestionPaper.ts";
 import "./AcademicSection.ts";
@@ -92,8 +93,10 @@ const ResponseUploadHistorySchema = new Schema<IResponseUploadHistory>(
 ResponseUploadHistorySchema.index({ paper: 1, createdAt: -1 });
 ResponseUploadHistorySchema.index({ academicSection: 1, createdAt: -1 });
 
+const modelRegistry = getModelRegistry();
+
 const ResponseUploadHistory: Model<IResponseUploadHistory> =
-  (mongoose.models.ResponseUploadHistory as Model<IResponseUploadHistory>) ||
+  (modelRegistry.ResponseUploadHistory as Model<IResponseUploadHistory>) ||
   mongoose.model<IResponseUploadHistory>("ResponseUploadHistory", ResponseUploadHistorySchema);
 
 export default ResponseUploadHistory;

@@ -17,6 +17,7 @@ import { QuestionItem, QuestionItemSkeleton } from '@/components/question-item';
 import type { Question } from '@/components/question-item';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
+import PageHero from '@/components/layout/PageHero';
 import { Spinner } from '@/components/ui/spinner';
 import { MetadataSelector } from '@/components/MetadataSelector';
 import { Input } from '@/components/ui/input';
@@ -184,21 +185,63 @@ export default function ViewQuestionsPage() {
   // --- Filtering logic ---
   // Server-side filtering is applied via /api/questions query params; use the result as-is
   const filteredQuestions = questions;
+  const activeFilterCount =
+    (classId ? 1 : 0) +
+    (subjectId ? 1 : 0) +
+    (selectedTags.length > 0 ? 1 : 0) +
+    (modalSearch.trim() ? 1 : 0);
 
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">All Questions</h1>
-          <p className="app-page-subtitle">Browse, filter, edit, and archive questions from the bank.</p>
-        </div>
-        <Link href="/questions/create">
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Question
-          </Button>
-        </Link>
-      </div>
+      <PageHero
+        eyebrow="Question Bank"
+        title="Questions"
+        description="Browse, filter, edit, and archive questions from one standardized bank that stays aligned with subjects, tags, and paper authoring."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline">
+              <Link href="/questions/bulk-upload">Bulk Upload</Link>
+            </Button>
+            <Button asChild className="gap-2">
+              <Link href="/questions/create">
+                <Plus className="h-4 w-4" />
+                Create Question
+              </Link>
+            </Button>
+          </div>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">
+              {selectedTags.length > 0
+                ? questionTagMatchMode === 'all'
+                  ? 'Match all selected tags'
+                  : 'Match any selected tag'
+                : 'No tag filter applied'}
+            </span>
+            <span className="app-meta-chip">
+              {activeFilterCount === 0 ? 'No active filters' : `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`}
+            </span>
+          </>
+        }
+        stats={[
+          {
+            label: 'Loaded questions',
+            value: loading ? 'Loading' : String(filteredQuestions.length),
+            meta: 'Current result set after server-side filtering.',
+          },
+          {
+            label: 'Available classes',
+            value: String(classes.length),
+            meta: 'Class filters currently loaded into the question bank sidebar.',
+          },
+          {
+            label: 'Tag library',
+            value: String(allTags.length),
+            meta: 'Reusable tags available for question discovery and organization.',
+          },
+        ]}
+      />
 
       {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
 
@@ -285,43 +328,52 @@ export default function ViewQuestionsPage() {
         </div>
       </div>
 
-      <div className="app-page-header-row">
-        <p className="app-page-subtitle">
-          Showing {filteredQuestions.length} question{filteredQuestions.length !== 1 ? 's' : ''}.
-        </p>
-        {filteredQuestions.length > 0 ? (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={async () => {
-              if (!window.confirm(`Are you sure you want to archive all ${filteredQuestions.length} filtered questions? This cannot be undone.`)) return;
-              setIsDeleting(true);
-              try {
-                const schoolKey = resolveClientSchoolKey();
-                if (!schoolKey) {
-                  throw new Error('Please select a school in the navbar first.');
-                }
+      <div className="app-toolbar">
+        <div className="app-toolbar-row">
+          <div className="app-toolbar-copy">
+            <p className="app-toolbar-title">
+              Showing {filteredQuestions.length} question{filteredQuestions.length !== 1 ? 's' : ''}.
+            </p>
+            <p className="app-toolbar-note">
+              Refresh, archive filtered results, or clear filters to widen the current bank view.
+            </p>
+          </div>
+          {filteredQuestions.length > 0 ? (
+            <div className="app-toolbar-actions">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  if (!window.confirm(`Are you sure you want to archive all ${filteredQuestions.length} filtered questions? This cannot be undone.`)) return;
+                  setIsDeleting(true);
+                  try {
+                    const schoolKey = resolveClientSchoolKey();
+                    if (!schoolKey) {
+                      throw new Error('Please select a school in the navbar first.');
+                    }
 
-                for (const question of filteredQuestions) {
-                  await fetchApiJson(`/api/questions/${question._id}`, {
-                    method: 'DELETE',
-                    schoolKey,
-                    fallbackMessage: 'Failed to archive question.',
-                  });
-                }
-                setQuestions(prev => prev.filter(question => !filteredQuestions.some(filtered => filtered._id === question._id)));
-                toast({ title: 'Success', description: 'All filtered questions archived.' });
-              } catch (error: any) {
-                toast({ title: 'Error', description: error?.message || 'Failed to archive filtered questions.', variant: 'destructive' });
-              } finally {
-                setIsDeleting(false);
-              }
-            }}
-            disabled={isDeleting}
-          >
-            {isDeleting ? 'Archiving...' : `Archive All (${filteredQuestions.length})`}
-          </Button>
-        ) : null}
+                    for (const question of filteredQuestions) {
+                      await fetchApiJson(`/api/questions/${question._id}`, {
+                        method: 'DELETE',
+                        schoolKey,
+                        fallbackMessage: 'Failed to archive question.',
+                      });
+                    }
+                    setQuestions(prev => prev.filter(question => !filteredQuestions.some(filtered => filtered._id === question._id)));
+                    toast({ title: 'Success', description: 'All filtered questions archived.' });
+                  } catch (error: any) {
+                    toast({ title: 'Error', description: error?.message || 'Failed to archive filtered questions.', variant: 'destructive' });
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Archiving...' : `Archive All (${filteredQuestions.length})`}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -374,4 +426,3 @@ export default function ViewQuestionsPage() {
     </div>
   );
 }
-

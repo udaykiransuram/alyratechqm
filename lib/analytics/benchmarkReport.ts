@@ -8,6 +8,7 @@ import {
   getStudentAcademicSectionId,
   toIdString,
 } from "@/lib/analytics/hydrateResponses";
+import { arraysEqual, matricesEqual } from "@/lib/question-paper/grading";
 
 type ParsedTagFilter = {
   type: string;
@@ -21,7 +22,9 @@ type QuestionMeta = {
   paperSectionName: string;
   marks: number;
   negativeMarks: number;
+  type: string;
   answerIndexes: number[];
+  matrixAnswers: number[][];
   options: any[];
   question: any;
   tags: { type: string; value: string }[];
@@ -105,15 +108,6 @@ type CohortSummary = {
   metrics: BenchmarkMetrics;
   gap: BenchmarkGap;
 };
-
-function arraysEqual(a: number[], b: number[]) {
-  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
-    return false;
-  }
-  const sortedA = [...a].sort((left, right) => left - right);
-  const sortedB = [...b].sort((left, right) => left - right);
-  return sortedA.every((value, index) => value === sortedB[index]);
-}
 
 function describeLargestGap(worstGapSections: any[], worstGap: number) {
   if (!Array.isArray(worstGapSections) || worstGapSections.length === 0) {
@@ -225,8 +219,16 @@ function buildQuestionMetas(paperSections: any[]) {
           paperSectionName: String(paperSection?.name || "Unknown Section"),
           marks: Number(qWrap?.marks || 0),
           negativeMarks: Number(qWrap?.negativeMarks || 0),
+          type: String(question?.type || ""),
           answerIndexes: Array.isArray(question?.answerIndexes)
             ? question.answerIndexes.map((value: any) => Number(value)).filter(Number.isFinite)
+            : [],
+          matrixAnswers: Array.isArray(question?.matrixAnswers)
+            ? question.matrixAnswers.map((row: any) =>
+                Array.isArray(row)
+                  ? row.map((value: any) => Number(value)).filter(Number.isFinite)
+                  : [],
+              )
             : [],
           options: Array.isArray(question?.options) ? question.options : [],
           question,
@@ -362,13 +364,27 @@ function evaluateOpportunity(meta: QuestionMeta, answer: any) {
         .map((value: any) => Number(value))
         .filter((value: number) => Number.isFinite(value))
     : [];
+  const matrixSelections = Array.isArray(answer?.matrixSelections)
+    ? answer.matrixSelections.map((row: any) =>
+        Array.isArray(row)
+          ? row.map((value: any) => Number(value)).filter((value: number) => Number.isFinite(value))
+          : [],
+      )
+    : [];
+  const hasMatrixSelections = matrixSelections.some((row: number[]) => row.length > 0);
   const hasAnswerText = typeof answer?.answerText === "string" && answer.answerText.trim().length > 0;
   const hasMarksAwarded = Number.isFinite(Number(answer?.marksAwarded));
-  const attempted = selectedOptions.length > 0 || hasAnswerText || hasMarksAwarded;
+  const attempted =
+    selectedOptions.length > 0 ||
+    hasMatrixSelections ||
+    hasAnswerText ||
+    hasMarksAwarded;
   const awardedMarks = hasMarksAwarded ? Number(answer?.marksAwarded) : null;
 
   let isCorrect = false;
-  if (meta.answerIndexes.length > 0 && selectedOptions.length > 0) {
+  if (meta.type === "matrix-match" && hasMatrixSelections) {
+    isCorrect = matricesEqual(matrixSelections, meta.matrixAnswers);
+  } else if (meta.answerIndexes.length > 0 && selectedOptions.length > 0) {
     isCorrect = arraysEqual(selectedOptions, meta.answerIndexes);
   } else if (awardedMarks !== null) {
     isCorrect = awardedMarks >= Number(meta.marks || 0);
@@ -378,6 +394,8 @@ function evaluateOpportunity(meta: QuestionMeta, answer: any) {
     ? awardedMarks
     : !attempted
       ? 0
+      : meta.type === "descriptive"
+        ? 0
       : isCorrect
         ? Number(meta.marks || 0)
         : -Math.abs(Number(meta.negativeMarks || 0));

@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import { getModelRegistry } from '@/lib/mongoose-models';
 
 /**
  * @interface ITagType
@@ -24,6 +25,10 @@ const TagTypeSchema: Schema<ITagType> = new Schema(
   }
 );
 
-const TagType: Model<ITagType> = mongoose.models.TagType || mongoose.model<ITagType>('TagType', TagTypeSchema);
+const modelRegistry = getModelRegistry();
+
+const TagType: Model<ITagType> =
+  (modelRegistry.TagType as Model<ITagType>) ||
+  mongoose.model<ITagType>('TagType', TagTypeSchema);
 
 export default TagType;

@@ -26,7 +26,7 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
   const { toast } = useToast();
 
   function buildCopyPayload(name: string) {
-    const { _id, title, examDate, ...rest } = paper;
+    const { _id, title, examDate, onlineStartsAt, onlineEndsAt, ...rest } = paper;
     const sections = (paper.sections || []).map((section: any) => ({
       id: section._id || `section-${Math.random()}`,
       name: section.name ?? "",
@@ -50,12 +50,15 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
       ...rest,
       title: name,
       examDate: "",
+      onlineStartsAt: "",
+      onlineEndsAt: "",
       sections,
       classId: paper.class?._id ?? "",
       subjectId: paper.subject?._id ?? "",
       instructions: paper.instructions ?? "",
       duration: paper.duration ?? 60,
       passingMarks: paper.passingMarks ?? 0,
+      onlineEnabled: Boolean(paper.onlineEnabled),
       assignedAcademicSectionIds: (paper.assignedAcademicSections || []).map((section: any) =>
         String(section?._id || section),
       ),

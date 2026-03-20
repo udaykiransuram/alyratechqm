@@ -4,9 +4,8 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
 const excludedRouteMatchers = [
-  (pathname: string) => pathname === "/",
-  (pathname: string) => pathname === "/marketing" || pathname.startsWith("/marketing/"),
-  (pathname: string) => pathname === "/register" || pathname.startsWith("/register/"),
+  (pathname: string) => pathname.startsWith("/auth/"),
+  (pathname: string) => pathname.startsWith("/student/"),
   (pathname: string) => pathname === "/manage/reports" || pathname.startsWith("/manage/reports/"),
   (pathname: string) => pathname === "/analytics" || pathname.startsWith("/analytics/"),
   (pathname: string) => pathname.includes("/report"),

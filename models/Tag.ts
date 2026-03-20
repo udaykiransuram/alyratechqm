@@ -1,5 +1,6 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 import { applyArchiveFields, hasArchiveFields } from '@/lib/archive';
+import { getModelRegistry } from '@/lib/mongoose-models';
 import type { ITagType } from './TagType.ts';
 
 export interface ITag extends Document {
@@ -28,14 +29,16 @@ const TagSchema: Schema<ITag> = new Schema(
 
 applyArchiveFields(TagSchema);
 
-const existingTagModel = mongoose.models.Tag as Model<ITag> | undefined;
+const modelRegistry = getModelRegistry();
+
+const existingTagModel = modelRegistry.Tag as Model<ITag> | undefined;
 
 if (existingTagModel && !hasArchiveFields(existingTagModel)) {
-  delete mongoose.models.Tag;
+  delete modelRegistry.Tag;
 }
 
 const Tag: Model<ITag> =
-  (mongoose.models.Tag as Model<ITag>) ||
+  (modelRegistry.Tag as Model<ITag>) ||
   mongoose.model<ITag>('Tag', TagSchema);
 
 export default Tag;

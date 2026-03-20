@@ -35,6 +35,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import PageHero from "@/components/layout/PageHero";
 
 interface ClassItem {
   _id: string;
@@ -155,10 +156,43 @@ export default function ManageSectionsPage() {
   };
 
   return (
-    <div className="container py-6 space-y-6">
-      <header className="app-page-header">
-        <h1 className="app-page-title">Manage Sections</h1>
-      </header>
+    <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
+      <PageHero
+        eyebrow="Academic Setup"
+        title="Manage Sections"
+        description="Create and review sections under each class so student placement, paper targeting, and reports stay aligned."
+        meta={
+          <>
+            <span className="app-meta-chip">Class-linked sections</span>
+            <span className="app-meta-chip">Filtering built in</span>
+          </>
+        }
+        stats={[
+          {
+            label: "Classes available",
+            value: String(classes.length),
+            meta: "Classes that can receive sections in this school workspace.",
+          },
+          {
+            label: "Sections tracked",
+            value: String(sections.length),
+            meta: "Active and inactive sections currently loaded.",
+          },
+          {
+            label: "Filter scope",
+            value:
+              sectionFilterClassId === "all"
+                ? "All classes"
+                : classes.find((classItem) => classItem._id === sectionFilterClassId)?.name || "Filtered",
+            meta: "Current list scope for reviewing section records.",
+          },
+          {
+            label: "Create status",
+            value: isSubmitting ? "Saving" : "Ready",
+            meta: "Add a new section directly from this page.",
+          },
+        ]}
+      />
 
       <div className="space-y-6">
         <Card className="app-surface overflow-hidden">

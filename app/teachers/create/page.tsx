@@ -6,6 +6,14 @@ import { useRouter } from "next/navigation";
 import MultiSelectChecklist from "@/components/multi-select-checklist";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import PageHero from "@/components/layout/PageHero";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { fetchApiJson, buildPartialLoadMessage, resolveClientSchoolKey } from "@/lib/client/api";
 
@@ -202,106 +210,168 @@ export default function CreateTeacherPage() {
       : "app-feedback app-feedback-success";
 
   return (
-    <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
-      <div className="app-page-header-row">
-        <div>
-          <h1 className="app-page-title">Create Teacher</h1>
-          <p className="app-page-subtitle">
-            Create a teacher profile and assign class, section, and subject access in one workflow.
-          </p>
-        </div>
-        <Button type="button" variant="outline" onClick={navigateBack}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-      </div>
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+      <PageHero
+        eyebrow="People"
+        title="Create Teacher"
+        description="Create a teacher account and configure the exact class, section, and subject scope the teacher should see in the workspace."
+        actions={
+          <Button type="button" variant="outline" onClick={navigateBack}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Teachers
+          </Button>
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Scoped teacher access</span>
+            <span className="app-meta-chip">Class + subject required</span>
+          </>
+        }
+        stats={[
+          {
+            label: "Classes selected",
+            value: String(form.classIds.length),
+            meta: "Teachers must have at least one class assignment.",
+          },
+          {
+            label: "Sections in scope",
+            value: form.hasAllSections ? "All" : String(form.academicSectionIds.length),
+            meta: form.hasAllSections ? "Teacher can work in all sections of selected classes." : "Only explicitly selected sections are enabled.",
+          },
+          {
+            label: "Subjects selected",
+            value: String(form.subjectIds.length),
+            meta: "Teachers must have at least one subject assignment.",
+          },
+          {
+            label: "Form state",
+            value: loading ? "Saving" : "Ready",
+            meta: "New teacher accounts are created inside the active school tenant.",
+          },
+        ]}
+      />
 
       {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
+      {message ? <div className={messageClassName}>{message}</div> : null}
 
-      <div className="app-surface app-surface-body">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="app-field-group">
-            <label className="app-field-label" htmlFor="name">Name</label>
-            <input id="name" name="name" placeholder="Enter name" value={form.name} onChange={handleChange} required className="app-form-input" />
-          </div>
+      <div className="app-editor-grid">
+        <div className="app-editor-main">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Teacher Profile</CardTitle>
+              <CardDescription>
+                Create the teacher identity first, then shape the academic access they should receive.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="app-field-group">
+                  <label className="app-field-label" htmlFor="name">Name</label>
+                  <input id="name" name="name" placeholder="Enter name" value={form.name} onChange={handleChange} required className="app-form-input" />
+                </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="email">Email</label>
-              <input id="email" name="email" placeholder="Enter email" value={form.email} onChange={handleChange} type="email" className="app-form-input" />
-            </div>
-            <div className="app-field-group">
-              <label className="app-field-label" htmlFor="mobileNumber">Phone Number</label>
-              <input id="mobileNumber" name="mobileNumber" placeholder="Enter phone number" value={form.mobileNumber} onChange={handleChange} required className="app-form-input" />
-            </div>
-          </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="email">Email</label>
+                    <input id="email" name="email" placeholder="Enter email" value={form.email} onChange={handleChange} type="email" className="app-form-input" />
+                  </div>
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="mobileNumber">Phone Number</label>
+                    <input id="mobileNumber" name="mobileNumber" placeholder="Enter phone number" value={form.mobileNumber} onChange={handleChange} required className="app-form-input" />
+                  </div>
+                </div>
 
-          <div className="app-field-group">
-            <label className="app-field-label" htmlFor="password">Password</label>
-            <input id="password" name="password" placeholder="Create password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
-          </div>
+                <div className="app-field-group">
+                  <label className="app-field-label" htmlFor="password">Password</label>
+                  <input id="password" name="password" placeholder="Create password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
+                </div>
 
-          <div className="app-field-group">
-            <label className="app-field-label">Classes</label>
-            <MultiSelectChecklist
-              items={classes.map((classItem) => ({
-                id: classItem._id,
-                label: classItem.name,
-              }))}
-              selectedIds={form.classIds}
-              onChange={(ids) => updateSelection("classIds", ids)}
-            />
-          </div>
+                <div className="app-field-group">
+                  <label className="app-field-label">Classes</label>
+                  <MultiSelectChecklist
+                    items={classes.map((classItem) => ({
+                      id: classItem._id,
+                      label: classItem.name,
+                    }))}
+                    selectedIds={form.classIds}
+                    onChange={(ids) => updateSelection("classIds", ids)}
+                  />
+                </div>
 
-          <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
-            <Checkbox
-              checked={form.hasAllSections}
-              onCheckedChange={(checked) => updateToggle("hasAllSections", checked === true)}
-              className="mt-0.5"
-            />
-            <span>Access to all sections in selected classes</span>
-          </label>
+                <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+                  <Checkbox
+                    checked={form.hasAllSections}
+                    onCheckedChange={(checked) => updateToggle("hasAllSections", checked === true)}
+                    className="mt-0.5"
+                  />
+                  <span>Access to all sections in selected classes</span>
+                </label>
 
-          {!form.hasAllSections && (
-            <div className="app-field-group">
-              <label className="app-field-label">Sections</label>
-              <MultiSelectChecklist
-                items={availableSections.map((section) => ({
-                  id: section._id,
-                  label: (
-                    <span>
-                      {section.name}
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        ({classes.find((classItem) => classItem._id === getSectionClassId(section))?.name || "Class"})
-                      </span>
-                    </span>
-                  ),
-                }))}
-                selectedIds={form.academicSectionIds}
-                onChange={(ids) => updateSelection("academicSectionIds", ids)}
-                emptyContent="Select one or more classes to choose sections."
-              />
-            </div>
-          )}
+                {!form.hasAllSections && (
+                  <div className="app-field-group">
+                    <label className="app-field-label">Sections</label>
+                    <MultiSelectChecklist
+                      items={availableSections.map((section) => ({
+                        id: section._id,
+                        label: (
+                          <span>
+                            {section.name}
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({classes.find((classItem) => classItem._id === getSectionClassId(section))?.name || "Class"})
+                            </span>
+                          </span>
+                        ),
+                      }))}
+                      selectedIds={form.academicSectionIds}
+                      onChange={(ids) => updateSelection("academicSectionIds", ids)}
+                      emptyContent="Select one or more classes to choose sections."
+                    />
+                  </div>
+                )}
 
-          <div className="app-field-group">
-            <label className="app-field-label">Subjects</label>
-            <MultiSelectChecklist
-              items={subjects.map((subject) => ({
-                id: subject._id,
-                label: subject.name,
-              }))}
-              selectedIds={form.subjectIds}
-              onChange={(ids) => updateSelection("subjectIds", ids)}
-            />
-          </div>
+                <div className="app-field-group">
+                  <label className="app-field-label">Subjects</label>
+                  <MultiSelectChecklist
+                    items={subjects.map((subject) => ({
+                      id: subject._id,
+                      label: subject.name,
+                    }))}
+                    selectedIds={form.subjectIds}
+                    onChange={(ids) => updateSelection("subjectIds", ids)}
+                  />
+                </div>
 
-          <button type="submit" disabled={loading} className="app-button-primary w-full">
-            {loading ? "Creating..." : "Create Teacher"}
-          </button>
-        </form>
+                <button type="submit" disabled={loading} className="app-button-primary w-full">
+                  {loading ? "Creating..." : "Create Teacher"}
+                </button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
 
-        {message ? <div className={messageClassName}>{message}</div> : null}
+        <div className="app-editor-aside">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Access Planning</CardTitle>
+              <CardDescription>
+                Use the same access language across every teacher account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <div className="app-note-list">
+                <div className="app-note-item">
+                  Teachers need at least one class and one subject to operate usefully in the workspace.
+                </div>
+                <div className="app-note-item">
+                  If all sections stay enabled, section selection is inherited from the chosen classes.
+                </div>
+                <div className="app-note-item">
+                  Restrict sections only when a teacher should not see every section in the assigned classes.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

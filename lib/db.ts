@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import './../models/Subject.ts';
 import './../models/Tag.ts';
 import './../models/TagType.ts';
+import './../models/CompanyAdmin.ts';
 // Assuming you have this model as well
 
 const MONGODB_URI = process.env.MONGODB_URI!;
