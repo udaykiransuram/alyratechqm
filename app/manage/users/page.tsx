@@ -38,6 +38,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
   DialogFooter,
   DialogClose,
@@ -64,6 +65,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import MultiSelectChecklist from "@/components/multi-select-checklist";
 import PageHero from "@/components/layout/PageHero";
 import { buildPartialLoadMessage, fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
+import { cn } from "@/lib/utils";
 
 interface User {
   _id: string;
@@ -862,6 +864,11 @@ export default function ManageUsersPage() {
             </CardHeader>
             <CardContent className="app-section-body">
               <form onSubmit={handleCreateUser} className="space-y-4">
+                <div className="app-form-callout">
+                  This unified flow is best for school-side onboarding, password
+                  maintenance, and scope changes across admins, teachers, and students.
+                </div>
+
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -871,7 +878,7 @@ export default function ManageUsersPage() {
                       Unified create flow
                     </Badge>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="app-role-grid">
                     {rolePresets.map((preset) => {
                       const Icon = preset.icon;
                       const isActive = formData.role === preset.value;
@@ -881,14 +888,13 @@ export default function ManageUsersPage() {
                           key={preset.value}
                           type="button"
                           onClick={() => handleRoleChange(preset.value)}
-                          className={`rounded-xl border px-3.5 py-3 text-left transition-colors ${
-                            isActive
-                              ? "border-primary/40 bg-primary/5 shadow-sm"
-                              : "border-border/70 bg-background hover:bg-accent/40"
-                          }`}
+                          className={cn(
+                            "app-role-card",
+                            isActive && "app-role-card-active",
+                          )}
                         >
                           <div className="flex items-start gap-3">
-                            <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <div className="app-role-card-icon">
                               <Icon className="h-4 w-4" />
                             </div>
                             <div className="min-w-0">
@@ -907,161 +913,215 @@ export default function ManageUsersPage() {
                 </div>
 
                 <div className="app-section space-y-4">
-                  <div>
-                    <p className="app-spotlight-label">Basic details</p>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  <div className="app-form-section-heading">
+                    <p className="app-form-section-title">Basic details</p>
+                    <p className="app-form-section-copy">
                       Set the user identity and first-time sign-in credentials.
                     </p>
                   </div>
-                  <Input
-                    name="name"
-                    placeholder="Full Name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    required
-                  />
-                  <Input
-                    name="email"
-                    type="email"
-                    placeholder={
-                      formData.role === "student"
-                        ? "Email Address (optional)"
-                        : "Email Address"
-                    }
-                    value={formData.email}
-                    onChange={handleInputChange}
-                  />
-                  <Input
-                    name="mobileNumber"
-                    placeholder="Phone Number"
-                    value={formData.mobileNumber}
-                    onChange={handleInputChange}
-                    required
-                  />
-                  <Input
-                    name="password"
-                    type="password"
-                    placeholder={
-                      formData.role === "student"
-                        ? "Leave blank to use roll number"
-                        : "Password"
-                    }
-                    value={formData.password}
-                    onChange={handleInputChange}
-                  />
+                  <div className="app-field-group">
+                    <Label htmlFor="create-name">Full Name</Label>
+                    <Input
+                      id="create-name"
+                      name="name"
+                      placeholder="Full Name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="app-field-group">
+                      <Label htmlFor="create-email">Email</Label>
+                      <Input
+                        id="create-email"
+                        name="email"
+                        type="email"
+                        placeholder={
+                          formData.role === "student"
+                            ? "Email Address (optional)"
+                            : "Email Address"
+                        }
+                        value={formData.email}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                    <div className="app-field-group">
+                      <Label htmlFor="create-mobile">Phone Number</Label>
+                      <Input
+                        id="create-mobile"
+                        name="mobileNumber"
+                        placeholder="Phone Number"
+                        value={formData.mobileNumber}
+                        onChange={handleInputChange}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="app-field-group">
+                    <Label htmlFor="create-password">Password</Label>
+                    <Input
+                      id="create-password"
+                      name="password"
+                      type="password"
+                      placeholder={
+                        formData.role === "student"
+                          ? "Leave blank to use roll number"
+                          : "Password"
+                      }
+                      value={formData.password}
+                      onChange={handleInputChange}
+                    />
+                  </div>
                   {formData.role === "student" ? (
-                    <p className="text-xs text-muted-foreground">
+                    <div className="app-form-callout">
                       Students sign in with roll number. If you leave password blank, the first password will match the roll number.
-                    </p>
+                    </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">
+                    <div className="app-form-callout">
                       Teachers and admins continue to sign in with email plus password.
-                    </p>
+                    </div>
                   )}
                 </div>
                 {formData.role === "student" && (
                   <div className="app-section space-y-3">
-                    <p className="text-xs text-muted-foreground">
-                      Roll number becomes the student username for sign in.
-                    </p>
-                    <div className="space-y-2">
-                      <Label>Class</Label>
-                      <Select
-                        value={formData.classId}
-                        onValueChange={handleClassChange}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Class" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {classes.map((c) => (
-                            <SelectItem key={c._id} value={c._id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="app-form-section-heading">
+                      <p className="app-form-section-title">Student placement</p>
+                      <p className="app-form-section-copy">
+                        Roll number becomes the username, and placement drives the student portal and online test visibility.
+                      </p>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Section</Label>
-                      <Select
-                        value={formData.academicSection || "none"}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            academicSection: value === "none" ? "" : value,
-                          }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Section" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No Section</SelectItem>
-                          {availableCreateSections.map((section) => (
-                            <SelectItem key={section._id} value={section._id}>
-                              {section.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Roll Number / Username</Label>
-                      <Input
-                        name="rollNumber"
-                        placeholder="Roll Number"
-                        value={formData.rollNumber}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Enrolled At</Label>
-                      <Input
-                        name="enrolledAt"
-                        type="date"
-                        value={formData.enrolledAt}
-                        onChange={handleInputChange}
-                      />
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Class</Label>
+                        <Select
+                          value={formData.classId}
+                          onValueChange={handleClassChange}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Class" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {classes.map((c) => (
+                              <SelectItem key={c._id} value={c._id}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Section</Label>
+                        <Select
+                          value={formData.academicSection || "none"}
+                          onValueChange={(value) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              academicSection: value === "none" ? "" : value,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Section" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No Section</SelectItem>
+                            {availableCreateSections.map((section) => (
+                              <SelectItem key={section._id} value={section._id}>
+                                {section.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Roll Number / Username</Label>
+                        <Input
+                          name="rollNumber"
+                          placeholder="Roll Number"
+                          value={formData.rollNumber}
+                          onChange={handleInputChange}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Enrolled At</Label>
+                        <Input
+                          name="enrolledAt"
+                          type="date"
+                          value={formData.enrolledAt}
+                          onChange={handleInputChange}
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
                 {(formData.role === "teacher" || formData.role === "admin") && (
                   <div className="app-section space-y-4">
+                    <div className="app-form-section-heading">
+                      <p className="app-form-section-title">Academic access</p>
+                      <p className="app-form-section-copy">
+                        Define the exact school scope this account should receive across classes, sections, and subjects.
+                      </p>
+                    </div>
                     {formData.role === "admin" && (
                       <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground">
+                        <div className="app-form-callout">
                           Admins default to full school access. Turn these off only if you want to restrict the admin to specific classes, sections, or subjects.
-                        </p>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="flex items-center gap-2 text-sm">
+                        </div>
+                        <div className="app-toggle-grid">
+                          <label
+                            className={cn(
+                              "app-toggle-card",
+                              formData.hasAllClasses && "app-toggle-card-active",
+                            )}
+                          >
                             <Checkbox
                               checked={formData.hasAllClasses}
                               onCheckedChange={(checked) =>
                                 setFormData((prev) => ({
                                   ...prev,
                                   hasAllClasses: checked === true,
-                                }))
+                                  }))
                               }
                             />
-                            <span>All Classes</span>
+                            <span className="app-toggle-card-copy">
+                              <span className="app-toggle-card-title">All Classes</span>
+                              <span className="app-toggle-card-note">
+                                Keep class scope fully open for school-wide admins.
+                              </span>
+                            </span>
                           </label>
-                          <label className="flex items-center gap-2 text-sm">
+                          <label
+                            className={cn(
+                              "app-toggle-card",
+                              formData.hasAllSubjects && "app-toggle-card-active",
+                            )}
+                          >
                             <Checkbox
                               checked={formData.hasAllSubjects}
                               onCheckedChange={(checked) =>
                                 setFormData((prev) => ({
                                   ...prev,
                                   hasAllSubjects: checked === true,
-                                }))
+                                  }))
                               }
                             />
-                            <span>All Subjects</span>
+                            <span className="app-toggle-card-copy">
+                              <span className="app-toggle-card-title">All Subjects</span>
+                              <span className="app-toggle-card-note">
+                                Use this when the admin should work across the full subject catalog.
+                              </span>
+                            </span>
                           </label>
                         </div>
                       </div>
                     )}
-                    <label className="flex items-center gap-2 text-sm">
+                    <label
+                      className={cn(
+                        "app-toggle-card",
+                        formData.hasAllSections && "app-toggle-card-active",
+                      )}
+                    >
                       <Checkbox
                         checked={formData.hasAllSections}
                         onCheckedChange={(checked) =>
@@ -1072,7 +1132,12 @@ export default function ManageUsersPage() {
                           }))
                         }
                       />
-                      <span>All Sections</span>
+                      <span className="app-toggle-card-copy">
+                        <span className="app-toggle-card-title">All Sections</span>
+                        <span className="app-toggle-card-note">
+                          Turn this off only when the account should stay limited to specific sections.
+                        </span>
+                      </span>
                     </label>
                     {!formData.hasAllClasses && (
                       <div className="space-y-2">
@@ -1298,14 +1363,24 @@ export default function ManageUsersPage() {
                                     Edit
                                   </Button>
                                 </DialogTrigger>
-                                <DialogContent>
-                                  <DialogHeader>
+                                <DialogContent className="sm:max-w-3xl">
+                                  <DialogHeader className="border-b border-border/60 pb-3 pr-8">
                                     <DialogTitle>
                                       Edit User: {editData.name}
                                     </DialogTitle>
+                                    <DialogDescription>
+                                      Update profile details, reset password when needed, and refine the user scope from the same dialog.
+                                    </DialogDescription>
                                   </DialogHeader>
-                                  <div className="space-y-4 py-4">
-                                    <div className="space-y-2">
+                                  <div className="max-h-[68vh] space-y-4 overflow-y-auto py-2 pr-1">
+                                    <div className="app-section space-y-4">
+                                      <div className="app-form-section-heading">
+                                        <p className="app-form-section-title">Basic details</p>
+                                        <p className="app-form-section-copy">
+                                          Keep identity and contact information accurate before changing scope.
+                                        </p>
+                                      </div>
+                                      <div className="space-y-2">
                                       <Label htmlFor="edit-name">Name</Label>
                                       <Input
                                         id="edit-name"
@@ -1317,30 +1392,41 @@ export default function ManageUsersPage() {
                                           }))
                                         }
                                       />
+                                      </div>
+                                      <div className="grid gap-4 md:grid-cols-2">
+                                        <div className="space-y-2">
+                                          <Label>Email (cannot be changed)</Label>
+                                          <Input
+                                            value={editData.email || ""}
+                                            disabled
+                                          />
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label htmlFor="edit-mobile">
+                                            Phone Number
+                                          </Label>
+                                          <Input
+                                            id="edit-mobile"
+                                            value={editData.mobileNumber || ""}
+                                            onChange={(e) =>
+                                              setEditData((d) => ({
+                                                ...d,
+                                                mobileNumber: e.target.value,
+                                              }))
+                                            }
+                                          />
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="space-y-2">
-                                      <Label>Email (cannot be changed)</Label>
-                                      <Input
-                                        value={editData.email || ""}
-                                        disabled
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="edit-mobile">
-                                        Phone Number
-                                      </Label>
-                                      <Input
-                                        id="edit-mobile"
-                                        value={editData.mobileNumber || ""}
-                                        onChange={(e) =>
-                                          setEditData((d) => ({
-                                            ...d,
-                                            mobileNumber: e.target.value,
-                                          }))
-                                        }
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
+
+                                    <div className="app-section space-y-4">
+                                      <div className="app-form-section-heading">
+                                        <p className="app-form-section-title">Credentials and role</p>
+                                        <p className="app-form-section-copy">
+                                          Leave password blank to keep the current credential, then confirm the role and scope.
+                                        </p>
+                                      </div>
+                                      <div className="space-y-2">
                                       <Label htmlFor="edit-password">
                                         Reset Password
                                       </Label>
@@ -1361,197 +1447,237 @@ export default function ManageUsersPage() {
                                         }
                                       />
                                       {editData.role === "student" ? (
-                                        <p className="text-xs text-muted-foreground">
+                                        <div className="app-form-callout">
                                           Enter the roll number to reset the student back to the default password.
-                                        </p>
+                                        </div>
                                       ) : null}
                                     </div>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="edit-role">Role</Label>
-                                      <Select
-                                        value={editData.role}
-                                        onValueChange={(value) =>
-                                          setEditData((d) => ({
-                                            ...d,
-                                            role: value as User["role"],
-                                            class:
-                                              value === "student" ? d.class || "" : "",
-                                            academicSection:
-                                              value === "student"
-                                                ? d.academicSection || ""
-                                                : "",
-                                            classIds:
-                                              value === "student" ? [] : d.classIds || [],
-                                            academicSectionIds:
-                                              value === "student"
-                                                ? []
-                                                : d.academicSectionIds || [],
-                                            subjectIds:
-                                              value === "student" ? [] : d.subjectIds || [],
-                                            hasAllClasses:
-                                              value === "admin"
-                                                ? d.role === "admin"
-                                                  ? d.hasAllClasses || false
-                                                  : true
-                                                : false,
-                                            hasAllSections:
-                                              value === "student"
-                                                ? false
-                                                : value === "admin"
+                                      <div className="space-y-2">
+                                        <Label htmlFor="edit-role">Role</Label>
+                                        <Select
+                                          value={editData.role}
+                                          onValueChange={(value) =>
+                                            setEditData((d) => ({
+                                              ...d,
+                                              role: value as User["role"],
+                                              class:
+                                                value === "student" ? d.class || "" : "",
+                                              academicSection:
+                                                value === "student"
+                                                  ? d.academicSection || ""
+                                                  : "",
+                                              classIds:
+                                                value === "student" ? [] : d.classIds || [],
+                                              academicSectionIds:
+                                                value === "student"
+                                                  ? []
+                                                  : d.academicSectionIds || [],
+                                              subjectIds:
+                                                value === "student" ? [] : d.subjectIds || [],
+                                              hasAllClasses:
+                                                value === "admin"
                                                   ? d.role === "admin"
-                                                    ? d.hasAllSections ?? true
+                                                    ? d.hasAllClasses || false
                                                     : true
-                                                  : true,
-                                            hasAllSubjects:
-                                              value === "admin"
-                                                ? d.role === "admin"
-                                                  ? d.hasAllSubjects || false
-                                                  : true
-                                                : false,
-                                            rollNumber:
-                                              value === "student" ? d.rollNumber || "" : "",
-                                            enrolledAt:
-                                              value === "student" ? d.enrolledAt || "" : "",
-                                          }))
-                                        }
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="teacher">
-                                            Teacher
-                                          </SelectItem>
-                                          <SelectItem value="student">
-                                            Student
-                                          </SelectItem>
-                                          <SelectItem value="admin">
-                                            Admin
-                                          </SelectItem>
-                                        </SelectContent>
-                                      </Select>
+                                                  : false,
+                                              hasAllSections:
+                                                value === "student"
+                                                  ? false
+                                                  : value === "admin"
+                                                    ? d.role === "admin"
+                                                      ? d.hasAllSections ?? true
+                                                      : true
+                                                    : true,
+                                              hasAllSubjects:
+                                                value === "admin"
+                                                  ? d.role === "admin"
+                                                    ? d.hasAllSubjects || false
+                                                    : true
+                                                  : false,
+                                              rollNumber:
+                                                value === "student" ? d.rollNumber || "" : "",
+                                              enrolledAt:
+                                                value === "student" ? d.enrolledAt || "" : "",
+                                            }))
+                                          }
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="teacher">
+                                              Teacher
+                                            </SelectItem>
+                                            <SelectItem value="student">
+                                              Student
+                                            </SelectItem>
+                                            <SelectItem value="admin">
+                                              Admin
+                                            </SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
                                     </div>
                                     {editData.role === "student" && (
                                       <div className="app-section space-y-4">
-                                        <p className="text-xs text-muted-foreground">
-                                          Students sign in with roll number as their username.
-                                        </p>
-                                        <div className="space-y-2">
-                                          <Label>Class</Label>
-                                          <Select
-                                            value={editData.class || ""}
-                                            onValueChange={(value) =>
-                                              setEditData((d) => ({
-                                                ...d,
-                                                class: value,
-                                                academicSection: "",
-                                              }))
-                                            }
-                                          >
-                                            <SelectTrigger>
-                                              <SelectValue placeholder="Select Class" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              {classes.map((c) => (
-                                                <SelectItem key={c._id} value={c._id}>
-                                                  {c.name}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
+                                        <div className="app-form-section-heading">
+                                          <p className="app-form-section-title">Student placement</p>
+                                          <p className="app-form-section-copy">
+                                            Roll number remains the username, and placement controls where the student appears and what tests are visible.
+                                          </p>
                                         </div>
-                                        <div className="space-y-2">
-                                          <Label>Section</Label>
-                                          <Select
-                                            value={editData.academicSection || "none"}
-                                            onValueChange={(value) =>
-                                              setEditData((d) => ({
-                                                ...d,
-                                                academicSection: value === "none" ? "" : value,
-                                              }))
-                                            }
-                                          >
-                                            <SelectTrigger>
-                                              <SelectValue placeholder="Select Section" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="none">No Section</SelectItem>
-                                              {availableEditSections.map((section) => (
-                                                <SelectItem key={section._id} value={section._id}>
-                                                  {section.name}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                          <Label>Roll Number / Username</Label>
-                                          <Input
-                                            value={editData.rollNumber || ""}
-                                            onChange={(e) =>
-                                              setEditData((d) => ({
-                                                ...d,
-                                                rollNumber: e.target.value,
-                                              }))
-                                            }
-                                          />
-                                        </div>
-                                        <div className="space-y-2">
-                                          <Label>Enrolled At</Label>
-                                          <Input
-                                            type="date"
-                                            value={
-                                              editData.enrolledAt
-                                                ? String(editData.enrolledAt).slice(0, 10)
-                                                : ""
-                                            }
-                                            onChange={(e) =>
-                                              setEditData((d) => ({
-                                                ...d,
-                                                enrolledAt: e.target.value,
-                                              }))
-                                            }
-                                          />
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                          <div className="space-y-2">
+                                            <Label>Class</Label>
+                                            <Select
+                                              value={editData.class || ""}
+                                              onValueChange={(value) =>
+                                                setEditData((d) => ({
+                                                  ...d,
+                                                  class: value,
+                                                  academicSection: "",
+                                                }))
+                                              }
+                                            >
+                                              <SelectTrigger>
+                                                <SelectValue placeholder="Select Class" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {classes.map((c) => (
+                                                  <SelectItem key={c._id} value={c._id}>
+                                                    {c.name}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label>Section</Label>
+                                            <Select
+                                              value={editData.academicSection || "none"}
+                                              onValueChange={(value) =>
+                                                setEditData((d) => ({
+                                                  ...d,
+                                                  academicSection: value === "none" ? "" : value,
+                                                }))
+                                              }
+                                            >
+                                              <SelectTrigger>
+                                                <SelectValue placeholder="Select Section" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="none">No Section</SelectItem>
+                                                {availableEditSections.map((section) => (
+                                                  <SelectItem key={section._id} value={section._id}>
+                                                    {section.name}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label>Roll Number / Username</Label>
+                                            <Input
+                                              value={editData.rollNumber || ""}
+                                              onChange={(e) =>
+                                                setEditData((d) => ({
+                                                  ...d,
+                                                  rollNumber: e.target.value,
+                                                }))
+                                              }
+                                            />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label>Enrolled At</Label>
+                                            <Input
+                                              type="date"
+                                              value={
+                                                editData.enrolledAt
+                                                  ? String(editData.enrolledAt).slice(0, 10)
+                                                  : ""
+                                              }
+                                              onChange={(e) =>
+                                                setEditData((d) => ({
+                                                  ...d,
+                                                  enrolledAt: e.target.value,
+                                                }))
+                                              }
+                                            />
+                                          </div>
                                         </div>
                                       </div>
                                     )}
                                     {(editData.role === "teacher" ||
                                       editData.role === "admin") && (
                                       <div className="app-section space-y-4">
+                                        <div className="app-form-section-heading">
+                                          <p className="app-form-section-title">Academic access</p>
+                                          <p className="app-form-section-copy">
+                                            Adjust class, section, and subject scope together to avoid accidental over-permissioning.
+                                          </p>
+                                        </div>
                                         {editData.role === "admin" && (
                                           <div className="space-y-2">
-                                            <p className="text-xs text-muted-foreground">
+                                            <div className="app-form-callout">
                                               Admins default to full school access. Turn these off only if you want to restrict the admin to specific classes, sections, or subjects.
-                                            </p>
-                                            <div className="grid gap-3 sm:grid-cols-2">
-                                              <label className="flex items-center gap-2 text-sm">
+                                            </div>
+                                            <div className="app-toggle-grid">
+                                              <label
+                                                className={cn(
+                                                  "app-toggle-card",
+                                                  editData.hasAllClasses === true &&
+                                                    "app-toggle-card-active",
+                                                )}
+                                              >
                                                 <Checkbox
                                                   checked={editData.hasAllClasses === true}
                                                   onCheckedChange={(checked) =>
                                                     setEditData((d) => ({
                                                       ...d,
                                                       hasAllClasses: checked === true,
-                                                    }))
+                                                      }))
                                                   }
                                                 />
-                                                <span>All Classes</span>
+                                                <span className="app-toggle-card-copy">
+                                                  <span className="app-toggle-card-title">All Classes</span>
+                                                  <span className="app-toggle-card-note">
+                                                    Keep class scope fully open for broader school administration.
+                                                  </span>
+                                                </span>
                                               </label>
-                                              <label className="flex items-center gap-2 text-sm">
+                                              <label
+                                                className={cn(
+                                                  "app-toggle-card",
+                                                  editData.hasAllSubjects === true &&
+                                                    "app-toggle-card-active",
+                                                )}
+                                              >
                                                 <Checkbox
                                                   checked={editData.hasAllSubjects === true}
                                                   onCheckedChange={(checked) =>
                                                     setEditData((d) => ({
                                                       ...d,
                                                       hasAllSubjects: checked === true,
-                                                    }))
+                                                      }))
                                                   }
                                                 />
-                                                <span>All Subjects</span>
+                                                <span className="app-toggle-card-copy">
+                                                  <span className="app-toggle-card-title">All Subjects</span>
+                                                  <span className="app-toggle-card-note">
+                                                    Use this only when the admin should work across the full subject set.
+                                                  </span>
+                                                </span>
                                               </label>
                                             </div>
                                           </div>
                                         )}
-                                        <label className="flex items-center gap-2 text-sm">
+                                        <label
+                                          className={cn(
+                                            "app-toggle-card",
+                                            editData.hasAllSections === true &&
+                                              "app-toggle-card-active",
+                                          )}
+                                        >
                                           <Checkbox
                                             checked={editData.hasAllSections === true}
                                             onCheckedChange={(checked) =>
@@ -1563,7 +1689,12 @@ export default function ManageUsersPage() {
                                               }))
                                             }
                                           />
-                                          <span>All Sections</span>
+                                          <span className="app-toggle-card-copy">
+                                            <span className="app-toggle-card-title">All Sections</span>
+                                            <span className="app-toggle-card-note">
+                                              Leave this enabled unless the user should be limited to specific sections.
+                                            </span>
+                                          </span>
                                         </label>
                                         {editData.hasAllClasses !== true && (
                                           <div className="space-y-2">
@@ -1617,7 +1748,7 @@ export default function ManageUsersPage() {
                                       </div>
                                     )}
                                   </div>
-                                  <DialogFooter>
+                                  <DialogFooter className="border-t border-border/60 pt-3">
                                     <DialogClose asChild>
                                       <Button variant="outline">Cancel</Button>
                                     </DialogClose>

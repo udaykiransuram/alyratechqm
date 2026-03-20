@@ -216,6 +216,66 @@ export default function EditStudentPage() {
       {message ? <div className="app-feedback app-feedback-success">{message}</div> : null}
       {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
 
+      <div className="app-spotlight-grid">
+        <div className="app-spotlight-card app-spotlight-card-strong">
+          <p className="app-spotlight-label">Student maintenance flow</p>
+          <h2 className="app-spotlight-title">
+            Keep student records accurate without breaking portal expectations
+          </h2>
+          <p className="app-spotlight-copy">
+            Edits here affect how the student signs in, how they appear in
+            school records, and which tests become available in the student portal.
+          </p>
+          <div className="app-flow-list">
+            <div className="app-flow-item">
+              <div className="app-flow-index">1</div>
+              <div className="app-flow-copy">
+                <p className="app-flow-title">Update profile details</p>
+                <p className="app-flow-note">
+                  Keep the student name, contact info, and enrollment data current.
+                </p>
+              </div>
+            </div>
+            <div className="app-flow-item">
+              <div className="app-flow-index">2</div>
+              <div className="app-flow-copy">
+                <p className="app-flow-title">Review placement changes</p>
+                <p className="app-flow-note">
+                  Class and section changes can affect test eligibility and reporting groupings.
+                </p>
+              </div>
+            </div>
+            <div className="app-flow-item">
+              <div className="app-flow-index">3</div>
+              <div className="app-flow-copy">
+                <p className="app-flow-title">Handle password resets carefully</p>
+                <p className="app-flow-note">
+                  Use the roll number again if you want to restore the default first-time password pattern.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="app-surface app-surface-body">
+          <p className="app-spotlight-label">Editing guidance</p>
+          <h2 className="text-lg font-semibold text-foreground">
+            Keep the student login and academic placement in sync
+          </h2>
+          <div className="mt-4 space-y-2">
+            <div className="app-note-item">
+              Roll number still acts as the student username after edits.
+            </div>
+            <div className="app-note-item">
+              Password stays unchanged unless you explicitly set a new one here.
+            </div>
+            <div className="app-note-item">
+              Changing class or section can move the student into a different set of online tests and analytics groups.
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="app-editor-grid">
         <div className="app-editor-main">
           <Card className="app-surface overflow-hidden">
@@ -227,73 +287,95 @@ export default function EditStudentPage() {
             </CardHeader>
             <CardContent className="app-section-body">
               <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="app-field-group">
-                  <label className="app-field-label" htmlFor="name">Name</label>
-                  <input id="name" name="name" placeholder="Enter student name" value={form.name} onChange={handleChange} required className="app-form-input" />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="email">Email (Optional)</label>
-                    <input id="email" name="email" placeholder="Enter email" value={form.email} onChange={handleChange} type="email" className="app-form-input" />
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="mobileNumber">Parent Mobile Number</label>
-                    <input id="mobileNumber" name="mobileNumber" placeholder="Enter WhatsApp number" value={form.mobileNumber} onChange={handleChange} className="app-form-input" />
-                  </div>
-                </div>
-
-                <div className="app-field-group">
-                  <label className="app-field-label" htmlFor="password">New Password</label>
-                  <input id="password" name="password" placeholder="Leave blank to keep the current password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
-                  <p className="text-xs text-muted-foreground">
-                    Enter the roll number here if you want to reset the student back to the default password.
-                  </p>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="class">Class</label>
-                    <select id="class" name="class" value={form.class} onChange={handleChange} required className="app-form-input">
-                      <option value="">Select Class</option>
-                      {classes.map((classItem) => (
-                        <option key={classItem._id} value={classItem._id}>
-                          {classItem.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="academicSection">Section</label>
-                    <select
-                      id="academicSection"
-                      name="academicSection"
-                      value={form.academicSection}
-                      onChange={handleChange}
-                      required
-                      disabled={!form.class}
-                      className="app-form-input"
-                    >
-                      <option value="">Select Section</option>
-                      {filteredSections.map((section) => (
-                        <option key={section._id} value={section._id}>
-                          {section.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="rollNumber">Roll Number / Username</label>
-                    <input id="rollNumber" name="rollNumber" placeholder="Enter roll number" value={form.rollNumber} onChange={handleChange} required className="app-form-input" />
-                    <p className="text-xs text-muted-foreground">
-                      Students sign in with this roll number as their username.
+                <div className="app-section">
+                  <div className="app-form-section-heading">
+                    <p className="app-form-section-title">Identity and contact</p>
+                    <p className="app-form-section-copy">
+                      Keep the student profile details accurate for communication and records.
                     </p>
                   </div>
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="name">Name</label>
+                    <input id="name" name="name" placeholder="Enter student name" value={form.name} onChange={handleChange} required className="app-form-input" />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="app-field-group">
+                      <label className="app-field-label" htmlFor="email">Email (Optional)</label>
+                      <input id="email" name="email" placeholder="Enter email" value={form.email} onChange={handleChange} type="email" className="app-form-input" />
+                    </div>
+                    <div className="app-field-group">
+                      <label className="app-field-label" htmlFor="mobileNumber">Parent Mobile Number</label>
+                      <input id="mobileNumber" name="mobileNumber" placeholder="Enter WhatsApp number" value={form.mobileNumber} onChange={handleChange} className="app-form-input" />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="app-field-group">
-                  <label className="app-field-label" htmlFor="enrolledAt">Enrollment Date</label>
-                  <input id="enrolledAt" name="enrolledAt" value={form.enrolledAt} onChange={handleChange} type="date" className="app-form-input" />
+                <div className="app-section">
+                  <div className="app-form-section-heading">
+                    <p className="app-form-section-title">Credentials</p>
+                    <p className="app-form-section-copy">
+                      Leave the password blank to preserve the current login. Set a new value only when you want to reset access.
+                    </p>
+                  </div>
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="password">New Password</label>
+                    <input id="password" name="password" placeholder="Leave blank to keep the current password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
+                    <div className="app-form-callout">
+                      Enter the roll number here if you want to reset the student back to the default password.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="app-section">
+                  <div className="app-form-section-heading">
+                    <p className="app-form-section-title">School placement</p>
+                    <p className="app-form-section-copy">
+                      Placement and roll number keep the student connected to the right class records and portal access.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="app-field-group">
+                      <label className="app-field-label" htmlFor="class">Class</label>
+                      <select id="class" name="class" value={form.class} onChange={handleChange} required className="app-form-input">
+                        <option value="">Select Class</option>
+                        {classes.map((classItem) => (
+                          <option key={classItem._id} value={classItem._id}>
+                            {classItem.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="app-field-group">
+                      <label className="app-field-label" htmlFor="academicSection">Section</label>
+                      <select
+                        id="academicSection"
+                        name="academicSection"
+                        value={form.academicSection}
+                        onChange={handleChange}
+                        required
+                        disabled={!form.class}
+                        className="app-form-input"
+                      >
+                        <option value="">Select Section</option>
+                        {filteredSections.map((section) => (
+                          <option key={section._id} value={section._id}>
+                            {section.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="app-field-group">
+                      <label className="app-field-label" htmlFor="rollNumber">Roll Number / Username</label>
+                      <input id="rollNumber" name="rollNumber" placeholder="Enter roll number" value={form.rollNumber} onChange={handleChange} required className="app-form-input" />
+                      <p className="text-xs text-muted-foreground">
+                        Students sign in with this roll number as their username.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="enrolledAt">Enrollment Date</label>
+                    <input id="enrolledAt" name="enrolledAt" value={form.enrolledAt} onChange={handleChange} type="date" className="app-form-input" />
+                  </div>
                 </div>
 
                 <button type="submit" disabled={saving} className="app-button-primary w-full">

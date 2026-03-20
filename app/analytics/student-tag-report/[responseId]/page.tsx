@@ -25,12 +25,20 @@ type ReportFilterOption = {
   label: string;
 };
 
+type StudentTagReportPageProps = {
+  params: { responseId: string };
+  portalMode?: "admin" | "student";
+  defaultBackHref?: string;
+};
+
 export default function StudentTagReportPage({
   params,
-}: {
-  params: { responseId: string };
-}) {
-  const { navigateBack } = useBackNavigation("/students");
+  portalMode = "admin",
+  defaultBackHref,
+}: StudentTagReportPageProps) {
+  const isStudentPortal = portalMode === "student";
+  const fallbackBackHref = defaultBackHref || (isStudentPortal ? "/student/account" : "/students");
+  const { navigateBack } = useBackNavigation(fallbackBackHref);
   const [stats, setStats] = useState<any>({});
   const [student, setStudent] = useState<string>("");
   const [rollNumber, setRollNumber] = useState<string>("");
@@ -297,6 +305,12 @@ export default function StudentTagReportPage({
       .join(" • ") || "All questions and sections";
 
   useEffect(() => {
+    if (isStudentPortal && classLevel) {
+      setClassLevel(false);
+    }
+  }, [classLevel, isStudentPortal]);
+
+  useEffect(() => {
     void (async () => {
       const sk = resolveClientSchoolKey();
       setSchoolKey(sk);
@@ -445,6 +459,11 @@ export default function StudentTagReportPage({
       setLoading(false);
     }
 
+    if (isStudentPortal) {
+      setClassStatsCompare({});
+      return;
+    }
+
     try {
       const classParams = new URLSearchParams();
       classParams.set("json", "1");
@@ -476,7 +495,7 @@ export default function StudentTagReportPage({
   const backAction = (
     <Button variant="outline" onClick={navigateBack} className="gap-2">
       <ArrowLeft className="h-4 w-4" />
-      Back
+      {isStudentPortal ? "Back to Account" : "Back"}
     </Button>
   );
 
@@ -576,37 +595,39 @@ export default function StudentTagReportPage({
             {showControls ? (
               <div className="analytics-controls-grid">
                 <div className="analytics-control-stack">
-                  <div className="analytics-control-panel">
-                    <div className="analytics-control-panel-header">
-                      <p className="analytics-control-panel-title">
-                        Analysis Mode
-                      </p>
-                    </div>
-                    <div className="analytics-mode-grid">
-                      <button
-                        type="button"
-                        onClick={() => setClassLevel(false)}
-                        className={`analytics-mode-card ${
-                          !classLevel ? "analytics-mode-card-active" : ""
-                        }`}
-                      >
-                        <p className="text-sm font-semibold text-foreground">
-                          Single student
+                  {!isStudentPortal ? (
+                    <div className="analytics-control-panel">
+                      <div className="analytics-control-panel-header">
+                        <p className="analytics-control-panel-title">
+                          Analysis Mode
                         </p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setClassLevel(true)}
-                        className={`analytics-mode-card ${
-                          classLevel ? "analytics-mode-card-active" : ""
-                        }`}
-                      >
-                        <p className="text-sm font-semibold text-foreground">
-                          Class level
-                        </p>
-                      </button>
+                      </div>
+                      <div className="analytics-mode-grid">
+                        <button
+                          type="button"
+                          onClick={() => setClassLevel(false)}
+                          className={`analytics-mode-card ${
+                            !classLevel ? "analytics-mode-card-active" : ""
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-foreground">
+                            Single student
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setClassLevel(true)}
+                          className={`analytics-mode-card ${
+                            classLevel ? "analytics-mode-card-active" : ""
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-foreground">
+                            Class level
+                          </p>
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
 
                   <div className="analytics-control-panel">
                     <div className="analytics-control-panel-header">
@@ -830,7 +851,7 @@ export default function StudentTagReportPage({
           </div>
         </div>
 
-        {!classLevel && compareRows.length > 0 && (
+        {!isStudentPortal && !classLevel && compareRows.length > 0 && (
           <div className="analytics-card analytics-card-body border-l-4 border-[hsl(var(--accent-blue))]">
             <div className="analytics-toolbar">
               <div className="analytics-toolbar-row">

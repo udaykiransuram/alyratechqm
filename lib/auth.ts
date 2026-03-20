@@ -6,6 +6,7 @@ import { connectDB } from "@/lib/db";
 import { ensureBootstrapCompanyAdmin } from "@/lib/company-admin";
 import { getTenantModels } from "@/lib/db-tenant";
 import type { AccountType, AppRole, SchoolUserRole } from "@/lib/auth-types";
+import { getNextAuthSecret } from "@/lib/auth-runtime";
 import {
   findStudentsByRollNumber,
   normalizeEmail,
@@ -194,7 +195,7 @@ export const authOptions: NextAuthOptions = {
       return baseUrl;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: getNextAuthSecret(),
   pages: {
     signIn: "/auth/signin",
   },
