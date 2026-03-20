@@ -253,6 +253,66 @@ export default function EditTeacherPage() {
       {message ? <div className="app-feedback app-feedback-success">{message}</div> : null}
       {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
 
+      <div className="app-spotlight-grid">
+        <div className="app-spotlight-card app-spotlight-card-strong">
+          <p className="app-spotlight-label">Teacher maintenance flow</p>
+          <h2 className="app-spotlight-title">
+            Keep teacher access aligned with how the school actually operates
+          </h2>
+          <p className="app-spotlight-copy">
+            Editing a teacher account is mostly about refining access without
+            accidentally broadening the classes, sections, or subjects they can manage.
+          </p>
+          <div className="app-flow-list">
+            <div className="app-flow-item">
+              <div className="app-flow-index">1</div>
+              <div className="app-flow-copy">
+                <p className="app-flow-title">Review profile details</p>
+                <p className="app-flow-note">
+                  Keep contact details and account identity up to date for the teacher.
+                </p>
+              </div>
+            </div>
+            <div className="app-flow-item">
+              <div className="app-flow-index">2</div>
+              <div className="app-flow-copy">
+                <p className="app-flow-title">Adjust class and section scope</p>
+                <p className="app-flow-note">
+                  Tighten or expand access only where the teacher&apos;s actual responsibility changed.
+                </p>
+              </div>
+            </div>
+            <div className="app-flow-item">
+              <div className="app-flow-index">3</div>
+              <div className="app-flow-copy">
+                <p className="app-flow-title">Update password only when needed</p>
+                <p className="app-flow-note">
+                  Leaving the password blank preserves the current credential.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="app-surface app-surface-body">
+          <p className="app-spotlight-label">Editing guidance</p>
+          <h2 className="text-lg font-semibold text-foreground">
+            The goal is accurate scope, not maximum scope
+          </h2>
+          <div className="mt-4 space-y-2">
+            <div className="app-note-item">
+              Teachers should stay tied to the classes and subjects they actually teach.
+            </div>
+            <div className="app-note-item">
+              Keep all sections enabled unless there is a real need to restrict by section.
+            </div>
+            <div className="app-note-item">
+              Leaving the password field blank is the safest option when only access scope is changing.
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="app-editor-grid">
         <div className="app-editor-main">
           <Card className="app-surface overflow-hidden">
@@ -264,80 +324,112 @@ export default function EditTeacherPage() {
             </CardHeader>
             <CardContent className="app-section-body">
               <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="app-field-group">
-                  <label className="app-field-label" htmlFor="name">Name</label>
-                  <input id="name" name="name" value={form.name} onChange={handleChange} required className="app-form-input" placeholder="Name" />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="email">Email</label>
-                    <input id="email" name="email" value={form.email} onChange={handleChange} type="email" className="app-form-input" placeholder="Email" />
+                <div className="app-section">
+                  <div className="app-form-section-heading">
+                    <p className="app-form-section-title">Identity and contact</p>
+                    <p className="app-form-section-copy">
+                      Keep the teacher profile current before changing any academic access.
+                    </p>
                   </div>
                   <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="mobileNumber">Phone Number</label>
-                    <input id="mobileNumber" name="mobileNumber" value={form.mobileNumber} onChange={handleChange} required className="app-form-input" placeholder="Phone Number" />
+                    <label className="app-field-label" htmlFor="name">Name</label>
+                    <input id="name" name="name" value={form.name} onChange={handleChange} required className="app-form-input" placeholder="Name" />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="app-field-group">
+                      <label className="app-field-label" htmlFor="email">Email</label>
+                      <input id="email" name="email" value={form.email} onChange={handleChange} type="email" className="app-form-input" placeholder="Email" />
+                    </div>
+                    <div className="app-field-group">
+                      <label className="app-field-label" htmlFor="mobileNumber">Phone Number</label>
+                      <input id="mobileNumber" name="mobileNumber" value={form.mobileNumber} onChange={handleChange} required className="app-form-input" placeholder="Phone Number" />
+                    </div>
                   </div>
                 </div>
 
-                <div className="app-field-group">
-                  <label className="app-field-label" htmlFor="password">New Password</label>
-                  <input id="password" name="password" value={form.password} onChange={handleChange} type="password" className="app-form-input" placeholder="Leave blank to keep the current password" />
-                </div>
-
-                <div className="app-field-group">
-                  <label className="app-field-label">Classes</label>
-                  <MultiSelectChecklist
-                    items={classes.map((classItem) => ({
-                      id: classItem._id,
-                      label: classItem.name,
-                    }))}
-                    selectedIds={form.classIds}
-                    onChange={(ids) => updateSelection("classIds", ids)}
-                  />
-                </div>
-
-                <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
-                  <Checkbox
-                    checked={form.hasAllSections}
-                    onCheckedChange={(checked) => updateToggle("hasAllSections", checked === true)}
-                    className="mt-0.5"
-                  />
-                  <span>Access to all sections in selected classes</span>
-                </label>
-
-                {!form.hasAllSections && (
+                <div className="app-section">
+                  <div className="app-form-section-heading">
+                    <p className="app-form-section-title">Credentials</p>
+                    <p className="app-form-section-copy">
+                      Reset the password only when the teacher needs a new credential.
+                    </p>
+                  </div>
                   <div className="app-field-group">
-                    <label className="app-field-label">Sections</label>
+                    <label className="app-field-label" htmlFor="password">New Password</label>
+                    <input id="password" name="password" value={form.password} onChange={handleChange} type="password" className="app-form-input" placeholder="Leave blank to keep the current password" />
+                  </div>
+                </div>
+
+                <div className="app-section">
+                  <div className="app-form-section-heading">
+                    <p className="app-form-section-title">Academic access</p>
+                    <p className="app-form-section-copy">
+                      Review class, section, and subject scope together so the teacher sees exactly what they should.
+                    </p>
+                  </div>
+                  <div className="app-field-group">
+                    <label className="app-field-label">Classes</label>
                     <MultiSelectChecklist
-                      items={availableSections.map((section) => ({
-                        id: section._id,
-                        label: (
-                          <span>
-                            {section.name}
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              ({classes.find((classItem) => classItem._id === getSectionClassId(section))?.name || "Class"})
-                            </span>
-                          </span>
-                        ),
+                      items={classes.map((classItem) => ({
+                        id: classItem._id,
+                        label: classItem.name,
                       }))}
-                      selectedIds={form.academicSectionIds}
-                      onChange={(ids) => updateSelection("academicSectionIds", ids)}
-                      emptyContent="Select one or more classes to choose sections."
+                      selectedIds={form.classIds}
+                      onChange={(ids) => updateSelection("classIds", ids)}
                     />
                   </div>
-                )}
 
-                <div className="app-field-group">
-                  <label className="app-field-label">Subjects</label>
-                  <MultiSelectChecklist
-                    items={subjects.map((subject) => ({
-                      id: subject._id,
-                      label: subject.name,
-                    }))}
-                    selectedIds={form.subjectIds}
-                    onChange={(ids) => updateSelection("subjectIds", ids)}
-                  />
+                  <label
+                    className={`app-toggle-card ${form.hasAllSections ? "app-toggle-card-active" : ""}`}
+                  >
+                    <Checkbox
+                      checked={form.hasAllSections}
+                      onCheckedChange={(checked) => updateToggle("hasAllSections", checked === true)}
+                      className="mt-0.5"
+                    />
+                    <span className="app-toggle-card-copy">
+                      <span className="app-toggle-card-title">
+                        Access to all sections in selected classes
+                      </span>
+                      <span className="app-toggle-card-note">
+                        Keep this enabled unless the teacher should be limited to a smaller section set.
+                      </span>
+                    </span>
+                  </label>
+
+                  {!form.hasAllSections && (
+                    <div className="app-field-group">
+                      <label className="app-field-label">Sections</label>
+                      <MultiSelectChecklist
+                        items={availableSections.map((section) => ({
+                          id: section._id,
+                          label: (
+                            <span>
+                              {section.name}
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                ({classes.find((classItem) => classItem._id === getSectionClassId(section))?.name || "Class"})
+                              </span>
+                            </span>
+                          ),
+                        }))}
+                        selectedIds={form.academicSectionIds}
+                        onChange={(ids) => updateSelection("academicSectionIds", ids)}
+                        emptyContent="Select one or more classes to choose sections."
+                      />
+                    </div>
+                  )}
+
+                  <div className="app-field-group">
+                    <label className="app-field-label">Subjects</label>
+                    <MultiSelectChecklist
+                      items={subjects.map((subject) => ({
+                        id: subject._id,
+                        label: subject.name,
+                      }))}
+                      selectedIds={form.subjectIds}
+                      onChange={(ids) => updateSelection("subjectIds", ids)}
+                    />
+                  </div>
                 </div>
 
                 <button type="submit" disabled={saving} className="app-button-primary w-full">

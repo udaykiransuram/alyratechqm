@@ -6,6 +6,7 @@ import QuestionPaper from "@/models/QuestionPaper";
 import PDFDocument from "pdfkit";
 import { Readable } from "stream";
 import path from "node:path";
+import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import "@/models/User";
@@ -24,7 +25,7 @@ import {
   evaluateQuestionAnswer,
 } from "@/lib/question-paper/grading";
 import { z } from "zod";
-import { objectIdSchema, schoolKeySchema, parseOr400 } from "@/lib/validation";
+import { objectIdSchema, parseOr400 } from "@/lib/validation";
 
 function getTagValue(tags: any[], type: string) {
   const tag = tags.find(
@@ -93,30 +94,16 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { responseId: string } },
 ) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  const schoolKey = (
-    schoolFromHeader ||
-    schoolFromQuery ||
-    schoolFromCookie ||
-    ""
-  )
-    .toString()
-    .trim();
-  // Require a valid schoolKey like other tenant APIs (questions, papers)
-  const parsedSk = parseOr400(z.object({ schoolKey: schoolKeySchema }), {
-    schoolKey,
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher", "student"],
   });
-  if (!parsedSk.ok) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
-  }
-  const tenantKey = schoolKey;
+  if (!auth.ok) return auth.response;
+
+  const tenantKey = auth.schoolKey as string;
+  const isStudentSession = auth.session.user.role === "student";
+  const responseQuery = isStudentSession
+    ? { _id: params.responseId, student: auth.session.user.id }
+    : { _id: params.responseId };
 
   // Validate params and query
   const groupByParam = req.nextUrl.searchParams.get("groupBy");
@@ -186,7 +173,7 @@ export async function GET(
 
   if (req.nextUrl.searchParams.get("groupFields") === "1") {
     try {
-      const response = await QPRModel.findById(params.responseId)
+      const response = await QPRModel.findOne(responseQuery)
         .populate({
           path: "paper",
           select: "title class sections assignedAcademicSections",
@@ -210,6 +197,13 @@ export async function GET(
           ],
         })
         .lean();
+
+      if (!response) {
+        return NextResponse.json(
+          { success: false, message: "Response not found." },
+          { status: 404 },
+        );
+      }
 
       const paperObj = Array.isArray(response)
         ? response[0]?.paper
@@ -310,6 +304,16 @@ export async function GET(
 
   const isClassLevel = req.nextUrl.searchParams.get("classLevel") === "1";
 
+  if (isStudentSession && isClassLevel) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Student accounts can view only their own report details.",
+      },
+      { status: 403 },
+    );
+  }
+
   try {
     await connectDB();
 
@@ -338,7 +342,7 @@ export async function GET(
       }
     > = {};
     if (isClassLevel) {
-      const firstResponse = await QPRModel.findById(params.responseId)
+      const firstResponse = await QPRModel.findOne(responseQuery)
         .populate("paper", "title sections")
         .lean();
       if (!firstResponse) {
@@ -454,7 +458,7 @@ export async function GET(
         }
       }
     } else {
-      const rawResponse = await QPRModel.findById(params.responseId)
+      const rawResponse = await QPRModel.findOne(responseQuery)
         .populate({
           path: "sectionAnswers.answers.question",
           select: "answerIndexes tags content options subject class type matrixOptions matrixAnswers",

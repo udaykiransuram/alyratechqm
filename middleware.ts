@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { getNextAuthSecret } from "@/lib/auth-runtime";
 
 function isSchoolSignInRoute(path: string) {
   return path === "/auth/signin";
@@ -47,12 +48,37 @@ export async function middleware(req: NextRequest) {
     path.startsWith("/public/") ||
     /\.[a-zA-Z0-9]+$/.test(path);
 
-  const token = isStaticAsset
-    ? null
-    : await getToken({
-        req,
-        secret: process.env.NEXTAUTH_SECRET,
-      });
+  const authSecret = getNextAuthSecret();
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    !authSecret &&
+    !isStaticAsset &&
+    !isApiRoute
+  ) {
+    if (isAuthRoute && req.nextUrl.searchParams.get("error") === "Configuration") {
+      return NextResponse.next();
+    }
+
+    const signInUrl = req.nextUrl.clone();
+    if (!isAuthRoute) {
+      signInUrl.pathname = isCompanyPage(path)
+        ? "/auth/company-signin"
+        : "/auth/signin";
+      signInUrl.search = "";
+      signInUrl.searchParams.set("callbackUrl", req.url);
+    }
+    signInUrl.searchParams.set("error", "Configuration");
+    return NextResponse.redirect(signInUrl);
+  }
+
+  const token =
+    isStaticAsset || !authSecret
+      ? null
+      : await getToken({
+          req,
+          secret: authSecret,
+        });
 
   if (!isApiRoute && !isStaticAsset) {
     const isCompanyRoute = isCompanyPage(path);

@@ -1,22 +1,29 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { getSession, signIn } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { Building2, Eye, EyeOff, Loader2, School } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getDefaultRouteForRole } from "@/lib/auth-types";
+import { getAuthErrorMessage } from "@/lib/auth-runtime";
 import { setSchoolKeyCookie } from "@/lib/client/school";
 import { toast } from "@/components/ui/use-toast";
 
 export default function SignInClient() {
+  const searchParams = useSearchParams();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [schoolKey, setSchoolKey] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const callbackUrl = searchParams.get("callbackUrl")?.trim() || "/";
+  const pageErrorMessage = getAuthErrorMessage(
+    searchParams.get("error"),
+    "school",
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,14 +35,14 @@ export default function SignInClient() {
       identifier,
       password,
       schoolKey: trimmedSchoolKey,
+      callbackUrl,
     });
 
     setIsLoading(false);
 
     if (!result || !result.ok) {
-      const errorMessage =
-        result?.error ||
-        "Login failed. Please check your credentials and try again.";
+      const errorMessage = getAuthErrorMessage(result?.error, "school")
+        || "Login failed. Please check your credentials and try again.";
       toast({
         title: "Error",
         description: errorMessage,
@@ -45,11 +52,7 @@ export default function SignInClient() {
     }
 
     setSchoolKeyCookie(trimmedSchoolKey);
-    const session = await getSession();
-    const nextPath = session?.user?.role
-      ? getDefaultRouteForRole(session.user.role)
-      : "/";
-    window.location.assign(nextPath);
+    window.location.assign(result.url || callbackUrl);
   };
 
   return (
@@ -141,6 +144,12 @@ export default function SignInClient() {
               className="app-auth-form"
               aria-busy={isLoading}
             >
+              {pageErrorMessage ? (
+                <div className="app-feedback app-feedback-error">
+                  {pageErrorMessage}
+                </div>
+              ) : null}
+
               <div className="app-field-group">
                 <label className="app-field-label" htmlFor="schoolKey">
                   School Key

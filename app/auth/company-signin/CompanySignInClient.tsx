@@ -7,6 +7,7 @@ import { signIn } from "next-auth/react";
 import { Building2, Eye, EyeOff, Loader2, School } from "lucide-react";
 
 import { clearSchoolKeyCookie } from "@/lib/client/school";
+import { getAuthErrorMessage } from "@/lib/auth-runtime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
@@ -17,6 +18,10 @@ export default function CompanySignInClient() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const pageErrorMessage = getAuthErrorMessage(
+    searchParams.get("error"),
+    "company",
+  );
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -37,7 +42,7 @@ export default function CompanySignInClient() {
       toast({
         title: "Error",
         description:
-          result?.error ||
+          getAuthErrorMessage(result?.error, "company") ||
           "Company admin sign in failed. Please check your credentials.",
         variant: "destructive",
       });
@@ -134,6 +139,12 @@ export default function CompanySignInClient() {
               className="app-auth-form"
               aria-busy={isLoading}
             >
+              {pageErrorMessage ? (
+                <div className="app-feedback app-feedback-error">
+                  {pageErrorMessage}
+                </div>
+              ) : null}
+
               <div className="app-field-group">
                 <label className="app-field-label" htmlFor="email">
                   Email
