@@ -11,8 +11,9 @@ import './../models/CompanyAuditLog.ts';
 
 const MONGODB_URI = process.env.MONGODB_URI!;
 
-// Disable automatic index creation to avoid startup stalls/timeouts on remote clusters
-mongoose.set('autoIndex', true);
+// Avoid running index creation work during normal request handling.
+// Indexes are provisioned explicitly via the existing scripts/routes instead.
+mongoose.set('autoIndex', false);
 
 if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable inside .env.local');

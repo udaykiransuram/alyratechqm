@@ -22,7 +22,6 @@ type PageHeroProps = {
 export default function PageHero({
   eyebrow,
   title,
-  description,
   actions,
   children,
   className,
@@ -33,12 +32,7 @@ export default function PageHero({
         <div className="app-page-hero-header">
           <div className="app-page-hero-copy">
             {eyebrow ? <div className="app-page-eyebrow">{eyebrow}</div> : null}
-            <div className="space-y-2">
-              <h1 className="app-page-title-lg">{title}</h1>
-              {description ? (
-                <p className="app-page-description">{description}</p>
-              ) : null}
-            </div>
+            <h1 className="app-page-title-lg">{title}</h1>
           </div>
           {actions ? <div className="app-page-hero-actions">{actions}</div> : null}
         </div>

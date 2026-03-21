@@ -25,7 +25,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchApiJson } from "@/lib/client/api";
-import { getSchoolKeyFromCookie, setSchoolKeyCookie } from "@/lib/client/school";
+import { getSchoolKeyFromCookie, setSchoolSelectionCookies } from "@/lib/client/school";
 import { cn } from "@/lib/utils";
 
 type SchoolOption = {
@@ -95,8 +95,9 @@ export default function SchoolSwitcher({
   }
 
   function onSelect(value: string) {
+    const selectedSchool = schools.find((school) => school.key === value);
     setCurrent(value);
-    setSchoolKeyCookie(value);
+    setSchoolSelectionCookies(value, selectedSchool?.displayName);
     window.location.reload();
   }
 

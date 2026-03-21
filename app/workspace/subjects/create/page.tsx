@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
+import { announceNavigationStart } from '@/lib/client/navigation-feedback';
 
 export default function CreateSubjectPage() {
   const [name, setName] = useState('');
@@ -136,6 +137,7 @@ export default function CreateSubjectPage() {
           title: 'Success',
           description: 'Subject created successfully. Redirecting…',
         });
+        announceNavigationStart('/workspace/subjects');
         router.push('/workspace/subjects');
       } else {
         console.error('Failed to create subject:', data.message);
@@ -168,7 +170,10 @@ export default function CreateSubjectPage() {
             type="button"
             variant="outline"
             className="gap-2"
-            onClick={() => router.push('/workspace/subjects')}
+            onClick={() => {
+              announceNavigationStart('/workspace/subjects');
+              router.push('/workspace/subjects');
+            }}
             disabled={isCreatingSubject}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -280,7 +285,10 @@ export default function CreateSubjectPage() {
                   type="button"
                   variant="outline"
                   className="sm:min-w-[140px]"
-                  onClick={() => router.push('/workspace/subjects')}
+                  onClick={() => {
+                    announceNavigationStart('/workspace/subjects');
+                    router.push('/workspace/subjects');
+                  }}
                   disabled={isCreatingSubject}
                 >
                   Cancel

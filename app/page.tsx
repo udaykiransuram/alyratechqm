@@ -48,11 +48,7 @@ async function getHomePageData() {
       };
     })();
 
-    const timeoutPromise = new Promise<{ stats: never[]; testConfig: null; testimonials: never[]; faqs: never[]; whatsappHref: '' }>((resolve) =>
-      setTimeout(() => resolve({ stats: [], testConfig: null, testimonials: [], faqs: [], whatsappHref: '' }), 2000)
-    );
-
-    return await Promise.race([dataPromise, timeoutPromise]);
+    return await dataPromise;
   } catch {
     return { stats: [], testConfig: null, testimonials: [], faqs: [], whatsappHref: '' };
   }

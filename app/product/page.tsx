@@ -86,10 +86,7 @@ async function getProductPageData() {
         faqs: faqDocs.map((f: any) => ({ question: f.question, answer: f.answer })) as FAQItem[], 
       };
     })();
-    const timeout = new Promise<{ tiers: Tier[]; trustStats: typeof DEFAULT_TRUST; testimonials: ProductTestimonial[]; faqs: FAQItem[] }>((r) =>
-      setTimeout(() => r({ tiers: [], trustStats: DEFAULT_TRUST, testimonials: DEFAULT_PRODUCT_TESTIMONIALS, faqs: [] }), 3000),
-    );
-    return await Promise.race([work, timeout]);
+    return await work;
   } catch {
     return { tiers: [], trustStats: DEFAULT_TRUST, testimonials: DEFAULT_PRODUCT_TESTIMONIALS, faqs: [] };
   }

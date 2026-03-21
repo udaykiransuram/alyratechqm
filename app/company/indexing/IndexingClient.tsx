@@ -93,8 +93,12 @@ export default function IndexingClient() {
 
   const [cleanupSchoolKey, setCleanupSchoolKey] = useState('');
   const [cleanupReport, setCleanupReport] = useState<StudentRollDuplicateAuditReport | null>(null);
+  const [cleanupAuditScopeSchoolKey, setCleanupAuditScopeSchoolKey] = useState<string | null>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupActionLoading, setCleanupActionLoading] = useState(false);
+  const [cleanupActionType, setCleanupActionType] = useState<
+    'safe-fix' | 'apply-suggested-fix' | 'resolve-group' | null
+  >(null);
   const [manualResolutionValues, setManualResolutionValues] = useState<
     Record<string, Record<string, string>>
   >({});
@@ -177,6 +181,7 @@ export default function IndexingClient() {
     setCleanupLoading(true);
     setCleanupMessage(null);
     setManualResolutionValues({});
+    setCleanupAuditScopeSchoolKey(targetSchoolKey?.trim() || null);
 
     try {
       const queryString = targetSchoolKey
@@ -219,17 +224,19 @@ export default function IndexingClient() {
         text:
           error?.message || 'Failed to audit duplicate student roll numbers.',
       });
+      setCleanupAuditScopeSchoolKey(null);
     } finally {
       setCleanupLoading(false);
     }
   };
 
   const handleAutoFixSafeDuplicates = async () => {
+    const scope = cleanupAuditScopeSchoolKey?.trim();
     setCleanupActionLoading(true);
+    setCleanupActionType('safe-fix');
     setCleanupMessage(null);
 
     try {
-      const scope = cleanupSchoolKey.trim();
       const data = await readJsonResponse<any>(
         await fetch('/api/admin/student-roll-cleanup', {
           method: 'POST',
@@ -259,6 +266,60 @@ export default function IndexingClient() {
       });
     } finally {
       setCleanupActionLoading(false);
+      setCleanupActionType(null);
+    }
+  };
+
+  const handleApplySuggestedValuesToAll = async () => {
+    if (!cleanupSummary || cleanupSummary.duplicateGroupCount === 0) {
+      return;
+    }
+
+    const scope = cleanupAuditScopeSchoolKey?.trim();
+    const scopeLabel = scope ? `school "${scope}"` : 'all audited schools';
+    const confirmationMessage = cleanupSummary.riskyGroupCount > 0
+      ? `Apply suggested roll-number fixes to all ${cleanupSummary.duplicateGroupCount} duplicate group(s) in ${scopeLabel}? This will also rename records in ${cleanupSummary.riskyGroupCount} manual-review group(s) that already have linked responses or report jobs.`
+      : `Apply suggested roll-number fixes to all ${cleanupSummary.duplicateGroupCount} duplicate group(s) in ${scopeLabel}?`;
+
+    if (typeof window !== 'undefined' && !window.confirm(confirmationMessage)) {
+      return;
+    }
+
+    setCleanupActionLoading(true);
+    setCleanupActionType('apply-suggested-fix');
+    setCleanupMessage(null);
+
+    try {
+      const data = await readJsonResponse<any>(
+        await fetch('/api/admin/student-roll-cleanup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'apply-suggested-fix',
+            schoolKey: scope || undefined,
+          }),
+        }),
+      );
+
+      setCleanupMessage({
+        tone: 'success',
+        text:
+          data.summary.updatedCount > 0
+            ? `Applied suggested values across ${data.summary.groupCount} duplicate group(s) and updated ${data.summary.updatedCount} student record(s). Passwords were resynced to the new roll number for ${data.summary.passwordResetCount} account(s).`
+            : 'No duplicate records were available for suggested-value auto-fix.',
+      });
+
+      await runCleanupAudit(scope || undefined);
+    } catch (error: any) {
+      setCleanupMessage({
+        tone: 'error',
+        text:
+          error?.message ||
+          'Failed to apply suggested duplicate student roll-number fixes.',
+      });
+    } finally {
+      setCleanupActionLoading(false);
+      setCleanupActionType(null);
     }
   };
 
@@ -315,6 +376,7 @@ export default function IndexingClient() {
     }
 
     setCleanupActionLoading(true);
+    setCleanupActionType('resolve-group');
     setCleanupMessage(null);
 
     try {
@@ -342,7 +404,7 @@ export default function IndexingClient() {
         text: `Resolved duplicate roll number "${group.normalizedRollNumber}" in ${schoolKey}. Updated ${data.result.updatedCount} student record(s).`,
       });
 
-      await runCleanupAudit(cleanupSchoolKey.trim() || undefined);
+      await runCleanupAudit(cleanupAuditScopeSchoolKey?.trim() || undefined);
     } catch (error: any) {
       setCleanupMessage({
         tone: 'error',
@@ -352,6 +414,7 @@ export default function IndexingClient() {
       });
     } finally {
       setCleanupActionLoading(false);
+      setCleanupActionType(null);
     }
   };
 
@@ -489,7 +552,7 @@ export default function IndexingClient() {
             <div className="space-y-1">
               <CardTitle>Student Roll Number Cleanup</CardTitle>
               <CardDescription>
-                Audit older student data, run safe auto-fixes, and manually resolve duplicate roll numbers that already have linked responses or report jobs.
+                Audit older student data, run safe auto-fixes, and apply the recommended duplicate roll-number suggestions in bulk when you want to clear an entire scope quickly.
               </CardDescription>
             </div>
           </div>
@@ -500,7 +563,7 @@ export default function IndexingClient() {
               <div className="app-toolbar-copy">
                 <p className="app-toolbar-title">Cleanup Scope</p>
                 <p className="app-toolbar-note">
-                  Audit all schools or focus on a single school first. Safe auto-fix renames only duplicates with no linked student data. Risky groups stay for manual review.
+                  Audit all schools or focus on a single school first. Safe auto-fix only renames duplicates with no linked student data. The suggested-values action uses the recommended keeper for every duplicate group in the audited scope, including linked-data groups.
                 </p>
               </div>
               <div className="app-toolbar-actions">
@@ -552,7 +615,23 @@ export default function IndexingClient() {
                     cleanupSummary.autoFixCandidateCount === 0
                   }
                 >
-                  {cleanupActionLoading ? 'Applying...' : 'Auto-fix Safe Duplicates'}
+                  {cleanupActionLoading && cleanupActionType === 'safe-fix'
+                    ? 'Applying safe fixes...'
+                    : 'Auto-fix Safe Duplicates'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleApplySuggestedValuesToAll}
+                  disabled={
+                    cleanupLoading ||
+                    cleanupActionLoading ||
+                    !cleanupSummary ||
+                    cleanupSummary.duplicateGroupCount === 0
+                  }
+                >
+                  {cleanupActionLoading && cleanupActionType === 'apply-suggested-fix'
+                    ? 'Applying suggestions...'
+                    : 'Auto-fix All Suggested Values'}
                 </Button>
               </div>
             </div>
@@ -712,7 +791,9 @@ export default function IndexingClient() {
                                         pendingUpdates.length === 0
                                       }
                                     >
-                                      Apply Manual Resolution
+                                      {cleanupActionLoading && cleanupActionType === 'resolve-group'
+                                        ? 'Resolving...'
+                                        : 'Apply Manual Resolution'}
                                     </Button>
                                   </div>
                                 </div>

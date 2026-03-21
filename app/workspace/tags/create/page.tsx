@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ArrowLeft, PlusCircle } from 'lucide-react';
 
 import PageHero from '@/components/layout/PageHero';
@@ -164,14 +164,14 @@ export default function CreateTagPage() {
     [toast],
   );
 
-  const handleSelectedSubjectIdsChange = (nextSubjectIds: string[]) => {
+  const handleSelectedSubjectIdsChange = useCallback((nextSubjectIds: string[]) => {
     const subjectMap = new Map(allSubjects.map((subject) => [subject._id, subject]));
     setSelectedSubjects(
       nextSubjectIds
         .map((subjectId) => subjectMap.get(subjectId))
         .filter((subject): subject is Subject => Boolean(subject)),
     );
-  };
+  }, [allSubjects]);
 
   const handleCreateAndAssignTag = async () => {
     if (!newTagName.trim() || !selectedTagTypeId) {
@@ -264,10 +264,14 @@ export default function CreateTagPage() {
     }
   };
 
-  const subjectOptions: SearchableCommandOption[] = allSubjects.map((subject) => ({
-    value: subject._id,
-    label: subject.name,
-  }));
+  const subjectOptions: SearchableCommandOption[] = useMemo(
+    () =>
+      allSubjects.map((subject) => ({
+        value: subject._id,
+        label: subject.name,
+      })),
+    [allSubjects],
+  );
 
   return (
     <>

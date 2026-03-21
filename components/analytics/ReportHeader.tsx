@@ -17,9 +17,6 @@ const ReportHeader = ({
 }: ReportHeaderProps) => {
   const isClass = variant === "class";
   const title = isClass ? "Class Analytics Report" : "Student Analytics Report";
-  const subtitle = isClass
-    ? "Class performance overview"
-    : "Student performance overview";
 
   const items = isClass
     ? [
@@ -38,7 +35,6 @@ const ReportHeader = ({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
             <h1 className="app-page-title">{title}</h1>
-            <p className="app-page-subtitle">{subtitle}</p>
           </div>
           {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
         </div>

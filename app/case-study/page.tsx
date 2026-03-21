@@ -86,10 +86,7 @@ const getCaseStudyData = cache(async () => {
 
       return { featured: featuredCS, otherCaseStudies, headerStats, testimonials: tList };
     })();
-    const timeout = new Promise<{ featured: CSData | null; otherCaseStudies: CSData[]; headerStats: HeaderStat[]; testimonials: TestimonialData[] }>(
-      (r) => setTimeout(() => r({ featured: null, otherCaseStudies: [], headerStats: DEFAULT_HEADER_STATS, testimonials: DEFAULT_TESTIMONIALS }), 3000),
-    );
-    return await Promise.race([work, timeout]);
+    return await work;
   } catch {
     return { featured: null, otherCaseStudies: [], headerStats: DEFAULT_HEADER_STATS, testimonials: DEFAULT_TESTIMONIALS };
   }

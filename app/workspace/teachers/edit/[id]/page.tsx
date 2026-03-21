@@ -180,7 +180,7 @@ export default function EditTeacherPage() {
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "Failed to update teacher");
       setMessage("Teacher updated successfully.");
-      setTimeout(() => navigateBack(), 600);
+      navigateBack();
     } catch (e: any) {
       setError(e.message || "Update failed");
     } finally {

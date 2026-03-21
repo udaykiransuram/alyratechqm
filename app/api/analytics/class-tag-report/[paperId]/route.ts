@@ -168,6 +168,90 @@ export async function GET(
     ]);
 
     const groupBy = groupByParts;
+    const groupFieldsOnly = req.nextUrl.searchParams.get("groupFields") === "1";
+
+    if (groupFieldsOnly) {
+      const paper = await QPModel.findById(params.paperId)
+        .select("title class sections assignedAcademicSections")
+        .populate({
+          path: "sections.questions.question",
+          select: "tags",
+          populate: {
+            path: "tags",
+            populate: { path: "type", select: "name" },
+          },
+        })
+        .populate({
+          path: "assignedAcademicSections",
+          model: AcademicSectionModel,
+          select: "name class",
+          populate: { path: "class", model: ClassModel, select: "name" },
+        })
+        .lean();
+
+      if (!paper || (Array.isArray(paper) && paper.length === 0)) {
+        return NextResponse.json(
+          { success: false, message: "Paper not found" },
+          { status: 404 },
+        );
+      }
+
+      const paperObj: any = Array.isArray(paper) ? paper[0] : paper;
+      const paperSections = paperObj.sections || [];
+      const tagTypes = new Set<string>();
+      paperSections.forEach((section: any) => {
+        (section.questions || []).forEach((qWrap: any) => {
+          (qWrap.question?.tags || []).forEach((tag: any) => {
+            if (tag.type?.name) tagTypes.add(tag.type.name);
+          });
+        });
+      });
+
+      const fields = [
+        { value: "section", label: "Section" },
+        ...Array.from(tagTypes).map((type) => ({
+          value: type.toLowerCase(),
+          label: type,
+        })),
+      ];
+      const configuredAcademicSections = Array.isArray(
+        paperObj?.assignedAcademicSections,
+      )
+        ? paperObj.assignedAcademicSections
+        : [];
+      const fallbackAcademicSections =
+        configuredAcademicSections.length === 0 && paperObj?.class
+          ? await AcademicSectionModel.find({ class: paperObj.class })
+              .select("name class")
+              .sort({ name: 1 })
+              .lean()
+          : [];
+      const academicSections = [
+        ...configuredAcademicSections.map((section: any) => ({
+          value: String(section?._id || ""),
+          label: section?.name || "Unknown Section",
+        })),
+        ...fallbackAcademicSections.map((section: any) => ({
+          value: String(section?._id || ""),
+          label: section?.name || "Unknown Section",
+        })),
+      ]
+        .filter((section: any) => section.value)
+        .filter(
+          (section: any, index: number, allSections: any[]) =>
+            allSections.findIndex(
+              (candidate) => candidate.value === section.value,
+            ) === index,
+        )
+        .sort((a: any, b: any) => a.label.localeCompare(b.label));
+
+      return NextResponse.json({
+        fields,
+        filters: {
+          academicSections,
+        },
+      });
+    }
 
     let responses: any[] = [];
     let paperTitle = "";
@@ -399,84 +483,6 @@ export async function GET(
         res.headers.set("X-Stats-Bytes", String(JSON.stringify(stats).length));
       } catch {}
       return res;
-    }
-
-    if (req.nextUrl.searchParams.get("groupFields") === "1") {
-      // Build group fields from paperSections/tags
-      const tagTypes = new Set<string>();
-      paperSections.forEach((section: any) => {
-        (section.questions || []).forEach((qWrap: any) => {
-          (qWrap.question?.tags || []).forEach((tag: any) => {
-            if (tag.type?.name) tagTypes.add(tag.type.name);
-          });
-        });
-      });
-      const fields = [
-        { value: "section", label: "Section" },
-        ...Array.from(tagTypes).map((type) => ({
-          value: type.toLowerCase(),
-          label: type,
-        })),
-      ];
-      const configuredAcademicSections = Array.isArray(
-        paperObj?.assignedAcademicSections,
-      )
-        ? paperObj.assignedAcademicSections
-        : [];
-      const fallbackAcademicSections =
-        configuredAcademicSections.length === 0 && paperObj?.class
-          ? await AcademicSectionModel.find({ class: paperObj.class })
-              .select("name class")
-              .sort({ name: 1 })
-              .lean()
-          : [];
-      const responseAcademicSections = new Map<
-        string,
-        { value: string; label: string }
-      >();
-      students.forEach((student: any) => {
-        const academicSection = student?.academicSection;
-        const academicSectionId = String(
-          academicSection?._id || academicSection || "",
-        );
-        if (!academicSectionId) return;
-        responseAcademicSections.set(academicSectionId, {
-          value: academicSectionId,
-          label: academicSection?.name || "Unknown Section",
-        });
-      });
-      const configuredAcademicSectionOptions = configuredAcademicSections.map(
-        (section: any) => ({
-          value: String(section?._id || ""),
-          label: section?.name || "Unknown Section",
-        }),
-      );
-      const fallbackAcademicSectionOptions = fallbackAcademicSections.map(
-        (section: any) => ({
-          value: String(section?._id || ""),
-          label: section?.name || "Unknown Section",
-        }),
-      );
-      const academicSectionCandidates =
-        responseAcademicSections.size > 0
-          ? Array.from(responseAcademicSections.values())
-          : configuredAcademicSectionOptions.length > 0
-            ? configuredAcademicSectionOptions
-            : fallbackAcademicSectionOptions;
-
-      const academicSections = Array.from(
-        new Map(
-          academicSectionCandidates
-            .filter((section: any) => section.value)
-            .map((section: any) => [section.value, section]),
-        ).values(),
-      ).sort((a: any, b: any) => a.label.localeCompare(b.label));
-      return NextResponse.json({
-        fields,
-        filters: {
-          academicSections,
-        },
-      });
     }
 
     // PDF generation (optional, similar to student route)

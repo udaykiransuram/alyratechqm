@@ -37,7 +37,7 @@ export function SubjectItem({ subject, onDelete, isLoading }: SubjectItemProps) 
   return (
     <li className="h-full list-none">
       <Card className="app-surface flex h-full flex-col overflow-hidden transition-shadow duration-200 hover:shadow-md">
-        <CardContent className="flex h-full flex-col p-0">
+        <CardContent className="flex h-full flex-col p-0 pt-0">
           <div className="flex flex-1 flex-col gap-4 p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
@@ -98,7 +98,7 @@ export function SubjectItemSkeleton() {
   return (
     <li className="h-full list-none">
       <Card className="app-surface h-full overflow-hidden animate-pulse">
-        <CardContent className="flex h-full flex-col p-0">
+        <CardContent className="flex h-full flex-col p-0 pt-0">
           <div className="flex-1 space-y-4 p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 space-y-2">

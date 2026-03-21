@@ -40,10 +40,7 @@ async function getBenefitsData() {
 
       return { roiStats, testimonials: tList };
     })();
-    const timeout = new Promise<{ roiStats: BenefitsStat[]; testimonials: BenefitsTestimonial[] }>(
-      (r) => setTimeout(() => r({ roiStats: [], testimonials: [] }), 3000),
-    );
-    return await Promise.race([work, timeout]);
+    return await work;
   } catch {
     return { roiStats: [], testimonials: [] };
   }

@@ -9,6 +9,7 @@ import {
 import { requireProductionAdminMaintenanceAccess } from "@/lib/ops-runtime";
 import {
   applySafeStudentRollDuplicateFixes,
+  applySuggestedStudentRollDuplicateFixes,
   buildStudentRollDuplicateAudit,
   resolveStudentRollDuplicateGroup,
 } from "@/lib/admin/student-roll-cleanup";
@@ -30,7 +31,7 @@ async function recordRollCleanupAudits(
     toRollNumber: string;
     passwordResetToRollNumber: boolean;
   }>,
-  source: "safe_fix" | "manual_resolution",
+  source: "safe_fix" | "manual_resolution" | "suggested_bulk_fix",
 ) {
   await Promise.all(
     updates.map((update) =>
@@ -137,11 +138,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     action = String(body?.action || "").trim();
 
-    if (action === "safe-fix") {
+    if (action === "safe-fix" || action === "apply-suggested-fix") {
       schoolKey = normalizeSchoolKey(body?.schoolKey);
-      const result = await applySafeStudentRollDuplicateFixes(
-        schoolKey || undefined,
-      );
+      const isSuggestedBulkFix = action === "apply-suggested-fix";
+      const result = isSuggestedBulkFix
+        ? await applySuggestedStudentRollDuplicateFixes(schoolKey || undefined)
+        : await applySafeStudentRollDuplicateFixes(schoolKey || undefined);
 
       await Promise.all(
         result.schools.map((schoolResult) =>
@@ -150,7 +152,7 @@ export async function POST(req: NextRequest) {
             auth.session,
             schoolResult.schoolKey,
             schoolResult.updatedUsers,
-            "safe_fix",
+            isSuggestedBulkFix ? "suggested_bulk_fix" : "safe_fix",
           ),
         ),
       );
@@ -161,19 +163,29 @@ export async function POST(req: NextRequest) {
         actor,
         entityType: "student_roll_cleanup",
         entityLabel: schoolKey || "all schools",
-        action: "student_roll_cleanup_safe_fix",
+        action: isSuggestedBulkFix
+          ? "student_roll_cleanup_apply_suggested_fix"
+          : "student_roll_cleanup_safe_fix",
         summary:
           result.summary.updatedCount > 0
-            ? `Applied safe duplicate student roll-number fixes to ${result.summary.updatedCount} student record(s).`
-            : "Ran safe duplicate student roll-number fixes with no eligible changes.",
+            ? isSuggestedBulkFix
+              ? `Applied suggested duplicate student roll-number fixes to ${result.summary.updatedCount} student record(s) across ${result.summary.groupCount} group(s).`
+              : `Applied safe duplicate student roll-number fixes to ${result.summary.updatedCount} student record(s).`
+            : isSuggestedBulkFix
+              ? "Ran suggested duplicate student roll-number fixes with no eligible changes."
+              : "Ran safe duplicate student roll-number fixes with no eligible changes.",
         details: {
           outcome: "success",
           requestedSchoolKey: schoolKey || undefined,
           schoolsProcessed: result.summary.schoolsProcessed,
+          groupCount: result.summary.groupCount,
+          riskyGroupCount: result.summary.riskyGroupCount,
           updatedCount: result.summary.updatedCount,
           passwordResetCount: result.summary.passwordResetCount,
           schools: result.schools.map((schoolResult) => ({
             schoolKey: schoolResult.schoolKey,
+            groupCount: schoolResult.groupCount,
+            riskyGroupCount: schoolResult.riskyGroupCount,
             updatedCount: schoolResult.updatedCount,
             passwordResetCount: schoolResult.passwordResetCount,
           })),
@@ -300,12 +312,16 @@ export async function POST(req: NextRequest) {
       action:
         action === "safe-fix"
           ? "student_roll_cleanup_safe_fix"
+          : action === "apply-suggested-fix"
+            ? "student_roll_cleanup_apply_suggested_fix"
           : action === "resolve-group"
             ? "student_roll_cleanup_manual_resolution"
             : "student_roll_cleanup_request",
       summary:
         action === "safe-fix"
           ? "Failed to apply safe duplicate student roll-number fixes."
+          : action === "apply-suggested-fix"
+            ? "Failed to apply suggested duplicate student roll-number fixes."
           : action === "resolve-group"
             ? `Failed to resolve duplicate student roll-number group ${normalizedRollNumber || "(unknown)"}.`
             : "Failed to process duplicate student roll-number cleanup request.",

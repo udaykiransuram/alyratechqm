@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,8 +22,8 @@ export interface PaperDetailsFormProps {
   setDuration: (v: number) => void;
   passingMarks: number;
   setPassingMarks: (v: number) => void;
-  examDate: Date;
-  setExamDate: (v: Date) => void;
+  examDate: Date | null;
+  setExamDate: (v: Date | null) => void;
   onlineEnabled: boolean;
   setOnlineEnabled: (v: boolean) => void;
   onlineStartsAt: Date | null;
@@ -42,12 +43,68 @@ export interface PaperDetailsFormProps {
   initialDataLoading?: boolean;
 }
 
+function padDateSegment(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function parseDateInput(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(year, month - 1, day);
+
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function parseDateTimeLocalInput(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hours = Number(match[4]);
+  const minutes = Number(match[5]);
+  const parsed = new Date(year, month - 1, day, hours, minutes);
+
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day ||
+    parsed.getHours() !== hours ||
+    parsed.getMinutes() !== minutes
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function formatDateInput(value: Date | null | undefined) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return `${date.getFullYear()}-${padDateSegment(date.getMonth() + 1)}-${padDateSegment(date.getDate())}`;
+}
+
 function formatDateTimeLocal(value: Date | null | undefined) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  const localValue = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return localValue.toISOString().slice(0, 16);
+
+  return `${formatDateInput(date)}T${padDateSegment(date.getHours())}:${padDateSegment(date.getMinutes())}`;
 }
 
 export function PaperDetailsForm({
@@ -78,6 +135,28 @@ export function PaperDetailsForm({
   setAssignedAcademicSectionIds,
   initialDataLoading,
 }: PaperDetailsFormProps) {
+  const [examDateInput, setExamDateInput] = useState(() =>
+    formatDateInput(examDate),
+  );
+  const [onlineStartsAtInput, setOnlineStartsAtInput] = useState(() =>
+    formatDateTimeLocal(onlineStartsAt),
+  );
+  const [onlineEndsAtInput, setOnlineEndsAtInput] = useState(() =>
+    formatDateTimeLocal(onlineEndsAt),
+  );
+
+  useEffect(() => {
+    setExamDateInput(formatDateInput(examDate));
+  }, [examDate ? examDate.getTime() : null]);
+
+  useEffect(() => {
+    setOnlineStartsAtInput(formatDateTimeLocal(onlineStartsAt));
+  }, [onlineStartsAt ? onlineStartsAt.getTime() : null]);
+
+  useEffect(() => {
+    setOnlineEndsAtInput(formatDateTimeLocal(onlineEndsAt));
+  }, [onlineEndsAt ? onlineEndsAt.getTime() : null]);
+
   if (initialDataLoading) {
     return (
       <Card className="app-surface overflow-hidden">
@@ -180,8 +259,20 @@ export function PaperDetailsForm({
             <Input
               id="examDate"
               type="date"
-              value={examDate ? examDate.toISOString().slice(0, 10) : ''}
-              onChange={e => setExamDate(new Date(e.target.value))}
+              value={examDateInput}
+              onChange={(e) => {
+                const nextValue = e.target.value;
+                setExamDateInput(nextValue);
+                if (!nextValue) {
+                  setExamDate(null);
+                  return;
+                }
+
+                const parsedDate = parseDateInput(nextValue);
+                if (parsedDate) {
+                  setExamDate(parsedDate);
+                }
+              }}
             />
           </div>
 
@@ -236,10 +327,20 @@ export function PaperDetailsForm({
                   <Input
                     id="onlineStartsAt"
                     type="datetime-local"
-                    value={formatDateTimeLocal(onlineStartsAt)}
-                    onChange={e =>
-                      setOnlineStartsAt(e.target.value ? new Date(e.target.value) : null)
-                    }
+                    value={onlineStartsAtInput}
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      setOnlineStartsAtInput(nextValue);
+                      if (!nextValue) {
+                        setOnlineStartsAt(null);
+                        return;
+                      }
+
+                      const parsedDate = parseDateTimeLocalInput(nextValue);
+                      if (parsedDate) {
+                        setOnlineStartsAt(parsedDate);
+                      }
+                    }}
                   />
                   <p className="text-sm text-muted-foreground">
                     Leave blank to start from the paper exam date.
@@ -253,10 +354,20 @@ export function PaperDetailsForm({
                   <Input
                     id="onlineEndsAt"
                     type="datetime-local"
-                    value={formatDateTimeLocal(onlineEndsAt)}
-                    onChange={e =>
-                      setOnlineEndsAt(e.target.value ? new Date(e.target.value) : null)
-                    }
+                    value={onlineEndsAtInput}
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      setOnlineEndsAtInput(nextValue);
+                      if (!nextValue) {
+                        setOnlineEndsAt(null);
+                        return;
+                      }
+
+                      const parsedDate = parseDateTimeLocalInput(nextValue);
+                      if (parsedDate) {
+                        setOnlineEndsAt(parsedDate);
+                      }
+                    }}
                   />
                   <p className="text-sm text-muted-foreground">
                     Optional global cutoff. Student timers still respect the

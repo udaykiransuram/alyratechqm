@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import PageHero from "@/components/layout/PageHero";
@@ -68,7 +68,7 @@ function getStatusVariant(status: string) {
   return "outline";
 }
 
-export default function StudentTestsPage() {
+function StudentTestsPageContent() {
   const searchParams = useSearchParams();
   const [tests, setTests] = useState<StudentTest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -307,5 +307,20 @@ export default function StudentTestsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function StudentTestsPage() {
+  return (
+    <Suspense
+      fallback={
+        <PageLoadingState
+          title="Loading assigned tests"
+          description="Preparing your available online tests and saved attempts."
+        />
+      }
+    >
+      <StudentTestsPageContent />
+    </Suspense>
   );
 }

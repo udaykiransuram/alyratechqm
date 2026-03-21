@@ -128,26 +128,7 @@ const rolePresets = [
   },
 ];
 
-const userAreaLinks = [
-  {
-    title: "Admins page",
-    description: "Focused list for school admin records and maintenance.",
-    href: "/workspace/admins",
-    icon: ShieldCheck,
-  },
-  {
-    title: "Teachers page",
-    description: "Browse teacher records separately from student enrollment work.",
-    href: "/workspace/teachers",
-    icon: Users,
-  },
-  {
-    title: "Students page",
-    description: "Jump to student-centric records, tests, and roll-number navigation.",
-    href: "/workspace/students",
-    icon: GraduationCap,
-  },
-];
+const rolePresetMap = new Map(rolePresets.map((preset) => [preset.value, preset]));
 
 function resolveEffectiveAdminScope(state: {
   role?: Role | User["role"];
@@ -245,19 +226,27 @@ export default function ManageUsersPage() {
 
   const { toast } = useToast();
 
-  const loadUsers = async (pageNum = 1) => {
+  const loadUsers = async (
+    pageNum = 1,
+    options?: { silent?: boolean },
+  ) => {
+    const silent = options?.silent === true;
     try {
-      setIsLoading(true);
-      setListError(null);
+      if (!silent) {
+        setIsLoading(true);
+        setListError(null);
+      }
 
       const schoolKey = resolveClientSchoolKey();
       setCurrentSchoolKey(schoolKey);
       if (!schoolKey) {
-        setUsers([]);
-        setTotal(0);
-        setPages(1);
-        setPage(1);
-        setListError(NO_SCHOOL_USERS_MESSAGE);
+        if (!silent) {
+          setUsers([]);
+          setTotal(0);
+          setPages(1);
+          setPage(1);
+          setListError(NO_SCHOOL_USERS_MESSAGE);
+        }
         return;
       }
 
@@ -273,18 +262,22 @@ export default function ManageUsersPage() {
       setPage(data.page || pageNum);
     } catch (err: any) {
       const message = err.message || "Failed to load users.";
-      setUsers([]);
-      setTotal(0);
-      setPages(1);
-      setPage(1);
-      setListError(message);
-      toast({
-        title: "Error",
-        description: message,
-        variant: "destructive",
-      });
+      if (!silent) {
+        setUsers([]);
+        setTotal(0);
+        setPages(1);
+        setPage(1);
+        setListError(message);
+        toast({
+          title: "Error",
+          description: message,
+          variant: "destructive",
+        });
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -545,7 +538,6 @@ export default function ManageUsersPage() {
         title: "Success",
         description: `User "${data.user.name}" created.`,
       });
-      await loadUsers(page);
       setFormData({
         name: "",
         email: "",
@@ -563,6 +555,7 @@ export default function ManageUsersPage() {
         hasAllSections: true,
         hasAllSubjects: false,
       });
+      void loadUsers(page, { silent: true });
     } catch (err: any) {
       toast({
         title: "Error",
@@ -659,7 +652,7 @@ export default function ManageUsersPage() {
       if (!schoolKey) {
         throw new Error(NO_SCHOOL_USERS_MESSAGE);
       }
-      await fetchApiJson(`/api/users/${editData._id}`, {
+      const data = await fetchApiJson<any>(`/api/users/${editData._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -667,8 +660,15 @@ export default function ManageUsersPage() {
         fallbackMessage: "Failed to update user.",
       });
       toast({ title: "Success", description: "User updated successfully." });
-      await loadUsers(page);
       setIsEditDialogOpen(false);
+      if (data?.user?._id) {
+        setUsers((currentUsers) =>
+          currentUsers.map((user) =>
+            user._id === data.user._id ? data.user : user,
+          ),
+        );
+      }
+      void loadUsers(page, { silent: true });
     } catch (err: any) {
       toast({
         title: "Error",
@@ -692,7 +692,11 @@ export default function ManageUsersPage() {
         fallbackMessage: "Failed to archive user.",
       });
       toast({ title: "Success", description: "User archived successfully." });
-      await loadUsers(page);
+      setUsers((currentUsers) =>
+        currentUsers.filter((user) => user._id !== userId),
+      );
+      setTotal((currentTotal) => Math.max(0, currentTotal - 1));
+      void loadUsers(page, { silent: true });
     } catch (err: any) {
       toast({
         title: "Error",
@@ -720,18 +724,7 @@ export default function ManageUsersPage() {
     return `${classLabel} • ${sectionLabel}`;
   };
 
-  const adminCount = useMemo(
-    () => users.filter((user) => user.role === "admin").length,
-    [users],
-  );
-  const teacherCount = useMemo(
-    () => users.filter((user) => user.role === "teacher").length,
-    [users],
-  );
-  const studentCount = useMemo(
-    () => users.filter((user) => user.role === "student").length,
-    [users],
-  );
+  const activeRolePreset = rolePresetMap.get(formData.role);
 
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
@@ -767,19 +760,21 @@ export default function ManageUsersPage() {
               : "Pick a school workspace to manage users.",
           },
           {
-            label: "Admins",
-            value: String(adminCount),
-            meta: "Tenant admins with school management access.",
+            label: "Create role",
+            value: activeRolePreset?.title || "Teacher",
+            meta:
+              activeRolePreset?.description ||
+              "Choose the account type before filling the form.",
           },
           {
-            label: "Teachers",
-            value: String(teacherCount),
-            meta: "Teaching accounts scoped by class, section, and subject.",
+            label: "User areas",
+            value: "Students + Teachers + Admins",
+            meta: "Dedicated user pages stay available alongside this unified create/edit flow.",
           },
           {
-            label: "Students",
-            value: String(studentCount),
-            meta: "Learners who can sign in and access online tests.",
+            label: "Access model",
+            value: "Tenant scoped",
+            meta: "All user actions stay inside the currently selected school workspace.",
           },
         ]}
       />
@@ -796,45 +791,54 @@ export default function ManageUsersPage() {
               <form onSubmit={handleCreateUser} className="space-y-4">
 
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                      Choose role
+                      Account role
                     </p>
-                    <Badge variant="outline" className="text-[11px]">
-                      Unified create flow
-                    </Badge>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Choose the account type first so the fields and access rules below stay aligned.
+                    </p>
                   </div>
-                  <div className="app-role-grid">
-                    {rolePresets.map((preset) => {
-                      const Icon = preset.icon;
-                      const isActive = formData.role === preset.value;
+                  <div className="app-role-switcher">
+                    <div className="app-role-switcher-grid">
+                      {rolePresets.map((preset) => {
+                        const Icon = preset.icon;
+                        const isActive = formData.role === preset.value;
 
-                      return (
-                        <button
-                          key={preset.value}
-                          type="button"
-                          onClick={() => handleRoleChange(preset.value)}
-                          className={cn(
-                            "app-role-card",
-                            isActive && "app-role-card-active",
-                          )}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="app-role-card-icon">
+                        return (
+                          <button
+                            key={preset.value}
+                            type="button"
+                            onClick={() => handleRoleChange(preset.value)}
+                            className={cn(
+                              "app-role-switcher-button",
+                              isActive && "app-role-switcher-button-active",
+                            )}
+                            aria-pressed={isActive}
+                          >
+                            <div className="app-role-switcher-icon">
                               <Icon className="h-4 w-4" />
                             </div>
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-foreground">
-                                {preset.title}
-                              </div>
-                              <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                                {preset.description}
-                              </div>
+                            <div className="app-role-switcher-copy">
+                              <div className="app-role-switcher-title">{preset.title}</div>
                             </div>
-                          </div>
-                        </button>
-                      );
-                    })}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="app-form-callout">
+                    <p className="font-medium text-foreground">
+                      {activeRolePreset?.description ||
+                        "Choose the account type before filling the form."}
+                    </p>
+                    <p className="mt-1.5">
+                      {formData.role === "student"
+                        ? "Students sign in with their roll number. If you leave the password blank, the roll number becomes the default password."
+                        : formData.role === "admin"
+                          ? "Admins stay inside the same school tenant and can manage users, classes, sections, papers, analytics, and reports."
+                          : "Teachers get scoped access based on the classes, sections, and subjects you assign below."}
+                    </p>
                   </div>
                 </div>
 
@@ -1133,11 +1137,6 @@ export default function ManageUsersPage() {
                         </p>
                       </div>
                       <div className="app-toolbar-actions">
-                        <Badge variant="outline">{adminCount} admins</Badge>
-                        <Badge variant="outline">{teacherCount} teachers</Badge>
-                        <Badge variant="outline">{studentCount} students</Badge>
-                      </div>
-                      <div className="app-toolbar-actions">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1333,6 +1332,14 @@ export default function ManageUsersPage() {
                                           }))
                                         }
                                       />
+                                      {editData.role === "student" ? (
+                                        <p className="text-xs text-muted-foreground">
+                                          Leave this blank to keep the current password. If the
+                                          student is still using the default roll-number password,
+                                          changing the roll number will sync that default
+                                          automatically.
+                                        </p>
+                                      ) : null}
                                     </div>
                                       <div className="space-y-2">
                                         <Label htmlFor="edit-role">Role</Label>

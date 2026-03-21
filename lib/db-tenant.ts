@@ -21,15 +21,31 @@ function sanitizeKey(key: string) {
   return key.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
 }
 
+function resolveTenantDbName(schoolKey: string) {
+  return `school_db_${sanitizeKey(schoolKey)}`;
+}
+
+function deleteTenantModel(conn: mongoose.Connection, name: string) {
+  if (typeof conn.deleteModel === 'function') {
+    try {
+      conn.deleteModel(name);
+      return;
+    } catch {}
+  }
+
+  delete (conn.models as Record<string, any>)[name];
+}
+
 /**
- * Return a per-school DB connection on the same cluster.
- * IMPORTANT: useCache=false so models are not reused from the global connection.
+ * Return a cached per-school DB connection on the same cluster.
+ * We keep a stable tenant connection per db name so repeated API calls
+ * do not pay the cost of recreating connection wrappers and recompiling models.
  */
 export async function getTenantDb(schoolKey: string) {
   if (!schoolKey) throw new Error('schoolKey is required');
   await connectDB();
-  const dbName = `school_db_${sanitizeKey(schoolKey)}`;
-  return mongoose.connection.useDb(dbName, { useCache: false });
+  const dbName = resolveTenantDbName(schoolKey);
+  return mongoose.connection.useDb(dbName, { useCache: true });
 }
 
 /**
@@ -42,6 +58,13 @@ export async function getTenantModels<T extends string>(schoolKey: string, names
   for (const name of names) {
     const baseModel = mongoose.model(name); // schema must be registered on base
     const schema = baseModel.schema;
+    const existingTenantModel = conn.models[name];
+
+    // During local schema edits/HMR, refresh the tenant model if the base schema changed.
+    if (existingTenantModel && existingTenantModel.schema !== schema) {
+      deleteTenantModel(conn, name);
+    }
+
     out[name] = conn.models[name] || conn.model(name, schema);
   }
   return out as Record<T, any>;

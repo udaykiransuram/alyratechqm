@@ -29,6 +29,7 @@ export default function AuditLogsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const schoolKey = useMemo(() => resolveClientSchoolKey(), []);
+  const hasActiveFilters = entityTypeFilter !== "all" || actionFilter !== "all";
 
   const loadLogs = useCallback(async () => {
     if (!schoolKey) {
@@ -108,98 +109,138 @@ export default function AuditLogsPage() {
         </div>
       ) : null}
 
-      <div className="app-surface app-surface-body space-y-5">
-        <div className="grid gap-3 md:grid-cols-[220px_220px_auto] md:items-end">
-          <label className="app-field-group">
-            <span className="app-field-label">Entity</span>
-            <select
-              className="app-form-input"
-              value={entityTypeFilter}
-              onChange={(event) => setEntityTypeFilter(event.target.value)}
-            >
-              <option value="all">All entities</option>
-              {entityTypes.map((entityType) => (
-                <option key={entityType} value={entityType}>
-                  {entityType}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="app-field-group">
-            <span className="app-field-label">Action</span>
-            <select
-              className="app-form-input"
-              value={actionFilter}
-              onChange={(event) => setActionFilter(event.target.value)}
-            >
-              <option value="all">All actions</option>
-              {actions.map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="text-sm text-muted-foreground">
-            {logs.length} log entries loaded
+      <div className="app-filter-panel">
+        <div className="app-filter-panel-header">
+          <div className="app-filter-panel-heading">
+            <div className="app-filter-panel-copy">
+              <h2 className="app-filter-panel-title">Audit Filters</h2>
+              <p className="app-filter-panel-note">
+                Narrow the school audit trail by entity type and action without leaving the operations view.
+              </p>
+            </div>
+            <div className="app-filter-panel-chips">
+              <span className="app-meta-chip">{logs.length} loaded</span>
+              <span className="app-meta-chip">
+                {entityTypeFilter === "all" ? "All entities" : entityTypeFilter}
+              </span>
+              <span className="app-meta-chip">
+                {actionFilter === "all" ? "All actions" : actionFilter}
+              </span>
+            </div>
           </div>
         </div>
+        <div className="app-filter-panel-body">
+          <div className="app-filter-grid md:grid-cols-[220px_220px_minmax(0,1fr)] md:items-end">
+            <label className="app-field-group">
+              <span className="app-field-label">Entity</span>
+              <select
+                className="app-form-input"
+                value={entityTypeFilter}
+                onChange={(event) => setEntityTypeFilter(event.target.value)}
+              >
+                <option value="all">All entities</option>
+                {entityTypes.map((entityType) => (
+                  <option key={entityType} value={entityType}>
+                    {entityType}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="app-field-group">
+              <span className="app-field-label">Action</span>
+              <select
+                className="app-form-input"
+                value={actionFilter}
+                onChange={(event) => setActionFilter(event.target.value)}
+              >
+                <option value="all">All actions</option>
+                {actions.map((action) => (
+                  <option key={action} value={action}>
+                    {action}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="app-filter-summary">
+              <div className="app-filter-summary-copy">
+                <p className="app-filter-summary-title">Current scope</p>
+                <p className="app-filter-summary-note">
+                  {logs.length} log entr{logs.length === 1 ? "y" : "ies"} loaded for the current school workspace.
+                </p>
+              </div>
+              <div className="app-filter-summary-actions">
+                {hasActiveFilters ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEntityTypeFilter("all");
+                      setActionFilter("all");
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
 
-        {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+          {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
 
-        <div className="app-table-wrap">
-          <table className="min-w-full text-sm">
-            <thead className="bg-muted/30">
-              <tr>
-                <th className="analytics-th">Time</th>
-                <th className="analytics-th">Actor</th>
-                <th className="analytics-th">Action</th>
-                <th className="analytics-th">Entity</th>
-                <th className="analytics-th">Summary</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.length === 0 ? (
+          <div className="app-table-wrap">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/30">
                 <tr>
-                  <td className="analytics-td text-center text-muted-foreground" colSpan={5}>
-                    {loading ? "Loading audit logs…" : "No audit activity found."}
-                  </td>
+                  <th className="analytics-th">Time</th>
+                  <th className="analytics-th">Actor</th>
+                  <th className="analytics-th">Action</th>
+                  <th className="analytics-th">Entity</th>
+                  <th className="analytics-th">Summary</th>
                 </tr>
-              ) : (
-                logs.map((log) => (
-                  <tr key={log._id} className="analytics-row">
-                    <td className="analytics-td text-muted-foreground">
-                      {log.createdAt ? new Date(log.createdAt).toLocaleString() : "-"}
-                    </td>
-                    <td className="analytics-td">
-                      <div className="font-medium text-foreground">
-                        {log.actorName || log.actorEmail || "System"}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {log.actorRole || "Unknown role"}
-                      </div>
-                    </td>
-                    <td className="analytics-td">
-                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                        {log.action || "-"}
-                      </span>
-                    </td>
-                    <td className="analytics-td">
-                      <div className="font-medium text-foreground">
-                        {log.entityLabel || log.entityType || "-"}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {log.entityId || log.entityType || "-"}
-                      </div>
-                    </td>
-                    <td className="analytics-td text-muted-foreground">
-                      {log.summary || "-"}
+              </thead>
+              <tbody>
+                {logs.length === 0 ? (
+                  <tr>
+                    <td className="analytics-td text-center text-muted-foreground" colSpan={5}>
+                      {loading ? "Loading audit logs…" : "No audit activity found."}
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  logs.map((log) => (
+                    <tr key={log._id} className="analytics-row">
+                      <td className="analytics-td text-muted-foreground">
+                        {log.createdAt ? new Date(log.createdAt).toLocaleString() : "-"}
+                      </td>
+                      <td className="analytics-td">
+                        <div className="font-medium text-foreground">
+                          {log.actorName || log.actorEmail || "System"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {log.actorRole || "Unknown role"}
+                        </div>
+                      </td>
+                      <td className="analytics-td">
+                        <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                          {log.action || "-"}
+                        </span>
+                      </td>
+                      <td className="analytics-td">
+                        <div className="font-medium text-foreground">
+                          {log.entityLabel || log.entityType || "-"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {log.entityId || log.entityType || "-"}
+                        </div>
+                      </td>
+                      <td className="analytics-td text-muted-foreground">
+                        {log.summary || "-"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

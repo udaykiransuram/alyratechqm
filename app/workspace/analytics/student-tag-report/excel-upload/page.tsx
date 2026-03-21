@@ -9,7 +9,6 @@ import React, {
   useState,
 } from "react";
 import { useSearchParams } from "next/navigation";
-import * as XLSX from "xlsx";
 import pLimit from "p-limit";
 import { ArrowLeft } from "lucide-react";
 
@@ -620,11 +619,21 @@ function ExcelStudentResponseUploadPageContent() {
 
     const reader = new FileReader();
     reader.onload = (fileEvent) => {
-      const workbook = XLSX.read(fileEvent.target?.result, { type: "binary" });
-      const firstSheetName = workbook.SheetNames[0];
-      const firstSheet = workbook.Sheets[firstSheetName];
-      const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-      setExcelRows(Array.isArray(rows) ? rows : []);
+      void (async () => {
+        try {
+          const XLSX = await import("xlsx");
+          const workbook = XLSX.read(fileEvent.target?.result, {
+            type: "binary",
+          });
+          const firstSheetName = workbook.SheetNames[0];
+          const firstSheet = workbook.Sheets[firstSheetName];
+          const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+          setExcelRows(Array.isArray(rows) ? rows : []);
+        } catch (error) {
+          console.error("Failed to read upload workbook", error);
+          setExcelRows([]);
+        }
+      })();
     };
     reader.readAsBinaryString(file);
   };

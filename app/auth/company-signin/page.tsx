@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import CompanySignInClient from "./CompanySignInClient";
 
@@ -12,5 +13,9 @@ export const metadata: Metadata = {
 };
 
 export default function CompanySignInPage() {
-  return <CompanySignInClient />;
+  return (
+    <Suspense fallback={null}>
+      <CompanySignInClient />
+    </Suspense>
+  );
 }

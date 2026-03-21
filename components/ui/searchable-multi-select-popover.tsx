@@ -1,19 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { type SearchableCommandOption } from "@/components/ui/searchable-command-select";
 import { Spinner } from "@/components/ui/spinner";
@@ -32,9 +34,58 @@ type SearchableMultiSelectPopoverProps = {
   disabled?: boolean;
   closeOnSelect?: boolean;
   maxVisibleBadges?: number;
+  defaultVisibleOptions?: number;
   triggerClassName?: string;
   contentClassName?: string;
 };
+
+type SearchableMultiSelectOptionRowProps = {
+  option: SearchableCommandOption;
+  isSelected: boolean;
+  disabled: boolean;
+  onToggle: (value: string) => void;
+};
+
+function areStringArraysEqual(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+const SearchableMultiSelectOptionRow = memo(function SearchableMultiSelectOptionRow({
+  option,
+  isSelected,
+  disabled,
+  onToggle,
+}: SearchableMultiSelectOptionRowProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(option.value)}
+      className={cn(
+        "flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
+        isSelected
+          ? "bg-accent text-accent-foreground"
+          : "hover:bg-accent/60 hover:text-accent-foreground",
+      )}
+      role="option"
+      aria-selected={isSelected}
+      disabled={disabled}
+    >
+      <Checkbox
+        checked={isSelected}
+        className="mt-0.5 pointer-events-none"
+        aria-hidden="true"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="truncate">{option.label}</div>
+        {option.description ? (
+          <div className="truncate text-xs text-muted-foreground">
+            {option.description}
+          </div>
+        ) : null}
+      </div>
+    </button>
+  );
+});
 
 export function SearchableMultiSelectPopover({
   selectedValues,
@@ -49,20 +100,89 @@ export function SearchableMultiSelectPopover({
   disabled = false,
   closeOnSelect = false,
   maxVisibleBadges = 2,
+  defaultVisibleOptions = 24,
   triggerClassName,
   contentClassName,
 }: SearchableMultiSelectPopoverProps) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
+  const [renderOptions, setRenderOptions] = useState(false);
+  const [optimisticSelectedValues, setOptimisticSelectedValues] = useState(selectedValues);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const optimisticSelectedValuesRef = useRef(selectedValues);
+  const onSelectedValuesChangeRef = useRef(onSelectedValuesChange);
+  const closeOnSelectRef = useRef(closeOnSelect);
+  const deferredSearchValue = useDeferredValue(searchValue);
 
-  const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
-  const selectedOptions = useMemo(
-    () => selectedValues
-      .map((value) => options.find((option) => option.value === value))
-      .filter((option): option is SearchableCommandOption => Boolean(option)),
-    [options, selectedValues],
+  useEffect(() => {
+    optimisticSelectedValuesRef.current = selectedValues;
+    setOptimisticSelectedValues((currentValues) =>
+      areStringArraysEqual(currentValues, selectedValues) ? currentValues : selectedValues,
+    );
+  }, [selectedValues]);
+
+  useEffect(() => {
+    onSelectedValuesChangeRef.current = onSelectedValuesChange;
+  }, [onSelectedValuesChange]);
+
+  useEffect(() => {
+    closeOnSelectRef.current = closeOnSelect;
+  }, [closeOnSelect]);
+
+  const selectedSet = useMemo(() => new Set(optimisticSelectedValues), [optimisticSelectedValues]);
+  const optionMap = useMemo(
+    () => new Map(options.map((option) => [option.value, option])),
+    [options],
   );
+  const selectedOptions = useMemo(
+    () =>
+      optimisticSelectedValues
+        .map((value) => optionMap.get(value))
+        .filter((option): option is SearchableCommandOption => Boolean(option)),
+    [optionMap, optimisticSelectedValues],
+  );
+
+  const filteredOptions = useMemo(() => {
+    const query = deferredSearchValue.trim().toLowerCase();
+    if (!query) return options;
+
+    return options.filter((option) =>
+      [
+        option.label,
+        option.description,
+        option.value,
+        ...(option.keywords || []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [deferredSearchValue, options]);
+
+  const hasSearchQuery = deferredSearchValue.trim().length > 0;
+  const visibleOptions = useMemo(() => {
+    if (hasSearchQuery) {
+      return filteredOptions;
+    }
+
+    const selectedOptionsFirst = filteredOptions.filter((option) =>
+      selectedSet.has(option.value),
+    );
+    const remainingOptions = filteredOptions.filter((option) =>
+      !selectedSet.has(option.value),
+    );
+
+    return [
+      ...selectedOptionsFirst,
+      ...remainingOptions.slice(
+        0,
+        Math.max(defaultVisibleOptions - selectedOptionsFirst.length, 0),
+      ),
+    ];
+  }, [defaultVisibleOptions, filteredOptions, hasSearchQuery, selectedSet]);
+
+  const hiddenOptionCount = Math.max(filteredOptions.length - visibleOptions.length, 0);
 
   useEffect(() => {
     if (!open) return;
@@ -77,18 +197,38 @@ export function SearchableMultiSelectPopover({
     };
   }, [open]);
 
-  const toggleValue = (value: string) => {
-    const nextValues = selectedSet.has(value)
-      ? selectedValues.filter((item) => item !== value)
-      : [...selectedValues, value];
+  useEffect(() => {
+    if (!open) {
+      setRenderOptions(false);
+      return;
+    }
 
-    onSelectedValuesChange(nextValues);
+    const frameId = window.requestAnimationFrame(() => {
+      setRenderOptions(true);
+    });
 
-    if (closeOnSelect) {
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [open]);
+
+  const toggleValue = useCallback((value: string) => {
+    const currentValues = optimisticSelectedValuesRef.current;
+    const nextValues = currentValues.includes(value)
+      ? currentValues.filter((item) => item !== value)
+      : [...currentValues, value];
+
+    optimisticSelectedValuesRef.current = nextValues;
+    setOptimisticSelectedValues(nextValues);
+    startTransition(() => {
+      onSelectedValuesChangeRef.current(nextValues);
+    });
+
+    if (closeOnSelectRef.current) {
       setOpen(false);
       setSearchValue("");
     }
-  };
+  }, []);
 
   return (
     <Popover
@@ -155,49 +295,58 @@ export function SearchableMultiSelectPopover({
         className={cn("w-[--radix-popover-trigger-width] p-0", contentClassName)}
         align="start"
       >
-        <Command>
-          <CommandInput
+        <div className="border-b border-border/60 p-3">
+          <Input
             ref={searchInputRef}
             placeholder={searchPlaceholder}
             value={searchValue}
-            onValueChange={setSearchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
             disabled={disabled || loading}
+            className="h-10"
           />
-          <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  value={[
-                    option.label,
-                    option.description,
-                    option.value,
-                    ...(option.keywords || []),
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  onSelect={() => toggleValue(option.value)}
-                  className="cursor-pointer"
-                  disabled={disabled || loading}
-                >
-                  <Checkbox
-                    checked={selectedSet.has(option.value)}
-                    className="mr-2"
-                  />
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span>{option.label}</span>
-                    {option.description ? (
-                      <span className="text-xs text-muted-foreground">
-                        {option.description}
-                      </span>
-                    ) : null}
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+        </div>
+
+        {!renderOptions ? (
+          <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+            <Spinner />
+            <span className="ml-2">Opening...</span>
+          </div>
+        ) : loading ? (
+          <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+            <Spinner />
+            <span className="ml-2">{loadingText}</span>
+          </div>
+        ) : options.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+            {noOptionsText}
+          </div>
+        ) : filteredOptions.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+            {emptyText}
+          </div>
+        ) : (
+          <div
+            className="max-h-[320px] overflow-y-auto p-1.5"
+            role="listbox"
+            aria-multiselectable="true"
+          >
+            {!hasSearchQuery && hiddenOptionCount > 0 ? (
+              <div className="px-3 py-2 text-xs text-muted-foreground">
+                Showing {visibleOptions.length} of {filteredOptions.length} options. Search to
+                find the remaining {hiddenOptionCount}.
+              </div>
+            ) : null}
+            {visibleOptions.map((option) => (
+              <SearchableMultiSelectOptionRow
+                key={option.value}
+                option={option}
+                isSelected={selectedSet.has(option.value)}
+                disabled={disabled}
+                onToggle={toggleValue}
+              />
+            ))}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

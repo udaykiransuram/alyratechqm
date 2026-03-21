@@ -25,7 +25,6 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { Spinner } from '@/components/ui/spinner';
 import { CreateTagTypeModal } from '../CreateTagTypeModal';
-import { Label } from './label';
 
 export interface TagType {
   _id: string;
@@ -47,6 +46,8 @@ interface MultiSelectTagsProps {
   recommendedTagIds?: string[];
   disabled?: boolean; // --- FIX: Add a disabled prop ---
 }
+
+const INITIAL_VISIBLE_TAGS = 24;
 
 export function MultiSelectTags({
   selectedTags,
@@ -71,6 +72,7 @@ export function MultiSelectTags({
   const [isTagTypeModalOpen, setIsTagTypeModalOpen] = React.useState(false);
 
   const { toast } = useToast();
+  const deferredInputValue = React.useDeferredValue(inputValue);
 
   React.useEffect(() => {
     const fetchTagTypes = async () => {
@@ -85,6 +87,21 @@ export function MultiSelectTags({
     fetchTagTypes();
   }, []);
 
+  React.useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [open]);
+
   const uniqueTagTypesForFilter = React.useMemo(() => {
     const typeMap = new Map<string, TagType>();
     allTags.forEach(tag => {
@@ -93,12 +110,13 @@ export function MultiSelectTags({
     return Array.from(typeMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [allTags]);
 
+  const searchQuery = deferredInputValue.trim().toLowerCase();
+
   const { recommendedTags, otherTags } = React.useMemo(() => {
     const recommended = new Set(recommendedTagIds);
     const selected = new Set(selectedTags.map(t => t._id));
     const recs: TagItem[] = [];
     const others: TagItem[] = [];
-    const searchInput = inputValue.toLowerCase();
 
     allTags.forEach(tag => {
       // Skip tags that are already selected
@@ -113,7 +131,7 @@ export function MultiSelectTags({
       const searchableText = `${tag.name} ${tag.type ? tag.type?.name ?? '' : ''}`.toLowerCase();
       
       // 3. Check if the tag matches the search input
-      const matchesSearch = searchInput ? searchableText.includes(searchInput) : true;
+      const matchesSearch = searchQuery ? searchableText.includes(searchQuery) : true;
 
       // Add the tag if it matches both filters
       if (matchesTypeFilter && matchesSearch) {
@@ -126,7 +144,24 @@ export function MultiSelectTags({
     });
 
     return { recommendedTags: recs, otherTags: others };
-  }, [allTags, selectedTags, inputValue, selectedTypeIdFilter, recommendedTagIds]);
+  }, [allTags, recommendedTagIds, searchQuery, selectedTags, selectedTypeIdFilter]);
+
+  const hasSearchQuery = searchQuery.length > 0;
+  const { visibleRecommendedTags, visibleOtherTags, hiddenTagCount, totalMatchingTagCount } =
+    React.useMemo(() => {
+      const orderedTags = [...recommendedTags, ...otherTags];
+      const visibleTags = hasSearchQuery
+        ? orderedTags
+        : orderedTags.slice(0, INITIAL_VISIBLE_TAGS);
+      const visibleIds = new Set(visibleTags.map((tag) => tag._id));
+
+      return {
+        visibleRecommendedTags: recommendedTags.filter((tag) => visibleIds.has(tag._id)),
+        visibleOtherTags: otherTags.filter((tag) => visibleIds.has(tag._id)),
+        hiddenTagCount: Math.max(orderedTags.length - visibleTags.length, 0),
+        totalMatchingTagCount: orderedTags.length,
+      };
+    }, [hasSearchQuery, otherTags, recommendedTags]);
 
   const handleSelect = (tag: TagItem) => {
     onSelectedTagsChange([...selectedTags, tag]);
@@ -185,6 +220,7 @@ export function MultiSelectTags({
         {/* --- FIX: Pass the disabled state to the trigger --- */}
         <PopoverTrigger asChild disabled={disabled}>
           <div
+            data-tag-popover
             className={cn(
               "flex flex-wrap gap-2 items-center min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
               "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
@@ -220,8 +256,12 @@ export function MultiSelectTags({
             </Button>
           </div>
         </PopoverTrigger>
-        <PopoverContent forceMount className="w-[--radix-popover-trigger-width] p-0" align="start">
-          <Command>
+        <PopoverContent
+          forceMount
+          className="tag-popover-content w-[--radix-popover-trigger-width] p-0"
+          align="start"
+        >
+          <Command shouldFilter={false}>
             <div className="flex items-center border-b px-2 py-2 gap-2">
               <CommandInput
                 placeholder="Search or create..."
@@ -242,17 +282,32 @@ export function MultiSelectTags({
                 </SelectContent>
               </Select>
             </div>
+            {!showCreateForm && !hasSearchQuery && hiddenTagCount > 0 ? (
+              <div className="border-b border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                Showing {visibleRecommendedTags.length + visibleOtherTags.length} of{" "}
+                {totalMatchingTagCount} tags. Search to find the remaining {hiddenTagCount} faster.
+              </div>
+            ) : null}
             <CommandList className="h-[300px] overflow-y-auto">
-              <CommandEmpty>
-                {isNewTagCandidate && onCreateNewTag ? (
-                  <div className="p-4 text-center text-sm text-muted-foreground">
-                    No tag named &quot;{inputValue}&quot;.
-                    <Button variant="link" className="h-auto p-0 text-accent-blue mt-1" onClick={() => { setShowCreateForm(true); setNewTagName(inputValue); }}>
-                      <PlusCircle className="mr-1 h-4 w-4" /> Create it now
-                    </Button>
-                  </div>
-                ) : 'No tags found.'}
-              </CommandEmpty>
+              {!showCreateForm ? (
+                <CommandEmpty>
+                  {isNewTagCandidate && onCreateNewTag ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      No tag named &quot;{inputValue}&quot;.
+                      <Button
+                        variant="link"
+                        className="mt-1 h-auto p-0 text-accent-blue"
+                        onClick={() => {
+                          setShowCreateForm(true);
+                          setNewTagName(inputValue);
+                        }}
+                      >
+                        <PlusCircle className="mr-1 h-4 w-4" /> Create it now
+                      </Button>
+                    </div>
+                  ) : 'No tags found.'}
+                </CommandEmpty>
+              ) : null}
               {showCreateForm ? (
                 <div className="p-3 border-t">
                   <div className="space-y-3">
@@ -284,9 +339,9 @@ export function MultiSelectTags({
                 </div>
               ) : (
                 <>
-                  {recommendedTags.length > 0 && (
+                  {visibleRecommendedTags.length > 0 && (
                     <CommandGroup heading="Recommended">
-                      {recommendedTags.map((tag) => (
+                      {visibleRecommendedTags.map((tag) => (
                         <CommandItem key={tag._id} value={tag.name} onSelect={() => handleSelect(tag)} className="cursor-pointer">
                           <TagIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                           <span>{tag.name}</span>
@@ -295,15 +350,17 @@ export function MultiSelectTags({
                       ))}
                     </CommandGroup>
                   )}
-                  <CommandGroup heading={recommendedTags.length > 0 ? "Other Tags" : "All Tags"}>
-                    {otherTags.map((tag) => (
-                      <CommandItem key={tag._id} value={tag.name} onSelect={() => handleSelect(tag)} className="cursor-pointer">
-                        <TagIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-                        <span>{tag.name}</span>
-                        <span className="ml-auto text-xs text-muted-foreground/80 capitalize">{tag.type?.name ?? ''}</span>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
+                  {visibleOtherTags.length > 0 ? (
+                    <CommandGroup heading={visibleRecommendedTags.length > 0 ? "Other Tags" : "All Tags"}>
+                      {visibleOtherTags.map((tag) => (
+                        <CommandItem key={tag._id} value={tag.name} onSelect={() => handleSelect(tag)} className="cursor-pointer">
+                          <TagIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                          <span>{tag.name}</span>
+                          <span className="ml-auto text-xs text-muted-foreground/80 capitalize">{tag.type?.name ?? ''}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  ) : null}
                 </>
               )}
             </CommandList>

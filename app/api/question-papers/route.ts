@@ -327,9 +327,16 @@ export async function GET(req: NextRequest) {
       "AcademicSection",
     ]);
 
-    const papers = await QPModel.find(
-      buildArchiveFilter(resolveIncludeArchived(req.nextUrl)),
-    )
+    const archiveFilter = buildArchiveFilter(resolveIncludeArchived(req.nextUrl));
+    const pageParam = Number(req.nextUrl.searchParams.get("page") || "");
+    const limitParam = Number(req.nextUrl.searchParams.get("limit") || "");
+
+    let total: number | undefined;
+    let page: number | undefined;
+    let pages: number | undefined;
+    let limit: number | undefined;
+
+    let cursor = QPModel.find(archiveFilter)
       .select(
         "title class subject totalMarks sections assignedAcademicSections duration examDate onlineEnabled onlineStartsAt onlineEndsAt createdAt updatedAt",
       )
@@ -344,7 +351,19 @@ export async function GET(req: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
-    return NextResponse.json({ success: true, papers });
+    if (pageParam && limitParam) {
+      const totalCount = await QPModel.countDocuments(archiveFilter);
+      total = totalCount;
+      page = Math.max(1, pageParam);
+      limit = Math.min(100, Math.max(1, limitParam));
+      pages = Math.max(1, Math.ceil(totalCount / limit));
+      const skip = (page - 1) * limit;
+      cursor = cursor.skip(skip).limit(limit);
+    }
+
+    const papers = await cursor;
+
+    return NextResponse.json({ success: true, papers, total, page, pages, limit });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message || "Server error." },

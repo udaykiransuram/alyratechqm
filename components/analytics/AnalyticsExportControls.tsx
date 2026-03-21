@@ -1,6 +1,4 @@
 import React from "react";
-import { toPng } from "html-to-image";
-import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import {
   getConsolidatedStudentList,
@@ -8,13 +6,13 @@ import {
   buildStudentAreaMetrics,
   computeInsightsForLastTag,
 } from "@/components/analytics/helpers";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import {
-  appendBenchmarkSheetsToWorkbook,
-  buildBenchmarkPdfBundle,
-} from "@/lib/analytics/benchmarkExport";
 import type { BenchmarkViewSettings } from "@/lib/analytics/benchmarkPresentation";
+import {
+  loadBenchmarkExport,
+  loadPdfDeps,
+  loadToPng,
+  loadXlsx,
+} from "@/lib/client/lazy-export-deps";
 
 interface AnalyticsExportControlsProps {
   stats: any;
@@ -80,6 +78,7 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
 
   async function handleDownloadTableImage() {
     if (tableRef.current) {
+      const toPng = await loadToPng();
       const dataUrl = await toPng(tableRef.current, { cacheBust: true });
       const link = document.createElement("a");
       link.download = "analytics_table.png";
@@ -147,6 +146,7 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
       }
     }
 
+    const XLSX = await loadXlsx();
     const consolidatedRows: any[] = [];
     const detailedRows: any[] = [];
     const studentSummaryMap: Record<
@@ -511,6 +511,7 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
     } catch {}
 
     if (mode === "class" && benchmarkData) {
+      const { appendBenchmarkSheetsToWorkbook } = await loadBenchmarkExport();
       appendBenchmarkSheetsToWorkbook(workbook, benchmarkData, {
         benchmarkViewSettings,
         baseUrl: typeof window !== "undefined" ? window.location.origin : "",
@@ -527,7 +528,7 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
     Action: string;
   };
 
-  function generateRemedialDocForStudent(
+  async function generateRemedialDocForStudent(
     name: string,
     roll: string,
     rows: {
@@ -541,6 +542,7 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
     paperTitle?: string,
     insights?: InsightRow[],
   ) {
+    const { jsPDF, autoTable } = await loadPdfDeps();
     const doc = new jsPDF();
     if (paperTitle) {
       doc.setFontSize(14);
@@ -692,7 +694,7 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
         }
       } catch {}
 
-      const doc = generateRemedialDocForStudent(
+      const doc = await generateRemedialDocForStudent(
         studentName || "Student",
         rollNumber || "",
         rows,
@@ -707,6 +709,7 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
       try {
         const insights = computeInsightsForLastTag(stats, groupBy, groupFields);
         if (insights && insights.length > 0) {
+          const { jsPDF, autoTable } = await loadPdfDeps();
           const doc = new jsPDF();
           doc.setFontSize(16);
           if (paperTitle) {
@@ -750,7 +753,7 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
       } catch {}
 
       for (const [, v] of metrics.entries()) {
-        const doc = generateRemedialDocForStudent(
+        const doc = await generateRemedialDocForStudent(
           v.name,
           v.roll,
           v.rows,
@@ -775,6 +778,8 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
   async function handleDownloadBenchmarkPdf() {
     if (mode !== "class") return;
 
+    const [{ buildBenchmarkPdfBundle }, { jsPDF, autoTable }] =
+      await Promise.all([loadBenchmarkExport(), loadPdfDeps()]);
     const bundle = buildBenchmarkPdfBundle(benchmarkData, {
       benchmarkViewSettings,
       baseUrl: typeof window !== "undefined" ? window.location.origin : "",
@@ -973,13 +978,14 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
   );
 };
 
-export function generateClassAnalyticsExcel(
+export async function generateClassAnalyticsExcel(
   stats: any,
   groupBy: string[],
   groupFields: { value: string; label: string }[],
   sortConfig: { key: string; direction: "asc" | "desc" },
   fileName: string = "analytics_report.xlsx",
 ) {
+  const XLSX = await loadXlsx();
   const consolidatedRows: any[] = [];
   const detailedRows: any[] = [];
   const studentSummaryMap: Record<

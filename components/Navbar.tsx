@@ -30,7 +30,6 @@ export default function Navbar() {
   const [mobileDropdownOpen, setMobileDropdownOpen] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
-  const headerInnerRef = useRef<HTMLDivElement | null>(null);
   const [headerH, setHeaderH] = useState<number>(80); // fallback to 80px (h-20)
   // Horizontal alignment handled by mirroring header container paddings on inner nav
   // Removed dynamic horizontal alignment states in favor of matching header container classes directly
@@ -39,24 +38,31 @@ export default function Navbar() {
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    onScroll();
+    let frameId: number | null = null;
+    const updateScrolledState = () => {
+      frameId = null;
+      const nextScrolled = window.scrollY > 20;
+      setScrolled((current) => (current === nextScrolled ? current : nextScrolled));
+    };
+    const onScroll = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(updateScrolledState);
+    };
+
+    updateScrolledState();
     window.addEventListener("scroll", onScroll, { passive: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpenDropdown(null);
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("keydown", onKey);
+    };
   }, []);
-
-  // Recompute header height precisely when mobile menu toggles or scroll state changes
-  useEffect(() => {
-    if (!headerRef.current) return;
-    const update = () => setHeaderH(headerRef.current!.getBoundingClientRect().height);
-    update();
-    const id = window.requestAnimationFrame(update);
-    return () => window.cancelAnimationFrame(id);
-  }, [mobileMenuOpen, scrolled]);
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -108,12 +114,10 @@ export default function Navbar() {
     setH();
     const ro = new ResizeObserver(setH);
     ro.observe(el);
-    window.addEventListener("scroll", setH, { passive: true });
     window.addEventListener("orientationchange", setH);
     window.addEventListener("resize", setH);
     return () => {
       ro.disconnect();
-      window.removeEventListener("scroll", setH);
       window.removeEventListener("orientationchange", setH);
       window.removeEventListener("resize", setH);
     };
@@ -123,9 +127,11 @@ export default function Navbar() {
 
   // Close desktop dropdown when clicking outside header
   useEffect(() => {
+    if (!openDropdown) return;
+
     const onDocClick = (e: MouseEvent) => {
       if (!headerRef.current) return;
-      if (openDropdown && !headerRef.current.contains(e.target as Node)) {
+      if (!headerRef.current.contains(e.target as Node)) {
         setOpenDropdown(null);
       }
     };
@@ -157,7 +163,6 @@ export default function Navbar() {
       )}
     >
       <div
-        ref={headerInnerRef}
         className="mx-auto max-w-7xl px-4 sm:px-8 md:px-16 flex h-20 items-center justify-around md:justify-between gap-2"
         style={{
           paddingLeft: 'max(env(safe-area-inset-left, 0px), 24px)',

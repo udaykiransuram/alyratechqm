@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Copy, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -17,9 +18,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
+import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 
 export function QuestionPaperToolbar({ paper }: { paper: any }) {
   const { buildReturnHref } = useReturnHrefBuilder("/workspace/question-papers");
+  const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [names, setNames] = useState("");
   const [loading, setLoading] = useState(false);
@@ -142,7 +145,8 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
           onClick={() => {
             const copyPayload = buildCopyPayload("");
             sessionStorage.setItem("questionPaperCopy", JSON.stringify(copyPayload));
-            window.location.href = "/workspace/question-papers/create";
+            announceNavigationStart("/workspace/question-papers/create");
+            router.push("/workspace/question-papers/create");
           }}
         >
           <Copy className="mr-2 h-4 w-4" />
