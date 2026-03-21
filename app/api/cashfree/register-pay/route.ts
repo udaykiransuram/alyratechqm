@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { connectDB } from "@/lib/db";
+import { getSiteUrlOrFallback } from "@/lib/site-url";
 import Registration from "@/models/Registration";
 import TalentTestConfig from "@/models/TalentTestConfig";
 
@@ -124,7 +125,7 @@ export async function POST(req: NextRequest) {
           customer_phone: body.phone,
         },
         order_meta: {
-          return_url: `${process.env.NEXTAUTH_URL}/success/${orderId}`,
+          return_url: `${getSiteUrlOrFallback(req.nextUrl.origin)}/success/${orderId}`,
           studentName: body.studentName,
           guardianName: body.guardianName,
               schoolName: body.schoolName,

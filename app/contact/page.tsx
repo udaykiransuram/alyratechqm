@@ -4,6 +4,7 @@ import { Reveal } from "@/components/Reveal";
 import { LottieAnimation } from "@/components/LottieAnimation";
 import { EnvelopeIcon, PhoneIcon, MapPinIcon } from "@heroicons/react/24/outline";
 import { connectDB } from "@/lib/db";
+import { getSiteUrlOrFallback } from "@/lib/site-url";
 import ContactInfo from "@/models/ContactInfo";
 import FAQ from "@/models/FAQ";
 
@@ -72,7 +73,7 @@ export default async function ContactPage() {
   const waDigits = (info.whatsappNumber || info.phone).replace(/\D+/g, "");
   const waText = "Hello Alyra Tech! I would like to know more about your diagnostics.";
   const waHref = waDigits ? `https://wa.me/${waDigits}?text=${encodeURIComponent(waText)}` : "";
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://your-domain.com";
+  const siteUrl = getSiteUrlOrFallback("https://your-domain.com");
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
