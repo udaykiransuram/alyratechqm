@@ -1016,7 +1016,8 @@
   }
 
   .app-report-filter-card {
-    @apply rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm;
+    @apply rounded-2xl border border-border/60 bg-background px-4 py-3.5 shadow-sm;
+    box-shadow: 0 16px 28px -28px hsl(var(--app-shadow-deep) / 0.24);
   }
 
   .app-report-filter-label {
@@ -1024,11 +1025,11 @@
   }
 
   .app-report-filter-control {
-    @apply mt-2;
+    @apply mt-2.5;
   }
 
   .app-report-filter-footer {
-    @apply flex flex-col gap-3 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3 lg:flex-row lg:items-center lg:justify-between;
+    @apply flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/90 px-4 py-3.5 shadow-sm lg:flex-row lg:items-center lg:justify-between;
   }
 
   .app-filter-summary {
@@ -1571,7 +1572,7 @@
   }
 
   .analytics-card {
-    @apply rounded-xl border bg-card shadow-sm;
+    @apply rounded-2xl border bg-card shadow-sm;
     border-color: hsl(var(--border) / 0.82);
     box-shadow: 0 20px 38px -34px hsl(var(--app-shadow-deep) / 0.26);
   }
@@ -1581,7 +1582,7 @@
   }
 
   .analytics-card-header {
-    @apply flex flex-col gap-1.5 border-b px-4 py-3;
+    @apply flex flex-col gap-2 border-b px-4 py-3.5 sm:px-5 sm:py-4;
     border-color: hsl(var(--border) / 0.76);
     background:
       linear-gradient(
@@ -1592,44 +1593,44 @@
   }
 
   .analytics-card-title {
-    @apply text-lg font-semibold tracking-tight text-foreground;
+    @apply text-base font-semibold tracking-[-0.02em] text-foreground sm:text-lg;
   }
 
   .analytics-card-description {
-    @apply text-[13px] leading-5 text-muted-foreground;
+    @apply text-xs leading-5 text-muted-foreground sm:text-[13px];
   }
 
   .analytics-subsection {
-    @apply space-y-2.5 rounded-lg border p-3;
+    @apply space-y-3 rounded-2xl border p-4;
     border-color: hsl(var(--border) / 0.76);
     background-color: hsl(var(--app-surface-soft) / 0.82);
   }
 
   .analytics-filter-chip {
-    @apply inline-flex cursor-pointer items-center justify-center rounded-full border bg-background px-2.5 py-1 text-[13px] font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground;
+    @apply inline-flex min-h-[2.25rem] cursor-pointer items-center justify-center rounded-xl border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground;
     border-color: hsl(var(--border) / 0.82);
   }
 
   .analytics-order-item {
-    @apply flex flex-col gap-1.5 rounded-lg border bg-background px-3 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between;
+    @apply flex flex-col gap-2 rounded-xl border bg-background px-3.5 py-2.5 shadow-sm sm:flex-row sm:items-center sm:justify-between;
     border-color: hsl(var(--border) / 0.82);
     box-shadow: 0 12px 24px -24px hsl(var(--app-shadow-deep) / 0.22);
   }
 
   .analytics-toggle {
-    @apply mx-auto flex w-full max-w-xs rounded-lg border p-0.5;
+    @apply mx-auto flex w-full max-w-xs rounded-2xl border p-1;
     border-color: hsl(var(--border) / 0.82);
     background-color: hsl(var(--app-surface-soft) / 0.84);
   }
 
   .analytics-table-shell {
-    @apply overflow-hidden rounded-xl border bg-card shadow-sm;
+    @apply overflow-hidden rounded-2xl border bg-card shadow-sm;
     border-color: hsl(var(--border) / 0.82);
     box-shadow: 0 18px 34px -32px hsl(var(--app-shadow-deep) / 0.24);
   }
 
   .analytics-table-wrap {
-    @apply relative max-h-[70vh] overflow-auto rounded-lg border bg-background;
+    @apply relative max-h-[70vh] overflow-auto rounded-2xl border bg-background;
     border-color: hsl(var(--border) / 0.82);
   }
 
@@ -1656,7 +1657,7 @@
   }
 
   .analytics-badge {
-    @apply inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium;
+    @apply inline-flex min-h-[2rem] items-center rounded-xl border px-2.5 py-1 text-xs font-medium;
   }
 
   .analytics-badge-success {
@@ -1676,39 +1677,52 @@
   }
 
   .analytics-pagination-button {
-    @apply inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex h-9 items-center justify-center rounded-xl border border-input bg-background px-3.5 text-[13px] font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50;
   }
 
   .analytics-select {
-    @apply h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm;
+    @apply h-10 rounded-xl border border-input bg-background px-3.5 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+
+  .analytics-select-compact {
+    @apply h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 
   .analytics-toolbar {
-    @apply rounded-lg border border-border/60 bg-muted/20 p-2.5 sm:p-3;
+    @apply rounded-2xl border border-border/60 bg-muted/20 p-4 sm:p-5;
+    box-shadow: 0 18px 32px -32px hsl(var(--app-shadow-deep) / 0.24);
   }
 
   .analytics-toolbar-row {
     @apply flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between;
   }
 
+  .analytics-toolbar-row-start {
+    @apply items-start;
+  }
+
   .analytics-toolbar-copy {
-    @apply space-y-0.5;
+    @apply space-y-1;
   }
 
   .analytics-toolbar-title {
-    @apply text-[13px] font-semibold text-foreground;
+    @apply text-sm font-semibold tracking-[-0.01em] text-foreground;
   }
 
   .analytics-toolbar-note {
-    @apply text-xs leading-5 text-muted-foreground;
+    @apply text-xs leading-5 text-muted-foreground sm:text-[13px];
   }
 
   .analytics-toolbar-meta {
     @apply flex flex-wrap items-center gap-2;
   }
 
+  .analytics-toolbar-meta-start {
+    @apply justify-start;
+  }
+
   .analytics-toolbar-chip {
-    @apply inline-flex items-center rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm;
+    @apply inline-flex min-h-[2.25rem] items-center rounded-xl border border-border/60 bg-background px-3.5 py-1.5 text-[12px] font-medium text-foreground shadow-sm;
   }
 
   .analytics-toolbar-chip-muted {
@@ -1717,6 +1731,10 @@
 
   .analytics-toolbar-actions {
     @apply flex flex-wrap items-center gap-2;
+  }
+
+  .analytics-toolbar-actions-grid {
+    @apply mt-3 grid w-full gap-2 sm:grid-cols-2;
   }
 
   .analytics-setup-bar {
@@ -1728,15 +1746,15 @@
   }
 
   .analytics-setup-grid {
-    @apply mt-3 grid gap-2.5 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)];
+    @apply mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)];
   }
 
   .analytics-setup-summary-grid {
-    @apply grid gap-2 sm:grid-cols-3;
+    @apply grid gap-3 sm:grid-cols-3;
   }
 
   .analytics-setup-summary-card {
-    @apply rounded-lg border border-border/60 bg-background px-3 py-2.5 shadow-sm;
+    @apply min-h-[5.75rem] rounded-2xl border border-border/60 bg-background px-4 py-3.5 shadow-sm;
   }
 
   .analytics-setup-summary-label {
@@ -1744,15 +1762,19 @@
   }
 
   .analytics-setup-summary-value {
-    @apply mt-2 flex flex-wrap gap-2;
+    @apply mt-2.5 flex flex-wrap gap-2;
   }
 
   .analytics-setup-toggle-grid {
-    @apply grid gap-2 sm:grid-cols-2;
+    @apply grid gap-3 sm:grid-cols-2;
   }
 
   .analytics-checkbox-card {
-    @apply inline-flex items-center gap-2 rounded-lg border border-border/60 bg-background px-2.5 py-1.5 text-[13px] font-medium text-foreground shadow-sm;
+    @apply inline-flex min-h-[2.5rem] items-center gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm;
+  }
+
+  .analytics-setup-toggle-card {
+    @apply inline-flex min-h-[5.75rem] items-center gap-2 rounded-2xl border border-border/60 bg-background px-4 py-3.5 text-sm font-medium text-foreground shadow-sm;
   }
 
   .analytics-checkbox-card-split {
@@ -1760,15 +1782,15 @@
   }
 
   .analytics-checkbox-card-copy {
-    @apply min-w-0 space-y-0.5 text-left;
+    @apply min-w-0 space-y-1 text-left;
   }
 
   .analytics-checkbox-card-label {
-    @apply block text-[13px] font-medium text-foreground;
+    @apply block text-sm font-medium text-foreground;
   }
 
   .analytics-checkbox-card-note {
-    @apply block text-[11px] leading-4 text-muted-foreground;
+    @apply block text-xs leading-5 text-muted-foreground;
   }
 
   .analytics-info-grid {
@@ -1776,7 +1798,7 @@
   }
 
   .analytics-info-card {
-    @apply rounded-lg border border-border/60 bg-background px-3 py-2.5 shadow-sm;
+    @apply rounded-2xl border border-border/60 bg-background px-4 py-3.5 shadow-sm;
   }
 
   .analytics-info-label {
@@ -1796,19 +1818,19 @@
   }
 
   .analytics-control-panel {
-    @apply rounded-lg border border-border/60 bg-background p-3 shadow-sm;
+    @apply rounded-2xl border border-border/60 bg-background p-4 shadow-sm sm:p-5;
   }
 
   .analytics-control-panel-header {
-    @apply mb-2.5 space-y-0.5;
+    @apply mb-4 space-y-1 border-b border-border/60 pb-3;
   }
 
   .analytics-control-panel-title {
-    @apply text-[13px] font-semibold text-foreground;
+    @apply text-sm font-semibold tracking-[-0.01em] text-foreground;
   }
 
   .analytics-control-panel-note {
-    @apply text-xs leading-5 text-muted-foreground;
+    @apply text-[13px] leading-5 text-muted-foreground;
   }
 
   .analytics-mode-grid {
@@ -1816,11 +1838,67 @@
   }
 
   .analytics-mode-card {
-    @apply rounded-lg border border-border/60 bg-background p-2.5 sm:p-3 text-left shadow-sm transition-colors hover:bg-muted/30;
+    @apply rounded-2xl border border-border/60 bg-background px-4 py-3.5 text-left shadow-sm transition-colors hover:bg-muted/30;
   }
 
   .analytics-mode-card-active {
     @apply border-primary bg-primary/5;
+  }
+
+  .analytics-action-button-primary {
+    @apply app-button-primary h-10 rounded-xl px-4 text-sm;
+  }
+
+  .analytics-action-button-secondary {
+    @apply app-button-secondary h-10 rounded-xl px-4 text-sm;
+  }
+
+  .analytics-action-button-compact {
+    @apply app-button-secondary h-9 rounded-xl px-3.5 text-[13px];
+  }
+
+  .analytics-action-button-icon {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-xl border border-input bg-background text-sm text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .analytics-active-filter-tag {
+    @apply inline-flex items-center gap-2 rounded-xl border border-primary/25 bg-background px-3 py-2 text-xs font-medium text-primary shadow-sm transition-colors hover:bg-primary/5;
+  }
+
+  .analytics-chip-button {
+    @apply inline-flex min-h-[2.25rem] items-center gap-2 rounded-xl border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground;
+  }
+
+  .analytics-chip-button-success {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100;
+  }
+
+  .analytics-chip-button-danger {
+    @apply border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100;
+  }
+
+  .analytics-link-chip {
+    @apply inline-flex min-h-[2.25rem] items-center gap-2 rounded-xl border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-primary shadow-sm transition-colors hover:bg-primary/5;
+  }
+
+  .analytics-inline-link-button {
+    @apply inline-flex items-center justify-center rounded-xl px-2 py-1 text-sm font-medium text-primary underline decoration-dotted underline-offset-4 transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+
+  .analytics-data-card {
+    @apply rounded-2xl border border-border/60 bg-background p-4 shadow-sm;
+  }
+
+  .analytics-data-card-compact {
+    @apply rounded-2xl border border-border/60 bg-background p-3 shadow-sm;
+  }
+
+  .analytics-view-toggle-button {
+    @apply flex h-10 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold text-muted-foreground transition-colors;
+  }
+
+  .analytics-view-toggle-button-active {
+    @apply bg-background text-foreground shadow-sm;
   }
 
   @media (min-width: 640px) {

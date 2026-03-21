@@ -553,7 +553,10 @@ export function StudentTagReportPageView({
             <div className="analytics-toolbar-row gap-4">
               <div className="analytics-toolbar-copy">
                 <h2 className="analytics-card-title">Report Controls</h2>
-                <p className="analytics-card-description">Controls</p>
+                <p className="analytics-card-description">
+                  Align setup, grouping, and filters before reviewing the
+                  student report.
+                </p>
               </div>
               <div className="analytics-toolbar-meta">
                 <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
@@ -577,7 +580,7 @@ export function StudentTagReportPageView({
                     type="button"
                     onClick={() => setShowControls((value) => !value)}
                     aria-expanded={showControls}
-                    className="app-button-secondary h-9 w-full px-3 sm:w-auto"
+                    className="analytics-action-button-secondary w-full sm:w-auto"
                   >
                     {showControls ? "Hide setup" : "Setup"}
                   </button>
@@ -585,7 +588,7 @@ export function StudentTagReportPageView({
                     type="button"
                     onClick={() => fetchAnalytics()}
                     disabled={loading}
-                    className="app-button-primary h-9 w-full px-3 sm:w-auto"
+                    className="analytics-action-button-primary w-full sm:w-auto"
                   >
                     {loading
                       ? "Refreshing report..."
@@ -632,7 +635,7 @@ export function StudentTagReportPageView({
                   </div>
                 </div>
                 <div className="analytics-setup-toggle-grid">
-                  <label className="analytics-checkbox-card analytics-checkbox-card-split">
+                  <label className="analytics-setup-toggle-card analytics-checkbox-card-split">
                     <span className="analytics-checkbox-card-copy">
                       <span className="analytics-checkbox-card-label">
                         Show tags column
@@ -648,7 +651,7 @@ export function StudentTagReportPageView({
                       className="analytics-inline-check shrink-0"
                     />
                   </label>
-                  <label className="analytics-checkbox-card analytics-checkbox-card-split">
+                  <label className="analytics-setup-toggle-card analytics-checkbox-card-split">
                     <span className="analytics-checkbox-card-copy">
                       <span className="analytics-checkbox-card-label">
                         Show option tags column
@@ -806,7 +809,7 @@ export function StudentTagReportPageView({
                         type="button"
                         onClick={() => fetchAnalytics()}
                         disabled={loading}
-                        className="app-button-secondary h-9 px-3"
+                        className="analytics-action-button-secondary"
                       >
                         {loading ? "Applying..." : "Apply question filters"}
                       </button>
@@ -823,7 +826,7 @@ export function StudentTagReportPageView({
                           });
                         }}
                         disabled={loading || !hasActiveFilters}
-                        className="app-button-secondary h-9 px-3"
+                        className="analytics-action-button-secondary"
                       >
                         Clear filters
                       </button>
@@ -880,7 +883,7 @@ export function StudentTagReportPageView({
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"
-                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                                className="analytics-action-button-icon"
                                 disabled={idx === 0}
                                 onClick={() => {
                                   setGroupBy((prev) => {
@@ -898,7 +901,7 @@ export function StudentTagReportPageView({
                               </button>
                               <button
                                 type="button"
-                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                                className="analytics-action-button-icon"
                                 disabled={idx === groupBy.length - 1}
                                 onClick={() => {
                                   setGroupBy((prev) => {
@@ -1030,7 +1033,7 @@ export function StudentTagReportPageView({
                                 Rows per page
                               </span>
                               <select
-                                className="analytics-select h-8"
+                                className="analytics-select-compact"
                                 value={cmpPageSize}
                                 onChange={(e) => {
                                   setCmpPageSize(Number(e.target.value));
@@ -1165,7 +1168,7 @@ export function StudentTagReportPageView({
                                 Rows per page
                               </span>
                               <select
-                                className="analytics-select h-8"
+                                className="analytics-select-compact"
                                 value={insPageSize}
                                 onChange={(e) => {
                                   setInsPageSize(Number(e.target.value));
@@ -1222,7 +1225,7 @@ export function StudentTagReportPageView({
           </div>
         )}
 
-        <div className="analytics-toolbar border border-border/60 bg-card/70">
+        <div className="analytics-toolbar">
           <div className="analytics-toolbar-row">
             <div className="analytics-toolbar-copy">
               <p className="analytics-toolbar-title">Report view</p>
@@ -1236,20 +1239,20 @@ export function StudentTagReportPageView({
           <div className="analytics-toggle">
             <button
               onClick={() => setView("table")}
-              className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+              className={`analytics-view-toggle-button ${
                 view === "table"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-background/70"
+                  ? "analytics-view-toggle-button-active"
+                  : "hover:bg-background/70"
               }`}
             >
               Table
             </button>
             <button
               onClick={() => setView("charts")}
-              className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+              className={`analytics-view-toggle-button ${
                 view === "charts"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-background/70"
+                  ? "analytics-view-toggle-button-active"
+                  : "hover:bg-background/70"
               }`}
             >
               Charts
