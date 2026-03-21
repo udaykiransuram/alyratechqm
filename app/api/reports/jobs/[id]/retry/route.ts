@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import ReportDispatchJob from "../../../../../../models/ReportDispatchJob";
 import mongoose from "mongoose";
 import { requireTenantSession } from "@/lib/api-auth";
+import { expireActiveDeliveryAttempt } from "@/lib/reports/dispatchAttempts";
 import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
 
 function normalizeMobileNumber(input: string): string {
@@ -50,9 +51,28 @@ export async function POST(
     );
   }
 
+  if (job.status !== "failed") {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          job.status === "processing"
+            ? "This job is already being processed. Wait for the active worker run to finish before retrying."
+            : "Only failed jobs can be retried manually.",
+      },
+      { status: 409 },
+    );
+  }
+
   job.status = "queued";
   job.error = undefined;
   job.nextRetryAt = new Date();
+  job.processingStartedAt = undefined;
+  expireActiveDeliveryAttempt(
+    job,
+    "Manual retry requested after the previous delivery attempt failed.",
+    new Date(),
+  );
   if (job.mobileNumber) {
     job.mobileNumber = normalizeMobileNumber(job.mobileNumber);
   }

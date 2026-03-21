@@ -28,7 +28,7 @@ export default function CompanySignInClient() {
     setIsLoading(true);
 
     const callbackUrl =
-      searchParams.get("callbackUrl")?.trim() || "/manage/schools";
+      searchParams.get("callbackUrl")?.trim() || "/company/schools";
     const result = await signIn("company-admin", {
       redirect: false,
       email,
@@ -83,43 +83,6 @@ export default function CompanySignInClient() {
                 </p>
               </div>
             </div>
-
-            <div className="app-chip-cloud">
-              <span className="app-meta-chip">Company-only access</span>
-              <span className="app-meta-chip">School bootstrap flow</span>
-              <span className="app-meta-chip">Separate auth session</span>
-            </div>
-
-            <div className="app-auth-feature-grid">
-              <div className="app-auth-feature-card">
-                <p className="app-auth-feature-title">Create and provision schools</p>
-                <p className="app-auth-feature-copy">
-                  Launch new school workspaces with the permanent school key and
-                  first admin in the same operational flow.
-                </p>
-              </div>
-              <div className="app-auth-feature-card">
-                <p className="app-auth-feature-title">Keep school sessions separate</p>
-                <p className="app-auth-feature-copy">
-                  Company access never replaces the school-user login used by
-                  admins, teachers, or students.
-                </p>
-              </div>
-              <div className="app-auth-feature-card">
-                <p className="app-auth-feature-title">Operate maintenance safely</p>
-                <p className="app-auth-feature-copy">
-                  Reindexing and global maintenance stay behind company-admin
-                  access instead of school-level pages.
-                </p>
-              </div>
-              <div className="app-auth-feature-card">
-                <p className="app-auth-feature-title">Bootstrap-focused v1</p>
-                <p className="app-auth-feature-copy">
-                  This surface is intentionally lean and focused on school
-                  creation plus company operations.
-                </p>
-              </div>
-            </div>
           </section>
 
           <section className="app-auth-panel app-auth-panel-form">
@@ -156,6 +119,7 @@ export default function CompanySignInClient() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   autoComplete="email"
+                  autoFocus
                   className="h-11"
                   required
                 />
@@ -199,11 +163,6 @@ export default function CompanySignInClient() {
                     )}
                   </button>
                 </div>
-              </div>
-
-              <div className="app-feedback app-feedback-info">
-                School admins, teachers, and students should not use this
-                screen. They should continue through the school sign-in page.
               </div>
 
               <Button type="submit" disabled={isLoading} className="h-11 w-full text-sm">

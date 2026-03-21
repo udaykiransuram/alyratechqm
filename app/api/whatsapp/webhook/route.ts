@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
+import { applyDeliveryWebhookUpdate } from "@/lib/reports/dispatchAttempts";
 import { verifyWhatsAppWebhookSignature } from "@/lib/whatsapp/meta";
 
 export const dynamic = 'force-dynamic';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "";
+
+function resolveCallbackData(statusPayload: any) {
+  return String(
+    statusPayload?.biz_opaque_callback_data ||
+      statusPayload?.conversation?.biz_opaque_callback_data ||
+      "",
+  )
+    .trim();
+}
 
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get("hub.mode");
@@ -48,7 +58,8 @@ export async function POST(req: NextRequest) {
 
     for (const s of statuses) {
       const messageId = s?.id;
-      if (!messageId) continue;
+      const callbackData = resolveCallbackData(s);
+      if (!messageId && !callbackData) continue;
 
       const status = String(s?.status || "").toLowerCase();
       const errors = s?.errors || [];
@@ -58,29 +69,41 @@ export async function POST(req: NextRequest) {
           .filter(Boolean)
           .join(" | ") || undefined;
 
-      const update: any = {
-        lastWebhookAt: new Date(),
-      };
-
-      if (status === "sent") update.deliveryStatus = "sent";
-      if (status === "delivered") {
-        update.deliveryStatus = "delivered";
-        update.deliveredAt = new Date();
-      }
-      if (status === "read") {
-        update.deliveryStatus = "read";
-        update.readAt = new Date();
-      }
-      if (status === "failed") {
-        update.deliveryStatus = "failed";
-        update.deliveryError = errorMessage || "WhatsApp delivery failed";
+      if (!["sent", "delivered", "read", "failed"].includes(status)) {
+        continue;
       }
 
-      const res = await ReportDispatchJob.updateOne(
-        { providerMessageId: messageId },
-        { $set: update },
-      );
-      if (res.modifiedCount > 0) updated += 1;
+      const job =
+        (messageId
+          ? await ReportDispatchJob.findOne({
+              providerMessageId: messageId,
+            })
+          : null) ||
+        (callbackData
+          ? await ReportDispatchJob.findOne({
+              $or: [
+                { activeAttemptKey: callbackData },
+                { "deliveryAttempts.key": callbackData },
+              ],
+            })
+          : null);
+
+      if (!job) {
+        continue;
+      }
+
+      const didApply = applyDeliveryWebhookUpdate(job, {
+        attemptKey: callbackData || undefined,
+        providerMessageId: messageId || undefined,
+        deliveryStatus: status as "sent" | "delivered" | "read" | "failed",
+        errorMessage,
+        webhookAt: new Date(),
+      });
+
+      if (didApply) {
+        await job.save();
+        updated += 1;
+      }
     }
 
     return NextResponse.json({ success: true, updated });

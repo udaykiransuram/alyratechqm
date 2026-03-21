@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0ea5a4" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0ea5a4" stop-opacity="0.6"/>
+    </linearGradient>
+  </defs>
+  <path d="M0 10 C30 35 90 -5 120 20" stroke="url(#fade)" stroke-width="2.5" fill="none"/>
+  <path d="M0 50 C30 75 90 35 120 60" stroke="url(#fade)" stroke-width="2.5" fill="none"/>
+  <path d="M0 90 C30 115 90 75 120 100" stroke="url(#fade)" stroke-width="2.5" fill="none"/>
+</svg>

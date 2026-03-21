@@ -9,10 +9,12 @@
     "build": "BROWSERSLIST_IGNORE_OLD_DATA=1 next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "build-indexes": "ts-node scripts/build-indexes.ts",
     "build-tenant-indexes": "ts-node scripts/build-tenant-indexes.ts",
     "predev": "node scripts/build-tenant-indexes.cjs || echo \"[predev] Skipping index build (DB unreachable)\"",
     "test:e2e": "playwright test -c local-tests/playwright.config.ts",
+    "test:e2e:smoke": "playwright test -c local-tests/playwright.config.ts local-tests/tests/e2e/auth-smoke.spec.ts --project=chromium-desktop",
     "test:e2e:headed": "playwright test -c local-tests/playwright.config.ts --headed",
     "test:e2e:ui": "playwright test -c local-tests/playwright.config.ts --ui",
     "test:seed": "ts-node scripts/seed-test-data.ts",
@@ -98,7 +100,9 @@
     "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "@heroicons/react": "^2.2.0",
+    "@lottiefiles/dotlottie-react": "^0.17.14"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

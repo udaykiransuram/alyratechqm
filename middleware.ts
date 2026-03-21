@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { getNextAuthSecret } from "@/lib/auth-runtime";
+import {
+  getAuthConfigurationIssue,
+  getNextAuthSecret,
+} from "@/lib/auth-runtime";
+
+type RateLimitStore = Map<string, number[]>;
 
 function isSchoolSignInRoute(path: string) {
   return path === "/auth/signin";
@@ -12,16 +17,39 @@ function isCompanySignInRoute(path: string) {
 }
 
 function isCompanyPage(path: string) {
-  return (
-    path === "/manage/schools" ||
-    path.startsWith("/manage/schools/") ||
-    path === "/manage/admin/indexing" ||
-    path.startsWith("/manage/admin/indexing/")
-  );
+  return path === "/company" || path.startsWith("/company/");
 }
 
 function isStudentPage(path: string) {
   return path === "/student" || path.startsWith("/student/");
+}
+
+function isPublicPage(path: string) {
+  return (
+    path === "/" ||
+    path === "/about" ||
+    path.startsWith("/about/") ||
+    path === "/benefits" ||
+    path.startsWith("/benefits/") ||
+    path === "/talent-test" ||
+    path.startsWith("/talent-test/") ||
+    path === "/register" ||
+    path.startsWith("/register/") ||
+    path === "/terms" ||
+    path.startsWith("/terms/") ||
+    path === "/success" ||
+    path.startsWith("/success/") ||
+    path === "/contact" ||
+    path.startsWith("/contact/") ||
+    path === "/product" ||
+    path.startsWith("/product/") ||
+    path === "/case-study" ||
+    path.startsWith("/case-study/")
+  );
+}
+
+function isWorkspacePage(path: string) {
+  return path === "/workspace" || path.startsWith("/workspace/");
 }
 
 function resolveTokenAccountType(token: any) {
@@ -32,15 +60,118 @@ function resolveTokenAccountType(token: any) {
 
 function resolveDefaultPath(token: any) {
   const role = String(token?.role || "").trim();
-  if (role === "company_admin") return "/manage/schools";
+  if (role === "company_admin") return "/company/schools";
   if (role === "student") return "/student/tests";
-  return "/";
+  return "/workspace";
+}
+
+function getClientIp(req: NextRequest) {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  return String(req.ip || forwardedFor || "unknown")
+    .split(",")[0]
+    .trim();
+}
+
+function getRateLimitStore() {
+  const globalState = globalThis as typeof globalThis & {
+    __rateLimitStore?: RateLimitStore;
+  };
+
+  if (!globalState.__rateLimitStore) {
+    globalState.__rateLimitStore = new Map();
+  }
+
+  return globalState.__rateLimitStore;
+}
+
+function consumeRateLimit({
+  key,
+  max,
+  windowMs,
+  now = Date.now(),
+}: {
+  key: string;
+  max: number;
+  windowMs: number;
+  now?: number;
+}) {
+  const store = getRateLimitStore();
+  const recentHits = (store.get(key) || []).filter((ts) => now - ts < windowMs);
+
+  if (recentHits.length >= max) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((windowMs - (now - recentHits[0])) / 1000),
+    );
+    store.set(key, recentHits);
+    return {
+      limited: true,
+      retryAfterSeconds,
+    };
+  }
+
+  recentHits.push(now);
+  store.set(key, recentHits);
+  return {
+    limited: false,
+    retryAfterSeconds: 0,
+  };
+}
+
+function buildRateLimitResponse(retryAfterSeconds: number) {
+  return new NextResponse("Too Many Requests", {
+    status: 429,
+    headers: new Headers({
+      "Retry-After": String(retryAfterSeconds),
+    }),
+  });
+}
+
+function applyResponseHeaders(res: NextResponse, path: string) {
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
+  res.headers.set("Referrer-Policy", "no-referrer");
+
+  if (!path.startsWith("/api/analytics/")) {
+    const isDev = process.env.NODE_ENV !== "production";
+    const scriptSrc = isDev
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://sdk.cashfree.com"
+      : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://sdk.cashfree.com";
+    const connectSrc = isDev
+      ? "connect-src 'self' ws: wss: https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com"
+      : "connect-src 'self' https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com";
+    const csp = [
+      "default-src 'self'",
+      scriptSrc,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "media-src 'self' blob: https://videos.pexels.com",
+      "worker-src 'self' blob:",
+      connectSrc,
+      "frame-src 'self' https://sdk.cashfree.com https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'",
+    ].join("; ");
+    res.headers.set("Content-Security-Policy", csp);
+  }
+
+  return res;
 }
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname || "";
   const isApiRoute = path.startsWith("/api/");
   const isAuthRoute = isSchoolSignInRoute(path) || isCompanySignInRoute(path);
+  const isPublicRoute = isPublicPage(path);
+  const isCompanyRoute = isCompanyPage(path);
+  const isStudentRoute = isStudentPage(path);
+  const isWorkspaceRoute = isWorkspacePage(path);
+  const isProtectedRoute = isWorkspaceRoute || isCompanyRoute || isStudentRoute;
   const isStaticAsset =
     path.startsWith("/_next/") ||
     path.startsWith("/images/") ||
@@ -48,21 +179,30 @@ export async function middleware(req: NextRequest) {
     path.startsWith("/public/") ||
     /\.[a-zA-Z0-9]+$/.test(path);
 
+
   const authSecret = getNextAuthSecret();
+  const authConfigurationIssue =
+    process.env.NODE_ENV === "production" && !isStaticAsset
+      ? getAuthConfigurationIssue(req.nextUrl.origin)
+      : null;
 
   if (
     process.env.NODE_ENV === "production" &&
-    !authSecret &&
+    authConfigurationIssue &&
     !isStaticAsset &&
     !isApiRoute
   ) {
+    if (isPublicRoute || !isProtectedRoute) {
+      return NextResponse.next();
+    }
+
     if (isAuthRoute && req.nextUrl.searchParams.get("error") === "Configuration") {
       return NextResponse.next();
     }
 
     const signInUrl = req.nextUrl.clone();
     if (!isAuthRoute) {
-      signInUrl.pathname = isCompanyPage(path)
+      signInUrl.pathname = isCompanyRoute
         ? "/auth/company-signin"
         : "/auth/signin";
       signInUrl.search = "";
@@ -81,12 +221,9 @@ export async function middleware(req: NextRequest) {
         });
 
   if (!isApiRoute && !isStaticAsset) {
-    const isCompanyRoute = isCompanyPage(path);
-    const isStudentRoute = isStudentPage(path);
-    const isSchoolWorkspaceRoute =
-      !isAuthRoute && !isCompanyRoute && !isStudentRoute;
+    const isSchoolWorkspaceRoute = isWorkspaceRoute;
 
-    if (!token && !isAuthRoute) {
+    if (!token && !isAuthRoute && isProtectedRoute) {
       const signInPath = isCompanyRoute
         ? "/auth/company-signin"
         : "/auth/signin";
@@ -131,60 +268,40 @@ export async function middleware(req: NextRequest) {
   }
   // Simple in-memory rate limiter for analytics APIs (best-effort; not durable across serverless instances)
   try {
+    const requestIp = getClientIp(req);
+    const isAuthCallbackRequest =
+      req.method === "POST" && path.startsWith("/api/auth/callback/");
+
+    if (isAuthCallbackRequest) {
+      const authRateLimit = consumeRateLimit({
+        key: `${requestIp}|auth|${path}`,
+        max: 10,
+        windowMs: 10 * 60_000,
+      });
+
+      if (authRateLimit.limited) {
+        return buildRateLimitResponse(authRateLimit.retryAfterSeconds);
+      }
+    }
+
     const shouldRateLimit =
       path.startsWith("/api/analytics/") || path.startsWith("/api/reports/");
     if (shouldRateLimit) {
-      // 60 requests per 60s per (ip+schoolKey+route)
-      const keyIp = (
-        req.ip ||
-        req.headers.get("x-forwarded-for") ||
-        "unknown"
-      ).toString();
-      const rlKey = `${keyIp}|${schoolKey || "no-school"}|${path}`;
-      const now = Date.now();
-      const windowMs = 60_000;
-      const max = 60;
-      // @ts-ignore
-      const store: Map<string, number[]> = (globalThis.__rateLimitStore ||=
-        new Map());
-      const arr = store.get(rlKey) || [];
-      const recent = arr.filter((ts) => now - ts < windowMs);
-      if (recent.length >= max) {
-        return new NextResponse("Too Many Requests", {
-          status: 429,
-          headers: new Headers({ "Retry-After": "60" }),
-        });
+      const analyticsRateLimit = consumeRateLimit({
+        key: `${requestIp}|${schoolKey || "no-school"}|${path}`,
+        max: 60,
+        windowMs: 60_000,
+      });
+
+      if (analyticsRateLimit.limited) {
+        return buildRateLimitResponse(analyticsRateLimit.retryAfterSeconds);
       }
-      recent.push(now);
-      store.set(rlKey, recent);
     }
   } catch {}
-  const res = NextResponse.next({ request: { headers } });
-  // Basic security headers
-  res.headers.set("X-Content-Type-Options", "nosniff");
-  res.headers.set("X-Frame-Options", "DENY");
-  res.headers.set(
-    "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=()",
+  return applyResponseHeaders(
+    NextResponse.next({ request: { headers } }),
+    path,
   );
-  res.headers.set("Referrer-Policy", "no-referrer");
-  if (!path.startsWith("/api/analytics/")) {
-    const isDev = process.env.NODE_ENV !== "production";
-    const csp = [
-      "default-src 'self'",
-      isDev
-        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-        : "script-src 'self' 'unsafe-inline'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      isDev ? "connect-src 'self' ws: wss:" : "connect-src 'self'",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "frame-ancestors 'none'",
-    ].join("; ");
-    res.headers.set("Content-Security-Policy", csp);
-  }
-  return res;
 }
 
 export const config = {

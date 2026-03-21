@@ -202,68 +202,7 @@ export default function StudentTestsPage() {
         </div>
       ) : null}
 
-      <div className="app-spotlight-grid">
-        <div className="app-spotlight-card app-spotlight-card-strong">
-          <p className="app-spotlight-label">How this portal works</p>
-          <h2 className="app-spotlight-title">
-            Start when the paper opens, save as you go, and submit from the same test flow
-          </h2>
-          <p className="app-spotlight-copy">
-            Each visible test is already matched to your student account. The
-            portal keeps your saved work attached to the same attempt, then
-            blocks further edits once the test is submitted or auto-submitted.
-          </p>
-          <div className="app-flow-list">
-            <div className="app-flow-item">
-              <div className="app-flow-index">1</div>
-              <div className="app-flow-copy">
-                <p className="app-flow-title">Available</p>
-                <p className="app-flow-note">
-                  The paper is inside its live schedule window and you can start now.
-                </p>
-              </div>
-            </div>
-            <div className="app-flow-item">
-              <div className="app-flow-index">2</div>
-              <div className="app-flow-copy">
-                <p className="app-flow-title">In progress</p>
-                <p className="app-flow-note">
-                  Your saved attempt already exists, so you can continue from the same paper.
-                </p>
-              </div>
-            </div>
-            <div className="app-flow-item">
-              <div className="app-flow-index">3</div>
-              <div className="app-flow-copy">
-                <p className="app-flow-title">Submitted or expired</p>
-                <p className="app-flow-note">
-                  Submitted attempts stay visible for review, while expired papers stop accepting work.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="app-surface app-surface-body">
-          <p className="app-spotlight-label">Student checklist</p>
-          <h2 className="text-lg font-semibold text-foreground">
-            Small checks before opening a test
-          </h2>
-          <div className="mt-4 space-y-2">
-            <div className="app-note-item">
-              Open the paper only when you are ready to stay with the test window and finish within the timer.
-            </div>
-            <div className="app-note-item">
-              Use the portal status badge to tell whether you should start, continue, or just review a submission.
-            </div>
-            <div className="app-note-item">
-              If a paper includes descriptive questions, the final score may still wait for manual review after submission.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {tests.length === 0 ? (
+            {tests.length === 0 ? (
         <Card className="app-surface">
           <CardContent className="app-empty-state py-12">
             No online tests are assigned to you right now.

@@ -48,7 +48,7 @@ interface QuestionItemProps {
 }
 
 export function QuestionItem({ question, onDelete, onArchive, isDeleting = false }: QuestionItemProps) {
-  const { buildReturnHref } = useReturnHrefBuilder('/questions');
+  const { buildReturnHref } = useReturnHrefBuilder('/workspace/questions');
   const tags = Array.isArray(question.tags) ? question.tags : [];
   const handleDelete = onArchive || onDelete;
 
@@ -66,12 +66,12 @@ export function QuestionItem({ question, onDelete, onArchive, isDeleting = false
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Link href={buildReturnHref(`/questions/view/${question._id}`)} title="View question">
+          <Link href={buildReturnHref(`/workspace/questions/view/${question._id}`)} title="View question">
             <Button variant="outline" size="icon" className="h-8 w-8" disabled={isDeleting} aria-label="View question">
               <Eye className="h-4 w-4" />
             </Button>
           </Link>
-          <Link href={buildReturnHref(`/questions/edit/${question._id}`)} title="Edit question">
+          <Link href={buildReturnHref(`/workspace/questions/edit/${question._id}`)} title="Edit question">
             <Button variant="outline" size="icon" className="h-8 w-8" disabled={isDeleting} aria-label="Edit question">
               <Edit className="h-4 w-4" />
             </Button>

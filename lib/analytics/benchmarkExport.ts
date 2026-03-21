@@ -115,7 +115,7 @@ function buildQuestionUrl(questionId: any, baseUrl?: string | null) {
   const normalizedQuestionId = String(questionId || "").trim();
   if (!normalizedQuestionId) return "";
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
-  const relativePath = `/questions/view/${encodeURIComponent(normalizedQuestionId)}`;
+  const relativePath = `/workspace/questions/view/${encodeURIComponent(normalizedQuestionId)}`;
   return normalizedBaseUrl ? `${normalizedBaseUrl}${relativePath}` : relativePath;
 }
 

@@ -1,6 +1,30 @@
 import mongoose, { Document, Model, Schema, Types } from "mongoose";
 import { getModelRegistry } from "@/lib/mongoose-models";
 
+export type ReportDispatchAttemptState =
+  | "pending_ack"
+  | "accepted"
+  | "expired";
+
+export type ReportDispatchDeliveryStatus =
+  | "accepted"
+  | "sent"
+  | "delivered"
+  | "read"
+  | "failed";
+
+export interface IReportDispatchAttempt {
+  key: string;
+  attemptNumber: number;
+  state: ReportDispatchAttemptState;
+  createdAt: Date;
+  acknowledgedAt?: Date;
+  lastWebhookAt?: Date;
+  providerMessageId?: string;
+  deliveryStatus?: ReportDispatchDeliveryStatus;
+  note?: string;
+}
+
 export interface IReportDispatchJob extends Document {
   schoolKey: string;
   type: "student" | "exam" | "teacher" | "admin";
@@ -20,9 +44,14 @@ export interface IReportDispatchJob extends Document {
   maxAttempts: number;
   nextRetryAt?: Date;
   lastAttemptAt?: Date;
+  processingStartedAt?: Date;
+  activeAttemptKey?: string;
+  activeAttemptCreatedAt?: Date;
+  providerAcceptedAt?: Date;
+  deliveryAttempts?: IReportDispatchAttempt[];
   reportUrl?: string;
   providerMessageId?: string;
-  deliveryStatus?: "accepted" | "sent" | "delivered" | "read" | "failed";
+  deliveryStatus?: ReportDispatchDeliveryStatus;
   deliveryError?: string;
   deliveredAt?: Date;
   readAt?: Date;
@@ -30,6 +59,29 @@ export interface IReportDispatchJob extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const ReportDispatchAttemptSchema = new Schema<IReportDispatchAttempt>(
+  {
+    key: { type: String, required: true, trim: true },
+    attemptNumber: { type: Number, required: true },
+    state: {
+      type: String,
+      enum: ["pending_ack", "accepted", "expired"],
+      required: true,
+      default: "pending_ack",
+    },
+    createdAt: { type: Date, required: true },
+    acknowledgedAt: { type: Date },
+    lastWebhookAt: { type: Date },
+    providerMessageId: { type: String, trim: true },
+    deliveryStatus: {
+      type: String,
+      enum: ["accepted", "sent", "delivered", "read", "failed"],
+    },
+    note: { type: String },
+  },
+  { _id: false },
+);
 
 const ReportDispatchJobSchema = new Schema<IReportDispatchJob>(
   {
@@ -64,6 +116,14 @@ const ReportDispatchJobSchema = new Schema<IReportDispatchJob>(
     maxAttempts: { type: Number, default: 3 },
     nextRetryAt: { type: Date, index: true },
     lastAttemptAt: { type: Date },
+    processingStartedAt: { type: Date },
+    activeAttemptKey: { type: String, trim: true, index: true },
+    activeAttemptCreatedAt: { type: Date },
+    providerAcceptedAt: { type: Date },
+    deliveryAttempts: {
+      type: [ReportDispatchAttemptSchema],
+      default: [],
+    },
     reportUrl: { type: String },
     providerMessageId: { type: String },
     deliveryStatus: {
@@ -85,6 +145,27 @@ ReportDispatchJobSchema.index({
   status: 1,
   updatedAt: -1,
 });
+ReportDispatchJobSchema.index({
+  schoolKey: 1,
+  status: 1,
+  nextRetryAt: 1,
+  createdAt: 1,
+});
+ReportDispatchJobSchema.index({
+  schoolKey: 1,
+  status: 1,
+  processingStartedAt: 1,
+  lastAttemptAt: 1,
+});
+ReportDispatchJobSchema.index(
+  { providerMessageId: 1 },
+  {
+    sparse: true,
+  },
+);
+ReportDispatchJobSchema.index({
+  "deliveryAttempts.key": 1,
+});
 
 const modelRegistry = getModelRegistry();
 
@@ -98,6 +179,9 @@ const existingTypeValues = existingReportDispatchJobModel
 if (
   existingReportDispatchJobModel &&
   (!existingReportDispatchJobModel.schema.path("studentName") ||
+    !existingReportDispatchJobModel.schema.path("processingStartedAt") ||
+    !existingReportDispatchJobModel.schema.path("activeAttemptKey") ||
+    !existingReportDispatchJobModel.schema.path("deliveryAttempts") ||
     !existingTypeValues.includes("teacher") ||
     !existingTypeValues.includes("admin"))
 ) {

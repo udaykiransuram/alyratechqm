@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "global.d.ts",
+    "postcss.config.js",
+    "app/utils/extractQuestionsFromText.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "local-tests",
+    ".next",
+    ".next-dev"
+  ]
+}

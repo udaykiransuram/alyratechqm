@@ -8,8 +8,11 @@ import {
   hydrateUsersWithAcademicContext,
 } from "@/lib/analytics/hydrateResponses";
 import { requireTenantSession } from "@/lib/api-auth";
+import { getDispatchAttemptAckWaitUntil } from "@/lib/reports/dispatchAttempts";
 
 export const dynamic = "force-dynamic";
+
+const DEFAULT_PROVIDER_ACK_WAIT_MINUTES = 45;
 
 function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
@@ -20,6 +23,126 @@ function resolveSchoolKey(req: NextRequest) {
   return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
     .toString()
     .trim();
+}
+
+function toIsoString(value: unknown) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function resolveProviderAckWaitMinutes() {
+  const parsed = Number(
+    process.env.REPORT_DISPATCH_PROVIDER_ACK_WAIT_MINUTES ||
+      DEFAULT_PROVIDER_ACK_WAIT_MINUTES,
+  );
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_PROVIDER_ACK_WAIT_MINUTES;
+  }
+
+  return Math.min(1440, Math.max(1, Math.floor(parsed)));
+}
+
+function normalizeDeliveryAttempt(attempt: any) {
+  const key = String(attempt?.key || "").trim();
+  if (!key) return null;
+
+  return {
+    key,
+    attemptNumber: Math.max(1, Number(attempt?.attemptNumber || 1)),
+    state: String(attempt?.state || "pending_ack"),
+    createdAt: toIsoString(attempt?.createdAt),
+    acknowledgedAt: toIsoString(attempt?.acknowledgedAt),
+    lastWebhookAt: toIsoString(attempt?.lastWebhookAt),
+    providerMessageId: String(attempt?.providerMessageId || "").trim() || null,
+    deliveryStatus: String(attempt?.deliveryStatus || "").trim() || null,
+    note: String(attempt?.note || "").trim() || null,
+  };
+}
+
+function compareDeliveryAttempts(left: any, right: any) {
+  const leftAttemptNumber = Number(left?.attemptNumber || 0);
+  const rightAttemptNumber = Number(right?.attemptNumber || 0);
+  if (leftAttemptNumber !== rightAttemptNumber) {
+    return leftAttemptNumber - rightAttemptNumber;
+  }
+
+  const leftCreatedAt = left?.createdAt ? new Date(left.createdAt).getTime() : 0;
+  const rightCreatedAt = right?.createdAt
+    ? new Date(right.createdAt).getTime()
+    : 0;
+  return leftCreatedAt - rightCreatedAt;
+}
+
+function buildDeliveryAttemptSummary(job: any) {
+  const ackWaitMinutes = resolveProviderAckWaitMinutes();
+  const normalizedAttempts = (Array.isArray(job?.deliveryAttempts)
+    ? job.deliveryAttempts
+    : []
+  )
+    .map(normalizeDeliveryAttempt)
+    .filter(Boolean)
+    .sort(compareDeliveryAttempts);
+
+  const activeAttemptKey = String(job?.activeAttemptKey || "").trim();
+  let activeAttempt = activeAttemptKey
+    ? normalizedAttempts.find((attempt: any) => attempt.key === activeAttemptKey) ||
+      null
+    : null;
+
+  if (!activeAttempt && activeAttemptKey) {
+    activeAttempt = normalizeDeliveryAttempt({
+      key: activeAttemptKey,
+      attemptNumber: Math.max(1, Number(job?.attempts || 1)),
+      state: "pending_ack",
+      createdAt:
+        job?.activeAttemptCreatedAt ||
+        job?.lastAttemptAt ||
+        job?.updatedAt ||
+        new Date(),
+    });
+  }
+
+  const trackedAttempts =
+    activeAttempt && !normalizedAttempts.some((attempt: any) => attempt.key === activeAttempt.key)
+      ? [...normalizedAttempts, activeAttempt].sort(compareDeliveryAttempts)
+      : normalizedAttempts;
+
+  const ackWaitUntil = activeAttempt
+    ? getDispatchAttemptAckWaitUntil(
+        activeAttempt.createdAt ? new Date(activeAttempt.createdAt) : undefined,
+        ackWaitMinutes,
+      )
+    : null;
+
+  const now = Date.now();
+  const latestAttempt =
+    trackedAttempts.length > 0 ? trackedAttempts[trackedAttempts.length - 1] : null;
+
+  return {
+    totalTracked: trackedAttempts.length,
+    acceptedCount: trackedAttempts.filter(
+      (attempt: any) => attempt.state === "accepted",
+    ).length,
+    expiredCount: trackedAttempts.filter(
+      (attempt: any) => attempt.state === "expired",
+    ).length,
+    pendingAckCount: trackedAttempts.filter(
+      (attempt: any) => attempt.state === "pending_ack",
+    ).length,
+    latestAttempt,
+    activeAttempt,
+    awaitingProviderAck: Boolean(
+      activeAttempt && ackWaitUntil && ackWaitUntil.getTime() > now,
+    ),
+    ackWaitUntil: toIsoString(ackWaitUntil),
+    recoveredStaleLock: String(job?.error || "")
+      .toLowerCase()
+      .includes("recovered stale processing lock"),
+    history: trackedAttempts,
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -109,6 +232,21 @@ export async function GET(req: NextRequest) {
         academicSectionId: resolvedAcademicSectionId || undefined,
         academicSectionName:
           job.academicSectionName || user?.academicSection?.name || "",
+        providerAcceptedAt: toIsoString(job.providerAcceptedAt),
+        deliveredAt: toIsoString(job.deliveredAt),
+        readAt: toIsoString(job.readAt),
+        lastWebhookAt: toIsoString(job.lastWebhookAt),
+        nextRetryAt: toIsoString(job.nextRetryAt),
+        processingStartedAt: toIsoString(job.processingStartedAt),
+        activeAttemptCreatedAt: toIsoString(job.activeAttemptCreatedAt),
+        deliveryAttempts: (Array.isArray(job.deliveryAttempts)
+          ? job.deliveryAttempts
+          : []
+        )
+          .map(normalizeDeliveryAttempt)
+          .filter(Boolean)
+          .sort(compareDeliveryAttempts),
+        deliveryAttemptSummary: buildDeliveryAttemptSummary(job),
       };
     })
     .filter((job: any) => {

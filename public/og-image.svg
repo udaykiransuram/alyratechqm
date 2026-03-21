@@ -1,0 +1,20 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#g)"/>
+  <g fill="white" fill-opacity="0.15">
+    <circle cx="200" cy="120" r="60"/>
+    <circle cx="1000" cy="200" r="80"/>
+    <circle cx="600" cy="500" r="50"/>
+  </g>
+  <g>
+    <rect x="80" y="90" width="1040" height="450" rx="18" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.25)"/>
+    <text x="120" y="200" font-family="Inter, ui-sans-serif, system-ui" font-size="56" font-weight="800" fill="white">Precision Diagnostics — Alyra Tech</text>
+    <text x="120" y="270" font-family="Inter, ui-sans-serif, system-ui" font-size="28" fill="white" fill-opacity="0.9">Marks show scores. We show understanding.</text>
+    <text x="120" y="310" font-family="Inter, ui-sans-serif, system-ui" font-size="24" fill="white" fill-opacity="0.8">Topic → Skill → Subskill • Concept • Procedure • Prerequisite • Focus</text>
+  </g>
+</svg>

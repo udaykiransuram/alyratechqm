@@ -3,8 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantDb } from "@/lib/db-tenant";
 import { requireTenantSession } from "@/lib/api-auth";
+import { requireProductionDebugRouteAccess } from "@/lib/ops-runtime";
 
 export async function GET(req: NextRequest) {
+  const debugAccess = requireProductionDebugRouteAccess();
+  if (debugAccess) return debugAccess;
+
   const auth = await requireTenantSession(req, { allowRoles: ["admin"] });
   if (!auth.ok) return auth.response;
   await connectDB();

@@ -45,7 +45,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 }) {
   const { toast } = useToast();
   const router = useRouter();
-  const { navigateBack } = useBackNavigation('/question-papers');
+  const { navigateBack } = useBackNavigation('/workspace/question-papers');
 
   // State initialization (use initialData if present)
   const [paperTitle, setPaperTitle] = useState(initialData?.title || '');
@@ -494,7 +494,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
             navigateBack();
             return;
           }
-          router.push(`/question-papers/view/${data.paper._id}`);
+          router.push(`/workspace/question-papers/view/${data.paper._id}`);
         }, 1000);
       } else {
         toast({ title: 'Error', description: data.message || 'Failed to save paper.', variant: 'destructive' });
@@ -759,25 +759,6 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
             onlineStartsAt={onlineStartsAt ? onlineStartsAt.toISOString() : null}
             onlineEndsAt={onlineEndsAt ? onlineEndsAt.toISOString() : null}
           />
-          <div className="app-section">
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-foreground">Builder Notes</h3>
-              <p className="text-sm text-muted-foreground">
-                Keep the paper structure stable before publishing it to classes and sections.
-              </p>
-            </div>
-            <div className="app-note-list">
-              <div className="app-note-item">
-                Select the paper class and subject before adding questions so the bank filter stays precise.
-              </div>
-              <div className="app-note-item">
-                Section names and default marks should be final before bulk-adding questions.
-              </div>
-              <div className="app-note-item">
-                Online timing is enforced server-side, so confirm start and end windows carefully.
-              </div>
-            </div>
-          </div>
           <Button size="lg" className="w-full" onClick={handleSavePaper} disabled={saving}>
             {saving ? <Spinner /> : isEditMode ? 'Update Question Paper' : 'Save Question Paper'}
           </Button>

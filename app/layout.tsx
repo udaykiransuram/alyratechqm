@@ -10,8 +10,7 @@ import {
   getMetadataBase,
 } from "@/lib/seo";
 import "./globals.css";
-import SiteHeader from "@/components/navigation/SiteHeader";
-import AppViewport from "@/components/layout/AppViewport";
+import AppChrome from "@/components/layout/AppChrome";
 
 // Use a locally bundled font to avoid external network fetches during CI/e2e builds
 // This prevents build failures when Google Fonts is unreachable.
@@ -69,10 +68,7 @@ export default function RootLayout({
           inter.variable,
         )}
       >
-        <SiteHeader />
-        <main className="min-h-screen pt-[calc(var(--app-header-height)+var(--app-mobile-school-switcher-height))] transition-[margin-left] duration-200 ease-in-out md:pt-[var(--app-header-height)] lg:ml-[var(--app-sidebar-width)]">
-          <AppViewport>{children}</AppViewport>
-        </main>
+        <AppChrome>{children}</AppChrome>
         <Toaster />
       </body>
     </html>
