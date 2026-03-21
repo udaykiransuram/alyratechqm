@@ -14,6 +14,7 @@ import { QuestionFilterPopup } from '@/components/QuestionFilterPopup';
 import { useToast } from '@/components/ui/use-toast';
 import { useRouter } from 'next/navigation';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import { announceNavigationStart } from '@/lib/client/navigation-feedback';
 import {
   Accordion,
   AccordionContent,
@@ -39,6 +40,12 @@ interface Section {
   questions: QuestionInPaper[];
 }
 
+function parseStoredDate(value: unknown) {
+  if (!value) return null;
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export default function QuestionPaperForm({ initialData, isEditMode = false }: {
   initialData?: any;
   isEditMode?: boolean;
@@ -52,17 +59,17 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
   const [instructions, setInstructions] = useState(initialData?.instructions || '');
   const [duration, setDuration] = useState(initialData?.duration ?? 60);
   const [passingMarks, setPassingMarks] = useState(initialData?.passingMarks ?? 0);
-  const [examDate, setExamDate] = useState(
-    initialData?.examDate ? new Date(initialData.examDate) : new Date()
+  const [examDate, setExamDate] = useState<Date | null>(
+    parseStoredDate(initialData?.examDate) ?? new Date(),
   );
   const [onlineEnabled, setOnlineEnabled] = useState(
     Boolean(initialData?.onlineEnabled),
   );
   const [onlineStartsAt, setOnlineStartsAt] = useState<Date | null>(
-    initialData?.onlineStartsAt ? new Date(initialData.onlineStartsAt) : null,
+    parseStoredDate(initialData?.onlineStartsAt),
   );
   const [onlineEndsAt, setOnlineEndsAt] = useState<Date | null>(
-    initialData?.onlineEndsAt ? new Date(initialData.onlineEndsAt) : null,
+    parseStoredDate(initialData?.onlineEndsAt),
   );
   const [sections, setSections] = useState<Section[]>(initialData?.sections || []);
   const [classId, setClassId] = useState(initialData?.classId || '');
@@ -76,14 +83,10 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
       setInstructions(initialData.instructions || '');
       setDuration(initialData.duration ?? 60);
       setPassingMarks(initialData.passingMarks ?? 0);
-      setExamDate(initialData.examDate ? new Date(initialData.examDate) : new Date());
+      setExamDate(parseStoredDate(initialData.examDate) ?? new Date());
       setOnlineEnabled(Boolean(initialData.onlineEnabled));
-      setOnlineStartsAt(
-        initialData.onlineStartsAt ? new Date(initialData.onlineStartsAt) : null,
-      );
-      setOnlineEndsAt(
-        initialData.onlineEndsAt ? new Date(initialData.onlineEndsAt) : null,
-      );
+      setOnlineStartsAt(parseStoredDate(initialData.onlineStartsAt));
+      setOnlineEndsAt(parseStoredDate(initialData.onlineEndsAt));
       setClassId(initialData.classId || '');
       setSubjectId(initialData.subjectId || '');
       setAssignedAcademicSectionIds(initialData.assignedAcademicSectionIds || []);
@@ -489,13 +492,13 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
       if (data.success) {
         toast({ title: 'Success', description: isEditMode ? 'Question paper updated.' : 'Question paper created successfully.' });
-        setTimeout(() => {
-          if (isEditMode) {
-            navigateBack();
-            return;
-          }
-          router.push(`/workspace/question-papers/view/${data.paper._id}`);
-        }, 1000);
+        if (isEditMode) {
+          navigateBack();
+          return;
+        }
+        const nextHref = `/workspace/question-papers/view/${data.paper._id}`;
+        announceNavigationStart(nextHref);
+        router.push(nextHref);
       } else {
         toast({ title: 'Error', description: data.message || 'Failed to save paper.', variant: 'destructive' });
       }
@@ -729,8 +732,8 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
             setDuration={setDuration}
             passingMarks={passingMarks}
             setPassingMarks={setPassingMarks}
-            examDate={examDate ? new Date(examDate) : new Date()}
-            setExamDate={date => setExamDate(date ? new Date(date) : new Date())}
+            examDate={examDate}
+            setExamDate={setExamDate}
             onlineEnabled={onlineEnabled}
             setOnlineEnabled={setOnlineEnabled}
             onlineStartsAt={onlineStartsAt}

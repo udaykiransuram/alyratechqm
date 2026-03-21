@@ -1,11 +1,15 @@
 "use client";
 
-import { type ComponentType, useEffect, useState } from "react";
+import { type ComponentType, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { getSchoolKeyFromCookie } from "@/lib/client/school";
+import {
+  getSchoolDisplayNameFromCookie,
+  getSchoolKeyFromCookie,
+  setSchoolSelectionCookies,
+} from "@/lib/client/school";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -52,6 +56,12 @@ type SidebarGroup = {
   items: SidebarItem[];
 };
 
+type CurrentSchoolInfo = {
+  key: string;
+  label: string;
+  initials: string;
+};
+
 const SIDEBAR_EXPANDED_WIDTH = "var(--app-sidebar-expanded-width)";
 const SIDEBAR_COLLAPSED_WIDTH = "var(--app-sidebar-collapsed-width)";
 const SIDEBAR_STORAGE_KEY = "app-sidebar-collapsed";
@@ -92,6 +102,53 @@ function isPublicRoute(pathname: string) {
   );
 }
 
+function normalizeSidebarPath(pathname: string) {
+  if (pathname.length > 1 && pathname.endsWith("/")) {
+    return pathname.slice(0, -1);
+  }
+
+  return pathname;
+}
+
+function matchesSidebarChild(pathname: string, childHref: string) {
+  const normalizedPath = normalizeSidebarPath(pathname);
+  const normalizedHref = normalizeSidebarPath(childHref);
+
+  if (normalizedHref === "/") {
+    return normalizedPath === "/";
+  }
+
+  // Keep the workspace home item exact-only so it does not stay active
+  // across every nested route within the app shell.
+  if (normalizedHref === "/workspace") {
+    return normalizedPath === "/workspace";
+  }
+
+  return (
+    normalizedPath === normalizedHref ||
+    normalizedPath.startsWith(`${normalizedHref}/`)
+  );
+}
+
+function getActiveSidebarChild(pathname: string, children: SidebarChild[]) {
+  let activeChild: SidebarChild | null = null;
+
+  for (const child of children) {
+    if (!matchesSidebarChild(pathname, child.href)) {
+      continue;
+    }
+
+    if (
+      !activeChild ||
+      normalizeSidebarPath(child.href).length > normalizeSidebarPath(activeChild.href).length
+    ) {
+      activeChild = child;
+    }
+  }
+
+  return activeChild;
+}
+
 const schoolSidebarGroups: SidebarGroup[] = [
   {
     title: "Workspace",
@@ -107,7 +164,7 @@ const schoolSidebarGroups: SidebarGroup[] = [
     title: "Assessments",
     items: [
       {
-        label: "Question Papers",
+        label: "Papers",
         icon: BookOpen,
         children: [
           { href: "/workspace/question-papers", label: "All Question Papers" },
@@ -115,7 +172,7 @@ const schoolSidebarGroups: SidebarGroup[] = [
         ],
       },
       {
-        label: "Question Bank",
+        label: "Questions",
         icon: FileQuestion,
         children: [
           { href: "/workspace/questions", label: "All Questions" },
@@ -153,9 +210,9 @@ const schoolSidebarGroups: SidebarGroup[] = [
         ],
       },
       {
-        label: "User Directory",
+        label: "Users",
         icon: Users,
-        children: [{ href: "/workspace/manage/users", label: "Manage School Users" }],
+        children: [{ href: "/workspace/manage/users", label: "Users" }],
       },
     ],
   },
@@ -179,7 +236,7 @@ const schoolSidebarGroups: SidebarGroup[] = [
         ],
       },
       {
-        label: "Classes & Sections",
+        label: "Sections",
         icon: Layers,
         children: [
           { href: "/workspace/manage/classes", label: "All Classes" },
@@ -265,14 +322,6 @@ const companySidebarGroups: SidebarGroup[] = [
   },
 ];
 
-function isChildActive(pathname: string, child: SidebarChild) {
-  return child.href === "/" ? pathname === "/" : pathname.startsWith(child.href);
-}
-
-function isItemActive(pathname: string, item: SidebarItem) {
-  return item.children.some((child) => isChildActive(pathname, child));
-}
-
 function Brand() {
   const pathname = usePathname() || "/";
   const publicRoute = isPublicRoute(pathname);
@@ -319,59 +368,131 @@ function getSchoolInitials(label: string, key: string) {
   return source.replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase() || "SC";
 }
 
-function CollapsedSchoolBadge() {
-  const [schoolKey, setSchoolKey] = useState("");
+function useCurrentSchoolInfo(enabled: boolean): CurrentSchoolInfo {
+  const [school, setSchool] = useState({
+    key: "",
+    label: "",
+    resolved: false,
+  });
 
   useEffect(() => {
-    setSchoolKey(getSchoolKeyFromCookie());
-  }, []);
+    let active = true;
 
-  if (!schoolKey) return null;
+    if (!enabled) {
+      setSchool({ key: "", label: "", resolved: false });
+      return () => {
+        active = false;
+      };
+    }
 
-  const initials = getSchoolInitials(schoolKey, schoolKey);
+    const schoolKey = getSchoolKeyFromCookie();
+    const schoolDisplayName = getSchoolDisplayNameFromCookie();
+
+    setSchool({
+      key: schoolKey,
+      label: schoolDisplayName,
+      resolved: !schoolKey || Boolean(schoolDisplayName),
+    });
+
+    if (!schoolKey || schoolDisplayName) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/public/schools", { cache: "no-store" });
+        const data = (await response.json()) as {
+          schools?: Array<{ key?: string; displayName?: string }>;
+        };
+        const matchedSchool = Array.isArray(data?.schools)
+          ? data.schools.find(
+              (school) => String(school?.key || "").trim() === schoolKey,
+            )
+          : null;
+        const resolvedLabel = String(
+          matchedSchool?.displayName || matchedSchool?.key || "",
+        ).trim();
+
+        if (!active) {
+          return;
+        }
+
+        if (resolvedLabel) {
+          setSchoolSelectionCookies(schoolKey, resolvedLabel);
+          setSchool({ key: schoolKey, label: resolvedLabel, resolved: true });
+          return;
+        }
+
+        setSchool({ key: schoolKey, label: schoolKey, resolved: true });
+      } catch {
+        if (!active) {
+          return;
+        }
+        setSchool({ key: schoolKey, label: schoolKey, resolved: true });
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [enabled]);
+
+  const label =
+    school.label ||
+    (school.key ? (school.resolved ? school.key : "Loading school...") : "");
+
+  return {
+    key: school.key,
+    label,
+    initials: getSchoolInitials(label || school.key, school.key),
+  };
+}
+
+function CollapsedSchoolBadge({ school }: { school: CurrentSchoolInfo }) {
+  if (!school.key) return null;
 
   return (
     <div
-      title={schoolKey}
-      aria-label={`Current school: ${schoolKey}`}
+      title={school.label ? `${school.label} (${school.key})` : school.key}
+      aria-label={`Current school: ${school.label || school.key}`}
       className="app-nav-chip mt-2.5 flex items-center justify-center p-1.5"
     >
       <div className="app-nav-logo flex h-9 w-9 items-center justify-center rounded-xl text-xs font-semibold tracking-[0.08em]">
-        {initials}
+        {school.initials}
       </div>
     </div>
   );
 }
 
 function CurrentSchoolBadge({
+  school,
   compact = false,
 }: {
+  school: CurrentSchoolInfo;
   compact?: boolean;
 }) {
-  const [schoolKey, setSchoolKey] = useState("");
-
-  useEffect(() => {
-    setSchoolKey(getSchoolKeyFromCookie());
-  }, []);
+  const label = school.label || "No school selected";
+  const title = school.key && school.label
+    ? `${school.label} (${school.key})`
+    : label;
 
   return (
     <div
+      title={title}
+      aria-label={title}
       className={cn(
-        "app-nav-chip flex items-center gap-2",
-        compact ? "px-3 py-2" : "px-3 py-2.5",
+        "app-nav-chip flex h-9 max-w-[min(32rem,44vw)] items-center gap-2 px-3",
+        compact ? "max-w-full" : null,
       )}
     >
-      <div className="app-nav-logo flex h-8 w-8 items-center justify-center rounded-xl">
-        <Building2 className="h-4 w-4" />
+      <div className="app-nav-logo flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-semibold tracking-[0.08em]">
+        {school.initials}
       </div>
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          School Workspace
-        </p>
-        <p className="truncate text-sm font-medium text-foreground">
-          {schoolKey || "No school selected"}
-        </p>
-      </div>
+      <p className="min-w-0 truncate text-[13px] font-medium leading-none text-foreground">
+        {label}
+      </p>
     </div>
   );
 }
@@ -379,19 +500,60 @@ function CurrentSchoolBadge({
 function DesktopSidebarItem({
   item,
   collapsed,
+  activePath,
+  onNavigate,
 }: {
   item: SidebarItem;
   collapsed: boolean;
+  activePath: string;
+  onNavigate: (href: string) => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const closeTimeoutRef = useRef<number | null>(null);
+  const hasPrefetchedChildrenRef = useRef(false);
   const Icon = item.icon;
   const directChild = item.children.length === 1 ? item.children[0] : null;
-  const isActive = isItemActive(pathname, item);
+  const activeChild = getActiveSidebarChild(activePath, item.children);
+  const isActive = activeChild !== null;
+
+  const clearCloseTimeout = () => {
+    if (closeTimeoutRef.current !== null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  };
+
+  const openMenu = () => {
+    clearCloseTimeout();
+    if (!hasPrefetchedChildrenRef.current) {
+      hasPrefetchedChildrenRef.current = true;
+      item.children.forEach((child) => {
+        router.prefetch(child.href);
+      });
+    }
+    setOpen(true);
+  };
+
+  const scheduleClose = () => {
+    clearCloseTimeout();
+    closeTimeoutRef.current = window.setTimeout(() => {
+      setOpen(false);
+      closeTimeoutRef.current = null;
+    }, 180);
+  };
 
   useEffect(() => {
+    clearCloseTimeout();
     setOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    return () => {
+      clearCloseTimeout();
+    };
+  }, []);
 
   const triggerClassName = cn(
     "app-sidebar-item flex w-full items-center rounded-xl text-sm transition-colors",
@@ -402,7 +564,9 @@ function DesktopSidebarItem({
   const content = (
     <>
       <span className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
-        <Icon className="h-4 w-4 shrink-0" />
+        <span className="app-sidebar-item-icon">
+          <Icon className="h-4 w-4 shrink-0" />
+        </span>
         {!collapsed && <span className="truncate">{item.label}</span>}
       </span>
       {!collapsed && !directChild && <span className="text-xs opacity-70">›</span>}
@@ -416,6 +580,7 @@ function DesktopSidebarItem({
         title={item.label}
         aria-label={item.label}
         className={triggerClassName}
+        onClick={() => onNavigate(directChild.href)}
       >
         {content}
       </Link>
@@ -423,13 +588,24 @@ function DesktopSidebarItem({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          clearCloseTimeout();
+        }
+        setOpen(nextOpen);
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           type="button"
           title={item.label}
           aria-label={item.label}
           className={triggerClassName}
+          onMouseEnter={openMenu}
+          onMouseLeave={scheduleClose}
+          onFocus={openMenu}
         >
           {content}
         </button>
@@ -437,21 +613,28 @@ function DesktopSidebarItem({
       <PopoverContent
         side="right"
         align="start"
-        sideOffset={collapsed ? 14 : 10}
-        className="w-56 p-1.5"
+        sideOffset={collapsed ? 10 : 8}
+        className="app-nav-popover w-56 p-1.5"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => event.preventDefault()}
+        onMouseEnter={openMenu}
+        onMouseLeave={scheduleClose}
       >
         <div className="space-y-0.5">
-          <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
+          <p className="app-nav-popover-title">
             {item.label}
           </p>
           {item.children.map((child) => {
-            const childActive = isChildActive(pathname, child);
+            const childActive = activeChild?.href === child.href;
 
             return (
               <Link
                 key={child.href}
                 href={child.href}
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  onNavigate(child.href);
+                  setOpen(false);
+                }}
                 className={cn(
                   "app-sidebar-subitem block rounded-lg px-3 py-1.5 text-sm transition-colors",
                   childActive ? "app-sidebar-subitem-active font-medium" : null,
@@ -467,16 +650,16 @@ function DesktopSidebarItem({
   );
 }
 
-function SidebarNav({ collapsed }: { collapsed: boolean }) {
-  return <SidebarNavGroups collapsed={collapsed} groups={schoolSidebarGroups} />;
-}
-
 function SidebarNavGroups({
   collapsed,
   groups,
+  activePath,
+  onNavigate,
 }: {
   collapsed: boolean;
   groups: SidebarGroup[];
+  activePath: string;
+  onNavigate: (href: string) => void;
 }) {
   return (
     <div className="flex h-full flex-col gap-4">
@@ -499,6 +682,8 @@ function SidebarNavGroups({
                   key={item.label}
                   item={item}
                   collapsed={collapsed}
+                  activePath={activePath}
+                  onNavigate={onNavigate}
                 />
               ))}
             </div>
@@ -510,10 +695,16 @@ function SidebarNavGroups({
 
 function MobileSidebar({
   groups,
+  school,
   showSchoolWorkspace,
+  activePath,
+  onNavigate,
 }: {
   groups: SidebarGroup[];
+  school: CurrentSchoolInfo;
   showSchoolWorkspace: boolean;
+  activePath: string;
+  onNavigate: (href: string) => void;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -537,7 +728,7 @@ function MobileSidebar({
         <div className="max-h-[calc(100dvh-80px)] overflow-y-auto px-4 py-4">
           {showSchoolWorkspace ? (
             <div className="mb-5">
-              <CurrentSchoolBadge compact />
+              <CurrentSchoolBadge school={school} compact />
             </div>
           ) : null}
           <div className="flex h-full flex-col gap-4">
@@ -553,20 +744,26 @@ function MobileSidebar({
                       const Icon = item.icon;
                       const directChild =
                         item.children.length === 1 ? item.children[0] : null;
-                      const isActive = isItemActive(pathname, item);
+                      const activeChild = getActiveSidebarChild(activePath, item.children);
+                      const isActive = activeChild !== null;
 
                       if (directChild) {
                         return (
                           <Link
                             key={item.label}
                             href={directChild.href}
-                            onClick={() => setOpen(false)}
+                            onClick={() => {
+                              onNavigate(directChild.href);
+                              setOpen(false);
+                            }}
                             className={cn(
                               "app-sidebar-item flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
                               isActive ? "app-sidebar-item-active" : null,
                             )}
                           >
-                            <Icon className="h-4 w-4 shrink-0" />
+                            <span className="app-sidebar-item-icon">
+                              <Icon className="h-4 w-4 shrink-0" />
+                            </span>
                             <span>{item.label}</span>
                           </Link>
                         );
@@ -578,18 +775,23 @@ function MobileSidebar({
                           className="app-nav-panel p-1.5"
                         >
                           <div className="flex items-center gap-3 px-2 py-1.5 text-sm font-medium">
-                            <Icon className="h-4 w-4 shrink-0" />
+                            <span className="app-sidebar-item-icon">
+                              <Icon className="h-4 w-4 shrink-0" />
+                            </span>
                             <span>{item.label}</span>
                           </div>
                           <div className="space-y-0.5">
                             {item.children.map((child) => {
-                              const childActive = isChildActive(pathname, child);
+                              const childActive = activeChild?.href === child.href;
 
                               return (
                                 <Link
                                   key={child.href}
                                   href={child.href}
-                                  onClick={() => setOpen(false)}
+                                  onClick={() => {
+                                    onNavigate(child.href);
+                                    setOpen(false);
+                                  }}
                                   className={cn(
                                     "app-sidebar-subitem block rounded-lg px-3 py-1.5 text-sm transition-colors",
                                     childActive ? "app-sidebar-subitem-active font-medium" : null,
@@ -616,6 +818,7 @@ function MobileSidebar({
 export default function SiteHeader() {
   const pathname = usePathname() || "/";
   const [collapsed, setCollapsed] = useState(false);
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
   const publicRoute = isPublicRoute(pathname);
   const schoolWorkspaceRoute =
     !isAuthRoute(pathname) &&
@@ -636,6 +839,16 @@ export default function SiteHeader() {
   const authSwitchLabel = pathname === "/auth/company-signin"
     ? "School Sign In"
     : "Company Sign In";
+  const currentSchool = useCurrentSchoolInfo(schoolWorkspaceRoute);
+  const activePath = pendingPath || pathname;
+
+  useEffect(() => {
+    setPendingPath(null);
+  }, [pathname]);
+
+  const handleNavigate = (href: string) => {
+    setPendingPath(href);
+  };
 
   useEffect(() => {
     try {
@@ -681,7 +894,10 @@ export default function SiteHeader() {
             {hasSidebar ? (
               <MobileSidebar
                 groups={activeSidebarGroups}
+                school={currentSchool}
                 showSchoolWorkspace={schoolWorkspaceRoute}
+                activePath={activePath}
+                onNavigate={handleNavigate}
               />
             ) : null}
             <Brand />
@@ -689,30 +905,37 @@ export default function SiteHeader() {
 
           <div className="hidden min-w-0 flex-1 items-center justify-end md:flex">
             <div className="flex items-center gap-3">
-              {schoolWorkspaceRoute ? <CurrentSchoolBadge /> : null}
+              {schoolWorkspaceRoute ? <CurrentSchoolBadge school={currentSchool} /> : null}
               {companyRoute ? (
-                <div className="app-nav-chip px-3 py-2.5 text-sm font-medium text-foreground">
+                <div className="app-nav-chip flex h-9 items-center px-3 text-[13px] font-medium text-foreground">
                   Company Admin Portal
                 </div>
               ) : null}
               {studentRoute ? (
                 <>
-                  <div className="app-nav-chip px-3 py-2.5 text-sm font-medium text-foreground">
+                  <div className="app-nav-chip flex h-9 items-center px-3 text-[13px] font-medium text-foreground">
                     Student Test Portal
                   </div>
                   <Button
                     asChild
-                    variant={pathname.startsWith("/student/tests") ? "default" : "outline"}
+                    variant={activePath.startsWith("/student/tests") ? "default" : "outline"}
                     size="sm"
                   >
-                    <Link href="/student/tests">Tests</Link>
+                    <Link href="/student/tests" onClick={() => handleNavigate("/student/tests")}>
+                      Tests
+                    </Link>
                   </Button>
                   <Button
                     asChild
-                    variant={pathname.startsWith("/student/account") ? "default" : "outline"}
+                    variant={activePath.startsWith("/student/account") ? "default" : "outline"}
                     size="sm"
                   >
-                    <Link href="/student/account">Account</Link>
+                    <Link
+                      href="/student/account"
+                      onClick={() => handleNavigate("/student/account")}
+                    >
+                      Account
+                    </Link>
                   </Button>
                 </>
               ) : null}
@@ -746,7 +969,7 @@ export default function SiteHeader() {
 
       {showMobileContextBar ? (
         <div className="app-nav-shell fixed inset-x-0 top-[var(--app-header-height)] z-40 border-b px-3 py-2.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--app-nav-surface)/0.82)] md:hidden">
-          <CurrentSchoolBadge compact />
+          <CurrentSchoolBadge school={currentSchool} compact />
         </div>
       ) : null}
 
@@ -784,7 +1007,9 @@ export default function SiteHeader() {
                 </span>
               </Button>
             </div>
-            {collapsed && schoolWorkspaceRoute ? <CollapsedSchoolBadge /> : null}
+            {collapsed && schoolWorkspaceRoute ? (
+              <CollapsedSchoolBadge school={currentSchool} />
+            ) : null}
           </div>
 
           <div
@@ -793,7 +1018,12 @@ export default function SiteHeader() {
               collapsed ? "px-1.5" : "px-3",
             )}
           >
-            <SidebarNavGroups collapsed={collapsed} groups={activeSidebarGroups} />
+            <SidebarNavGroups
+              collapsed={collapsed}
+              groups={activeSidebarGroups}
+              activePath={activePath}
+              onNavigate={handleNavigate}
+            />
           </div>
         </div>
         </aside>

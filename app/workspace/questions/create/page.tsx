@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import { announceNavigationStart } from '@/lib/client/navigation-feedback';
 
 // Dynamically load Tiptap rich editor
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -273,6 +274,7 @@ export default function CreateQuestionPage() {
         setClassId('');
         setMarks(1);
         setResetCounter(c => c + 1);
+        announceNavigationStart('/workspace/question-papers/create');
         router.push('/workspace/question-papers/create');
       } else {
         toast({

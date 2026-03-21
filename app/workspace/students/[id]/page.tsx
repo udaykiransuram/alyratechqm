@@ -455,12 +455,24 @@ export default function StudentDetailPage() {
                               <TableCell>{score}</TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <Link href={buildHrefWithReturnTo(`/workspace/analytics/student-tag-report/${attempt._id}`, currentPath)}>
+                                  <Link
+                                    href={buildHrefWithReturnTo(
+                                      `/workspace/analytics/student-tag-report/${attempt._id}`,
+                                      currentPath,
+                                    )}
+                                    prefetch
+                                  >
                                     <Button variant="outline" size="sm">
                                       Student Report
                                     </Button>
                                   </Link>
-                                  <Link href={buildHrefWithReturnTo(`/workspace/analytics/class-tag-report/${paperId}`, currentPath)} prefetch={false}>
+                                  <Link
+                                    href={buildHrefWithReturnTo(
+                                      `/workspace/analytics/class-tag-report/${paperId}`,
+                                      currentPath,
+                                    )}
+                                    prefetch
+                                  >
                                     <Button size="sm">Class Report</Button>
                                   </Link>
                                   <Link href={buildHrefWithReturnTo(`/workspace/question-papers/view/${paperId}`, currentPath)}>

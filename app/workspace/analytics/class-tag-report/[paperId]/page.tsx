@@ -1,19 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useEffect, useState, useRef } from "react";
 import LoadingState from "@/components/analytics/LoadingState";
 import ErrorState from "@/components/analytics/ErrorState";
 import ReportHeader from "@/components/analytics/ReportHeader";
-import OptionTagModal from "@/components/analytics/OptionTagModal";
 import StatsTable from "@/components/analytics/StatsTable";
-import ChartView from "@/components/analytics/ChartView";
 import {
   sortStatsRows,
   computeInsightsForLastTag,
 } from "@/components/analytics/helpers";
-import QuestionListModal from "@/components/analytics/QuestionListModal";
-import AnalyticsExportControls from "@/components/analytics/AnalyticsExportControls";
-import ClassBenchmarkPanel from "@/components/analytics/ClassBenchmarkPanel";
 import { Button } from "@/components/ui/button";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { ArrowLeft } from "lucide-react";
@@ -22,6 +18,55 @@ import {
   type BenchmarkViewSettings,
 } from "@/lib/analytics/benchmarkPresentation";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
+
+const ChartView = dynamic(() => import("@/components/analytics/ChartView"), {
+  ssr: false,
+  loading: () => (
+    <div className="analytics-card analytics-card-body">
+      <p className="text-sm text-muted-foreground">Loading charts...</p>
+    </div>
+  ),
+});
+
+const AnalyticsExportControls = dynamic(
+  () => import("@/components/analytics/AnalyticsExportControls"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-9 w-full rounded-xl border border-border/60 bg-muted/30 sm:w-56" />
+    ),
+  },
+);
+
+const QuestionListModal = dynamic(
+  () => import("@/components/analytics/QuestionListModal"),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
+
+const OptionTagModal = dynamic(
+  () => import("@/components/analytics/OptionTagModal"),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
+
+const ClassBenchmarkPanel = dynamic(
+  () => import("@/components/analytics/ClassBenchmarkPanel"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="analytics-card analytics-card-body">
+        <p className="text-sm text-muted-foreground">
+          Loading benchmark view...
+        </p>
+      </div>
+    ),
+  },
+);
 
 type ReportFilterOption = {
   value: string;
@@ -432,16 +477,20 @@ export default function ClassTagReportPage({
           </div>
           <div className="space-y-3 p-3 sm:p-4">
             <div className="analytics-toolbar">
-              <div className="analytics-toolbar-row">
+              <div className="analytics-setup-bar">
                 <div className="analytics-toolbar-copy">
                   <p className="analytics-toolbar-title">Quick setup</p>
+                  <p className="analytics-toolbar-note">
+                    Review the active view, visible metrics, and class-section
+                    scope before refreshing the report.
+                  </p>
                 </div>
-                <div className="analytics-toolbar-actions">
+                <div className="analytics-setup-actions">
                   <button
                     type="button"
                     onClick={() => setShowControls((value) => !value)}
                     aria-expanded={showControls}
-                    className="app-button-secondary h-9 px-3"
+                    className="app-button-secondary h-9 w-full px-3 sm:w-auto"
                   >
                     {showControls ? "Hide setup" : "Setup"}
                   </button>
@@ -449,44 +498,78 @@ export default function ClassTagReportPage({
                     type="button"
                     onClick={() => fetchAnalytics()}
                     disabled={loading}
-                    className="app-button-primary h-9 px-3"
+                    className="app-button-primary h-9 w-full px-3 sm:w-auto"
                   >
                     {loading ? "Refreshing report..." : "Refresh report"}
                   </button>
                 </div>
               </div>
-              <div className="analytics-toolbar-row">
-                <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    {activeViewLabel}
-                  </span>
-                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    {visibleColumnsLabel}
-                  </span>
-                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    {activeAcademicSectionLabel}
-                  </span>
+              <div className="analytics-setup-grid">
+                <div className="analytics-setup-summary-grid">
+                  <div className="analytics-setup-summary-card">
+                    <p className="analytics-setup-summary-label">View</p>
+                    <div className="analytics-setup-summary-value">
+                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                        {activeViewLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="analytics-setup-summary-card">
+                    <p className="analytics-setup-summary-label">
+                      Visible metrics
+                    </p>
+                    <div className="analytics-setup-summary-value">
+                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                        {visibleColumnsLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="analytics-setup-summary-card">
+                    <p className="analytics-setup-summary-label">
+                      Class section
+                    </p>
+                    <div className="analytics-setup-summary-value">
+                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                        {activeAcademicSectionLabel}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="analytics-toolbar-actions">
-                  <label className="analytics-checkbox-card w-full justify-between sm:w-auto sm:justify-start">
+                <div className="analytics-setup-toggle-grid">
+                  <label className="analytics-checkbox-card analytics-checkbox-card-split">
+                    <span className="analytics-checkbox-card-copy">
+                      <span className="analytics-checkbox-card-label">
+                        Show tags column
+                      </span>
+                      <span className="analytics-checkbox-card-note">
+                        Keep grouped tag labels visible beside each metric row.
+                      </span>
+                    </span>
                     <input
                       type="checkbox"
                       checked={showTagsColumn}
                       onChange={() => setShowTagsColumn((value) => !value)}
-                      className="analytics-inline-check"
+                      className="analytics-inline-check shrink-0"
                     />
-                    <span>Show tags column</span>
                   </label>
-                  <label className="analytics-checkbox-card w-full justify-between sm:w-auto sm:justify-start">
+                  <label className="analytics-checkbox-card analytics-checkbox-card-split">
+                    <span className="analytics-checkbox-card-copy">
+                      <span className="analytics-checkbox-card-label">
+                        Show option tags column
+                      </span>
+                      <span className="analytics-checkbox-card-note">
+                        Expose option-level tag groupings when reviewing table
+                        details.
+                      </span>
+                    </span>
                     <input
                       type="checkbox"
                       checked={showOptionTagsColumn}
                       onChange={() =>
                         setShowOptionTagsColumn((value) => !value)
                       }
-                      className="analytics-inline-check"
+                      className="analytics-inline-check shrink-0"
                     />
-                    <span>Show option tags column</span>
                   </label>
                 </div>
               </div>

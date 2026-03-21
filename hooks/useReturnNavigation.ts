@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
+import { announceNavigationStart } from '@/lib/client/navigation-feedback';
 import { canonicalizeAppPath } from '@/lib/navigation/canonical-paths';
 import { buildHrefWithReturnTo, getSafeReturnToPath } from '@/lib/navigation/returnTo';
 
@@ -64,15 +65,18 @@ export function useBackNavigation(fallbackPath: string) {
 
   const navigateBack = useCallback(() => {
     if (hasSameOriginHistory()) {
+      announceNavigationStart();
       router.back();
       return;
     }
 
     if (returnTo) {
+      announceNavigationStart(returnTo);
       router.replace(returnTo);
       return;
     }
 
+    announceNavigationStart(canonicalFallbackPath);
     router.replace(canonicalFallbackPath);
   }, [canonicalFallbackPath, returnTo, router]);
 

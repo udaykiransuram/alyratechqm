@@ -12,14 +12,12 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   getStatsSum,
   getStatsStudents,
   buildStudentAreaMetrics,
 } from "./helpers";
-import { toPng } from "html-to-image";
+import { loadPdfDeps, loadToPng } from "@/lib/client/lazy-export-deps";
 
 const COLORS = {
   correct: "#22c55e",
@@ -326,6 +324,7 @@ const ChartView = ({
     if (!chartContainerRef.current) return;
     try {
       setDownloading(true);
+      const toPng = await loadToPng();
       const dataUrl = await toPng(chartContainerRef.current, {
         cacheBust: true,
         backgroundColor: "#ffffff",
@@ -351,6 +350,7 @@ const ChartView = ({
     if (!barChartRef.current) return;
     try {
       setDownloading(true);
+      const toPng = await loadToPng();
       const dataUrl = await toPng(barChartRef.current, {
         cacheBust: true,
         backgroundColor: "#ffffff",
@@ -376,6 +376,7 @@ const ChartView = ({
     if (!allPieChartsRef.current) return;
     try {
       setDownloading(true);
+      const toPng = await loadToPng();
       const dataUrl = await toPng(allPieChartsRef.current, {
         cacheBust: true,
         backgroundColor: "#ffffff",
@@ -397,11 +398,12 @@ const ChartView = ({
   }
 
   // Generate remedial PDF rows using helper
-  function generateRemedialDocForStudent(
+  async function generateRemedialDocForStudent(
     name: string,
     roll: string,
     rows: { area: string; correct: number; total: number; percent: number }[],
   ) {
+    const { jsPDF, autoTable } = await loadPdfDeps();
     const doc = new jsPDF();
     doc.setFontSize(14);
     doc.text(`${paperTitle ? `Paper: ${paperTitle}` : ""}`, 14, 16);
@@ -435,7 +437,7 @@ const ChartView = ({
         const key = `${rollNumber || ""}|${studentName || ""}`;
         const entry = metrics.get(key);
         const rows = entry?.rows || [];
-        const doc = generateRemedialDocForStudent(
+        const doc = await generateRemedialDocForStudent(
           studentName || "Student",
           rollNumber || "",
           rows,
@@ -450,7 +452,11 @@ const ChartView = ({
         const ts = new Date().toISOString().replace(/[:.]/g, "-");
         const base = paperTitle ? `${paperTitle}-` : "";
         for (const [, v] of metrics.entries()) {
-          const doc = generateRemedialDocForStudent(v.name, v.roll, v.rows);
+          const doc = await generateRemedialDocForStudent(
+            v.name,
+            v.roll,
+            v.rows,
+          );
           const blob = doc.output("blob");
           const filename = `${base}${v.name}-remedial-${ts}.pdf`;
           zip.file(filename, blob as any);

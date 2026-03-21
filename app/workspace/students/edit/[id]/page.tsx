@@ -39,7 +39,8 @@ export default function EditStudentPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -57,7 +58,8 @@ export default function EditStudentPage() {
     async function load() {
       try {
         setLoading(true);
-        setError(null);
+        setLoadError(null);
+        setSubmitError(null);
         const [uRes, cRes, sRes] = await Promise.all([
           fetch("/api/users/" + id),
           fetch("/api/classes"),
@@ -92,7 +94,7 @@ export default function EditStudentPage() {
         setClasses(cJson.classes || []);
         setSections(sJson.sections || []);
       } catch (e: any) {
-        setError(e.message || "Failed to load");
+        setLoadError(e.message || "Failed to load");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -123,7 +125,7 @@ export default function EditStudentPage() {
     e.preventDefault();
     setSaving(true);
     setMessage(null);
-    setError(null);
+    setSubmitError(null);
     try {
       const res = await fetch("/api/users/" + id, {
         method: "PUT",
@@ -143,9 +145,9 @@ export default function EditStudentPage() {
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "Failed to update");
       setMessage("Student updated successfully.");
-      setTimeout(() => navigateBack(), 600);
+      navigateBack();
     } catch (e: any) {
-      setError(e.message || "Update failed");
+      setSubmitError(e.message || "Update failed");
     } finally {
       setSaving(false);
     }
@@ -160,10 +162,10 @@ export default function EditStudentPage() {
     );
   }
 
-  if (error) {
+  if (loadError) {
     return (
       <div className="app-page-shell max-w-xl px-4 py-5 sm:px-0">
-        <div className="app-feedback app-feedback-error">{error}</div>
+        <div className="app-feedback app-feedback-error">{loadError}</div>
       </div>
     );
   }
@@ -206,14 +208,14 @@ export default function EditStudentPage() {
           },
           {
             label: "Password reset",
-            value: "Manual",
-            meta: "Use the roll number to restore the default password.",
+            value: "Auto-sync",
+            meta: "If the student still uses the default roll-number password, changing the roll number updates it automatically.",
           },
         ]}
       />
 
       {message ? <div className="app-feedback app-feedback-success">{message}</div> : null}
-      {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+      {submitError ? <div className="app-feedback app-feedback-error">{submitError}</div> : null}
 
             <div className="app-editor-grid">
         <div className="app-editor-main">
@@ -250,6 +252,12 @@ export default function EditStudentPage() {
                   <div className="app-field-group">
                     <label className="app-field-label" htmlFor="password">New Password</label>
                     <input id="password" name="password" placeholder="Leave blank to keep the current password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
+                    <p className="text-xs text-muted-foreground">
+                      Leave this blank to keep the current password. If this
+                      student still uses the default roll-number password,
+                      changing the roll number will sync that default
+                      automatically.
+                    </p>
                   </div>
                 </div>
 

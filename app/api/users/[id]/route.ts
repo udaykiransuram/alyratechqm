@@ -338,6 +338,8 @@ export async function PUT(
       }
     }
 
+    const explicitPasswordProvided =
+      typeof password === "string" && password.trim().length > 0;
     const effectivePassword = resolveUserPasswordInput({
       role,
       rollNumber: normalizedRollNumber,
@@ -358,8 +360,33 @@ export async function PUT(
       );
     }
 
-    if (typeof password === "string" && password.trim() && effectivePassword) {
+    if (explicitPasswordProvided && effectivePassword) {
       updateData.passwordHash = await bcrypt.hash(effectivePassword, 10);
+    } else if (role === "student" && normalizedRollNumber) {
+      const currentPasswordHash = String(userToUpdate?.passwordHash || "");
+      const previousRollNumber = normalizeRollNumber(userToUpdate?.rollNumber);
+      const shouldRestoreMissingPassword = !currentPasswordHash;
+      let shouldSyncDefaultPassword = false;
+
+      if (
+        currentPasswordHash &&
+        String(userToUpdate?.role || "") === "student" &&
+        previousRollNumber &&
+        previousRollNumber !== normalizedRollNumber
+      ) {
+        try {
+          shouldSyncDefaultPassword = await bcrypt.compare(
+            previousRollNumber,
+            currentPasswordHash,
+          );
+        } catch {
+          shouldSyncDefaultPassword = false;
+        }
+      }
+
+      if (shouldRestoreMissingPassword || shouldSyncDefaultPassword) {
+        updateData.passwordHash = await bcrypt.hash(normalizedRollNumber, 10);
+      }
     }
 
     if (role === "student") {

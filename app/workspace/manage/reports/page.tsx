@@ -201,9 +201,11 @@ export default function ManageReportJobsPage() {
 
   const schoolKey = useMemo(() => getSchoolKeyFromCookie(), []);
 
-  const loadJobs = async () => {
+  const loadJobs = async ({ silent = false }: { silent?: boolean } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
       const qs = new URLSearchParams();
       if (statusFilter !== "all") qs.set("status", statusFilter);
@@ -224,12 +226,14 @@ export default function ManageReportJobsPage() {
     } catch (loadError: any) {
       setError(loadError?.message || "Failed to load report jobs.");
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadJobs();
+    void loadJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, academicSectionFilter]);
 
@@ -242,8 +246,8 @@ export default function ManageReportJobsPage() {
         schoolKey,
         fallbackMessage: "Retry failed.",
       });
-      await loadJobs();
       setNotice("Retry request queued successfully.");
+      void loadJobs({ silent: true });
     } catch (retryError: any) {
       setError(retryError?.message || "Retry failed.");
     } finally {
@@ -270,7 +274,7 @@ export default function ManageReportJobsPage() {
       setNotice(
         `Worker processed ${data.processed}, sent ${data.sent}, and failed ${data.failed}.${recoveredNote}${waitingNote}`,
       );
-      await loadJobs();
+      void loadJobs({ silent: true });
     } catch (workerError: any) {
       setError(workerError?.message || "Worker run failed.");
     }
@@ -323,6 +327,12 @@ export default function ManageReportJobsPage() {
     );
   }, [visibleJobs]);
 
+  const hasActiveFilters =
+    statusFilter !== "all" ||
+    typeFilter !== "all" ||
+    reportScopeFilter !== "all" ||
+    academicSectionFilter !== "all";
+
   if (loading && jobs.length === 0 && !error) {
     return (
       <PageLoadingState
@@ -340,7 +350,12 @@ export default function ManageReportJobsPage() {
         description="Track dispatch jobs, refresh delivery state, and run the worker manually when queued or failed report delivery needs attention."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={loadJobs} disabled={loading}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadJobs()}
+              disabled={loading}
+            >
               <RefreshCcw className="h-4 w-4" />
               Refresh
             </Button>
@@ -389,111 +404,122 @@ export default function ManageReportJobsPage() {
       {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
       {notice ? <div className="app-feedback app-feedback-success">{notice}</div> : null}
 
-            <Card className="app-surface overflow-hidden">
-        <CardHeader className="app-section-header">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-1">
-              <CardTitle>Filters & Actions</CardTitle>
+      <Card className="app-filter-panel">
+        <CardHeader className="app-filter-panel-header">
+          <div className="app-filter-panel-heading">
+            <div className="app-filter-panel-copy">
+              <CardTitle className="app-filter-panel-title">Filters & Actions</CardTitle>
+              <p className="app-report-filter-panel-note">
+                Narrow the delivery queue by dispatch state, recipient type, report scope, and class-section context.
+              </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">{visibleJobs.length} visible</Badge>
-              <Badge variant="outline">{summary.failed} failed</Badge>
-              <Badge variant="outline">{summary.awaitingAck} waiting ack</Badge>
+            <div className="app-filter-panel-chips">
+              <span className="app-meta-chip">{visibleJobs.length} visible</span>
+              <span className="app-meta-chip">{summary.failed} failed</span>
+              <span className="app-meta-chip">{summary.awaitingAck} waiting ack</span>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="app-section-body">
-          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(12rem,1.1fr)]">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <CardContent className="app-filter-panel-body">
+          <div className="app-report-filter-layout">
+            <div className="app-report-filter-grid">
+              <div className="app-report-filter-card">
+                <p className="app-report-filter-label">
                   Dispatch status
                 </p>
-                <select
-                  className="app-form-input"
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                >
-                  <option value="all">All statuses</option>
-                  <option value="queued">Queued</option>
-                  <option value="processing">Processing</option>
-                  <option value="sent">Sent</option>
-                  <option value="failed">Failed</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Recipients
-                </p>
-                <select
-                  className="app-form-input"
-                  value={typeFilter}
-                  onChange={(event) => setTypeFilter(event.target.value as TypeFilter)}
-                >
-                  <option value="all">All recipients</option>
-                  <option value="student">Students</option>
-                  <option value="teacher">Teachers</option>
-                  <option value="admin">Admins</option>
-                  <option value="exam">Exam team</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Report scope
-                </p>
-                <select
-                  className="app-form-input"
-                  value={reportScopeFilter}
-                  onChange={(event) =>
-                    setReportScopeFilter(event.target.value as ReportScopeFilter)
-                  }
-                >
-                  <option value="all">All report scopes</option>
-                  <option value="benchmark">Benchmark reports</option>
-                  <option value="student">Student reports</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Class section
-                </p>
-                <select
-                  className="app-form-input"
-                  value={academicSectionFilter}
-                  onChange={(event) => setAcademicSectionFilter(event.target.value)}
-                >
-                  <option value="all">All class sections</option>
-                  {academicSectionOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="app-section space-y-3 2xl:self-start">
-              <div>
-                <p className="app-spotlight-label">Current scope</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <span className="app-meta-chip">
-                    {statusFilter === "all" ? "All statuses" : statusFilter}
-                  </span>
-                  <span className="app-meta-chip">
-                    {typeFilter === "all" ? "All recipients" : typeFilter}
-                  </span>
-                  <span className="app-meta-chip">
-                    {reportScopeFilter === "all"
-                      ? "All report scopes"
-                      : reportScopeFilter === "benchmark"
-                        ? "Benchmark reports"
-                        : "Student reports"}
-                  </span>
+                <div className="app-report-filter-control">
+                  <select
+                    className="app-form-input"
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="queued">Queued</option>
+                    <option value="processing">Processing</option>
+                    <option value="sent">Sent</option>
+                    <option value="failed">Failed</option>
+                  </select>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Status and class-section filters reload the server list. Recipient and report-scope filters narrow the current results client-side.
+              <div className="app-report-filter-card">
+                <p className="app-report-filter-label">
+                  Recipients
+                </p>
+                <div className="app-report-filter-control">
+                  <select
+                    className="app-form-input"
+                    value={typeFilter}
+                    onChange={(event) => setTypeFilter(event.target.value as TypeFilter)}
+                  >
+                    <option value="all">All recipients</option>
+                    <option value="student">Students</option>
+                    <option value="teacher">Teachers</option>
+                    <option value="admin">Admins</option>
+                    <option value="exam">Exam team</option>
+                  </select>
+                </div>
+              </div>
+              <div className="app-report-filter-card">
+                <p className="app-report-filter-label">
+                  Report scope
+                </p>
+                <div className="app-report-filter-control">
+                  <select
+                    className="app-form-input"
+                    value={reportScopeFilter}
+                    onChange={(event) =>
+                      setReportScopeFilter(event.target.value as ReportScopeFilter)
+                    }
+                  >
+                    <option value="all">All report scopes</option>
+                    <option value="benchmark">Benchmark reports</option>
+                    <option value="student">Student reports</option>
+                  </select>
+                </div>
+              </div>
+              <div className="app-report-filter-card">
+                <p className="app-report-filter-label">
+                  Class section
+                </p>
+                <div className="app-report-filter-control">
+                  <select
+                    className="app-form-input"
+                    value={academicSectionFilter}
+                    onChange={(event) => setAcademicSectionFilter(event.target.value)}
+                  >
+                    <option value="all">All class sections</option>
+                    {academicSectionOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="app-report-filter-footer">
+              <p className="app-report-filter-hint">
+                Status and class-section filters reload the server list. Recipient
+                and report-scope filters narrow the current results client-side.
               </p>
+              {hasActiveFilters ? (
+                <div className="app-filter-summary-actions">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setStatusFilter("all");
+                      setTypeFilter("all");
+                      setReportScopeFilter("all");
+                      setAcademicSectionFilter("all");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+            <div className="space-y-3">
               {summary.awaitingAck > 0 || summary.recoveredStale > 0 ? (
                 <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
                   {summary.awaitingAck > 0 ? (
@@ -526,30 +552,39 @@ export default function ManageReportJobsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 pt-0">
           <div className="app-table-wrap rounded-none border-x-0 border-b-0 overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="w-full table-fixed text-sm">
               <thead className="bg-muted/40">
                 <tr>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Dispatch</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">WA Delivery</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Recipient</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Report</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Scope</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Benchmark</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">File</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Mobile</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Attempts</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Updated</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Error</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Action</th>
+                  <th className="w-[18%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Dispatch
+                  </th>
+                  <th className="w-[14%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Recipient
+                  </th>
+                  <th className="w-[24%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Report
+                  </th>
+                  <th className="w-[18%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    WA delivery
+                  </th>
+                  <th className="w-[16%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Attempts
+                  </th>
+                  <th className="w-[10%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Issue & action
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {visibleJobs.map((job) => (
-                  <tr key={job._id} className="border-t border-border/60 align-top bg-background">
+                  <tr
+                    key={job._id}
+                    className="border-t border-border/60 align-top bg-background"
+                  >
                     <td className="px-3 py-2">
-                      <div className="flex min-w-[220px] flex-col gap-2">
+                      <div className="flex flex-col gap-2">
                         <div className="flex flex-wrap gap-2">
                           <span
                             className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(job.status)}`}
@@ -569,7 +604,10 @@ export default function ManageReportJobsPage() {
                         </div>
                         <div className="space-y-1 text-xs text-muted-foreground">
                           {job.processingStartedAt && job.status === "processing" ? (
-                            <p>Processing since {formatDateTime(job.processingStartedAt)}</p>
+                            <p>
+                              Processing since{" "}
+                              {formatDateTime(job.processingStartedAt)}
+                            </p>
                           ) : null}
                           {job.nextRetryAt ? (
                             <p>Next retry at {formatDateTime(job.nextRetryAt)}</p>
@@ -578,27 +616,88 @@ export default function ManageReportJobsPage() {
                           job.deliveryAttemptSummary.awaitingProviderAck ? (
                             <p>
                               Provider ack wait until{" "}
-                              {formatDateTime(job.deliveryAttemptSummary.ackWaitUntil)}
+                              {formatDateTime(
+                                job.deliveryAttemptSummary.ackWaitUntil,
+                              )}
                             </p>
+                          ) : null}
+                          {job.updatedAt ? (
+                            <p>Updated {formatDateTime(job.updatedAt)}</p>
                           ) : null}
                         </div>
                       </div>
                     </td>
                     <td className="px-3 py-2">
-                      <div className="flex max-w-[260px] flex-col gap-1">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-foreground">
+                          {job.studentName || "-"}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {getTypeLabel(job)}
+                        </span>
+                        <span className="break-words text-xs text-muted-foreground">
+                          {job.mobileNumber || "No mobile number"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col gap-2">
+                        <div className="space-y-1">
+                          <span className="font-medium text-foreground">
+                            {job.paperTitle || "-"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {getReportLabel(job)}
+                          </span>
+                          <p className="text-xs text-muted-foreground">
+                            {getScopeLabel(job)}
+                          </p>
+                        </div>
+                        {isBenchmarkJob(job) ? (
+                          <div className="space-y-1">
+                            <span className="inline-flex w-fit rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-medium text-indigo-700">
+                              Benchmark included
+                            </span>
+                            <p className="text-xs text-muted-foreground">
+                              {getBenchmarkLabel(job)}
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Student-only analytics
+                          </span>
+                        )}
+                        {job.reportUrl ? (
+                          <a
+                            href={job.reportUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="app-button-secondary h-8 w-fit px-3 text-xs"
+                          >
+                            Open report
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Report file pending
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col gap-1">
                         <span
                           className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${getDeliveryBadgeClass(job.deliveryStatus)}`}
                         >
                           {job.deliveryStatus || "-"}
                         </span>
                         {job.deliveryError ? (
-                          <span className="text-xs text-rose-600">
+                          <span className="break-words text-xs text-rose-600">
                             {job.deliveryError}
                           </span>
                         ) : null}
                         {job.providerMessageId ? (
                           <span
-                            className="truncate text-xs text-slate-500"
+                            className="break-all text-xs text-slate-500"
                             title={job.providerMessageId}
                           >
                             {job.providerMessageId}
@@ -617,63 +716,7 @@ export default function ManageReportJobsPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2">
-                      <div className="flex min-w-[160px] flex-col gap-1">
-                        <span className="font-medium text-foreground">
-                          {job.studentName || "-"}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {getTypeLabel(job)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex min-w-[220px] flex-col gap-1">
-                        <span className="font-medium text-foreground">
-                          {job.paperTitle || "-"}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {getReportLabel(job)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="min-w-[220px] text-sm text-foreground/80">
-                        {getScopeLabel(job)}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      {isBenchmarkJob(job) ? (
-                        <div className="flex min-w-[220px] flex-col gap-1">
-                          <span className="inline-flex w-fit rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-medium text-indigo-700">
-                            Benchmark included
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {getBenchmarkLabel(job)}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          Student-only analytics
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {job.reportUrl ? (
-                        <a
-                          href={job.reportUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="app-button-secondary h-8 px-3 text-xs"
-                        >
-                          Open report
-                        </a>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Pending file</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">{job.mobileNumber || "-"}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex min-w-[240px] flex-col gap-2">
+                      <div className="flex flex-col gap-2">
                         <div className="font-medium text-foreground">
                           {job.attempts || 0}/{job.maxAttempts || 3}
                         </div>
@@ -705,7 +748,8 @@ export default function ManageReportJobsPage() {
                                   <span
                                     className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${getAttemptStateBadgeClass(job.deliveryAttemptSummary.latestAttempt.state)}`}
                                   >
-                                    Attempt #{job.deliveryAttemptSummary.latestAttempt.attemptNumber}{" "}
+                                    Attempt #
+                                    {job.deliveryAttemptSummary.latestAttempt.attemptNumber}{" "}
                                     {getAttemptStateLabel(
                                       job.deliveryAttemptSummary.latestAttempt.state,
                                     )}
@@ -714,7 +758,10 @@ export default function ManageReportJobsPage() {
                                     <span
                                       className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${getDeliveryBadgeClass(job.deliveryAttemptSummary.latestAttempt.deliveryStatus)}`}
                                     >
-                                      {job.deliveryAttemptSummary.latestAttempt.deliveryStatus}
+                                      {
+                                        job.deliveryAttemptSummary.latestAttempt
+                                          .deliveryStatus
+                                      }
                                     </span>
                                   ) : null}
                                 </div>
@@ -722,7 +769,8 @@ export default function ManageReportJobsPage() {
                                   <p>
                                     Started{" "}
                                     {formatDateTime(
-                                      job.deliveryAttemptSummary.latestAttempt.createdAt || undefined,
+                                      job.deliveryAttemptSummary.latestAttempt
+                                        .createdAt || undefined,
                                     )}
                                   </p>
                                 ) : null}
@@ -730,7 +778,8 @@ export default function ManageReportJobsPage() {
                                   <p>
                                     Acknowledged{" "}
                                     {formatDateTime(
-                                      job.deliveryAttemptSummary.latestAttempt.acknowledgedAt || undefined,
+                                      job.deliveryAttemptSummary.latestAttempt
+                                        .acknowledgedAt || undefined,
                                     )}
                                   </p>
                                 ) : null}
@@ -740,48 +789,48 @@ export default function ManageReportJobsPage() {
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
-                      {formatDateTime(job.updatedAt)}
-                    </td>
                     <td className="px-3 py-2">
-                      <div className="max-w-[320px] space-y-1">
+                      <div className="space-y-2">
                         <div
-                          className="truncate text-xs text-rose-600"
+                          className="break-words text-xs text-rose-600"
                           title={job.error || ""}
                         >
-                          {job.error || "-"}
+                          {job.error || "No reported error"}
                         </div>
                         {job.deliveryAttemptSummary?.latestAttempt?.note &&
-                        job.deliveryAttemptSummary.latestAttempt.note !== job.error ? (
+                        job.deliveryAttemptSummary.latestAttempt.note !==
+                          job.error ? (
                           <div
-                            className="truncate text-xs text-muted-foreground"
-                            title={job.deliveryAttemptSummary.latestAttempt.note || ""}
+                            className="break-words text-xs text-muted-foreground"
+                            title={
+                              job.deliveryAttemptSummary.latestAttempt.note || ""
+                            }
                           >
                             {job.deliveryAttemptSummary.latestAttempt.note}
                           </div>
                         ) : null}
+                        {job.status === "failed" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => retryJob(job._id)}
+                            disabled={retryingId === job._id}
+                          >
+                            {retryingId === job._id ? "Retrying…" : "Retry now"}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            No action needed
+                          </span>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      {job.status === "failed" ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => retryJob(job._id)}
-                          disabled={retryingId === job._id}
-                        >
-                          {retryingId === job._id ? "Retrying…" : "Retry now"}
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )}
                     </td>
                   </tr>
                 ))}
                 {visibleJobs.length === 0 && (
                   <tr>
                     <td
-                      colSpan={12}
+                      colSpan={6}
                       className="px-3 py-8 text-center text-muted-foreground"
                     >
                       No jobs found.

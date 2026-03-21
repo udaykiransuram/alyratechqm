@@ -131,9 +131,12 @@ export default function StudentsByClassPage() {
     }
   }, [availableSections, selectedSection]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchData = async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const params = new URLSearchParams();
       if (selectedClass && selectedClass !== "all") params.set("classId", selectedClass);
@@ -150,9 +153,13 @@ export default function StudentsByClassPage() {
       });
       setPages(initialPages);
     } catch (e: any) {
-      setError(e.message);
+      if (!silent) {
+        setError(e.message);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -271,7 +278,7 @@ export default function StudentsByClassPage() {
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "Failed to update");
       setEditOpen(false);
-      await fetchData();
+      void fetchData({ silent: true });
     } catch (e: any) {
       alert(e.message || "Failed to update student");
     } finally {
@@ -286,7 +293,7 @@ export default function StudentsByClassPage() {
       const res = await fetch(`/api/users/${studentId}`, { method: "DELETE" });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "Failed to archive");
-      await fetchData();
+      void fetchData({ silent: true });
     } catch (e: any) {
       alert(e.message || "Failed to archive student");
     } finally {
@@ -341,16 +348,16 @@ export default function StudentsByClassPage() {
         ]}
       />
 
-      <Card className="app-surface overflow-hidden">
-        <CardHeader className="app-section-header space-y-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-1">
-              <CardTitle>Student Filters</CardTitle>
-              <p className="text-sm leading-6 text-muted-foreground">
+      <Card className="app-filter-panel">
+        <CardHeader className="app-filter-panel-header">
+          <div className="app-filter-panel-heading">
+            <div className="app-filter-panel-copy">
+              <CardTitle className="app-filter-panel-title">Student Filters</CardTitle>
+              <p className="app-filter-panel-note">
                 Search across student groups, narrow by class and section, or include empty groups when reviewing setup coverage.
               </p>
             </div>
-            <div className="app-chip-cloud">
+            <div className="app-filter-panel-chips">
               <span className="app-meta-chip">
                 {activeFilterCount > 0 ? `${activeFilterCount} active filters` : "No active filters"}
               </span>
@@ -360,10 +367,10 @@ export default function StudentsByClassPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="app-section-body space-y-4">
+        <CardContent className="app-filter-panel-body">
           <form
             onSubmit={onSearch}
-            className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px_auto_auto]"
+            className="app-filter-grid xl:grid-cols-[minmax(0,1fr)_180px_180px_auto_auto]"
           >
             <Input
               placeholder="Search by name, email, or roll number"
@@ -405,16 +412,16 @@ export default function StudentsByClassPage() {
               {includeEmpty ? "Hide Empty" : "Show Empty"}
             </Button>
           </form>
-          <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground">
+          <div className="app-filter-summary">
+            <div className="app-filter-summary-copy">
+              <p className="app-filter-summary-title">
                 {totalStudents} student{totalStudents === 1 ? "" : "s"} across {groups.length} group{groups.length === 1 ? "" : "s"}
               </p>
-              <p className="text-xs leading-5 text-muted-foreground">
+              <p className="app-filter-summary-note">
                 Students remain grouped by class and section so exports and quick edits stay predictable.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="app-filter-summary-actions">
               <Button type="button" variant="outline" onClick={resetFilters}>
                 Clear Filters
               </Button>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import SignInClient from "./SignInClient";
 
 export const metadata: Metadata = {
@@ -11,5 +12,9 @@ export const metadata: Metadata = {
 };
 
 export default function SignInPage() {
-  return <SignInClient />;
+  return (
+    <Suspense fallback={null}>
+      <SignInClient />
+    </Suspense>
+  );
 }

@@ -1,4 +1,4 @@
-import StudentTagReportPage from "@/app/workspace/analytics/student-tag-report/[responseId]/page";
+import { StudentTagReportPageView } from "@/components/analytics/StudentTagReportPageView";
 
 export default function StudentReportDetailPage({
   params,
@@ -6,7 +6,7 @@ export default function StudentReportDetailPage({
   params: { responseId: string };
 }) {
   return (
-    <StudentTagReportPage
+    <StudentTagReportPageView
       params={params}
       portalMode="student"
       defaultBackHref="/student/account"

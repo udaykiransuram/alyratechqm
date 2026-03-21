@@ -154,10 +154,7 @@ async function getTalentTestData() {
           : DEFAULT_FAQS,
       };
     })();
-    const timeout = new Promise<ReturnType<typeof getDefaults>>((r) =>
-      setTimeout(() => r(getDefaults()), 3000),
-    );
-    return await Promise.race([work, timeout]);
+    return await work;
   } catch {
     return getDefaults();
   }

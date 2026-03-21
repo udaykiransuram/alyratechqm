@@ -277,26 +277,31 @@ export default function ManageSectionsPage() {
               <div className="app-feedback app-feedback-error">{error}</div>
             ) : (
               <>
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {sectionFilterClassId !== "all"
-                      ? "Showing sections only for the selected class."
-                      : "Showing sections across all classes."}
-                  </p>
-                  <div className="w-full sm:w-[260px]">
-                    <Select value={sectionFilterClassId} onValueChange={setSectionFilterClassId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Filter by class" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Classes</SelectItem>
-                        {classes.map((classItem) => (
-                          <SelectItem key={classItem._id} value={classItem._id}>
-                            {classItem.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                <div className="app-filter-summary mb-4">
+                  <div className="app-filter-summary-copy">
+                    <p className="app-filter-summary-title">Current scope</p>
+                    <p className="app-filter-summary-note">
+                      {sectionFilterClassId !== "all"
+                        ? "Showing sections only for the selected class."
+                        : "Showing sections across all classes."}
+                    </p>
+                  </div>
+                  <div className="app-filter-summary-actions">
+                    <div className="w-full sm:w-[260px]">
+                      <Select value={sectionFilterClassId} onValueChange={setSectionFilterClassId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Filter by class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Classes</SelectItem>
+                          {classes.map((classItem) => (
+                            <SelectItem key={classItem._id} value={classItem._id}>
+                              {classItem.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 

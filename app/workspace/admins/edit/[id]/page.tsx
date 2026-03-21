@@ -197,7 +197,7 @@ export default function EditAdminPage() {
       const data = await res.json();
       if (!data.success) throw new Error(data.message || 'Failed to update admin');
       setMessage('Admin updated successfully.');
-      setTimeout(() => navigateBack(), 600);
+      navigateBack();
     } catch (err: any) {
       setError(err.message || 'Update failed');
     } finally {

@@ -85,6 +85,23 @@ export type ApplyStudentRollUpdatesResult = {
   updatedUsers: StudentRollUpdateResult[];
 };
 
+export type ApplyStudentRollDuplicateFixesSummary = {
+  schoolsProcessed: number;
+  groupCount: number;
+  riskyGroupCount: number;
+  updatedCount: number;
+  passwordResetCount: number;
+};
+
+export type ApplyStudentRollDuplicateFixesSchoolResult = {
+  schoolKey: string;
+  groupCount: number;
+  riskyGroupCount: number;
+  updatedCount: number;
+  passwordResetCount: number;
+  updatedUsers: StudentRollUpdateResult[];
+};
+
 function normalizeSchoolKey(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
@@ -370,6 +387,22 @@ async function resolveTargetSchools(schoolKey?: string | null) {
   return await School.find({}).sort({ displayName: 1 }).lean();
 }
 
+function buildGroupSuggestedUpdates(
+  group: StudentRollDuplicateGroup,
+  includeRiskyStudents: boolean,
+) {
+  return group.students
+    .filter(
+      (student) =>
+        Boolean(student.suggestedRollNumber) &&
+        (includeRiskyStudents || student.canAutoFix),
+    )
+    .map((student) => ({
+      userId: student.userId,
+      newRollNumber: String(student.suggestedRollNumber),
+    }));
+}
+
 export async function buildStudentRollDuplicateAudit(
   schoolKey?: string | null,
 ): Promise<StudentRollDuplicateAuditReport> {
@@ -567,21 +600,16 @@ export async function applySafeStudentRollDuplicateFixes(
   schoolKey?: string | null,
 ) {
   const audit = await buildStudentRollDuplicateAudit(schoolKey);
-  const schoolResults: Array<{
-    schoolKey: string;
-    updatedCount: number;
-    passwordResetCount: number;
-    updatedUsers: StudentRollUpdateResult[];
-  }> = [];
+  const schoolResults: ApplyStudentRollDuplicateFixesSchoolResult[] = [];
 
   for (const schoolReport of audit.schools) {
-    const updates = schoolReport.duplicateGroups.flatMap((group) =>
-      group.students
-        .filter((student) => student.canAutoFix && student.suggestedRollNumber)
-        .map((student) => ({
-          userId: student.userId,
-          newRollNumber: String(student.suggestedRollNumber),
-        })),
+    const groupsWithUpdates = schoolReport.duplicateGroups.filter((group) =>
+      group.students.some(
+        (student) => student.canAutoFix && student.suggestedRollNumber,
+      ),
+    );
+    const updates = groupsWithUpdates.flatMap((group) =>
+      buildGroupSuggestedUpdates(group, false),
     );
 
     if (updates.length === 0) {
@@ -592,12 +620,78 @@ export async function applySafeStudentRollDuplicateFixes(
       schoolKey: schoolReport.schoolKey,
       updates,
     });
-    schoolResults.push(schoolResult);
+    schoolResults.push({
+      ...schoolResult,
+      groupCount: groupsWithUpdates.length,
+      riskyGroupCount: groupsWithUpdates.filter((group) => group.risky).length,
+    });
   }
 
   return {
     summary: {
       schoolsProcessed: schoolResults.length,
+      groupCount: schoolResults.reduce(
+        (total, schoolResult) => total + schoolResult.groupCount,
+        0,
+      ),
+      riskyGroupCount: schoolResults.reduce(
+        (total, schoolResult) => total + schoolResult.riskyGroupCount,
+        0,
+      ),
+      updatedCount: schoolResults.reduce(
+        (total, schoolResult) => total + schoolResult.updatedCount,
+        0,
+      ),
+      passwordResetCount: schoolResults.reduce(
+        (total, schoolResult) => total + schoolResult.passwordResetCount,
+        0,
+      ),
+    },
+    schools: schoolResults,
+  };
+}
+
+export async function applySuggestedStudentRollDuplicateFixes(
+  schoolKey?: string | null,
+) {
+  const audit = await buildStudentRollDuplicateAudit(schoolKey);
+  const schoolResults: ApplyStudentRollDuplicateFixesSchoolResult[] = [];
+
+  for (const schoolReport of audit.schools) {
+    const groupsWithUpdates = schoolReport.duplicateGroups.filter((group) =>
+      group.students.some((student) => Boolean(student.suggestedRollNumber)),
+    );
+    const updates = groupsWithUpdates.flatMap((group) =>
+      buildGroupSuggestedUpdates(group, true),
+    );
+
+    if (updates.length === 0) {
+      continue;
+    }
+
+    const schoolResult = await applyStudentRollNumberUpdates({
+      schoolKey: schoolReport.schoolKey,
+      updates,
+    });
+
+    schoolResults.push({
+      ...schoolResult,
+      groupCount: groupsWithUpdates.length,
+      riskyGroupCount: groupsWithUpdates.filter((group) => group.risky).length,
+    });
+  }
+
+  return {
+    summary: {
+      schoolsProcessed: schoolResults.length,
+      groupCount: schoolResults.reduce(
+        (total, schoolResult) => total + schoolResult.groupCount,
+        0,
+      ),
+      riskyGroupCount: schoolResults.reduce(
+        (total, schoolResult) => total + schoolResult.riskyGroupCount,
+        0,
+      ),
       updatedCount: schoolResults.reduce(
         (total, schoolResult) => total + schoolResult.updatedCount,
         0,

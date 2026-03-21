@@ -21,7 +21,7 @@ import {
 import { getAuthErrorMessage } from "@/lib/auth-runtime";
 import {
   getSchoolKeyFromCookie,
-  setSchoolKeyCookie,
+  setSchoolSelectionCookies,
 } from "@/lib/client/school";
 import { toast } from "@/components/ui/use-toast";
 
@@ -84,18 +84,27 @@ export default function SignInClient() {
         setSchools(nextSchools);
 
         const rememberedSchoolKey = getSchoolKeyFromCookie();
+        const rememberedSchool = nextSchools.find(
+          (school: SchoolOption) => school.key === rememberedSchoolKey,
+        );
         if (
           rememberedSchoolKey &&
-          nextSchools.some(
-            (school: SchoolOption) => school.key === rememberedSchoolKey,
-          )
+          rememberedSchool
         ) {
           setSchoolKey(rememberedSchoolKey);
+          setSchoolSelectionCookies(
+            rememberedSchoolKey,
+            rememberedSchool.displayName,
+          );
           return;
         }
 
         if (nextSchools.length === 1) {
           setSchoolKey(nextSchools[0].key);
+          setSchoolSelectionCookies(
+            nextSchools[0].key,
+            nextSchools[0].displayName,
+          );
         }
       } catch (error: unknown) {
         if (!mounted) return;
@@ -160,7 +169,11 @@ export default function SignInClient() {
       return;
     }
 
-    setSchoolKeyCookie(trimmedSchoolKey);
+    const selectedSchool = schools.find((school) => school.key === trimmedSchoolKey);
+    setSchoolSelectionCookies(
+      trimmedSchoolKey,
+      selectedSchool?.displayName,
+    );
     window.location.assign(result.url || callbackUrl);
   };
 

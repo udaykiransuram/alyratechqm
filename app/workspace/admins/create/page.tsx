@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import { announceNavigationStart } from '@/lib/client/navigation-feedback';
 import { fetchApiJson, buildPartialLoadMessage, resolveClientSchoolKey } from '@/lib/client/api';
 
 interface ClassItem {
@@ -209,7 +210,8 @@ export default function CreateAdminPage() {
         academicSectionIds: [],
         subjectIds: [],
       });
-      setTimeout(() => router.push('/workspace/manage/users'), 800);
+      announceNavigationStart('/workspace/manage/users');
+      router.push('/workspace/manage/users');
     } catch (error: any) {
       setMessage(error?.message || 'Error creating admin');
     } finally {

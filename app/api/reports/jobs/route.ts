@@ -13,17 +13,55 @@ import { getDispatchAttemptAckWaitUntil } from "@/lib/reports/dispatchAttempts";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_PROVIDER_ACK_WAIT_MINUTES = 45;
+const REPORT_JOB_FETCH_LIMIT = 260;
+const REPORT_JOB_RESPONSE_LIMIT = 200;
+const ACADEMIC_SECTION_OPTIONS_TTL_MS = 60 * 1000;
+const REPORT_JOB_LIST_SELECT = [
+  "_id",
+  "type",
+  "student",
+  "studentName",
+  "paperTitle",
+  "classId",
+  "className",
+  "academicSection",
+  "academicSectionName",
+  "status",
+  "mobileNumber",
+  "error",
+  "attempts",
+  "maxAttempts",
+  "nextRetryAt",
+  "lastAttemptAt",
+  "processingStartedAt",
+  "activeAttemptKey",
+  "activeAttemptCreatedAt",
+  "providerAcceptedAt",
+  "providerMessageId",
+  "deliveryStatus",
+  "deliveryError",
+  "deliveredAt",
+  "readAt",
+  "lastWebhookAt",
+  "reportUrl",
+  "deliveryAttempts",
+  "updatedAt",
+].join(" ");
 
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
-    .toString()
-    .trim();
-}
+type ReportFilterOption = {
+  value: string;
+  label: string;
+};
+
+type CachedAcademicSectionOptions = {
+  expiresAt: number;
+  options: ReportFilterOption[];
+};
+
+const academicSectionOptionsCache = new Map<
+  string,
+  CachedAcademicSectionOptions
+>();
 
 function toIsoString(value: unknown) {
   if (!value) return null;
@@ -141,8 +179,73 @@ function buildDeliveryAttemptSummary(job: any) {
     recoveredStaleLock: String(job?.error || "")
       .toLowerCase()
       .includes("recovered stale processing lock"),
-    history: trackedAttempts,
   };
+}
+
+function jobNeedsAcademicHydration(job: any) {
+  const studentId = String(job?.student || "").trim();
+  if (!studentId) return false;
+
+  if (!String(job?.studentName || "").trim()) {
+    return true;
+  }
+
+  if (!String(job?.className || "").trim()) {
+    return true;
+  }
+
+  if (job?.academicSection && !String(job?.academicSectionName || "").trim()) {
+    return true;
+  }
+
+  return false;
+}
+
+async function getAcademicSectionFilterOptions({
+  schoolKey,
+  ensureTenantModels,
+}: {
+  schoolKey: string;
+  ensureTenantModels: () => Promise<any>;
+}) {
+  const now = Date.now();
+  const cachedEntry = academicSectionOptionsCache.get(schoolKey);
+  if (cachedEntry && cachedEntry.expiresAt > now) {
+    return cachedEntry.options;
+  }
+
+  const {
+    AcademicSection: AcademicSectionModel,
+    Class: ClassModel,
+  } = await ensureTenantModels();
+
+  const rawSections = await AcademicSectionModel.find({})
+    .select("name class")
+    .sort({ name: 1 })
+    .lean();
+
+  const sections = await hydrateAcademicSectionsWithClasses({
+    sections: rawSections,
+    ClassModel,
+  });
+
+  const options = sections
+    .map((section: any) => ({
+      value: String(section._id),
+      label: section?.class?.name
+        ? `${section.class.name} • ${section.name}`
+        : section.name || "Unknown Section",
+    }))
+    .sort((left: ReportFilterOption, right: ReportFilterOption) =>
+      left.label.localeCompare(right.label),
+    );
+
+  academicSectionOptionsCache.set(schoolKey, {
+    expiresAt: now + ACADEMIC_SECTION_OPTIONS_TTL_MS,
+    options,
+  });
+
+  return options;
 }
 
 export async function GET(req: NextRequest) {
@@ -171,45 +274,58 @@ export async function GET(req: NextRequest) {
     query.status = status;
   }
 
-  const [
-    {
+  let tenantModelsPromise: Promise<any> | null = null;
+  const ensureTenantModels = () => {
+    if (!tenantModelsPromise) {
+      tenantModelsPromise = getTenantModels(schoolKey, [
+        "User",
+        "AcademicSection",
+        "Class",
+      ]);
+    }
+    return tenantModelsPromise;
+  };
+
+  const [jobs, academicSections] = await Promise.all([
+    ReportDispatchJob.find(query)
+      .select(REPORT_JOB_LIST_SELECT)
+      .sort({ updatedAt: -1 })
+      .limit(REPORT_JOB_FETCH_LIMIT)
+      .lean(),
+    getAcademicSectionFilterOptions({ schoolKey, ensureTenantModels }),
+  ]);
+
+  const studentIdsNeedingHydration = Array.from(
+    new Set(
+      jobs
+        .filter(jobNeedsAcademicHydration)
+        .map((job: any) => String(job.student || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  let userMap = new Map<string, any>();
+  if (studentIdsNeedingHydration.length > 0) {
+    const {
       User: UserModel,
       AcademicSection: AcademicSectionModel,
       Class: ClassModel,
-    },
-    jobs,
-  ] = await Promise.all([
-    getTenantModels(schoolKey, ["User", "AcademicSection", "Class"]),
-    ReportDispatchJob.find(query).sort({ updatedAt: -1 }).limit(500).lean(),
-  ]);
+    } = await ensureTenantModels();
 
-  const studentIds = Array.from(
-    new Set(jobs.map((job: any) => String(job.student || "")).filter(Boolean)),
-  );
+    const rawUsers = await UserModel.find({
+      _id: { $in: studentIdsNeedingHydration },
+    })
+      .select("name class academicSection")
+      .lean();
 
-  const rawUsers = studentIds.length
-    ? await UserModel.find({ _id: { $in: studentIds } })
-        .select("name class academicSection")
-        .lean()
-    : [];
+    const users = await hydrateUsersWithAcademicContext({
+      users: rawUsers,
+      AcademicSectionModel,
+      ClassModel,
+    });
 
-  const users = await hydrateUsersWithAcademicContext({
-    users: rawUsers,
-    AcademicSectionModel,
-    ClassModel,
-  });
-
-  const userMap = new Map(users.map((user: any) => [String(user._id), user]));
-
-  const rawSections = await AcademicSectionModel.find({})
-    .select("name class")
-    .sort({ name: 1 })
-    .lean();
-
-  const sections = await hydrateAcademicSectionsWithClasses({
-    sections: rawSections,
-    ClassModel,
-  });
+    userMap = new Map(users.map((user: any) => [String(user._id), user]));
+  }
 
   const enrichedJobs = jobs
     .map((job: any) => {
@@ -239,13 +355,6 @@ export async function GET(req: NextRequest) {
         nextRetryAt: toIsoString(job.nextRetryAt),
         processingStartedAt: toIsoString(job.processingStartedAt),
         activeAttemptCreatedAt: toIsoString(job.activeAttemptCreatedAt),
-        deliveryAttempts: (Array.isArray(job.deliveryAttempts)
-          ? job.deliveryAttempts
-          : []
-        )
-          .map(normalizeDeliveryAttempt)
-          .filter(Boolean)
-          .sort(compareDeliveryAttempts),
         deliveryAttemptSummary: buildDeliveryAttemptSummary(job),
       };
     })
@@ -253,14 +362,7 @@ export async function GET(req: NextRequest) {
       if (!academicSectionId) return true;
       return String(job.academicSectionId || "") === academicSectionId;
     })
-    .slice(0, 200);
-
-  const academicSections = sections.map((section: any) => ({
-    value: String(section._id),
-    label: section?.class?.name
-      ? `${section.class.name} • ${section.name}`
-      : section.name || "Unknown Section",
-  }));
+    .slice(0, REPORT_JOB_RESPONSE_LIMIT);
 
   return NextResponse.json({
     success: true,

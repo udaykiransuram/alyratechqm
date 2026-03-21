@@ -1,15 +1,18 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 
-import Footer from "@/components/Footer";
-import Navbar from "@/components/Navbar";
-import ViewportHover from "@/components/ViewportHover";
 import AppViewport from "@/components/layout/AppViewport";
-import SiteHeader from "@/components/navigation/SiteHeader";
+import RouteTransitionIndicator from "@/components/layout/RouteTransitionIndicator";
 import { isPublicPathname } from "@/lib/navigation/canonical-paths";
+
+const Footer = dynamic(() => import("@/components/Footer"));
+const Navbar = dynamic(() => import("@/components/Navbar"));
+const ViewportHover = dynamic(() => import("@/components/ViewportHover"));
+const SiteHeader = dynamic(() => import("@/components/navigation/SiteHeader"));
 
 export default function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "/";
@@ -28,6 +31,9 @@ export default function AppChrome({ children }: { children: ReactNode }) {
   if (publicRoute) {
     return (
       <div className="public-site-shell relative flex min-h-screen flex-col overflow-x-hidden">
+        <Suspense fallback={null}>
+          <RouteTransitionIndicator />
+        </Suspense>
         <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-sky-100 via-cyan-50 to-blue-100" />
           <div className="absolute inset-0 bg-[url('/images/source-frontend/ttf-water-drops.png')] bg-[length:320px_320px] bg-repeat opacity-[0.18]" />
@@ -43,6 +49,9 @@ export default function AppChrome({ children }: { children: ReactNode }) {
 
   return (
     <>
+      <Suspense fallback={null}>
+        <RouteTransitionIndicator />
+      </Suspense>
       <SiteHeader />
       <main className="min-h-screen pt-[calc(var(--app-header-height)+var(--app-mobile-school-switcher-height))] transition-[margin-left] duration-200 ease-in-out md:pt-[var(--app-header-height)] lg:ml-[var(--app-sidebar-width)]">
         <AppViewport>{children}</AppViewport>

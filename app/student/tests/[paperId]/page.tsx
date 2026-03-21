@@ -23,6 +23,7 @@ import PageLoadingState from "@/components/ui/page-loading-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { fetchApiJson } from "@/lib/client/api";
+import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 import { cn } from "@/lib/utils";
 
 type StudentQuestion = {
@@ -405,6 +406,7 @@ export default function StudentTestPage() {
       setAttempt(data.attempt || null);
       setSubmitDialogOpen(false);
       setActionError(null);
+      announceNavigationStart("/student/tests?submitted=1");
       router.push("/student/tests?submitted=1");
     } catch (error: any) {
       submitTriggeredRef.current = false;

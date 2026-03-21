@@ -46,10 +46,7 @@ async function getAboutStats() {
         },
       };
     })();
-    const timeout = new Promise<{ stats: typeof ABOUT_DEFAULTS; faqs: FAQItem[]; contact: { email: string; phone: string; whatsappNumber?: string; city: string; address: string } }>((r) =>
-      setTimeout(() => r({ stats: ABOUT_DEFAULTS, faqs: [], contact: { email: 'hello@beyondmarks.edu', phone: '+91 98765 43210', whatsappNumber: '', city: 'Hitech City, Hyderabad, India', address: 'Innovation Hub' } }), 3000)
-    );
-    return await Promise.race([work, timeout]);
+    return await work;
   } catch {
     return { stats: ABOUT_DEFAULTS, faqs: [], contact: { email: 'hello@beyondmarks.edu', phone: '+91 98765 43210', whatsappNumber: '', city: 'Hitech City, Hyderabad, India', address: 'Innovation Hub' } };
   }

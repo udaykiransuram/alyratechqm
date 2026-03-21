@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import * as XLSX from "xlsx";
 
 import { Button } from "@/components/ui/button";
 import PageHero from "@/components/layout/PageHero";
@@ -186,6 +185,7 @@ export default function CreateStudentPage() {
         return obj;
       });
     } else if (file.name.endsWith(".xlsx")) {
+      const XLSX = await import("xlsx");
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: "array" });
       const sheetName = workbook.SheetNames[0];
