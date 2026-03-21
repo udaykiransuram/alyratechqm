@@ -1,4 +1,4 @@
-import StudentTagReportPage from "@/app/analytics/student-tag-report/[responseId]/page";
+import StudentTagReportPage from "@/app/workspace/analytics/student-tag-report/[responseId]/page";
 
 export default function StudentReportDetailPage({
   params,

@@ -164,7 +164,7 @@ export default function SchoolSwitcher({
               className="h-9 min-w-0 flex-1 bg-background/80"
               title={
                 currentSchool
-                  ? `${currentSchool.displayName} (${currentSchool.key})`
+                  ? currentSchool.displayName || currentSchool.key
                   : "Select school workspace"
               }
             >
@@ -197,7 +197,7 @@ export default function SchoolSwitcher({
             size="sm"
             className="h-9 shrink-0 px-3 max-sm:flex-1"
           >
-            <Link href="/manage/schools" title="Manage schools" onClick={onManageClick}>
+            <Link href="/company/schools" title="Manage schools" onClick={onManageClick}>
               <Settings2 className="h-4 w-4" />
               <span className={cn(showCreateButton ? "hidden xl:inline" : "inline")}>
                 Manage

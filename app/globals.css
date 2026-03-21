@@ -1587,3 +1587,561 @@
     transform: translateX(100%);
   }
 }
+
+
+/* Public site utilities */
+.public-site-shell h1,
+.public-site-shell h2,
+.public-site-shell h3,
+.public-site-shell h4,
+.public-site-shell h5,
+.public-site-shell h6 {
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float-slow {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in { animation: fade-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-fade-in-delayed { animation: fade-in 900ms 120ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-float-slow { animation: float-slow 6s ease-in-out infinite; }
+.animate-slide-in { animation: slide-in-right 800ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-scale-in { animation: scale-in 600ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-dark {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.gradient-subtle {
+  background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+}
+
+.gradient-subtle-dark {
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+}
+
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.grid-pattern-dark {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.mask-blob {
+  -webkit-mask-image: radial-gradient(120% 120% at 50% 50%, #000 60%, transparent 100%);
+  mask-image: radial-gradient(120% 120% at 50% 50%, #000 60%, transparent 100%);
+}
+
+@keyframes kenburns {
+  0% { transform: scale(1.02) translateY(0); }
+  100% { transform: scale(1.08) translateY(-4px); }
+}
+
+.ken-burns { animation: kenburns 14s ease-in-out infinite alternate; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-fade-in-delayed,
+  .animate-float-slow,
+  .ken-burns {
+    animation: none !important;
+  }
+}
+
+.cards-section {
+  position: relative;
+  overflow: hidden;
+}
+
+.cards-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(45,212,191,0.65) 0%, rgba(94,234,212,0.55) 45%, rgba(153,246,228,0.50) 100%);
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 1;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.dark .cards-section::before {
+  background: linear-gradient(180deg, rgba(20,184,166,0.55) 0%, rgba(45,212,191,0.50) 45%, rgba(94,234,212,0.45) 100%);
+}
+
+.cards-section::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px),
+    url("https://grainy-gradients.vercel.app/noise.svg");
+  background-size: 64px 64px, 64px 64px, cover;
+  background-position: 0 0, 0 0, center;
+  opacity: 0.06;
+  -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 0%, #000 70%, transparent 100%);
+  mask-image: radial-gradient(ellipse 60% 60% at 50% 0%, #000 70%, transparent 100%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.dark .cards-section::after {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px),
+    url("https://grainy-gradients.vercel.app/noise.svg");
+  background-size: 64px 64px, 64px 64px, cover;
+  background-position: 0 0, 0 0, center;
+  opacity: 0.08;
+}
+
+.cards-section > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  [data-observe-card].in-view {
+    transform: translateY(0) scale(1.01);
+    opacity: 1;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.18);
+    transition: transform 450ms cubic-bezier(0.16,1,0.3,1), box-shadow 450ms ease;
+  }
+}
+
+@layer components {
+  .app-page-frame > .company-admin-page {
+    width: 100%;
+    max-width: var(--app-content-max-width);
+    margin-inline: auto;
+    box-sizing: border-box;
+    padding-inline: 0.875rem;
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+  }
+
+  .company-admin-shell,
+  .company-admin-content,
+  .company-admin-page {
+    @apply space-y-6;
+  }
+
+  .company-admin-header {
+    @apply flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between;
+  }
+
+  .company-admin-header-block {
+    @apply space-y-1.5;
+  }
+
+  .company-admin-title {
+    @apply text-[1.85rem] font-semibold tracking-[-0.03em] text-foreground;
+  }
+
+  .company-admin-description {
+    @apply max-w-3xl text-sm leading-6 text-muted-foreground;
+  }
+
+  .company-admin-banner {
+    @apply rounded-2xl border px-4 py-3 text-sm shadow-sm;
+    border-color: hsl(var(--accent-blue) / 0.22);
+    background:
+      radial-gradient(circle at top right, hsl(var(--accent-blue) / 0.12) 0%, transparent 12rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--background)) 0%,
+        hsl(var(--app-surface-soft) / 0.92) 100%
+      );
+    box-shadow: 0 18px 32px -34px hsl(var(--app-shadow-deep) / 0.24);
+  }
+
+  .company-admin-form,
+  .company-admin-surface {
+    @apply rounded-2xl border backdrop-blur-[4px];
+    border-color: hsl(var(--border) / 0.82);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--card) / 0.97) 0%,
+        hsl(var(--background) / 0.98) 100%
+      );
+    box-shadow: 0 20px 44px -34px hsl(var(--app-shadow-deep) / 0.26);
+  }
+
+  .company-admin-form {
+    @apply space-y-6 p-5 sm:p-6;
+  }
+
+  .company-admin-surface {
+    @apply p-5 sm:p-6;
+  }
+
+  .company-admin-section {
+    @apply space-y-3 rounded-xl border p-4;
+    border-color: hsl(var(--border) / 0.76);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-soft) / 0.92) 0%,
+        hsl(var(--background) / 0.9) 100%
+      );
+  }
+
+  .company-admin-loading {
+    @apply flex min-h-[14rem] items-center justify-center rounded-2xl border text-sm text-muted-foreground;
+    border-color: hsl(var(--border) / 0.82);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--background)) 0%,
+        hsl(var(--app-surface-soft) / 0.88) 100%
+      );
+  }
+
+  .company-admin-empty {
+    @apply app-empty-state;
+  }
+
+  .company-admin-tabs {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .company-admin-tab {
+    @apply inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors;
+    border-color: hsl(var(--border) / 0.82);
+    background-color: hsl(var(--background) / 0.9);
+    color: hsl(var(--muted-foreground));
+    box-shadow: 0 10px 24px -26px hsl(var(--app-shadow-deep) / 0.2);
+  }
+
+  .company-admin-tab:hover {
+    border-color: hsl(var(--primary) / 0.24);
+    background-color: hsl(var(--accent) / 0.6);
+    color: hsl(var(--foreground));
+  }
+
+  .company-admin-tab-active {
+    border-color: hsl(var(--primary) / 0.34);
+    background:
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.12) 0%, transparent 10rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--background)) 0%,
+        hsl(var(--primary) / 0.08) 100%
+      );
+    color: hsl(var(--foreground));
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--primary) / 0.1),
+      0 18px 30px -26px hsl(var(--app-shadow-deep) / 0.26);
+  }
+
+  .company-admin-card-grid {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-3;
+  }
+
+  .company-admin-link-card {
+    @apply flex h-full flex-col gap-4 rounded-2xl border p-5 shadow-sm transition-all duration-200;
+    border-color: hsl(var(--border) / 0.82);
+    background:
+      radial-gradient(circle at top right, hsl(var(--app-surface-tint) / 0.78) 0%, transparent 14rem),
+      linear-gradient(
+        145deg,
+        hsl(var(--background)) 0%,
+        hsl(var(--app-surface-soft) / 0.96) 100%
+      );
+    box-shadow: 0 22px 42px -34px hsl(var(--app-shadow-deep) / 0.24);
+  }
+
+  .company-admin-link-card:hover {
+    border-color: hsl(var(--primary) / 0.26);
+    transform: translateY(-2px);
+    box-shadow: 0 26px 48px -34px hsl(var(--app-shadow-deep) / 0.3);
+  }
+
+  .company-admin-link-card-icon {
+    @apply flex h-11 w-11 items-center justify-center rounded-2xl;
+    background-color: hsl(var(--primary) / 0.12);
+    color: hsl(var(--primary));
+  }
+
+  .company-admin-link-card-title {
+    @apply text-lg font-semibold tracking-[-0.02em] text-foreground;
+  }
+
+  .company-admin-link-card-copy {
+    @apply text-sm leading-6 text-muted-foreground;
+  }
+
+  .company-admin-table-wrap {
+    @apply app-table-wrap;
+  }
+
+  .company-admin-table-wrap table {
+    @apply min-w-full text-sm;
+  }
+
+  .company-admin-table-wrap thead {
+    background-color: hsl(var(--app-surface-soft) / 0.88);
+  }
+
+  .company-admin-table-wrap th {
+    @apply px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground;
+  }
+
+  .company-admin-table-wrap tbody tr + tr td {
+    border-top: 1px solid hsl(var(--border) / 0.72);
+  }
+
+  .company-admin-table-wrap td {
+    @apply px-4 py-3 align-top text-sm text-foreground;
+  }
+
+  .company-admin-page :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select) {
+    @apply app-form-input;
+  }
+
+  .company-admin-page textarea {
+    min-height: 7rem;
+    resize: vertical;
+  }
+
+  .company-admin-page :where(input[type="checkbox"], input[type="radio"]) {
+    accent-color: hsl(var(--primary));
+  }
+}
+
+@layer components {
+  .public-flow-page {
+    @apply min-h-screen px-4 py-10 sm:py-12;
+    color: hsl(var(--foreground));
+    background:
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.12) 0%, transparent 24rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--background)) 0%,
+        hsl(var(--app-surface-soft) / 0.56) 100%
+      );
+  }
+
+  .public-flow-shell {
+    width: 100%;
+    max-width: 78rem;
+    margin-inline: auto;
+  }
+
+  .public-flow-shell-narrow {
+    @apply mx-auto w-full max-w-4xl;
+  }
+
+  .public-flow-hero {
+    @apply relative overflow-hidden rounded-[2rem] border px-6 py-8 sm:px-8 sm:py-10 md:px-10 md:py-12;
+    border-color: hsl(var(--border) / 0.82);
+    background:
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.14) 0%, transparent 16rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.98) 0%,
+        hsl(var(--app-surface-soft) / 0.94) 100%
+      );
+    box-shadow: 0 32px 72px -44px hsl(var(--app-shadow-deep) / 0.32);
+  }
+
+  .public-flow-banner {
+    @apply rounded-full border px-5 py-3 text-sm font-semibold shadow-sm;
+    border-color: hsl(var(--primary) / 0.24);
+    background:
+      linear-gradient(
+        135deg,
+        hsl(var(--primary) / 0.14) 0%,
+        hsl(var(--accent-blue) / 0.14) 100%
+      );
+    color: hsl(var(--foreground));
+    box-shadow: 0 16px 28px -28px hsl(var(--app-shadow-deep) / 0.24);
+  }
+
+  .public-flow-surface {
+    @apply rounded-[1.75rem] border p-6 sm:p-8 md:p-10;
+    border-color: hsl(var(--border) / 0.82);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--card) / 0.98) 0%,
+        hsl(var(--background) / 0.98) 100%
+      );
+    box-shadow: 0 30px 64px -42px hsl(var(--app-shadow-deep) / 0.28);
+  }
+
+  .public-flow-card,
+  .public-flow-card-soft {
+    @apply rounded-2xl border p-5 sm:p-6;
+    border-color: hsl(var(--border) / 0.78);
+    box-shadow: 0 22px 42px -34px hsl(var(--app-shadow-deep) / 0.22);
+  }
+
+  .public-flow-card {
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--card) / 0.98) 0%,
+        hsl(var(--background) / 0.98) 100%
+      );
+  }
+
+  .public-flow-card-soft {
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-soft) / 0.84) 0%,
+        hsl(var(--background) / 0.96) 100%
+      );
+  }
+
+  .public-flow-section {
+    @apply space-y-6 border-t pt-6;
+    border-color: hsl(var(--border) / 0.72);
+  }
+
+  .public-flow-step {
+    @apply flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold;
+    background-color: hsl(var(--primary) / 0.12);
+    color: hsl(var(--primary));
+  }
+
+  .public-flow-label {
+    @apply mb-2 block text-sm font-semibold text-foreground;
+  }
+
+  .public-flow-helper {
+    @apply mt-1 text-xs leading-5 text-muted-foreground;
+  }
+
+  .public-flow-input {
+    @apply app-form-input h-12 px-4 py-3;
+  }
+
+  .public-flow-badge {
+    @apply inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.08em];
+    border-color: hsl(var(--primary) / 0.18);
+    background-color: hsl(var(--primary) / 0.08);
+    color: hsl(var(--primary));
+  }
+
+  .public-flow-stat-card {
+    @apply rounded-2xl border p-5 text-center sm:p-6;
+    border-color: hsl(var(--border) / 0.78);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.98) 0%,
+        hsl(var(--app-surface-soft) / 0.82) 100%
+      );
+    box-shadow: 0 24px 46px -36px hsl(var(--app-shadow-deep) / 0.22);
+  }
+
+  .public-flow-band {
+    @apply rounded-[2rem] border p-6 md:p-12;
+    border-color: hsl(var(--border) / 0.8);
+    background:
+      radial-gradient(circle at top right, hsl(var(--accent-blue) / 0.12) 0%, transparent 18rem),
+      linear-gradient(
+        135deg,
+        hsl(var(--background) / 0.98) 0%,
+        hsl(var(--app-surface-soft) / 0.94) 100%
+      );
+    box-shadow: 0 28px 60px -40px hsl(var(--app-shadow-deep) / 0.26);
+  }
+
+  .public-flow-cta {
+    @apply rounded-[2rem] p-6 text-white md:p-12;
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent-blue)) 100%);
+    box-shadow: 0 34px 68px -42px hsl(var(--app-shadow-deep) / 0.42);
+  }
+
+  .public-flow-button-primary,
+  .public-flow-button-secondary {
+    @apply inline-flex items-center justify-center rounded-full px-6 py-3.5 font-semibold transition-all duration-200;
+  }
+
+  .public-flow-button-primary {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent-blue)) 100%);
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 22px 38px -28px hsl(var(--app-shadow-deep) / 0.4);
+  }
+
+  .public-flow-button-primary:not(:disabled):not([aria-disabled='true']):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 24px 44px -28px hsl(var(--app-shadow-deep) / 0.48);
+  }
+
+  .public-flow-button-primary:disabled,
+  .public-flow-button-primary[aria-disabled='true'] {
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  .public-flow-button-secondary {
+    border: 1px solid hsl(var(--border) / 0.82);
+    background: hsl(var(--background) / 0.88);
+    color: hsl(var(--foreground));
+    box-shadow: 0 14px 28px -28px hsl(var(--app-shadow-deep) / 0.24);
+  }
+
+  .public-flow-button-secondary:not(:disabled):not([aria-disabled='true']):hover {
+    transform: translateY(-1px);
+    border-color: hsl(var(--primary) / 0.24);
+    background: hsl(var(--accent) / 0.65);
+  }
+
+  .public-flow-text-link {
+    @apply inline-flex items-center gap-1 text-sm font-medium transition-colors;
+    color: hsl(var(--primary));
+  }
+
+  .public-flow-text-link:hover {
+    color: hsl(var(--foreground));
+  }
+}

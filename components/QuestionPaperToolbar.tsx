@@ -19,7 +19,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
 
 export function QuestionPaperToolbar({ paper }: { paper: any }) {
-  const { buildReturnHref } = useReturnHrefBuilder("/question-papers");
+  const { buildReturnHref } = useReturnHrefBuilder("/workspace/question-papers");
   const [showModal, setShowModal] = useState(false);
   const [names, setNames] = useState("");
   const [loading, setLoading] = useState(false);
@@ -131,7 +131,7 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        <Link href={buildReturnHref(`/question-papers/edit/${paper._id}`)}>
+        <Link href={buildReturnHref(`/workspace/question-papers/edit/${paper._id}`)}>
           <Button variant="secondary">
             <Pencil className="mr-2 h-4 w-4" />
             Edit
@@ -142,7 +142,7 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
           onClick={() => {
             const copyPayload = buildCopyPayload("");
             sessionStorage.setItem("questionPaperCopy", JSON.stringify(copyPayload));
-            window.location.href = "/question-papers/create";
+            window.location.href = "/workspace/question-papers/create";
           }}
         >
           <Copy className="mr-2 h-4 w-4" />

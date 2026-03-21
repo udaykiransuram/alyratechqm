@@ -1,5 +1,12 @@
 import { getTenantModels } from "@/lib/db-tenant";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
+import {
+  createPendingDeliveryAttempt,
+  expireActiveDeliveryAttempt,
+  findDeliveryAttemptByKey,
+  getDispatchAttemptAckWaitUntil,
+  markDeliveryAttemptAccepted,
+} from "@/lib/reports/dispatchAttempts";
 import { generateStudentReportPdfAndGetPublicUrl } from "@/lib/reports/studentReport";
 import {
   sendWhatsAppDocument,
@@ -7,6 +14,8 @@ import {
 } from "@/lib/whatsapp/meta";
 
 const DEFAULT_MAX_PER_RUN = 10;
+const DEFAULT_STALE_PROCESSING_MINUTES = 15;
+const DEFAULT_PROVIDER_ACK_WAIT_MINUTES = 45;
 
 export type ReportDispatchDeliveryMode =
   | "document"
@@ -25,8 +34,258 @@ export type RunReportDispatchWorkerResult = {
   sent: number;
   failed: number;
   remainingQueued: number;
+  recoveredStale: number;
+  awaitingProviderAck: number;
   deliveryMode: ReportDispatchDeliveryMode;
 };
+
+function buildQueuedJobQuery({
+  schoolKey,
+  now,
+}: {
+  schoolKey: string;
+  now: Date;
+}) {
+  return {
+    schoolKey,
+    status: "queued",
+    $or: [
+      { nextRetryAt: { $exists: false } },
+      { nextRetryAt: { $lte: now } },
+    ],
+  };
+}
+
+function resolveStaleProcessingMinutes() {
+  const parsed = Number(
+    process.env.REPORT_DISPATCH_STALE_MINUTES ||
+      DEFAULT_STALE_PROCESSING_MINUTES,
+  );
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_STALE_PROCESSING_MINUTES;
+  }
+
+  return Math.min(1440, Math.max(1, Math.floor(parsed)));
+}
+
+function resolveProviderAckWaitMinutes() {
+  const parsed = Number(
+    process.env.REPORT_DISPATCH_PROVIDER_ACK_WAIT_MINUTES ||
+      DEFAULT_PROVIDER_ACK_WAIT_MINUTES,
+  );
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_PROVIDER_ACK_WAIT_MINUTES;
+  }
+
+  return Math.min(1440, Math.max(1, Math.floor(parsed)));
+}
+
+function buildStaleProcessingJobQuery({
+  schoolKey,
+  cutoff,
+}: {
+  schoolKey: string;
+  cutoff: Date;
+}) {
+  return {
+    schoolKey,
+    status: "processing",
+    $or: [
+      { processingStartedAt: { $lte: cutoff } },
+      {
+        processingStartedAt: { $exists: false },
+        lastAttemptAt: { $lte: cutoff },
+      },
+      {
+        processingStartedAt: { $exists: false },
+        lastAttemptAt: { $exists: false },
+        updatedAt: { $lte: cutoff },
+      },
+    ],
+  };
+}
+
+async function recoverStaleProcessingJobs({
+  schoolKey,
+}: {
+  schoolKey: string;
+}) {
+  const staleMinutes = resolveStaleProcessingMinutes();
+  const ackWaitMinutes = resolveProviderAckWaitMinutes();
+  const recoveryTime = new Date();
+  const cutoff = new Date(recoveryTime.getTime() - staleMinutes * 60 * 1000);
+  const staleJobs = await ReportDispatchJob.find(
+    buildStaleProcessingJobQuery({
+      schoolKey,
+      cutoff,
+    }),
+  ).sort({
+    processingStartedAt: 1,
+    lastAttemptAt: 1,
+    createdAt: 1,
+  });
+
+  let recoveredStale = 0;
+  let awaitingProviderAck = 0;
+
+  for (const job of staleJobs) {
+    const pendingAckUntil = job.activeAttemptKey
+      ? getDispatchAttemptAckWaitUntil(
+          job.activeAttemptCreatedAt ||
+            job.lastAttemptAt ||
+            job.updatedAt ||
+            recoveryTime,
+          ackWaitMinutes,
+        )
+      : null;
+
+    job.status = "queued";
+    job.processingStartedAt = undefined;
+
+    if (pendingAckUntil && pendingAckUntil.getTime() > recoveryTime.getTime()) {
+      job.nextRetryAt = pendingAckUntil;
+      job.error = `Recovered stale processing lock; waiting for provider acknowledgement before retrying at ${pendingAckUntil.toISOString()}.`;
+      awaitingProviderAck += 1;
+    } else {
+      job.nextRetryAt = recoveryTime;
+      job.error = job.activeAttemptKey
+        ? "Recovered stale processing lock after provider acknowledgement wait expired; retrying with a new delivery attempt."
+        : `Recovered stale processing lock after ${staleMinutes} minute(s) without completion.`;
+    }
+
+    await job.save();
+    recoveredStale += 1;
+  }
+
+  return {
+    recoveredStale,
+    awaitingProviderAck,
+  };
+}
+
+async function claimQueuedReportJobs({
+  schoolKey,
+  limit,
+  jobIds,
+}: {
+  schoolKey: string;
+  limit: number;
+  jobIds: string[];
+}) {
+  const claimedJobs = [];
+
+  if (jobIds.length > 0) {
+    for (const jobId of jobIds.slice(0, limit)) {
+      const claimTime = new Date();
+      const claimedJob = await ReportDispatchJob.findOneAndUpdate(
+        {
+          _id: jobId,
+          ...buildQueuedJobQuery({
+            schoolKey,
+            now: claimTime,
+          }),
+        },
+        {
+          $set: {
+            status: "processing",
+            lastAttemptAt: claimTime,
+            processingStartedAt: claimTime,
+          },
+          $inc: {
+            attempts: 1,
+          },
+        },
+        {
+          new: true,
+        },
+      );
+
+      if (claimedJob) {
+        claimedJobs.push(claimedJob);
+      }
+    }
+
+    return claimedJobs;
+  }
+
+  while (claimedJobs.length < limit) {
+    const claimTime = new Date();
+    const claimedJob = await ReportDispatchJob.findOneAndUpdate(
+      buildQueuedJobQuery({
+        schoolKey,
+        now: claimTime,
+      }),
+      {
+        $set: {
+          status: "processing",
+          lastAttemptAt: claimTime,
+          processingStartedAt: claimTime,
+        },
+        $inc: {
+          attempts: 1,
+        },
+      },
+      {
+        new: true,
+        sort: {
+          createdAt: 1,
+        },
+      },
+    );
+
+    if (!claimedJob) {
+      break;
+    }
+
+    claimedJobs.push(claimedJob);
+  }
+
+  return claimedJobs;
+}
+
+async function ensureReadyForAuthoritativeSend(job: any) {
+  const ackWaitMinutes = resolveProviderAckWaitMinutes();
+  const now = new Date();
+  const activeAttemptKey = String(job.activeAttemptKey || "").trim();
+
+  if (activeAttemptKey) {
+    const activeAttempt = findDeliveryAttemptByKey(job, activeAttemptKey);
+    const ackWaitUntil = getDispatchAttemptAckWaitUntil(
+      job.activeAttemptCreatedAt || activeAttempt?.createdAt || job.lastAttemptAt || now,
+      ackWaitMinutes,
+    );
+
+    if (ackWaitUntil && ackWaitUntil.getTime() > now.getTime()) {
+      job.status = "queued";
+      job.processingStartedAt = undefined;
+      job.nextRetryAt = ackWaitUntil;
+      job.error = `Waiting for provider acknowledgement before retrying at ${ackWaitUntil.toISOString()}.`;
+      await job.save();
+      return {
+        deferredUntil: ackWaitUntil,
+        attemptKey: null,
+      };
+    }
+
+    expireActiveDeliveryAttempt(
+      job,
+      "Provider acknowledgement window expired before the job could be confirmed; rotating to a new delivery attempt.",
+      now,
+    );
+  }
+
+  const attemptKey = createPendingDeliveryAttempt(job, now);
+  job.error = undefined;
+  job.nextRetryAt = undefined;
+  await job.save();
+
+  return {
+    deferredUntil: null,
+    attemptKey,
+  };
+}
 
 function isLikelyConversationWindowOrTemplatePolicyError(message: string) {
   const normalizedMessage = String(message || "").toLowerCase();
@@ -100,27 +359,17 @@ export async function runReportDispatchWorker({
   jobIds = [],
 }: RunReportDispatchWorkerParams): Promise<RunReportDispatchWorkerResult> {
   const deliveryMode = resolveDeliveryMode();
+  const staleRecovery = await recoverStaleProcessingJobs({
+    schoolKey,
+  });
   const targetedJobIds = Array.from(
     new Set(jobIds.map((jobId) => String(jobId || "").trim()).filter(Boolean)),
   );
-  const query: Record<string, any> = {
+  const jobs = await claimQueuedReportJobs({
     schoolKey,
-    status: "queued",
-  };
-
-  if (targetedJobIds.length > 0) {
-    query._id = { $in: targetedJobIds };
-  } else {
-    const now = new Date();
-    query.$or = [
-      { nextRetryAt: { $exists: false } },
-      { nextRetryAt: { $lte: now } },
-    ];
-  }
-
-  const jobs = await ReportDispatchJob.find(query)
-    .sort({ createdAt: 1 })
-    .limit(resolveProcessingLimit(limit ?? targetedJobIds.length));
+    limit: resolveProcessingLimit(limit ?? targetedJobIds.length),
+    jobIds: targetedJobIds,
+  });
 
   let processed = 0;
   let sent = 0;
@@ -130,11 +379,6 @@ export async function runReportDispatchWorker({
     processed += 1;
 
     try {
-      job.status = "processing";
-      job.lastAttemptAt = new Date();
-      job.attempts = (job.attempts || 0) + 1;
-      await job.save();
-
       if (!job.mobileNumber) {
         throw new Error("Invalid job payload: mobileNumber missing");
       }
@@ -199,26 +443,52 @@ export async function runReportDispatchWorker({
         throw new Error(`Unsupported job type: ${job.type}`);
       }
 
+      let authoritativeAttemptKey: string | null = null;
+      const ensureAuthoritativeAttemptKey = async () => {
+        if (authoritativeAttemptKey) {
+          return authoritativeAttemptKey;
+        }
+
+        const prepared = await ensureReadyForAuthoritativeSend(job);
+        authoritativeAttemptKey = prepared.attemptKey;
+        return authoritativeAttemptKey;
+      };
+
       let waRes: any;
       let sentVia: "document" | "template" = "document";
       let templateResponse: any;
 
-      if (
-        deliveryMode === "template_only" ||
-        deliveryMode === "template_first"
-      ) {
+      if (deliveryMode === "template_only") {
+        const attemptKey = await ensureAuthoritativeAttemptKey();
+        if (!attemptKey) {
+          continue;
+        }
+
+        templateResponse = await sendWhatsAppTemplate({
+          to: job.mobileNumber,
+          callbackData: attemptKey,
+        });
+        waRes = templateResponse;
+        sentVia = "template";
+      } else if (deliveryMode === "template_first") {
         templateResponse = await sendWhatsAppTemplate({ to: job.mobileNumber });
         waRes = templateResponse;
         sentVia = "template";
       }
 
       if (deliveryMode !== "template_only") {
+        const attemptKey = await ensureAuthoritativeAttemptKey();
+        if (!attemptKey) {
+          continue;
+        }
+
         try {
           waRes = await sendWhatsAppDocument({
             to: job.mobileNumber,
             link: reportUrl,
             filename,
             caption,
+            callbackData: attemptKey,
           });
           sentVia = "document";
         } catch (documentError: any) {
@@ -231,6 +501,7 @@ export async function runReportDispatchWorker({
           if (!templateResponse) {
             templateResponse = await sendWhatsAppTemplate({
               to: job.mobileNumber,
+              callbackData: attemptKey,
             });
           }
 
@@ -239,14 +510,25 @@ export async function runReportDispatchWorker({
         }
       }
 
+      const acceptedAt = new Date();
+      if (authoritativeAttemptKey) {
+        markDeliveryAttemptAccepted(job, {
+          attemptKey: authoritativeAttemptKey,
+          providerMessageId: waRes?.messages?.[0]?.id,
+          acceptedAt,
+          deliveryStatus: "accepted",
+        });
+      }
+
       job.status = "sent";
       job.error = undefined;
       job.nextRetryAt = undefined;
+      job.processingStartedAt = undefined;
       job.reportUrl = reportUrl;
       job.providerMessageId = waRes?.messages?.[0]?.id;
+      job.providerAcceptedAt = acceptedAt;
       job.deliveryStatus = "accepted";
       job.deliveryError = undefined;
-      job.lastWebhookAt = new Date();
       if (sentVia === "template") {
         job.error =
           deliveryMode === "template_only"
@@ -257,14 +539,48 @@ export async function runReportDispatchWorker({
       sent += 1;
     } catch (error: any) {
       const reachedMax = (job.attempts || 0) >= (job.maxAttempts || 3);
-      job.error = error?.message || "Worker send failed";
-      if (reachedMax) {
-        job.status = "failed";
-      } else {
+      const errorMessage = error?.message || "Worker send failed";
+      job.error = errorMessage;
+      job.processingStartedAt = undefined;
+
+      const activeAttemptKey = String(job.activeAttemptKey || "").trim();
+      const isExplicitProviderRejection = !!error?.providerRejected;
+
+      if (activeAttemptKey && !isExplicitProviderRejection) {
+        const ackWaitMinutes = resolveProviderAckWaitMinutes();
+        const pendingAckUntil =
+          getDispatchAttemptAckWaitUntil(
+            job.activeAttemptCreatedAt || job.lastAttemptAt || new Date(),
+            ackWaitMinutes,
+          ) || new Date(Date.now() + ackWaitMinutes * 60 * 1000);
+
         job.status = "queued";
-        const mins = backoffMinutes(job.attempts || 1);
-        job.nextRetryAt = new Date(Date.now() + mins * 60 * 1000);
+        job.nextRetryAt = pendingAckUntil;
+        job.error = `Delivery attempt outcome is uncertain (${errorMessage}). Waiting for provider acknowledgement until ${pendingAckUntil.toISOString()} before retrying.`;
+      } else {
+        if (activeAttemptKey) {
+          expireActiveDeliveryAttempt(
+            job,
+            `Delivery attempt ended before provider acceptance: ${errorMessage}`,
+            new Date(),
+          );
+        }
+
+        if (reachedMax) {
+          job.status = "failed";
+        } else {
+          job.status = "queued";
+          const mins = backoffMinutes(job.attempts || 1);
+          job.nextRetryAt = new Date(Date.now() + mins * 60 * 1000);
+        }
       }
+
+      if (reachedMax && activeAttemptKey && !isExplicitProviderRejection) {
+        job.status = "queued";
+      } else if (reachedMax && isExplicitProviderRejection) {
+        job.status = "failed";
+      }
+
       await job.save();
       failed += 1;
     }
@@ -278,6 +594,8 @@ export async function runReportDispatchWorker({
       schoolKey,
       status: "queued",
     }),
+    recoveredStale: staleRecovery.recoveredStale,
+    awaitingProviderAck: staleRecovery.awaitingProviderAck,
     deliveryMode,
   };
 }

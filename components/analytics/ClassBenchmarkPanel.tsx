@@ -334,16 +334,16 @@ export default function ClassBenchmarkPanel({
 
   const questionReturnTo = React.useMemo(() => {
     const query = searchParams?.toString();
-    if (!pathname) return '/questions';
+    if (!pathname) return '/workspace/questions';
     return query ? `${pathname}?${query}` : pathname;
   }, [pathname, searchParams]);
 
   const getQuestionHref = React.useCallback(
     (questionId?: string | number) => {
-      if (!questionId) return '/questions';
+      if (!questionId) return '/workspace/questions';
       const params = new URLSearchParams();
       if (questionReturnTo) params.set('returnTo', questionReturnTo);
-      const questionPath = `/questions/view/${encodeURIComponent(String(questionId))}`;
+      const questionPath = `/workspace/questions/view/${encodeURIComponent(String(questionId))}`;
       return params.size > 0 ? `${questionPath}?${params.toString()}` : questionPath;
     },
     [questionReturnTo],
@@ -366,18 +366,26 @@ export default function ClassBenchmarkPanel({
   const cohorts = Array.isArray(benchmarkData?.cohorts)
     ? benchmarkData.cohorts
     : [];
-  const tagBenchmarks = Array.isArray(benchmarkData?.tagBenchmarks)
-    ? benchmarkData.tagBenchmarks
-    : [];
+  const tagBenchmarks = React.useMemo(
+    () =>
+      Array.isArray(benchmarkData?.tagBenchmarks)
+        ? benchmarkData.tagBenchmarks
+        : [],
+    [benchmarkData],
+  );
   const distractorBenchmarks = Array.isArray(benchmarkData?.distractorBenchmarks)
     ? benchmarkData.distractorBenchmarks
     : [];
   const questionBenchmarks = Array.isArray(benchmarkData?.questionBenchmarks)
     ? benchmarkData.questionBenchmarks
     : [];
-  const insights = Array.isArray(benchmarkData?.insights)
-    ? benchmarkData.insights
-    : [];
+  const insights = React.useMemo(
+    () =>
+      Array.isArray(benchmarkData?.insights)
+        ? benchmarkData.insights
+        : [],
+    [benchmarkData],
+  );
   const questionScope = benchmarkData?.questionScope || {};
   const focusCohort = React.useMemo(
     () => getFocusBenchmarkCohort(benchmarkData, selectedAcademicSectionId),

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
@@ -10,7 +10,7 @@ import dynamic from 'next/dynamic';
 import { TagItem } from '@/components/ui/multi-select-tags';
 import { PlusCircle, X } from 'lucide-react';
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
@@ -74,10 +74,21 @@ export function EditQuestionModal({
   const [matrixRows, setMatrixRows] = useState<string[]>(['']);
   const [matrixCols, setMatrixCols] = useState<string[]>(['']);
   const [matrixAnswers, setMatrixAnswers] = useState<number[][]>([]);
+  const initializedQuestionKeyRef = useRef<string | null>(null);
 
-  // --- Populate initial values only when modal opens ---
+  // --- Populate initial values when the modal opens or its source data changes ---
   useEffect(() => {
-    if (!open || !question) return;
+    if (!open || !question) {
+      initializedQuestionKeyRef.current = null;
+      return;
+    }
+
+    const questionKey = `${String(question._id || 'question')}::${allTags.map((tag) => tag._id).join('|')}`;
+    if (initializedQuestionKeyRef.current === questionKey) {
+      return;
+    }
+
+    initializedQuestionKeyRef.current = questionKey;
     setType(question.type || 'single');
     setClassId(
       typeof question.class === 'string'
@@ -114,7 +125,7 @@ export function EditQuestionModal({
       setMatrixCols(['']);
       setMatrixAnswers([]);
     }
-  }, [open]); // <--- Only depend on open
+  }, [allTags, open, question]);
 
   // --- Option handlers ---
   const handleAddOption = () => {
@@ -278,7 +289,6 @@ export function EditQuestionModal({
                 <Card className="app-surface overflow-hidden shadow-none">
                   <CardHeader className="app-section-header py-3.5">
                     <CardTitle>Answer Options</CardTitle>
-                    <CardDescription>Select the correct answer(s) using the checkboxes.</CardDescription>
                   </CardHeader>
                   <CardContent className="app-section-body space-y-3">
                     {options.map((opt, index) => (
@@ -342,14 +352,8 @@ export function EditQuestionModal({
                 <Card className="app-surface overflow-hidden shadow-none">
                   <CardHeader className="app-section-header py-3.5">
                     <CardTitle>Written Response</CardTitle>
-                    <CardDescription>
-                      Descriptive answers are written by students directly and reviewed manually later.
-                    </CardDescription>
                   </CardHeader>
                   <CardContent className="app-section-body">
-                    <div className="rounded-2xl border border-dashed border-border/60 bg-muted/10 px-4 py-4 text-sm text-muted-foreground">
-                      This question type does not use predefined options.
-                    </div>
                   </CardContent>
                 </Card>
               ) : null}
@@ -357,7 +361,6 @@ export function EditQuestionModal({
               <Card className="app-surface overflow-hidden shadow-none">
                 <CardHeader className="app-section-header py-3.5">
                   <CardTitle>Explanation</CardTitle>
-                  <CardDescription>Provide an optional explanation for the answer.</CardDescription>
                 </CardHeader>
                 <CardContent className="app-section-body">
                   <RichTextEditor

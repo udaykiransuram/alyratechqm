@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { recordTenantAudit } from "@/lib/audit";
 import { requireCompanyAdminSession } from "@/lib/api-auth";
 import {
+  buildCompanyAuditActorFromSession,
+  recordCompanyAudit,
+} from "@/lib/company-audit";
+import { requireProductionAdminMaintenanceAccess } from "@/lib/ops-runtime";
+import {
   applySafeStudentRollDuplicateFixes,
   buildStudentRollDuplicateAudit,
   resolveStudentRollDuplicateGroup,
@@ -55,16 +60,57 @@ async function recordRollCleanupAudits(
 }
 
 export async function GET(req: NextRequest) {
+  const maintenanceAccess = requireProductionAdminMaintenanceAccess();
+  if (maintenanceAccess) return maintenanceAccess;
+
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
+  const actor = buildCompanyAuditActorFromSession(auth.session);
+  const schoolKey = normalizeSchoolKey(req.nextUrl.searchParams.get("schoolKey"));
 
   try {
-    const schoolKey = normalizeSchoolKey(
-      req.nextUrl.searchParams.get("schoolKey"),
-    );
     const audit = await buildStudentRollDuplicateAudit(schoolKey || undefined);
+
+    await recordCompanyAudit({
+      schoolKey: schoolKey || undefined,
+      req,
+      actor,
+      entityType: "student_roll_cleanup",
+      entityLabel: schoolKey || "all schools",
+      action: "student_roll_cleanup_audit",
+      summary:
+        audit.summary.duplicateGroupCount > 0
+          ? `Reviewed duplicate student roll numbers and found ${audit.summary.duplicateGroupCount} duplicate group(s).`
+          : "Reviewed duplicate student roll numbers and found no active duplicates.",
+      details: {
+        outcome: "success",
+        requestedSchoolKey: schoolKey || undefined,
+        schoolsScanned: audit.summary.schoolsScanned,
+        schoolsWithDuplicates: audit.summary.schoolsWithDuplicates,
+        duplicateGroupCount: audit.summary.duplicateGroupCount,
+        affectedStudentCount: audit.summary.affectedStudentCount,
+        autoFixCandidateCount: audit.summary.autoFixCandidateCount,
+        riskyGroupCount: audit.summary.riskyGroupCount,
+      },
+    });
+
     return NextResponse.json({ success: true, ...audit });
   } catch (error: any) {
+    await recordCompanyAudit({
+      schoolKey: schoolKey || undefined,
+      req,
+      actor,
+      entityType: "student_roll_cleanup",
+      entityLabel: schoolKey || "all schools",
+      action: "student_roll_cleanup_audit",
+      summary: "Failed to review duplicate student roll numbers.",
+      details: {
+        outcome: "failure",
+        requestedSchoolKey: schoolKey || undefined,
+        error:
+          error?.message || "Failed to audit duplicate student roll numbers.",
+      },
+    });
     return NextResponse.json(
       {
         success: false,
@@ -77,15 +123,22 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const maintenanceAccess = requireProductionAdminMaintenanceAccess();
+  if (maintenanceAccess) return maintenanceAccess;
+
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
+  const actor = buildCompanyAuditActorFromSession(auth.session);
+  let action = "";
+  let schoolKey = "";
+  let normalizedRollNumber = "";
 
   try {
     const body = await req.json().catch(() => ({}));
-    const action = String(body?.action || "").trim();
+    action = String(body?.action || "").trim();
 
     if (action === "safe-fix") {
-      const schoolKey = normalizeSchoolKey(body?.schoolKey);
+      schoolKey = normalizeSchoolKey(body?.schoolKey);
       const result = await applySafeStudentRollDuplicateFixes(
         schoolKey || undefined,
       );
@@ -102,6 +155,31 @@ export async function POST(req: NextRequest) {
         ),
       );
 
+      await recordCompanyAudit({
+        schoolKey: schoolKey || undefined,
+        req,
+        actor,
+        entityType: "student_roll_cleanup",
+        entityLabel: schoolKey || "all schools",
+        action: "student_roll_cleanup_safe_fix",
+        summary:
+          result.summary.updatedCount > 0
+            ? `Applied safe duplicate student roll-number fixes to ${result.summary.updatedCount} student record(s).`
+            : "Ran safe duplicate student roll-number fixes with no eligible changes.",
+        details: {
+          outcome: "success",
+          requestedSchoolKey: schoolKey || undefined,
+          schoolsProcessed: result.summary.schoolsProcessed,
+          updatedCount: result.summary.updatedCount,
+          passwordResetCount: result.summary.passwordResetCount,
+          schools: result.schools.map((schoolResult) => ({
+            schoolKey: schoolResult.schoolKey,
+            updatedCount: schoolResult.updatedCount,
+            passwordResetCount: schoolResult.passwordResetCount,
+          })),
+        },
+      });
+
       return NextResponse.json({
         success: true,
         action,
@@ -110,8 +188,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "resolve-group") {
-      const schoolKey = normalizeSchoolKey(body?.schoolKey);
-      const normalizedRollNumber = String(body?.normalizedRollNumber || "").trim();
+      schoolKey = normalizeSchoolKey(body?.schoolKey);
+      normalizedRollNumber = String(body?.normalizedRollNumber || "").trim();
       const updates = Array.isArray(body?.updates)
         ? body.updates.map((update: any) => ({
             userId: String(update?.userId || "").trim(),
@@ -120,6 +198,24 @@ export async function POST(req: NextRequest) {
         : [];
 
       if (!schoolKey || !normalizedRollNumber || updates.length === 0) {
+        await recordCompanyAudit({
+          schoolKey: schoolKey || undefined,
+          req,
+          actor,
+          entityType: "student_roll_cleanup",
+          entityLabel:
+            schoolKey && normalizedRollNumber
+              ? `${schoolKey}:${normalizedRollNumber}`
+              : schoolKey || "all schools",
+          action: "student_roll_cleanup_manual_resolution",
+          summary: "Rejected manual duplicate student roll-number resolution with missing inputs.",
+          details: {
+            outcome: "rejected",
+            requestedSchoolKey: schoolKey || undefined,
+            normalizedRollNumber: normalizedRollNumber || undefined,
+            updateCount: updates.length,
+          },
+        });
         return NextResponse.json(
           {
             success: false,
@@ -144,12 +240,45 @@ export async function POST(req: NextRequest) {
         "manual_resolution",
       );
 
+      await recordCompanyAudit({
+        schoolKey: result.schoolKey,
+        req,
+        actor,
+        entityType: "student_roll_cleanup",
+        entityLabel: `${result.schoolKey}:${normalizedRollNumber}`,
+        action: "student_roll_cleanup_manual_resolution",
+        summary: `Resolved duplicate student roll-number group ${normalizedRollNumber} in ${result.schoolKey}.`,
+        details: {
+          outcome: "success",
+          requestedSchoolKey: result.schoolKey,
+          normalizedRollNumber,
+          updatedCount: result.updatedCount,
+          passwordResetCount: result.passwordResetCount,
+          updatedUsers: result.updatedUsers,
+        },
+      });
+
       return NextResponse.json({
         success: true,
         action,
         result,
       });
     }
+
+    await recordCompanyAudit({
+      schoolKey: schoolKey || undefined,
+      req,
+      actor,
+      entityType: "student_roll_cleanup",
+      entityLabel: schoolKey || "all schools",
+      action: "student_roll_cleanup_request",
+      summary: "Rejected unsupported duplicate student roll-number cleanup action.",
+      details: {
+        outcome: "rejected",
+        requestedSchoolKey: schoolKey || undefined,
+        action,
+      },
+    });
 
     return NextResponse.json(
       {
@@ -159,6 +288,37 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   } catch (error: any) {
+    await recordCompanyAudit({
+      schoolKey: schoolKey || undefined,
+      req,
+      actor,
+      entityType: "student_roll_cleanup",
+      entityLabel:
+        action === "resolve-group" && normalizedRollNumber
+          ? `${schoolKey || "unknown"}:${normalizedRollNumber}`
+          : schoolKey || "all schools",
+      action:
+        action === "safe-fix"
+          ? "student_roll_cleanup_safe_fix"
+          : action === "resolve-group"
+            ? "student_roll_cleanup_manual_resolution"
+            : "student_roll_cleanup_request",
+      summary:
+        action === "safe-fix"
+          ? "Failed to apply safe duplicate student roll-number fixes."
+          : action === "resolve-group"
+            ? `Failed to resolve duplicate student roll-number group ${normalizedRollNumber || "(unknown)"}.`
+            : "Failed to process duplicate student roll-number cleanup request.",
+      details: {
+        outcome: "failure",
+        requestedSchoolKey: schoolKey || undefined,
+        normalizedRollNumber: normalizedRollNumber || undefined,
+        action: action || undefined,
+        error:
+          error?.message ||
+          "Failed to process duplicate student roll-number cleanup.",
+      },
+    });
     return NextResponse.json(
       {
         success: false,

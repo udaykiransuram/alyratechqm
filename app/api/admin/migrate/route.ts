@@ -4,6 +4,11 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { getTenantDb } from "@/lib/db-tenant";
 import { requireCompanyAdminSession } from "@/lib/api-auth";
+import {
+  buildCompanyAuditActorFromSession,
+  recordCompanyAudit,
+} from "@/lib/company-audit";
+import { requireProductionAdminMaintenanceAccess } from "@/lib/ops-runtime";
 
 // Map logical names to actual MongoDB collection names
 const COLLECTIONS: Record<string, string> = {
@@ -55,23 +60,46 @@ async function migrateCollection(
 }
 
 export async function POST(req: NextRequest) {
+  const maintenanceAccess = requireProductionAdminMaintenanceAccess();
+  if (maintenanceAccess) return maintenanceAccess;
+
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
   await connectDB();
+  const actor = buildCompanyAuditActorFromSession(auth.session);
+  let schoolKey = "";
+  let copy = true;
+  let wipe = false;
+  let collections: string[] = [];
+
   try {
     const body = await req.json();
-    const schoolKey = (body?.schoolKey || "").toString().trim();
-    if (!schoolKey)
+    schoolKey = (body?.schoolKey || "").toString().trim();
+    if (!schoolKey) {
+      await recordCompanyAudit({
+        req,
+        actor,
+        entityType: "tenant_maintenance",
+        entityLabel: "migration request",
+        action: "maintenance_migrate",
+        summary: "Rejected tenant migration request without a school key.",
+        details: {
+          outcome: "rejected",
+          requestedSchoolKey: undefined,
+        },
+      });
+
       return NextResponse.json(
         { success: false, message: "schoolKey required" },
         { status: 400 },
       );
-    const copy = body?.copy !== false;
-    const collections: string[] =
+    }
+    copy = body?.copy !== false;
+    collections =
       Array.isArray(body?.collections) && body.collections.length
         ? body.collections
         : Object.keys(COLLECTIONS);
-    const wipe = !!body?.wipe; // if true, clears tenant collections before copy
+    wipe = !!body?.wipe; // if true, clears tenant collections before copy
 
     const tenantConn = await getTenantDb(schoolKey);
     const globalConn = mongoose.connection;
@@ -109,6 +137,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    await recordCompanyAudit({
+      schoolKey,
+      req,
+      actor,
+      entityType: "tenant_maintenance",
+      entityLabel: schoolKey,
+      action: "maintenance_migrate",
+      summary: `Completed tenant migration workflow for ${schoolKey}.`,
+      details: {
+        outcome: "success",
+        requestedSchoolKey: schoolKey,
+        copy,
+        wipe,
+        collections,
+        dbName: (tenantConn as any).db?.name,
+        results,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       schoolKey,
@@ -117,6 +164,23 @@ export async function POST(req: NextRequest) {
       copy,
     });
   } catch (e: any) {
+    await recordCompanyAudit({
+      schoolKey: schoolKey || undefined,
+      req,
+      actor,
+      entityType: "tenant_maintenance",
+      entityLabel: schoolKey || undefined,
+      action: "maintenance_migrate",
+      summary: `Failed tenant migration workflow for ${schoolKey || "the requested school"}.`,
+      details: {
+        outcome: "failure",
+        requestedSchoolKey: schoolKey || undefined,
+        copy,
+        wipe,
+        collections,
+        error: e?.message || "failed",
+      },
+    });
     return NextResponse.json(
       { success: false, message: e?.message || "failed" },
       { status: 500 },

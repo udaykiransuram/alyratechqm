@@ -24,6 +24,7 @@ yarn-error.log*
 out/
 .next/
 .next-dev/
+*.tsbuildinfo
 *.pdf
 __pycache__/
 *.pyc

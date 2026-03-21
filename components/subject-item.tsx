@@ -33,7 +33,7 @@ export interface SubjectItemProps {
 }
 
 export function SubjectItem({ subject, onDelete, isLoading }: SubjectItemProps) {
-  const { buildReturnHref } = useReturnHrefBuilder('/subjects');
+  const { buildReturnHref } = useReturnHrefBuilder('/workspace/subjects');
   return (
     <li className="h-full list-none">
       <Card className="app-surface flex h-full flex-col overflow-hidden transition-shadow duration-200 hover:shadow-md">
@@ -73,7 +73,7 @@ export function SubjectItem({ subject, onDelete, isLoading }: SubjectItemProps) 
           </div>
 
           <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-4">
-            <Link href={buildReturnHref(`/subjects/edit/${subject._id}`)} className="flex-1">
+            <Link href={buildReturnHref(`/workspace/subjects/edit/${subject._id}`)} className="flex-1">
               <Button disabled={isLoading} size="sm" variant="outline" className="w-full">
                 Edit
               </Button>

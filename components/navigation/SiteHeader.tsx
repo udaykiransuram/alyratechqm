@@ -57,12 +57,7 @@ const SIDEBAR_COLLAPSED_WIDTH = "var(--app-sidebar-collapsed-width)";
 const SIDEBAR_STORAGE_KEY = "app-sidebar-collapsed";
 
 function isCompanyRoute(pathname: string) {
-  return (
-    pathname === "/manage/schools" ||
-    pathname.startsWith("/manage/schools/") ||
-    pathname === "/manage/admin/indexing" ||
-    pathname.startsWith("/manage/admin/indexing/")
-  );
+  return pathname === "/company" || pathname.startsWith("/company/");
 }
 
 function isStudentRoute(pathname: string) {
@@ -73,6 +68,30 @@ function isAuthRoute(pathname: string) {
   return pathname === "/auth/signin" || pathname === "/auth/company-signin";
 }
 
+function isPublicRoute(pathname: string) {
+  return (
+    pathname === "/" ||
+    pathname === "/about" ||
+    pathname.startsWith("/about/") ||
+    pathname === "/benefits" ||
+    pathname.startsWith("/benefits/") ||
+    pathname === "/talent-test" ||
+    pathname.startsWith("/talent-test/") ||
+    pathname === "/register" ||
+    pathname.startsWith("/register/") ||
+    pathname === "/terms" ||
+    pathname.startsWith("/terms/") ||
+    pathname === "/success" ||
+    pathname.startsWith("/success/") ||
+    pathname === "/contact" ||
+    pathname.startsWith("/contact/") ||
+    pathname === "/product" ||
+    pathname.startsWith("/product/") ||
+    pathname === "/case-study" ||
+    pathname.startsWith("/case-study/")
+  );
+}
+
 const schoolSidebarGroups: SidebarGroup[] = [
   {
     title: "Workspace",
@@ -80,7 +99,7 @@ const schoolSidebarGroups: SidebarGroup[] = [
       {
         label: "Home",
         icon: Layers,
-        children: [{ href: "/", label: "Home" }],
+        children: [{ href: "/workspace", label: "Home" }],
       },
     ],
   },
@@ -91,17 +110,17 @@ const schoolSidebarGroups: SidebarGroup[] = [
         label: "Question Papers",
         icon: BookOpen,
         children: [
-          { href: "/question-papers", label: "All Question Papers" },
-          { href: "/question-papers/create", label: "Create Question Paper" },
+          { href: "/workspace/question-papers", label: "All Question Papers" },
+          { href: "/workspace/question-papers/create", label: "Create Question Paper" },
         ],
       },
       {
         label: "Question Bank",
         icon: FileQuestion,
         children: [
-          { href: "/questions", label: "All Questions" },
-          { href: "/questions/create", label: "Create Question" },
-          { href: "/questions/bulk-upload", label: "Bulk Upload" },
+          { href: "/workspace/questions", label: "All Questions" },
+          { href: "/workspace/questions/create", label: "Create Question" },
+          { href: "/workspace/questions/bulk-upload", label: "Bulk Upload" },
         ],
       },
     ],
@@ -113,30 +132,30 @@ const schoolSidebarGroups: SidebarGroup[] = [
         label: "Students",
         icon: GraduationCap,
         children: [
-          { href: "/students", label: "All Students" },
-          { href: "/students/create", label: "Create Student" },
+          { href: "/workspace/students", label: "All Students" },
+          { href: "/workspace/students/create", label: "Create Student" },
         ],
       },
       {
         label: "Teachers",
         icon: UserCog,
         children: [
-          { href: "/teachers", label: "All Teachers" },
-          { href: "/teachers/create", label: "Create Teacher" },
+          { href: "/workspace/teachers", label: "All Teachers" },
+          { href: "/workspace/teachers/create", label: "Create Teacher" },
         ],
       },
       {
         label: "Admins",
         icon: Settings2,
         children: [
-          { href: "/admins", label: "All Admins" },
-          { href: "/admins/create", label: "Create Admin" },
+          { href: "/workspace/admins", label: "All Admins" },
+          { href: "/workspace/admins/create", label: "Create Admin" },
         ],
       },
       {
         label: "User Directory",
         icon: Users,
-        children: [{ href: "/manage/users", label: "Manage School Users" }],
+        children: [{ href: "/workspace/manage/users", label: "Manage School Users" }],
       },
     ],
   },
@@ -147,26 +166,26 @@ const schoolSidebarGroups: SidebarGroup[] = [
         label: "Subjects",
         icon: Layers,
         children: [
-          { href: "/subjects", label: "All Subjects" },
-          { href: "/subjects/create", label: "Create Subject" },
+          { href: "/workspace/subjects", label: "All Subjects" },
+          { href: "/workspace/subjects/create", label: "Create Subject" },
         ],
       },
       {
         label: "Tags",
         icon: Tags,
         children: [
-          { href: "/tags", label: "All Tags" },
-          { href: "/tags/create", label: "Create Tag" },
+          { href: "/workspace/tags", label: "All Tags" },
+          { href: "/workspace/tags/create", label: "Create Tag" },
         ],
       },
       {
         label: "Classes & Sections",
         icon: Layers,
         children: [
-          { href: "/manage/classes", label: "All Classes" },
-          { href: "/manage/classes/create", label: "Create Class" },
-          { href: "/manage/sections", label: "All Sections" },
-          { href: "/manage/sections/create", label: "Create Section" },
+          { href: "/workspace/manage/classes", label: "All Classes" },
+          { href: "/workspace/manage/classes/create", label: "Create Class" },
+          { href: "/workspace/manage/sections", label: "All Sections" },
+          { href: "/workspace/manage/sections/create", label: "Create Section" },
         ],
       },
     ],
@@ -178,9 +197,9 @@ const schoolSidebarGroups: SidebarGroup[] = [
         label: "Analytics",
         icon: BarChart2,
         children: [
-          { href: "/analytics", label: "Overview" },
+          { href: "/workspace/analytics", label: "Overview" },
           {
-            href: "/analytics/student-tag-report/excel-upload",
+            href: "/workspace/analytics/student-tag-report/excel-upload",
             label: "Student Tag Upload",
           },
         ],
@@ -189,8 +208,8 @@ const schoolSidebarGroups: SidebarGroup[] = [
         label: "Reports",
         icon: BarChart2,
         children: [
-          { href: "/manage/reports", label: "Report Jobs" },
-          { href: "/manage/audit-logs", label: "Audit Logs" },
+          { href: "/workspace/manage/reports", label: "Report Jobs" },
+          { href: "/workspace/manage/audit-logs", label: "Audit Logs" },
         ],
       },
     ],
@@ -202,8 +221,8 @@ const schoolSidebarGroups: SidebarGroup[] = [
         label: "Upload Tools",
         icon: Upload,
         children: [
-          { href: "/upload", label: "Upload" },
-          { href: "/upload/getjson", label: "Get JSON" },
+          { href: "/workspace/upload", label: "Upload" },
+          { href: "/workspace/upload/getjson", label: "Get JSON" },
         ],
       },
     ],
@@ -217,13 +236,29 @@ const companySidebarGroups: SidebarGroup[] = [
       {
         label: "Schools",
         icon: Building2,
-        children: [{ href: "/manage/schools", label: "Manage Schools" }],
+        children: [{ href: "/company/schools", label: "Manage Schools" }],
       },
       {
         label: "Maintenance",
         icon: BarChart2,
         children: [
-          { href: "/manage/admin/indexing", label: "Maintenance Console" },
+          { href: "/company/activity", label: "Operations Activity" },
+          { href: "/company/indexing", label: "Maintenance Console" },
+          { href: "/company/talent-test", label: "Talent Test" },
+        ],
+      },
+      {
+        label: "Public Site CMS",
+        icon: BookOpen,
+        children: [
+          { href: "/company/content", label: "Dashboard" },
+          { href: "/company/content/stats", label: "Site Stats" },
+          { href: "/company/content/testimonials", label: "Testimonials" },
+          { href: "/company/content/messages", label: "Messages" },
+          { href: "/company/content/case-studies", label: "Case Studies" },
+          { href: "/company/content/pricing", label: "Pricing Plans" },
+          { href: "/company/content/faq", label: "FAQs" },
+          { href: "/company/content/contact-info", label: "Contact Info" },
         ],
       },
     ],
@@ -239,9 +274,24 @@ function isItemActive(pathname: string, item: SidebarItem) {
 }
 
 function Brand() {
+  const pathname = usePathname() || "/";
+  const publicRoute = isPublicRoute(pathname);
+  const companyRoute = isCompanyRoute(pathname);
+  const studentRoute = isStudentRoute(pathname);
+  const href = publicRoute
+    ? "/"
+    : companyRoute
+      ? "/company/schools"
+      : studentRoute
+        ? "/student/tests"
+        : "/workspace";
+  const subtitle = publicRoute
+    ? "Talent Test & STEM Assessment"
+    : "Quality Management Workspace";
+
   return (
     <Link
-      href="/"
+      href={href}
       className="app-nav-brand flex min-w-0 items-center gap-2.5 px-1.5 py-1.5"
     >
       <div className="app-nav-logo flex h-9 w-9 items-center justify-center rounded-xl">
@@ -249,9 +299,7 @@ function Brand() {
       </div>
       <div className="min-w-0">
         <p className="text-[13px] font-semibold tracking-wide">ALYRA TECH</p>
-        <p className="text-xs text-muted-foreground">
-          Quality Management Workspace
-        </p>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
       </div>
     </Link>
   );
@@ -568,12 +616,16 @@ function MobileSidebar({
 export default function SiteHeader() {
   const pathname = usePathname() || "/";
   const [collapsed, setCollapsed] = useState(false);
+  const publicRoute = isPublicRoute(pathname);
   const schoolWorkspaceRoute =
-    !isAuthRoute(pathname) && !isCompanyRoute(pathname) && !isStudentRoute(pathname);
+    !isAuthRoute(pathname) &&
+    !isCompanyRoute(pathname) &&
+    !isStudentRoute(pathname) &&
+    !publicRoute;
   const companyRoute = isCompanyRoute(pathname);
   const studentRoute = isStudentRoute(pathname);
   const authRoute = isAuthRoute(pathname);
-  const hasSidebar = !authRoute && !studentRoute;
+  const hasSidebar = !authRoute && !studentRoute && !publicRoute;
   const activeSidebarGroups = companyRoute
     ? companySidebarGroups
     : schoolSidebarGroups;
@@ -664,7 +716,21 @@ export default function SiteHeader() {
                   </Button>
                 </>
               ) : null}
-              {authRoute ? (
+              {publicRoute ? (
+                <>
+                  {pathname !== "/register" ? (
+                    <Button asChild size="sm">
+                      <Link href="/register">Register now</Link>
+                    </Button>
+                  ) : null}
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/auth/signin">School Sign In</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/auth/company-signin">Company Sign In</Link>
+                  </Button>
+                </>
+              ) : authRoute ? (
                 <Button asChild variant="outline" size="sm">
                   <Link href={authSwitchHref}>{authSwitchLabel}</Link>
                 </Button>

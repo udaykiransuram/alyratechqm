@@ -28,15 +28,15 @@ export default function QuestionListModal({
 
   const questionReturnTo = useMemo(() => {
     const query = searchParams?.toString();
-    if (!pathname) return '/questions';
+    if (!pathname) return '/workspace/questions';
     return query ? `${pathname}?${query}` : pathname;
   }, [pathname, searchParams]);
 
   const getQuestionHref = (questionId?: string | number) => {
-    if (!questionId) return '/questions';
+    if (!questionId) return '/workspace/questions';
     const params = new URLSearchParams();
     if (questionReturnTo) params.set('returnTo', questionReturnTo);
-    const questionPath = `/questions/view/${encodeURIComponent(String(questionId))}`;
+    const questionPath = `/workspace/questions/view/${encodeURIComponent(String(questionId))}`;
     return params.size > 0 ? `${questionPath}?${params.toString()}` : questionPath;
   };
 

@@ -2,34 +2,143 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
-import { Building2, Eye, EyeOff, Loader2, School } from "lucide-react";
+import {
+  Building2,
+  Eye,
+  EyeOff,
+  Loader2,
+  School,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  SearchableCommandSelect,
+  type SearchableCommandOption,
+} from "@/components/ui/searchable-command-select";
 import { getAuthErrorMessage } from "@/lib/auth-runtime";
-import { setSchoolKeyCookie } from "@/lib/client/school";
+import {
+  getSchoolKeyFromCookie,
+  setSchoolKeyCookie,
+} from "@/lib/client/school";
 import { toast } from "@/components/ui/use-toast";
+
+type SchoolOption = {
+  key: string;
+  displayName: string;
+};
+
+type SchoolsResponse = {
+  success?: boolean;
+  schools?: Array<{ key?: string; displayName?: string }>;
+  message?: string;
+};
 
 export default function SignInClient() {
   const searchParams = useSearchParams();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [schoolKey, setSchoolKey] = useState("");
+  const [schools, setSchools] = useState<SchoolOption[]>([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(true);
+  const [schoolsError, setSchoolsError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const callbackUrl = searchParams.get("callbackUrl")?.trim() || "/";
+  const callbackUrl = searchParams.get("callbackUrl")?.trim() || "/workspace";
   const pageErrorMessage = getAuthErrorMessage(
     searchParams.get("error"),
     "school",
   );
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadSchools() {
+      try {
+        setSchoolsLoading(true);
+        setSchoolsError("");
+
+        const response = await fetch("/api/public/schools", {
+          cache: "no-store",
+        });
+        const data: SchoolsResponse = await response.json();
+
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.message || "Failed to load schools.");
+        }
+
+        if (!mounted) return;
+
+        const nextSchools = Array.isArray(data.schools)
+          ? data.schools
+              .map((school) => ({
+                key: String(school?.key || "").trim(),
+                displayName: String(school?.displayName || "").trim(),
+              }))
+              .filter(
+                (school: SchoolOption) => school.key && school.displayName,
+              )
+          : [];
+
+        setSchools(nextSchools);
+
+        const rememberedSchoolKey = getSchoolKeyFromCookie();
+        if (
+          rememberedSchoolKey &&
+          nextSchools.some(
+            (school: SchoolOption) => school.key === rememberedSchoolKey,
+          )
+        ) {
+          setSchoolKey(rememberedSchoolKey);
+          return;
+        }
+
+        if (nextSchools.length === 1) {
+          setSchoolKey(nextSchools[0].key);
+        }
+      } catch (error: unknown) {
+        if (!mounted) return;
+        setSchools([]);
+        setSchoolsError(
+          error instanceof Error
+            ? error.message
+            : "Failed to load schools. Please refresh and try again.",
+        );
+      } finally {
+        if (mounted) {
+          setSchoolsLoading(false);
+        }
+      }
+    }
+
+    void loadSchools();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const schoolOptions: SearchableCommandOption[] = schools.map((school) => ({
+    value: school.key,
+    label: school.displayName,
+  }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
 
     const trimmedSchoolKey = schoolKey.trim();
+    if (!trimmedSchoolKey) {
+      toast({
+        title: "Select your school",
+        description: "Choose your school from the list before signing in.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
     const result = await signIn("school-user", {
       redirect: false,
       identifier,
@@ -88,43 +197,6 @@ export default function SignInClient() {
                 </p>
               </div>
             </div>
-
-            <div className="app-chip-cloud">
-              <span className="app-meta-chip">School key required</span>
-              <span className="app-meta-chip">Student roll-number login</span>
-              <span className="app-meta-chip">Role-based redirect</span>
-            </div>
-
-            <div className="app-auth-feature-grid">
-              <div className="app-auth-feature-card">
-                <p className="app-auth-feature-title">School-scoped access</p>
-                <p className="app-auth-feature-copy">
-                  The school key ensures every sign-in stays inside the correct
-                  tenant workspace.
-                </p>
-              </div>
-              <div className="app-auth-feature-card">
-                <p className="app-auth-feature-title">Student-ready credentials</p>
-                <p className="app-auth-feature-copy">
-                  Roll numbers work as usernames, which keeps student login easy
-                  for tests and portal access.
-                </p>
-              </div>
-              <div className="app-auth-feature-card">
-                <p className="app-auth-feature-title">Same workspace flow</p>
-                <p className="app-auth-feature-copy">
-                  After login, each role lands on the right page for school
-                  operations or assigned tests.
-                </p>
-              </div>
-              <div className="app-auth-feature-card">
-                <p className="app-auth-feature-title">Company admin available</p>
-                <p className="app-auth-feature-copy">
-                  Use the alternate company sign-in only for school creation and
-                  company-level maintenance work.
-                </p>
-              </div>
-            </div>
           </section>
 
           <section className="app-auth-panel app-auth-panel-form">
@@ -134,8 +206,8 @@ export default function SignInClient() {
                 Continue to the quality workspace
               </h2>
               <p className="app-auth-copy max-w-none">
-                Enter the school key first, then use email or roll number with
-                the matching password.
+                Choose your school first, then use email or roll number with the
+                matching password.
               </p>
             </div>
 
@@ -150,21 +222,24 @@ export default function SignInClient() {
                 </div>
               ) : null}
 
+              {schoolsError ? (
+                <div className="app-feedback app-feedback-error">
+                  {schoolsError}
+                </div>
+              ) : null}
+
               <div className="app-field-group">
                 <label className="app-field-label" htmlFor="schoolKey">
-                  School Key
+                  School
                 </label>
-                <Input
-                  id="schoolKey"
-                  type="text"
-                  placeholder="alpha-high"
+                <SearchableCommandSelect
                   value={schoolKey}
-                  onChange={(e) => setSchoolKey(e.target.value)}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  className="h-11"
-                  required
+                  options={schoolOptions}
+                  onValueChange={setSchoolKey}
+                  placeholder={schoolsLoading ? "Loading schools..." : schools.length > 0 ? "Search and select your school" : "No schools available"}
+                  searchPlaceholder="Search schools..."
+                  emptyText="No schools found."
+                  disabled={schoolsLoading || schools.length === 0}
                 />
               </div>
 
@@ -185,10 +260,6 @@ export default function SignInClient() {
                   className="h-11"
                   required
                 />
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Students sign in with their roll number. Their first password
-                  usually matches that same roll number.
-                </p>
               </div>
 
               <div className="app-field-group">
@@ -230,12 +301,11 @@ export default function SignInClient() {
                 </div>
               </div>
 
-              <div className="app-feedback app-feedback-info">
-                Use the company sign-in only for company-level school
-                management. School users should always stay on this login flow.
-              </div>
-
-              <Button type="submit" disabled={isLoading} className="h-11 w-full text-sm">
+              <Button
+                type="submit"
+                disabled={isLoading || schoolsLoading || schools.length === 0}
+                className="h-11 w-full text-sm"
+              >
                 {isLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
