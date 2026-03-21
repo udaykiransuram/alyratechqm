@@ -32,19 +32,21 @@ const ReportHeader = ({
   return (
     <div className="analytics-card overflow-hidden">
       <div className="analytics-card-header border-l-4 border-primary bg-gradient-to-r from-primary/5 to-transparent">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
+        <div className="analytics-toolbar-row gap-4">
+          <div className="analytics-toolbar-copy">
             <h1 className="app-page-title">{title}</h1>
           </div>
-          {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+          {actions ? (
+            <div className="analytics-toolbar-actions">{actions}</div>
+          ) : null}
         </div>
       </div>
       <div className="p-4 sm:p-5">
         <div
-          className={`grid gap-4 ${items.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}
+          className={`grid gap-3 ${items.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}
         >
           {items.map((item) => (
-            <div key={item.label} className="app-detail-item">
+            <div key={item.label} className="analytics-data-card">
               <p className="app-detail-label">{item.label}</p>
               <p className="app-detail-value break-words">{item.value}</p>
             </div>

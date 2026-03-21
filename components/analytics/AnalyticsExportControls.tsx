@@ -142,7 +142,10 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
         } catch {}
         throw new Error(message);
       } catch (error: any) {
-        console.error("[analytics-export] class workbook download failed", error);
+        console.error(
+          "[analytics-export] class workbook download failed",
+          error,
+        );
       }
     }
 
@@ -791,7 +794,9 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
 
     const doc = new jsPDF();
     let y = 18;
-    const title = paperTitle ? `${paperTitle} • Benchmark Summary` : "Benchmark Summary";
+    const title = paperTitle
+      ? `${paperTitle} • Benchmark Summary`
+      : "Benchmark Summary";
     doc.setFontSize(16);
     doc.text(title, 14, y);
     y += 8;
@@ -812,7 +817,17 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
 
     if (bundle.cohortRows.length > 0) {
       autoTable(doc, {
-        head: [["Section", "Accuracy", "Acc Gap", "Avg Score", "Score Gap", "Pass Rate", "Pass Gap"]],
+        head: [
+          [
+            "Section",
+            "Accuracy",
+            "Acc Gap",
+            "Avg Score",
+            "Score Gap",
+            "Pass Rate",
+            "Pass Gap",
+          ],
+        ],
         body: bundle.cohortRows,
         startY: y,
         styles: { fontSize: 9 },
@@ -893,50 +908,61 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
         margin: { left: 14, right: 14 },
         didDrawCell: (data: any) => {
           if (data.section !== "body" || data.column.index !== 3) return;
-          const url = String(bundle.questionLinkRows?.[data.row.index]?.url || "").trim();
+          const url = String(
+            bundle.questionLinkRows?.[data.row.index]?.url || "",
+          ).trim();
           if (!/^https?:\/\//i.test(url)) return;
-          doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, {
-            url,
-          });
+          doc.link(
+            data.cell.x,
+            data.cell.y,
+            data.cell.width,
+            data.cell.height,
+            {
+              url,
+            },
+          );
         },
       });
     }
 
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    const safeTitle = (paperTitle || "benchmark_summary").replace(/[^a-zA-Z0-9_\-]+/g, "_");
+    const safeTitle = (paperTitle || "benchmark_summary").replace(
+      /[^a-zA-Z0-9_\-]+/g,
+      "_",
+    );
     doc.save(`${safeTitle}-benchmark-${ts}.pdf`);
   }
 
   return (
-    <div className="w-full xl:max-w-[34rem]">
+    <div className="w-full xl:max-w-[40rem]">
       <div className="analytics-toolbar">
-        <div className="analytics-toolbar-row">
+        <div className="analytics-toolbar-row analytics-toolbar-row-start">
           <div className="analytics-toolbar-copy">
             <p className="analytics-toolbar-title">Export current report</p>
           </div>
-          <div className="analytics-toolbar-meta">
+          <div className="analytics-toolbar-meta analytics-toolbar-meta-start">
             <span className="analytics-toolbar-chip">{exportModeLabel}</span>
             <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
               {exportGroupingLabel}
             </span>
           </div>
         </div>
-        <div className="analytics-toolbar-actions">
+        <div className="analytics-toolbar-actions analytics-toolbar-actions-grid">
           <Button
             onClick={handleDownloadTableImage}
             variant="outline"
-            size="sm"
+            size="default"
             disabled={!hasData}
-            className="min-w-[9.5rem] justify-center"
+            className="h-10 w-full justify-center rounded-xl px-4 text-sm sm:min-w-[9.5rem]"
           >
             Table image
           </Button>
           <Button
             onClick={handleDownloadExcel}
             variant="outline"
-            size="sm"
+            size="default"
             disabled={!hasData}
-            className="min-w-[9.5rem] justify-center"
+            className="h-10 w-full justify-center rounded-xl px-4 text-sm sm:min-w-[9.5rem]"
           >
             Excel workbook
           </Button>
@@ -944,9 +970,9 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
             <Button
               onClick={handleDownloadBenchmarkPdf}
               variant="outline"
-              size="sm"
+              size="default"
               disabled={!benchmarkData?.baseline}
-              className="min-w-[9.5rem] justify-center"
+              className="h-10 w-full justify-center rounded-xl px-4 text-sm sm:min-w-[9.5rem]"
             >
               Benchmark PDF
             </Button>
@@ -955,9 +981,9 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
             <Button
               onClick={handleDownloadRemedials}
               variant="outline"
-              size="sm"
+              size="default"
               disabled={!hasData}
-              className="min-w-[10rem] justify-center"
+              className="h-10 w-full justify-center rounded-xl px-4 text-sm sm:min-w-[10rem]"
             >
               Remedial PDF
             </Button>
@@ -965,9 +991,9 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
             <Button
               onClick={handleDownloadRemedials}
               variant="outline"
-              size="sm"
+              size="default"
               disabled={!hasData}
-              className="min-w-[10rem] justify-center"
+              className="h-10 w-full justify-center rounded-xl px-4 text-sm sm:min-w-[10rem]"
             >
               Remedial ZIP
             </Button>

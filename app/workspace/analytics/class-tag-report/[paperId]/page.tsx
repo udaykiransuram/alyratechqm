@@ -463,7 +463,10 @@ export default function ClassTagReportPage({
             <div className="analytics-toolbar-row gap-4">
               <div className="analytics-toolbar-copy">
                 <h2 className="analytics-card-title">Report Controls</h2>
-                <p className="analytics-card-description">Controls</p>
+                <p className="analytics-card-description">
+                  Align setup, grouping, and filters before reviewing the class
+                  report.
+                </p>
               </div>
               <div className="analytics-toolbar-meta">
                 <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
@@ -490,7 +493,7 @@ export default function ClassTagReportPage({
                     type="button"
                     onClick={() => setShowControls((value) => !value)}
                     aria-expanded={showControls}
-                    className="app-button-secondary h-9 w-full px-3 sm:w-auto"
+                    className="analytics-action-button-secondary w-full sm:w-auto"
                   >
                     {showControls ? "Hide setup" : "Setup"}
                   </button>
@@ -498,7 +501,7 @@ export default function ClassTagReportPage({
                     type="button"
                     onClick={() => fetchAnalytics()}
                     disabled={loading}
-                    className="app-button-primary h-9 w-full px-3 sm:w-auto"
+                    className="analytics-action-button-primary w-full sm:w-auto"
                   >
                     {loading ? "Refreshing report..." : "Refresh report"}
                   </button>
@@ -507,7 +510,7 @@ export default function ClassTagReportPage({
               <div className="analytics-setup-grid">
                 <div className="analytics-setup-summary-grid">
                   <div className="analytics-setup-summary-card">
-                    <p className="analytics-setup-summary-label">View</p>
+                    <p className="analytics-setup-summary-label">Report view</p>
                     <div className="analytics-setup-summary-value">
                       <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
                         {activeViewLabel}
@@ -526,7 +529,7 @@ export default function ClassTagReportPage({
                   </div>
                   <div className="analytics-setup-summary-card">
                     <p className="analytics-setup-summary-label">
-                      Class section
+                      Current scope
                     </p>
                     <div className="analytics-setup-summary-value">
                       <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
@@ -536,7 +539,7 @@ export default function ClassTagReportPage({
                   </div>
                 </div>
                 <div className="analytics-setup-toggle-grid">
-                  <label className="analytics-checkbox-card analytics-checkbox-card-split">
+                  <label className="analytics-setup-toggle-card analytics-checkbox-card-split">
                     <span className="analytics-checkbox-card-copy">
                       <span className="analytics-checkbox-card-label">
                         Show tags column
@@ -552,7 +555,7 @@ export default function ClassTagReportPage({
                       className="analytics-inline-check shrink-0"
                     />
                   </label>
-                  <label className="analytics-checkbox-card analytics-checkbox-card-split">
+                  <label className="analytics-setup-toggle-card analytics-checkbox-card-split">
                     <span className="analytics-checkbox-card-copy">
                       <span className="analytics-checkbox-card-label">
                         Show option tags column
@@ -576,7 +579,7 @@ export default function ClassTagReportPage({
             </div>
 
             {selectedTags.length > 0 ? (
-              <div className="rounded-xl border border-primary/15 bg-primary/[0.04] p-3">
+              <div className="analytics-toolbar border-primary/15 bg-primary/[0.04] p-3">
                 <div className="analytics-toolbar-row gap-3">
                   <div className="analytics-toolbar-copy">
                     <p className="analytics-toolbar-title">Active tag filters</p>
@@ -587,7 +590,7 @@ export default function ClassTagReportPage({
                         key={`${tag.type}:${tag.value}`}
                         type="button"
                         onClick={() => handleRemoveSelectedTag(tag)}
-                        className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-background px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                        className="analytics-active-filter-tag"
                         title="Remove tag filter"
                       >
                         <span>
@@ -599,7 +602,7 @@ export default function ClassTagReportPage({
                     <button
                       type="button"
                       onClick={handleClearSelectedTags}
-                      className="app-button-secondary h-8 px-3 text-xs"
+                      className="analytics-action-button-compact"
                     >
                       Clear all
                     </button>
@@ -647,7 +650,7 @@ export default function ClassTagReportPage({
                         })
                       }
                       disabled={loading}
-                      className="app-button-secondary h-9 px-3"
+                      className="analytics-action-button-secondary"
                     >
                       {loading ? "Applying..." : "Apply filter"}
                     </button>
@@ -658,7 +661,7 @@ export default function ClassTagReportPage({
                         fetchAnalytics({ academicSectionId: "all" });
                       }}
                       disabled={loading || !hasActiveAcademicSectionFilter}
-                      className="app-button-secondary h-9 px-3"
+                      className="analytics-action-button-secondary"
                     >
                       Clear filter
                     </button>
@@ -713,7 +716,7 @@ export default function ClassTagReportPage({
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"
-                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                                className="analytics-action-button-icon"
                                 disabled={idx === 0}
                                 onClick={() => {
                                   setGroupBy((prev) => {
@@ -731,7 +734,7 @@ export default function ClassTagReportPage({
                               </button>
                               <button
                                 type="button"
-                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                                className="analytics-action-button-icon"
                                 disabled={idx === groupBy.length - 1}
                                 onClick={() => {
                                   setGroupBy((prev) => {
@@ -834,7 +837,7 @@ export default function ClassTagReportPage({
                             <label className="analytics-checkbox-card">
                               <span className="text-muted-foreground">Rows per page</span>
                               <select
-                                className="analytics-select h-8"
+                                className="analytics-select-compact"
                                 value={insPageSize}
                                 onChange={(event) => {
                                   setInsPageSize(Number(event.target.value));
@@ -886,7 +889,7 @@ export default function ClassTagReportPage({
             </div>
           </div>
         )}
-        <div className="analytics-toolbar border border-border/60 bg-card/70">
+        <div className="analytics-toolbar">
           <div className="analytics-toolbar-row">
             <div className="analytics-toolbar-copy">
               <p className="analytics-toolbar-title">Report view</p>
@@ -900,33 +903,33 @@ export default function ClassTagReportPage({
           <div className="analytics-toggle">
             <button
               onClick={() => setView("table")}
-              className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+              className={`analytics-view-toggle-button ${
                 view === "table"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-background/70"
+                  ? "analytics-view-toggle-button-active"
+                  : "hover:bg-background/70"
               }`}
             >
-              Table View
+              Table
             </button>
             <button
               onClick={() => setView("charts")}
-              className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+              className={`analytics-view-toggle-button ${
                 view === "charts"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-background/70"
+                  ? "analytics-view-toggle-button-active"
+                  : "hover:bg-background/70"
               }`}
             >
-              Chart View
+              Charts
             </button>
             <button
               onClick={() => setView("benchmark")}
-              className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+              className={`analytics-view-toggle-button ${
                 view === "benchmark"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-background/70"
+                  ? "analytics-view-toggle-button-active"
+                  : "hover:bg-background/70"
               }`}
             >
-              Benchmark View
+              Benchmark
             </button>
           </div>
         </div>
