@@ -1,3 +1,5 @@
+import { getConfiguredSiteOrigin } from "@/lib/site-url";
+
 export function getNextAuthSecret() {
   const secret = String(
     process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? "",
@@ -22,24 +24,15 @@ export function getAuthConfigurationIssue(requestOrigin?: string) {
     return "missing_secret" as const;
   }
 
-  const nextAuthOrigin = normalizeOrigin(process.env.NEXTAUTH_URL);
-  if (!nextAuthOrigin) {
-    return "missing_nextauth_url" as const;
-  }
-
-  const publicSiteOrigin = normalizeOrigin(process.env.NEXT_PUBLIC_SITE_URL);
-  if (!publicSiteOrigin) {
-    return "missing_public_site_url" as const;
-  }
-
-  if (nextAuthOrigin !== publicSiteOrigin) {
-    return "configured_origin_mismatch" as const;
+  const configuredOrigin = normalizeOrigin(getConfiguredSiteOrigin());
+  if (!configuredOrigin) {
+    return "missing_site_url" as const;
   }
 
   const normalizedRequestOrigin = normalizeOrigin(requestOrigin);
   if (
     normalizedRequestOrigin &&
-    normalizedRequestOrigin !== nextAuthOrigin
+    normalizedRequestOrigin !== configuredOrigin
   ) {
     return "request_origin_mismatch" as const;
   }
@@ -57,7 +50,7 @@ export function getAuthErrorMessage(
   }
 
   if (normalizedError === "Configuration") {
-    return "Authentication is not configured correctly on this deployment yet. Set NEXTAUTH_SECRET and make sure NEXTAUTH_URL plus NEXT_PUBLIC_SITE_URL both point to this exact site before redeploying.";
+    return "Authentication is not configured correctly on this deployment yet. Set NEXTAUTH_SECRET and configure NEXTAUTH_URL for this exact site before redeploying. NEXT_PUBLIC_SITE_URL is optional and can match the same value if you still use it.";
   }
 
   if (normalizedError === "CredentialsSignin") {

@@ -1,3 +1,5 @@
+import { getSiteUrlOrFallback } from "@/lib/site-url";
+
 export const COMPANY_NAME = "ALYRA TECH";
 export const PRODUCT_NAME = "School Quality Management Workspace";
 export const SITE_TITLE = `${PRODUCT_NAME}`;
@@ -16,10 +18,7 @@ export const SITE_KEYWORDS = [
 ];
 
 export function getMetadataBase() {
-  const candidate =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXTAUTH_URL ||
-    "http://localhost:3000";
+  const candidate = getSiteUrlOrFallback();
 
   try {
     return new URL(candidate);
