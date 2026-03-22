@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
-import Link from 'next/link';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Plus } from 'lucide-react';
 
+import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
 import PageHero from '@/components/layout/PageHero';
 import { useReturnHrefBuilder } from '@/hooks/useReturnNavigation';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,7 @@ interface TagItem {
 }
 
 const INITIAL_TAG_BATCH_SIZE = 24;
+const TAGS_VISIBLE_PAGE_SIZE = INITIAL_TAG_BATCH_SIZE;
 
 type FetchTagsOptions = {
   limit?: number;
@@ -43,6 +44,7 @@ export default function TagsListPage() {
   const [totalTags, setTotalTags] = useState<number | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
+  const [visibleTagCount, setVisibleTagCount] = useState(TAGS_VISIBLE_PAGE_SIZE);
   const archivedTagIdsRef = useRef<Set<string>>(new Set());
   const { toast } = useToast();
 
@@ -145,6 +147,12 @@ export default function TagsListPage() {
     return () => controller.abort();
   }, [loadTagsProgressively]);
 
+  const visibleTags = useMemo(() => {
+    return tags.slice(0, visibleTagCount);
+  }, [tags, visibleTagCount]);
+  const hasMoreVisibleTags = tags.length > visibleTags.length;
+  const remainingVisibleTags = Math.max(0, tags.length - visibleTags.length);
+
   const archiveTag = async (id: string) => {
     const isConfirmed = confirm('Are you sure you want to archive this tag? This action cannot be undone.');
     if (!isConfirmed) return;
@@ -194,16 +202,20 @@ export default function TagsListPage() {
         description="Browse, edit, and assign tags across subjects so question authoring and analytics stay aligned."
         actions={
           <Button asChild className="gap-2">
-            <Link href="/workspace/tags/create">
+            <AppPrefetchLink
+              href="/workspace/tags/create"
+              relatedApiPrefetches={['/api/tag-types', '/api/subjects']}
+            >
               <Plus className="h-4 w-4" />
               Create Tag
-            </Link>
+            </AppPrefetchLink>
           </Button>
         }
         meta={
           <>
             <span className="app-meta-chip">Cross-subject labels</span>
             <span className="app-meta-chip">Analytics-ready structure</span>
+            {backgroundLoading ? <span className="app-meta-chip">Loading more...</span> : null}
           </>
         }
         stats={[
@@ -213,14 +225,22 @@ export default function TagsListPage() {
             meta: 'Active tags available for question authoring and subject organization.',
           },
           {
-            label: 'Visible now',
+            label: 'Loaded now',
             value:
               totalTags !== null && tags.length < totalTags
                 ? `${tags.length}/${totalTags}`
                 : String(tags.length),
             meta: backgroundLoading
               ? 'The first batch is ready now while the remaining tags continue loading in the background.'
-              : 'All currently visible tags are ready to browse.',
+              : 'All currently loaded tags are ready to browse.',
+          },
+          {
+            label: 'Visible now',
+            value:
+              visibleTags.length < tags.length
+                ? `${visibleTags.length}/${tags.length}`
+                : String(visibleTags.length),
+            meta: 'Progressive reveal keeps the grid quick while the full library stays available.',
           },
           {
             label: 'Library state',
@@ -259,25 +279,57 @@ export default function TagsListPage() {
             <div className="app-empty-state">
               <p>No tags found yet.</p>
               <div className="mt-4 flex justify-center">
-                <Link href="/workspace/tags/create">
+                <AppPrefetchLink href="/workspace/tags/create">
                   <Button variant="outline">
                     <Plus className="mr-2 h-4 w-4" />
                     Create Your First Tag
                   </Button>
-                </Link>
+                </AppPrefetchLink>
               </div>
             </div>
           ) : (
             <div className="space-y-3">
               {backgroundLoading ? (
                 <div className="app-feedback app-feedback-info">
-                  Showing the first {tags.length} tag{tags.length === 1 ? '' : 's'} now. The remaining
+                  Loaded {tags.length} tag{tags.length === 1 ? '' : 's'} so far. The remaining
                   {totalTags !== null && totalTags > tags.length ? ` ${totalTags - tags.length}` : ''} tag
-                  {totalTags !== null && totalTags - tags.length === 1 ? '' : 's'} are loading in the background.
+                  {totalTags !== null && totalTags - tags.length === 1 ? '' : 's'} are still loading in the background.
+                </div>
+              ) : null}
+              {tags.length > TAGS_VISIBLE_PAGE_SIZE ? (
+                <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">
+                        Showing {visibleTags.length} of {tags.length} loaded tag
+                        {tags.length === 1 ? '' : 's'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Load more when you want to expand the library without jumping between pages.
+                      </p>
+                    </div>
+                    {hasMoreVisibleTags ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="app-button-compact"
+                        onClick={() =>
+                          setVisibleTagCount(
+                            (currentCount) => currentCount + TAGS_VISIBLE_PAGE_SIZE,
+                          )
+                        }
+                      >
+                        Load More
+                        {remainingVisibleTags > 0
+                          ? ` (${Math.min(TAGS_VISIBLE_PAGE_SIZE, remainingVisibleTags)} more)`
+                          : ''}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {tags.map((tag) => (
+                {visibleTags.map((tag) => (
                   <Card key={tag._id} className="app-surface flex h-full flex-col overflow-hidden">
                     <CardContent className="flex h-full flex-col p-0 pt-0">
                       <div className="flex flex-1 flex-col gap-3 p-4">
@@ -312,15 +364,23 @@ export default function TagsListPage() {
                       </div>
 
                       <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-3">
-                        <Link href={buildReturnHref(`/workspace/tags/edit/${tag._id}`)} className="flex-1">
-                          <Button variant="outline" size="sm" className="w-full" disabled={deletingTagId === tag._id}>
+                        <AppPrefetchLink
+                          href={buildReturnHref(`/workspace/tags/edit/${tag._id}`)}
+                          className="flex-1"
+                        >
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="app-button-compact w-full"
+                            disabled={deletingTagId === tag._id}
+                          >
                             Edit
                           </Button>
-                        </Link>
+                        </AppPrefetchLink>
                         <Button
                           variant="destructive"
                           size="sm"
-                          className="flex-1"
+                          className="app-button-compact flex-1"
                           onClick={() => archiveTag(tag._id)}
                           disabled={deletingTagId === tag._id}
                         >

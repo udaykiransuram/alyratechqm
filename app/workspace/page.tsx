@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
   ArrowRight,
   BarChart2,
@@ -15,6 +14,7 @@ import {
   PRODUCT_NAME,
   SITE_KEYWORDS,
 } from "@/lib/seo";
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import PageHero from "@/components/layout/PageHero";
 
 const workspaceCards = [
@@ -129,15 +129,27 @@ export default function WorkspaceHomePage() {
         description={HOME_DESCRIPTION}
         actions={
           <>
-            <Link href="/workspace/question-papers/create" className="app-button-primary">
+            <AppPrefetchLink
+              href="/workspace/question-papers/create"
+              className="app-button-primary"
+              relatedApiPrefetches={[
+                "/api/classes",
+                "/api/sections",
+                "/api/subjects",
+                "/api/tags/with-subjects",
+              ]}
+            >
               Create question paper
-            </Link>
-            <Link href="/" className="app-button-secondary">
+            </AppPrefetchLink>
+            <AppPrefetchLink href="/" className="app-button-secondary">
               Open talent test
-            </Link>
-            <Link href="/workspace/manage/users" className="app-button-secondary">
+            </AppPrefetchLink>
+            <AppPrefetchLink
+              href="/workspace/manage/users"
+              className="app-button-secondary"
+            >
               Manage users
-            </Link>
+            </AppPrefetchLink>
           </>
         }
         meta={
@@ -191,13 +203,13 @@ export default function WorkspaceHomePage() {
                 </div>
               </div>
 
-              <Link
+              <AppPrefetchLink
                 href={card.href}
                 className="mt-auto inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80"
               >
                 {card.cta}
                 <ArrowRight className="h-4 w-4" />
-              </Link>
+              </AppPrefetchLink>
             </div>
           );
         })}

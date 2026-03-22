@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
 
 interface ContactInfoData {
   email: string;
@@ -129,7 +130,7 @@ export default function ContactInfoPage() {
         <div className="space-y-5">
           {fields.map(f => (
             <div key={f.key}>
-              <label className="mb-2 block text-sm font-semibold text-teal-900 dark:text-teal-200">
+              <label className="company-admin-field-label">
                 {f.label}
               </label>
               {f.type === 'textarea' ? (
@@ -138,7 +139,9 @@ export default function ContactInfoPage() {
                   onChange={e => { setData(prev => ({ ...prev, [f.key]: e.target.value })); setErrors(prev => ({ ...prev, [f.key]: undefined })); }}
                   placeholder={f.placeholder}
                   rows={3}
-                  className={`w-full rounded-lg border ${errors[f.key] ? 'border-red-500' : 'border-teal-200'} bg-white px-4 py-3 text-teal-950 placeholder-teal-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-teal-700 dark:bg-teal-800 dark:text-white`}
+                  className={cn(
+                    errors[f.key] ? 'border-destructive focus-visible:ring-destructive' : undefined,
+                  )}
                   aria-invalid={!!errors[f.key]}
                 />
               ) : (
@@ -147,7 +150,9 @@ export default function ContactInfoPage() {
                   value={data[f.key]}
                   onChange={e => { setData(prev => ({ ...prev, [f.key]: e.target.value })); setErrors(prev => ({ ...prev, [f.key]: undefined })); }}
                   placeholder={f.placeholder}
-                  className={`w-full rounded-lg border ${errors[f.key] ? 'border-red-500' : 'border-teal-200'} bg-white px-4 py-3 text-teal-950 placeholder-teal-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-teal-700 dark:bg-teal-800 dark:text-white`}
+                  className={cn(
+                    errors[f.key] ? 'border-destructive focus-visible:ring-destructive' : undefined,
+                  )}
                   aria-invalid={!!errors[f.key]}
                 />
               )}

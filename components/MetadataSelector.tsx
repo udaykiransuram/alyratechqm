@@ -27,6 +27,10 @@ interface MetadataSelectorProps {
   title?: string;
   description?: string;
   contentClassName?: string;
+  allowAllClassOption?: boolean;
+  allowAllSubjectOption?: boolean;
+  allClassLabel?: string;
+  allSubjectLabel?: string;
 }
 
 export function MetadataSelector({
@@ -49,6 +53,10 @@ export function MetadataSelector({
   title = 'Metadata',
   description = 'Select the class, subject, and relevant tags for this question.',
   contentClassName,
+  allowAllClassOption = false,
+  allowAllSubjectOption = false,
+  allClassLabel = 'All classes',
+  allSubjectLabel = 'All subjects',
 }: MetadataSelectorProps) {
   const [selectedTypeId] = useState<string | null>(null);
 
@@ -74,7 +82,10 @@ export function MetadataSelector({
         body: JSON.stringify({
           name: tagName,
           type: tagTypeId,
-          subjectIds: subjectId ? [subjectId] : [],
+          subjectIds:
+            subjectId && subjectId !== 'all'
+              ? [subjectId]
+              : [],
         }),
         schoolKey,
         fallbackMessage: 'Failed to create the new tag.',
@@ -104,6 +115,9 @@ export function MetadataSelector({
             <SelectValue placeholder="Select a class" />
           </SelectTrigger>
           <SelectContent>
+            {allowAllClassOption ? (
+              <SelectItem value="all">{allClassLabel}</SelectItem>
+            ) : null}
             {classes.map((c) => (
               <SelectItem key={c._id} value={c._id}>
                 {c.name}
@@ -121,13 +135,18 @@ export function MetadataSelector({
               placeholder={
                 subjectsLoading
                   ? 'Loading subjects...'
-                  : !classId
+                  : allowAllSubjectOption
+                    ? allSubjectLabel
+                    : !classId
                     ? 'Select a class first'
                     : 'Select a subject'
               }
             />
           </SelectTrigger>
           <SelectContent>
+            {allowAllSubjectOption ? (
+              <SelectItem value="all">{allSubjectLabel}</SelectItem>
+            ) : null}
             {subjects.map((sub) => (
               <SelectItem key={sub._id} value={sub._id}>
                 {sub.name}

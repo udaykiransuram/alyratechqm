@@ -1,9 +1,9 @@
 'use client';
 
 import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { Plus } from 'lucide-react';
 
+import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
 import PageHero from '@/components/layout/PageHero';
 import { QuestionItem, QuestionItemSkeleton } from '@/components/question-item';
 import type { Question } from '@/components/question-item';
@@ -60,6 +60,7 @@ const DEFAULT_FILTERS: QuestionBankFilters = {
 const ALL_CLASSES_VALUE = '__all_classes__';
 const ALL_SUBJECTS_VALUE = '__all_subjects__';
 const QUESTIONS_INITIAL_PAGE_SIZE = 24;
+const QUESTIONS_VISIBLE_PAGE_SIZE = QUESTIONS_INITIAL_PAGE_SIZE;
 const QUESTIONS_BACKGROUND_BATCH_SIZE = 3;
 
 function buildQuestionQueryParams(
@@ -176,9 +177,16 @@ const QuestionResultsList = memo(function QuestionResultsList({
         <div className="app-empty-state">
           <p>No questions match your current filters.</p>
           <div className="mt-4 flex justify-center">
-            <Link href="/workspace/questions/create">
+            <AppPrefetchLink
+              href="/workspace/questions/create"
+              relatedApiPrefetches={[
+                '/api/classes',
+                '/api/subjects',
+                '/api/tags/with-subjects',
+              ]}
+            >
               <Button variant="outline">Create your first question</Button>
-            </Link>
+            </AppPrefetchLink>
           </div>
         </div>
       ) : (
@@ -211,6 +219,9 @@ export default function ViewQuestionsPage() {
   const [setupNotice, setSetupNotice] = useState<string | null>(null);
   const [backgroundNotice, setBackgroundNotice] = useState<string | null>(null);
   const [totalQuestions, setTotalQuestions] = useState(0);
+  const [visibleQuestionCount, setVisibleQuestionCount] = useState(
+    QUESTIONS_VISIBLE_PAGE_SIZE,
+  );
   const requestAbortRef = useRef<AbortController | null>(null);
   const requestSequenceRef = useRef(0);
   const { toast } = useToast();
@@ -431,6 +442,10 @@ export default function ViewQuestionsPage() {
     void requestQuestions(appliedFilters);
   }, [appliedFilters, requestQuestions]);
 
+  useEffect(() => {
+    setVisibleQuestionCount(QUESTIONS_VISIBLE_PAGE_SIZE);
+  }, [appliedFilters]);
+
   const handleApplyFilters = useCallback(() => {
     const nextFilters = normalizeFilters(draftFilters);
     setAppliedFilters((current) => (areFiltersEqual(current, nextFilters) ? current : nextFilters));
@@ -493,6 +508,16 @@ export default function ViewQuestionsPage() {
   };
 
   const filteredQuestions = questions;
+  const refreshing = loading && filteredQuestions.length > 0;
+  const visibleQuestions = useMemo(() => {
+    return filteredQuestions.slice(0, visibleQuestionCount);
+  }, [filteredQuestions, visibleQuestionCount]);
+  const hasMoreVisibleQuestions = filteredQuestions.length > visibleQuestions.length;
+  const remainingVisibleQuestions = Math.max(
+    0,
+    filteredQuestions.length - visibleQuestions.length,
+  );
+
   const hasPendingFilterChanges = !areFiltersEqual(draftFilters, appliedFilters);
   const hasAnyAppliedFilters = countActiveFilters(appliedFilters) > 0;
   const appliedFilterCount = countActiveFilters(appliedFilters);
@@ -521,13 +546,22 @@ export default function ViewQuestionsPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline">
-              <Link href="/workspace/questions/bulk-upload">Bulk Upload</Link>
+              <AppPrefetchLink href="/workspace/questions/bulk-upload">
+                Bulk Upload
+              </AppPrefetchLink>
             </Button>
             <Button asChild className="gap-2">
-              <Link href="/workspace/questions/create">
+              <AppPrefetchLink
+                href="/workspace/questions/create"
+                relatedApiPrefetches={[
+                  '/api/classes',
+                  '/api/subjects',
+                  '/api/tags/with-subjects',
+                ]}
+              >
                 <Plus className="h-4 w-4" />
                 Create Question
-              </Link>
+              </AppPrefetchLink>
             </Button>
           </div>
         }
@@ -539,6 +573,7 @@ export default function ViewQuestionsPage() {
                 : `${appliedFilterCount} active filter${appliedFilterCount === 1 ? '' : 's'}`}
             </span>
             {appliedTagModeLabel ? <span className="app-meta-chip">{appliedTagModeLabel}</span> : null}
+            {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
             {backgroundLoading ? <span className="app-meta-chip">Loading more...</span> : null}
           </>
         }
@@ -739,16 +774,17 @@ export default function ViewQuestionsPage() {
               : ''}
             {' '}question{filteredQuestions.length === 1 ? '' : 's'}
           </p>
-          {backgroundLoading ? <span className="app-meta-chip">Loading more...</span> : null}
-          {filteredQuestions.length > 0 ? (
-            <div className="app-toolbar-actions">
-              <Button
-                variant="destructive"
+	          {backgroundLoading ? <span className="app-meta-chip">Loading more...</span> : null}
+	          {filteredQuestions.length > 0 ? (
+	            <div className="app-toolbar-actions">
+	              <Button
+	                variant="destructive"
                 size="sm"
+                className="app-button-compact"
                 onClick={async () => {
-                  if (!window.confirm(`Are you sure you want to archive all ${filteredQuestions.length} filtered questions? This cannot be undone.`)) {
-                    return;
-                  }
+	                  if (!window.confirm(`Are you sure you want to archive all ${filteredQuestions.length} loaded questions in the current result set? This cannot be undone.`)) {
+	                    return;
+	                  }
 
                   setIsDeleting(true);
                   try {
@@ -788,20 +824,53 @@ export default function ViewQuestionsPage() {
                 }}
                 disabled={isDeleting}
               >
-                {isDeleting ? 'Archiving...' : `Archive All (${filteredQuestions.length})`}
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      </div>
+	                {isDeleting ? 'Archiving...' : `Archive Loaded (${filteredQuestions.length})`}
+	              </Button>
+	            </div>
+	          ) : null}
+	        </div>
+	      </div>
 
-      <QuestionResultsList
-        loading={loading}
-        error={error}
-        questions={filteredQuestions}
-        isDeleting={isDeleting}
-        questionToArchive={questionToArchive}
-        onRetry={handleRetry}
+	      {filteredQuestions.length > QUESTIONS_VISIBLE_PAGE_SIZE ? (
+	        <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-3">
+	          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+	            <div className="space-y-1">
+	              <p className="text-sm font-medium text-foreground">
+	                Showing {visibleQuestions.length} of {filteredQuestions.length} loaded question
+	                {filteredQuestions.length === 1 ? '' : 's'}
+	              </p>
+	              <p className="text-xs text-muted-foreground">
+	                Load more when you want to expand the current result set without jumping pages.
+	              </p>
+	            </div>
+	            {hasMoreVisibleQuestions ? (
+	              <Button
+	                type="button"
+	                variant="outline"
+	                className="app-button-compact"
+	                onClick={() =>
+	                  setVisibleQuestionCount(
+	                    (currentCount) => currentCount + QUESTIONS_VISIBLE_PAGE_SIZE,
+	                  )
+	                }
+	              >
+	                Load More
+	                {remainingVisibleQuestions > 0
+	                  ? ` (${Math.min(QUESTIONS_VISIBLE_PAGE_SIZE, remainingVisibleQuestions)} more)`
+	                  : ''}
+	              </Button>
+	            ) : null}
+	          </div>
+	        </div>
+	      ) : null}
+
+	      <QuestionResultsList
+	        loading={loading && filteredQuestions.length === 0}
+	        error={error}
+	        questions={visibleQuestions}
+	        isDeleting={isDeleting}
+	        questionToArchive={questionToArchive}
+	        onRetry={handleRetry}
         onArchive={handleArchiveRequest}
       />
 

@@ -7,6 +7,7 @@ import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { Button } from "@/components/ui/button";
 import PageHero from "@/components/layout/PageHero";
+import { fetchApiJson, peekCachedApiJson } from "@/lib/client/api";
 import {
   Card,
   CardContent,
@@ -29,72 +30,92 @@ function getSectionClassId(section: AcademicSectionItem) {
   return typeof section.class === "string" ? section.class : section.class?._id || "";
 }
 
+const EDIT_PAGE_CACHE_TTL_MS = 60_000;
+
+function buildStudentForm(user: any) {
+  return {
+    name: user.name || "",
+    email: user.email || "",
+    password: "",
+    mobileNumber: user.mobileNumber || "",
+    class: user.class ? String(user.class) : "",
+    academicSection: user.academicSection ? String(user.academicSection) : "",
+    rollNumber: user.rollNumber || "",
+    enrolledAt: user.enrolledAt
+      ? new Date(user.enrolledAt).toISOString().split("T")[0]
+      : "",
+  };
+}
+
 export default function EditStudentPage() {
   const params = useParams();
   const id = (params?.id as string) || "";
   const { navigateBack } = useBackNavigation(`/workspace/students/${id}`);
+  const cachedUserResponse = id
+    ? peekCachedApiJson<{ user?: any }>(`/api/users/${id}`, {
+        clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+      })
+    : null;
+  const cachedClassesResponse = peekCachedApiJson<{ classes?: ClassItem[] }>("/api/classes", {
+    clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+  });
+  const cachedSectionsResponse = peekCachedApiJson<{ sections?: AcademicSectionItem[] }>(
+    "/api/sections",
+    {
+      clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+    },
+  );
+  const hasCachedUser = Boolean(cachedUserResponse?.user);
 
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [classes, setClasses] = useState<ClassItem[]>(
+    () => cachedClassesResponse?.classes || [],
+  );
+  const [sections, setSections] = useState<AcademicSectionItem[]>(
+    () => cachedSectionsResponse?.sections || [],
+  );
+  const [loading, setLoading] = useState(() => !hasCachedUser);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    password: "",
-    mobileNumber: "",
-    class: "",
-    academicSection: "",
-    rollNumber: "",
-    enrolledAt: "",
-  });
+  const [form, setForm] = useState(() => buildStudentForm(cachedUserResponse?.user || {}));
 
   useEffect(() => {
     let mounted = true;
     async function load() {
       try {
-        setLoading(true);
+        setLoading(!hasCachedUser);
         setLoadError(null);
         setSubmitError(null);
-        const [uRes, cRes, sRes] = await Promise.all([
-          fetch("/api/users/" + id),
-          fetch("/api/classes"),
-          fetch("/api/sections"),
+        const [uJson, cJson, sJson] = await Promise.all([
+          fetchApiJson<{ user?: any }>(`/api/users/${id}`, {
+            cache: "no-store",
+            fallbackMessage: "Failed to load user.",
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ classes?: ClassItem[] }>("/api/classes", {
+            cache: "no-store",
+            fallbackMessage: "Failed to load classes.",
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ sections?: AcademicSectionItem[] }>("/api/sections", {
+            cache: "no-store",
+            fallbackMessage: "Failed to load sections.",
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
         ]);
-        const uJson = await uRes.json();
-        const cJson = await cRes.json();
-        const sJson = await sRes.json();
         if (!mounted) return;
-        if (!uJson.success) {
-          throw new Error(uJson.message || "Failed to load user");
-        }
-        if (!cJson.success) {
-          throw new Error(cJson.message || "Failed to load classes");
-        }
-        if (!sJson.success) {
-          throw new Error(sJson.message || "Failed to load sections");
-        }
-        const user = uJson.user || {};
-        setForm({
-          name: user.name || "",
-          email: user.email || "",
-          password: "",
-          mobileNumber: user.mobileNumber || "",
-          class: user.class ? String(user.class) : "",
-          academicSection: user.academicSection ? String(user.academicSection) : "",
-          rollNumber: user.rollNumber || "",
-          enrolledAt: user.enrolledAt
-            ? new Date(user.enrolledAt).toISOString().split("T")[0]
-            : "",
-        });
+        setForm(buildStudentForm(uJson.user || {}));
         setClasses(cJson.classes || []);
         setSections(sJson.sections || []);
       } catch (e: any) {
-        setLoadError(e.message || "Failed to load");
+        if (!hasCachedUser) {
+          setLoadError(e.message || "Failed to load");
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -103,7 +124,7 @@ export default function EditStudentPage() {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [hasCachedUser, id]);
 
   const filteredSections = useMemo(
     () => sections.filter((section) => getSectionClassId(section) === form.class),

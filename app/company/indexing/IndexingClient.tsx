@@ -425,7 +425,7 @@ export default function IndexingClient() {
         title="Maintenance Console"
         description="Run company-wide maintenance tasks for tenant databases and clean up legacy student roll-number conflicts without entering a school workspace."
         actions={
-          <Button type="button" variant="outline" onClick={navigateBack}>
+          <Button type="button" variant="outline" size="sm" className="app-button-compact" onClick={navigateBack}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
@@ -484,7 +484,7 @@ export default function IndexingClient() {
                 </p>
               </div>
               <div className="app-toolbar-actions">
-                <Button onClick={handleIndexAll} disabled={indexLoading}>
+                <Button size="sm" className="app-button-compact" onClick={handleIndexAll} disabled={indexLoading}>
                   {indexLoading ? 'Indexing...' : 'Index All Tenants'}
                 </Button>
               </div>
@@ -499,10 +499,11 @@ export default function IndexingClient() {
                   placeholder="Enter school key"
                   value={indexSchoolKey}
                   onChange={(event) => setIndexSchoolKey(event.target.value)}
+                  className="app-control-compact"
                 />
               ) : (
                 <Select onValueChange={setIndexSchoolKey} value={indexSchoolKey}>
-                  <SelectTrigger>
+                  <SelectTrigger className="app-control-compact">
                     <SelectValue placeholder="Select school" />
                   </SelectTrigger>
                   <SelectContent>
@@ -517,6 +518,8 @@ export default function IndexingClient() {
             </div>
             <div className="flex items-end">
               <Button
+                size="sm"
+                className="app-button-compact"
                 onClick={handleIndexOne}
                 disabled={indexLoading || !indexSchoolKey.trim()}
               >
@@ -572,11 +575,11 @@ export default function IndexingClient() {
                     placeholder="Enter school key"
                     value={cleanupSchoolKey}
                     onChange={(event) => setCleanupSchoolKey(event.target.value)}
-                    className="min-w-[14rem]"
+                    className="app-control-compact min-w-[14rem]"
                   />
                 ) : (
                   <Select onValueChange={setCleanupSchoolKey} value={cleanupSchoolKey}>
-                    <SelectTrigger className="min-w-[14rem]">
+                    <SelectTrigger className="app-control-compact min-w-[14rem]">
                       <SelectValue placeholder="Select school" />
                     </SelectTrigger>
                     <SelectContent>
@@ -590,6 +593,7 @@ export default function IndexingClient() {
                 )}
                 <Button
                   variant="outline"
+                  className="app-button-compact"
                   onClick={() => void runCleanupAudit()}
                   disabled={cleanupLoading || cleanupActionLoading}
                 >
@@ -597,6 +601,7 @@ export default function IndexingClient() {
                 </Button>
                 <Button
                   variant="outline"
+                  className="app-button-compact"
                   onClick={() => void runCleanupAudit(cleanupSchoolKey)}
                   disabled={
                     cleanupLoading ||
@@ -607,6 +612,8 @@ export default function IndexingClient() {
                   {cleanupLoading ? 'Auditing...' : 'Audit Selected School'}
                 </Button>
                 <Button
+                  size="sm"
+                  className="app-button-compact"
                   onClick={handleAutoFixSafeDuplicates}
                   disabled={
                     cleanupLoading ||
@@ -621,6 +628,7 @@ export default function IndexingClient() {
                 </Button>
                 <Button
                   variant="outline"
+                  className="app-button-compact"
                   onClick={handleApplySuggestedValuesToAll}
                   disabled={
                     cleanupLoading ||
@@ -768,6 +776,7 @@ export default function IndexingClient() {
                                     <Button
                                       variant="outline"
                                       size="sm"
+                                      className="app-button-compact"
                                       onClick={() =>
                                         handleUseSuggestedValues(
                                           school.schoolKey,
@@ -780,6 +789,7 @@ export default function IndexingClient() {
                                     </Button>
                                     <Button
                                       size="sm"
+                                      className="app-button-compact"
                                       onClick={() =>
                                         void handleResolveGroup(
                                           school.schoolKey,

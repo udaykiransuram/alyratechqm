@@ -160,10 +160,10 @@ export default function FAQManagementPage() {
       </div>
 
             {loading ? (
-        <div className="p-8 text-center text-teal-600">Loading...</div>
+        <div className="company-admin-loading">Loading...</div>
       ) : faqs.length === 0 ? (
         <div className="company-admin-empty">
-          <p className="text-teal-600 dark:text-teal-400">No FAQs for this page yet.</p>
+          <p className="text-muted-foreground">No FAQs for this page yet.</p>
           <button onClick={addNew} className="text-sm font-medium text-primary underline underline-offset-4">
             Add your first FAQ
           </button>
@@ -173,14 +173,13 @@ export default function FAQManagementPage() {
           {faqs.map((faq, index) => (
             <div key={faq._id || `new-${index}`} className="company-admin-surface">
               <div className="mb-4 flex items-center justify-between">
-                <span className="text-sm font-bold text-teal-600">FAQ #{index + 1}</span>
+                <span className="text-sm font-bold text-primary">FAQ #{index + 1}</span>
                 <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <input
                       type="checkbox"
                       checked={faq.isActive}
                       onChange={e => handleChange(index, 'isActive', e.target.checked)}
-                      className="rounded border-teal-300"
                     />
                     Active
                   </label>
@@ -188,7 +187,7 @@ export default function FAQManagementPage() {
                     type="number"
                     value={faq.displayOrder}
                     onChange={e => handleChange(index, 'displayOrder', parseInt(e.target.value) || 0)}
-                    className="w-16 rounded border border-teal-200 px-2 py-1 text-sm dark:border-teal-700 dark:bg-teal-800 dark:text-white"
+                    className="app-control-compact w-20"
                     placeholder="Order"
                   />
                 </div>
@@ -196,23 +195,21 @@ export default function FAQManagementPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-teal-900 dark:text-teal-200">Question</label>
+                  <label className="company-admin-field-label">Question</label>
                   <input
                     type="text"
                     value={faq.question}
                     onChange={e => handleChange(index, 'question', e.target.value)}
                     placeholder="Enter the question..."
-                    className="w-full rounded-lg border border-teal-200 bg-white px-4 py-3 text-teal-950 placeholder-teal-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-teal-700 dark:bg-teal-800 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-teal-900 dark:text-teal-200">Answer</label>
+                  <label className="company-admin-field-label">Answer</label>
                   <textarea
                     value={faq.answer}
                     onChange={e => handleChange(index, 'answer', e.target.value)}
                     placeholder="Enter the answer..."
                     rows={3}
-                    className="w-full rounded-lg border border-teal-200 bg-white px-4 py-3 text-teal-950 placeholder-teal-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-teal-700 dark:bg-teal-800 dark:text-white"
                   />
                 </div>
               </div>
@@ -220,7 +217,7 @@ export default function FAQManagementPage() {
               <div className="mt-4 flex justify-end gap-3">
                 <button
                   onClick={() => deleteFaq(index)}
-                  className="app-button-secondary text-red-600 hover:text-red-700"
+                  className="app-button-secondary app-button-compact-danger"
                 >
                   Delete
                 </button>

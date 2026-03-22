@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import PageLoadingState from '@/components/ui/page-loading-state';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,11 @@ import PageHero from '@/components/layout/PageHero';
 import { ContentRenderer } from '@/components/ContentRenderer';
 import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
 import { useBackNavigation, useCurrentPathWithSearch } from '@/hooks/useReturnNavigation';
+import {
+  fetchApiJson,
+  peekCachedApiJson,
+  resolveClientSchoolKey,
+} from '@/lib/client/api';
 
 interface Question {
   _id: string;
@@ -28,30 +33,74 @@ interface Question {
   matrixAnswers?: number[][];
 }
 
+const DETAIL_PAGE_CACHE_TTL_MS = 30_000;
+
 export default function ViewQuestionPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const { navigateBack } = useBackNavigation('/workspace/questions');
   const currentPath = useCurrentPathWithSearch('/workspace/questions');
   const editHref = buildHrefWithReturnTo(`/workspace/questions/edit/${encodeURIComponent(id)}`, currentPath);
+  const schoolKey = resolveClientSchoolKey();
+  const cachedQuestionResponse = id
+    ? peekCachedApiJson<{ question?: Question }>(`/api/questions/${id}`, {
+        schoolKey,
+        clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+      })
+    : null;
 
-  const [question, setQuestion] = useState<Question | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [question, setQuestion] = useState<Question | null>(() => cachedQuestionResponse?.question || null);
+  const [loading, setLoading] = useState(() => !cachedQuestionResponse?.question);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    fetch(`/api/questions/${id}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.question) {
-          setQuestion(data.question as Question);
-        } else {
-          setError(data.message || 'Question not found.');
+    let active = true;
+    const hasCachedQuestion = Boolean(cachedQuestionResponse?.question);
+
+    if (hasCachedQuestion) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+
+    void fetchApiJson<any>(`/api/questions/${id}`, {
+      cache: 'no-store',
+      schoolKey,
+      fallbackMessage: 'Failed to load question.',
+      clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+    })
+      .then((data) => {
+        if (!active) {
+          return;
         }
+
+        if (data.question) {
+          setQuestion(data.question as Question);
+          setError(null);
+          return;
+        }
+
+        setError(data.message || 'Question not found.');
       })
-      .catch(() => setError('Network error loading question data.'))
-      .finally(() => setLoading(false));
-  }, [id]);
+      .catch((fetchError: any) => {
+        if (!active) {
+          return;
+        }
+        setError(fetchError?.message || 'Network error loading question data.');
+      })
+      .finally(() => {
+        if (!active) {
+          return;
+        }
+        setLoading(false);
+        setRefreshing(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [cachedQuestionResponse?.question, id, schoolKey]);
 
   if (loading) {
     return (
@@ -62,7 +111,7 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
     );
   }
 
-  if (error || !question) {
+  if ((error && !question) || !question) {
     return (
       <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
         <PageHero
@@ -94,7 +143,16 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
               Back
             </Button>
             <Button asChild>
-              <Link href={editHref}>Edit</Link>
+              <AppPrefetchLink
+                href={editHref}
+                relatedApiPrefetches={[
+                  `/api/questions/${id}`,
+                  '/api/classes',
+                  '/api/tags/with-subjects',
+                ]}
+              >
+                Edit
+              </AppPrefetchLink>
             </Button>
           </div>
         }
@@ -102,6 +160,7 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
           <>
             <span className="app-meta-chip">{question.class?.name || 'No class assigned'}</span>
             <span className="app-meta-chip">{question.subject?.name || 'No subject assigned'}</span>
+            {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
           </>
         }
         stats={[
@@ -122,6 +181,8 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
           },
         ]}
       />
+
+      {error ? <div className="app-feedback app-feedback-info">{error}</div> : null}
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">

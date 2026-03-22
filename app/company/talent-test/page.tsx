@@ -156,7 +156,7 @@ export default function TalentTestAdmin() {
             <form onSubmit={handleSubmit} className="company-admin-form">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-teal-900 mb-1">
+            <label className="company-admin-field-label">
               Test Name *
             </label>
             <input
@@ -165,12 +165,11 @@ export default function TalentTestAdmin() {
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., Precision Baseline Assessment"
-              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-teal-900 mb-1">
+            <label className="company-admin-field-label">
               Description *
             </label>
             <textarea
@@ -179,12 +178,11 @@ export default function TalentTestAdmin() {
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Brief description of the test"
-              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-teal-900 mb-1">
+            <label className="company-admin-field-label">
               Price *
             </label>
             <input
@@ -192,18 +190,16 @@ export default function TalentTestAdmin() {
               required
               value={formData.price}
               onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
-              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-teal-900 mb-1">
+            <label className="company-admin-field-label">
               Currency
             </label>
             <select
               value={formData.currency}
               onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               <option value="INR">INR (₹)</option>
               <option value="USD">USD ($)</option>
@@ -212,7 +208,7 @@ export default function TalentTestAdmin() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-teal-900 mb-1">
+            <label className="company-admin-field-label">
               Duration *
             </label>
             <input
@@ -221,21 +217,19 @@ export default function TalentTestAdmin() {
               value={formData.duration}
               onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
               placeholder="e.g., 45 minutes"
-              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div>
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <input
                 type="checkbox"
                 checked={formData.isActive}
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="w-4 h-4 text-teal-600 border-teal-300 rounded focus:ring-teal-500"
               />
-              <span className="text-sm text-teal-900">Active (Available for Registration)</span>
+              <span>Active (Available for Registration)</span>
             </label>
-            <p className="text-xs text-teal-600 mt-1">
+            <p className="company-admin-field-note mt-1">
               Tip: Uncheck to close registrations site-wide instantly.
             </p>
           </div>
@@ -243,51 +237,46 @@ export default function TalentTestAdmin() {
 
         {/* Scheduling */}
         <div className="company-admin-section">
-          <h3 className="text-md font-semibold text-teal-900 mb-3">Scheduling (Dates)</h3>
+          <h3 className="mb-3 text-base font-semibold text-foreground">Scheduling (Dates)</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-teal-900 mb-1">Registrations Open</label>
+              <label className="company-admin-field-label">Registrations Open</label>
               <input
                 type="date"
                 value={formData.registrationsOpen}
                 onChange={(e) => setFormData({ ...formData, registrationsOpen: e.target.value })}
-                className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-teal-900 mb-1">Registration Deadline</label>
+              <label className="company-admin-field-label">Registration Deadline</label>
               <input
                 type="date"
                 value={formData.registrationDeadline}
                 onChange={(e) => setFormData({ ...formData, registrationDeadline: e.target.value })}
-                className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-teal-900 mb-1">Test Window Start</label>
+              <label className="company-admin-field-label">Test Window Start</label>
               <input
                 type="date"
                 value={formData.testWindowStart}
                 onChange={(e) => setFormData({ ...formData, testWindowStart: e.target.value })}
-                className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-teal-900 mb-1">Test Window End</label>
+              <label className="company-admin-field-label">Test Window End</label>
               <input
                 type="date"
                 value={formData.testWindowEnd}
                 onChange={(e) => setFormData({ ...formData, testWindowEnd: e.target.value })}
-                className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-teal-900 mb-1">Results Date</label>
+              <label className="company-admin-field-label">Results Date</label>
               <input
                 type="date"
                 value={formData.resultsDate}
                 onChange={(e) => setFormData({ ...formData, resultsDate: e.target.value })}
-                className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
           </div>
@@ -296,74 +285,78 @@ export default function TalentTestAdmin() {
         {/* Subjects */}
         <div>
           <div className="flex justify-between items-center mb-2">
-            <label className="block text-sm font-medium text-teal-900">Subjects Covered *</label>
+            <label className="company-admin-field-label mb-0">Subjects Covered *</label>
             <button
               type="button"
               onClick={addSubject}
-              className="text-sm text-teal-600 hover:text-teal-700"
+              className="company-admin-inline-add"
             >
-              + Add Subject
+              Add Subject
             </button>
           </div>
-          {formData.subjects.map((subject, index) => (
-            <div key={index} className="flex gap-2 mb-2">
+          <div className="company-admin-inline-list">
+            {formData.subjects.map((subject, index) => (
+              <div key={index} className="company-admin-inline-row">
               <input
                 type="text"
                 required
                 value={subject}
                 onChange={(e) => updateSubject(index, e.target.value)}
                 placeholder={`Subject ${index + 1}`}
-                className="flex-1 px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="flex-1"
               />
               {formData.subjects.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeSubject(index)}
-                  className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                  className="company-admin-inline-remove"
                 >
                   Remove
                 </button>
               )}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Features */}
         <div>
           <div className="flex justify-between items-center mb-2">
-            <label className="block text-sm font-medium text-teal-900">Features & Benefits *</label>
+            <label className="company-admin-field-label mb-0">Features & Benefits *</label>
             <button
               type="button"
               onClick={addFeature}
-              className="text-sm text-teal-600 hover:text-teal-700"
+              className="company-admin-inline-add"
             >
-              + Add Feature
+              Add Feature
             </button>
           </div>
-          {formData.features.map((feature, index) => (
-            <div key={index} className="flex gap-2 mb-2">
+          <div className="company-admin-inline-list">
+            {formData.features.map((feature, index) => (
+              <div key={index} className="company-admin-inline-row">
               <input
                 type="text"
                 required
                 value={feature}
                 onChange={(e) => updateFeature(index, e.target.value)}
                 placeholder={`Feature ${index + 1}`}
-                className="flex-1 px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="flex-1"
               />
               {formData.features.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeFeature(index)}
-                  className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                  className="company-admin-inline-remove"
                 >
                   Remove
                 </button>
               )}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="pt-4 border-t border-teal-200">
+        <div className="border-t border-border/60 pt-4">
           <button
             type="submit"
             disabled={saving}
@@ -374,49 +367,49 @@ export default function TalentTestAdmin() {
         </div>
 
         {/* Preview Section */}
-        <div className="pt-4 border-t border-teal-200">
-          <h3 className="text-lg font-semibold text-teal-900 mb-3">Preview</h3>
-          <div className="bg-teal-50 rounded-lg p-4 space-y-2">
+        <div className="border-t border-border/60 pt-4">
+          <h3 className="mb-3 text-lg font-semibold text-foreground">Preview</h3>
+          <div className="company-admin-preview-card space-y-2">
             <div className="flex justify-between items-start">
               <div>
-                <h4 className="font-semibold text-teal-900">{formData.name}</h4>
-                <p className="text-sm text-teal-700 mt-1">{formData.description}</p>
+                <h4 className="font-semibold text-foreground">{formData.name}</h4>
+                <p className="mt-1 text-sm text-muted-foreground">{formData.description}</p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-teal-900">
+                <p className="text-2xl font-bold text-foreground">
                   {formData.currency === 'INR' ? '₹' : formData.currency === 'USD' ? '$' : '€'}
                   {formData.price}
                 </p>
-                <p className="text-xs text-teal-600">{formData.duration}</p>
+                <p className="text-xs text-muted-foreground">{formData.duration}</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-teal-800">
+            <div className="grid grid-cols-1 gap-2 text-xs text-muted-foreground md:grid-cols-3">
               <div>
-                <span className="font-medium">Open:</span> {formData.registrationsOpen || '—'}
+                <span className="font-medium text-foreground">Open:</span> {formData.registrationsOpen || '—'}
               </div>
               <div>
-                <span className="font-medium">Deadline:</span> {formData.registrationDeadline || '—'}
+                <span className="font-medium text-foreground">Deadline:</span> {formData.registrationDeadline || '—'}
               </div>
               <div>
-                <span className="font-medium">Test Window:</span> {(formData.testWindowStart && formData.testWindowEnd) ? `${formData.testWindowStart} → ${formData.testWindowEnd}` : '—'}
+                <span className="font-medium text-foreground">Test Window:</span> {(formData.testWindowStart && formData.testWindowEnd) ? `${formData.testWindowStart} → ${formData.testWindowEnd}` : '—'}
               </div>
               <div className="md:col-span-3">
-                <span className="font-medium">Results:</span> {formData.resultsDate || '—'}
+                <span className="font-medium text-foreground">Results:</span> {formData.resultsDate || '—'}
               </div>
             </div>
             <div className="mt-3">
-              <p className="text-xs font-medium text-teal-900 mb-1">Subjects:</p>
+              <p className="mb-1 text-xs font-medium text-foreground">Subjects:</p>
               <div className="flex flex-wrap gap-1">
                 {formData.subjects.map((subject, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-teal-200 text-teal-800 text-xs rounded">
+                  <span key={i} className="company-admin-status-chip">
                     {subject}
                   </span>
                 ))}
               </div>
             </div>
             <div className="mt-3">
-              <p className="text-xs font-medium text-teal-900 mb-1">Features:</p>
-              <ul className="text-xs text-teal-700 space-y-0.5">
+              <p className="mb-1 text-xs font-medium text-foreground">Features:</p>
+              <ul className="space-y-0.5 text-xs text-muted-foreground">
                 {formData.features.map((feature, i) => (
                   <li key={i}>• {feature}</li>
                 ))}

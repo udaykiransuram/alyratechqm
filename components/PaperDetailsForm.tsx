@@ -4,9 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { BookOpen } from 'lucide-react';
 import MultiSelectChecklist from '@/components/multi-select-checklist';
-import { Checkbox } from '@/components/ui/checkbox';
 
 interface AcademicSectionItem {
   _id: string;
@@ -67,28 +67,24 @@ function parseDateInput(value: string) {
   return parsed;
 }
 
-function parseDateTimeLocalInput(value: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+function parseTimeInput(value: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
   if (!match) return null;
 
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const hours = Number(match[4]);
-  const minutes = Number(match[5]);
-  const parsed = new Date(year, month - 1, day, hours, minutes);
-
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
   if (
-    parsed.getFullYear() !== year ||
-    parsed.getMonth() !== month - 1 ||
-    parsed.getDate() !== day ||
-    parsed.getHours() !== hours ||
-    parsed.getMinutes() !== minutes
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
   ) {
     return null;
   }
 
-  return parsed;
+  return { hours, minutes };
 }
 
 function formatDateInput(value: Date | null | undefined) {
@@ -99,12 +95,23 @@ function formatDateInput(value: Date | null | undefined) {
   return `${date.getFullYear()}-${padDateSegment(date.getMonth() + 1)}-${padDateSegment(date.getDate())}`;
 }
 
-function formatDateTimeLocal(value: Date | null | undefined) {
+function formatTimeInput(value: Date | null | undefined) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
 
-  return `${formatDateInput(date)}T${padDateSegment(date.getHours())}:${padDateSegment(date.getMinutes())}`;
+  return `${padDateSegment(date.getHours())}:${padDateSegment(date.getMinutes())}`;
+}
+
+function combineDateAndTimeInput(dateValue: string, timeValue: string) {
+  if (!dateValue || !timeValue) return null;
+
+  const parsedDate = parseDateInput(dateValue);
+  const parsedTime = parseTimeInput(timeValue);
+  if (!parsedDate || !parsedTime) return null;
+
+  parsedDate.setHours(parsedTime.hours, parsedTime.minutes, 0, 0);
+  return parsedDate;
 }
 
 export function PaperDetailsForm({
@@ -138,24 +145,35 @@ export function PaperDetailsForm({
   const [examDateInput, setExamDateInput] = useState(() =>
     formatDateInput(examDate),
   );
-  const [onlineStartsAtInput, setOnlineStartsAtInput] = useState(() =>
-    formatDateTimeLocal(onlineStartsAt),
+  const [onlineStartsAtDateInput, setOnlineStartsAtDateInput] = useState(() =>
+    formatDateInput(onlineStartsAt),
   );
-  const [onlineEndsAtInput, setOnlineEndsAtInput] = useState(() =>
-    formatDateTimeLocal(onlineEndsAt),
+  const [onlineStartsAtTimeInput, setOnlineStartsAtTimeInput] = useState(() =>
+    formatTimeInput(onlineStartsAt),
   );
+  const [onlineEndsAtDateInput, setOnlineEndsAtDateInput] = useState(() =>
+    formatDateInput(onlineEndsAt),
+  );
+  const [onlineEndsAtTimeInput, setOnlineEndsAtTimeInput] = useState(() =>
+    formatTimeInput(onlineEndsAt),
+  );
+  const examDateTimestamp = examDate ? examDate.getTime() : null;
+  const onlineStartsAtTimestamp = onlineStartsAt ? onlineStartsAt.getTime() : null;
+  const onlineEndsAtTimestamp = onlineEndsAt ? onlineEndsAt.getTime() : null;
 
   useEffect(() => {
     setExamDateInput(formatDateInput(examDate));
-  }, [examDate ? examDate.getTime() : null]);
+  }, [examDate, examDateTimestamp]);
 
   useEffect(() => {
-    setOnlineStartsAtInput(formatDateTimeLocal(onlineStartsAt));
-  }, [onlineStartsAt ? onlineStartsAt.getTime() : null]);
+    setOnlineStartsAtDateInput(formatDateInput(onlineStartsAt));
+    setOnlineStartsAtTimeInput(formatTimeInput(onlineStartsAt));
+  }, [onlineStartsAt, onlineStartsAtTimestamp]);
 
   useEffect(() => {
-    setOnlineEndsAtInput(formatDateTimeLocal(onlineEndsAt));
-  }, [onlineEndsAt ? onlineEndsAt.getTime() : null]);
+    setOnlineEndsAtDateInput(formatDateInput(onlineEndsAt));
+    setOnlineEndsAtTimeInput(formatTimeInput(onlineEndsAt));
+  }, [onlineEndsAt, onlineEndsAtTimestamp]);
 
   if (initialDataLoading) {
     return (
@@ -301,22 +319,32 @@ export function PaperDetailsForm({
           </div>
 
           <div className="app-field-group sm:col-span-2 rounded-2xl border border-border/60 bg-muted/20 p-4">
-            <div className="flex items-start gap-3">
-              <Checkbox
-                id="onlineEnabled"
-                checked={onlineEnabled}
-                onCheckedChange={(checked) => setOnlineEnabled(checked === true)}
-              />
-              <div className="space-y-1">
-                <Label htmlFor="onlineEnabled" className="app-field-label">
-                  Enable Online Test Delivery
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Objective and matrix questions are auto-graded online.
-                  Descriptive questions are allowed, but they still need manual review after submission.
-                </p>
-              </div>
+            <Label className="app-field-label">Delivery Mode</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant={onlineEnabled ? 'outline' : 'default'}
+                size="sm"
+                className="app-button-compact w-full"
+                onClick={() => setOnlineEnabled(false)}
+              >
+                Offline
+              </Button>
+              <Button
+                type="button"
+                variant={onlineEnabled ? 'default' : 'outline'}
+                size="sm"
+                className="app-button-compact w-full"
+                onClick={() => setOnlineEnabled(true)}
+              >
+                Online
+              </Button>
             </div>
+            <p className="text-sm text-muted-foreground">
+              {onlineEnabled
+                ? 'Online delivery is enabled for student logins. Objective and matrix questions are auto-graded; descriptive answers still need manual review.'
+                : 'Offline/manual workflow only. Enable online mode when students should log in and take the paper digitally.'}
+            </p>
 
             {onlineEnabled ? (
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -324,24 +352,66 @@ export function PaperDetailsForm({
                   <Label htmlFor="onlineStartsAt" className="app-field-label">
                     Online Start
                   </Label>
-                  <Input
-                    id="onlineStartsAt"
-                    type="datetime-local"
-                    value={onlineStartsAtInput}
-                    onChange={(e) => {
-                      const nextValue = e.target.value;
-                      setOnlineStartsAtInput(nextValue);
-                      if (!nextValue) {
-                        setOnlineStartsAt(null);
-                        return;
-                      }
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8.5rem]">
+                    <Input
+                      id="onlineStartsAt"
+                      type="date"
+                      value={onlineStartsAtDateInput}
+                      onChange={(e) => {
+                        const nextDateValue = e.target.value;
+                        setOnlineStartsAtDateInput(nextDateValue);
+                        if (!nextDateValue) {
+                          setOnlineStartsAt(null);
+                          return;
+                        }
 
-                      const parsedDate = parseDateTimeLocalInput(nextValue);
-                      if (parsedDate) {
-                        setOnlineStartsAt(parsedDate);
-                      }
-                    }}
-                  />
+                        const parsedDate = combineDateAndTimeInput(
+                          nextDateValue,
+                          onlineStartsAtTimeInput,
+                        );
+                        if (parsedDate) {
+                          setOnlineStartsAt(parsedDate);
+                        }
+                      }}
+                    />
+                    <Input
+                      type="time"
+                      step={60}
+                      value={onlineStartsAtTimeInput}
+                      onChange={(e) => {
+                        const nextTimeValue = e.target.value;
+                        setOnlineStartsAtTimeInput(nextTimeValue);
+                        if (!nextTimeValue) {
+                          setOnlineStartsAt(null);
+                          return;
+                        }
+
+                        const parsedDate = combineDateAndTimeInput(
+                          onlineStartsAtDateInput,
+                          nextTimeValue,
+                        );
+                        if (parsedDate) {
+                          setOnlineStartsAt(parsedDate);
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-xl px-2.5 text-xs"
+                      onClick={() => {
+                        setOnlineStartsAtDateInput('');
+                        setOnlineStartsAtTimeInput('');
+                        setOnlineStartsAt(null);
+                      }}
+                      disabled={!onlineStartsAtDateInput && !onlineStartsAtTimeInput}
+                    >
+                      Clear start
+                    </Button>
+                  </div>
                   <p className="text-sm text-muted-foreground">
                     Leave blank to start from the paper exam date.
                   </p>
@@ -351,24 +421,66 @@ export function PaperDetailsForm({
                   <Label htmlFor="onlineEndsAt" className="app-field-label">
                     Online End
                   </Label>
-                  <Input
-                    id="onlineEndsAt"
-                    type="datetime-local"
-                    value={onlineEndsAtInput}
-                    onChange={(e) => {
-                      const nextValue = e.target.value;
-                      setOnlineEndsAtInput(nextValue);
-                      if (!nextValue) {
-                        setOnlineEndsAt(null);
-                        return;
-                      }
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8.5rem]">
+                    <Input
+                      id="onlineEndsAt"
+                      type="date"
+                      value={onlineEndsAtDateInput}
+                      onChange={(e) => {
+                        const nextDateValue = e.target.value;
+                        setOnlineEndsAtDateInput(nextDateValue);
+                        if (!nextDateValue) {
+                          setOnlineEndsAt(null);
+                          return;
+                        }
 
-                      const parsedDate = parseDateTimeLocalInput(nextValue);
-                      if (parsedDate) {
-                        setOnlineEndsAt(parsedDate);
-                      }
-                    }}
-                  />
+                        const parsedDate = combineDateAndTimeInput(
+                          nextDateValue,
+                          onlineEndsAtTimeInput,
+                        );
+                        if (parsedDate) {
+                          setOnlineEndsAt(parsedDate);
+                        }
+                      }}
+                    />
+                    <Input
+                      type="time"
+                      step={60}
+                      value={onlineEndsAtTimeInput}
+                      onChange={(e) => {
+                        const nextTimeValue = e.target.value;
+                        setOnlineEndsAtTimeInput(nextTimeValue);
+                        if (!nextTimeValue) {
+                          setOnlineEndsAt(null);
+                          return;
+                        }
+
+                        const parsedDate = combineDateAndTimeInput(
+                          onlineEndsAtDateInput,
+                          nextTimeValue,
+                        );
+                        if (parsedDate) {
+                          setOnlineEndsAt(parsedDate);
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-xl px-2.5 text-xs"
+                      onClick={() => {
+                        setOnlineEndsAtDateInput('');
+                        setOnlineEndsAtTimeInput('');
+                        setOnlineEndsAt(null);
+                      }}
+                      disabled={!onlineEndsAtDateInput && !onlineEndsAtTimeInput}
+                    >
+                      Clear end
+                    </Button>
+                  </div>
                   <p className="text-sm text-muted-foreground">
                     Optional global cutoff. Student timers still respect the
                     paper duration.

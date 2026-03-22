@@ -19,6 +19,9 @@ import {
 } from "@/lib/analytics/benchmarkPresentation";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
 
+const REPORT_CACHE_TTL_MS = 15_000;
+const REPORT_SETUP_CACHE_TTL_MS = 60_000;
+
 const ChartView = dynamic(() => import("@/components/analytics/ChartView"), {
   ssr: false,
   loading: () => (
@@ -239,6 +242,8 @@ export default function ClassTagReportPage({
             cache: "no-store",
             schoolKey: sk,
             fallbackMessage: "Failed to load report setup.",
+            clientCacheTtlMs: REPORT_SETUP_CACHE_TTL_MS,
+            preferClientCache: true,
           },
         );
 
@@ -347,6 +352,8 @@ export default function ClassTagReportPage({
             cache: "no-store",
             schoolKey: sk,
             fallbackMessage: "Failed to load benchmark report.",
+            clientCacheTtlMs: REPORT_CACHE_TTL_MS,
+            preferClientCache: true,
           },
         );
         setBenchmarkData(data);
@@ -390,6 +397,8 @@ export default function ClassTagReportPage({
             cache: "no-store",
             schoolKey: sk,
             fallbackMessage: "Failed to fetch tag report.",
+            clientCacheTtlMs: REPORT_CACHE_TTL_MS,
+            preferClientCache: true,
           },
         );
 

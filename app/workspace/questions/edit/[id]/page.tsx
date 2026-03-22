@@ -22,6 +22,7 @@ import { MetadataSelector } from '@/components/MetadataSelector';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import { fetchApiJson, peekCachedApiJson } from '@/lib/client/api';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
@@ -32,47 +33,95 @@ const MatrixMatchConfigurator = dynamic(() => import('@/components/MatrixMatchCo
   loading: () => <EditorLoadingState label="Loading matrix configurator" />,
 });
 
+const SUPPORT_DATA_CACHE_TTL_MS = 60_000;
+
 export default function EditQuestionPage() {
   const params = useParams();
   const { navigateBack } = useBackNavigation('/workspace/questions');
   const questionId = params.id as string;
   const { toast } = useToast();
+  const cachedQuestionResponse = questionId
+    ? peekCachedApiJson<{ question?: any }>(`/api/questions/${questionId}`, {
+        clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+      })
+    : null;
+  const cachedClassesResponse = peekCachedApiJson<{ classes?: any[] }>('/api/classes', {
+    clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+  });
+  const cachedTagsResponse = peekCachedApiJson<{ tags?: TagItem[] }>('/api/tags/with-subjects', {
+    clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+  });
+  const cachedSubjectsResponse = peekCachedApiJson<{ subjects?: any[] }>('/api/subjects', {
+    clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+  });
+  const hasCachedSupportData = Boolean(
+    cachedClassesResponse?.classes && cachedTagsResponse?.tags,
+  );
+  const cachedQuestion = cachedQuestionResponse?.question;
 
   // Form state
-  const [type, setType] = useState<'single' | 'multiple' | 'matrix-match' | 'descriptive'>('single');
-  const [classId, setClassId] = useState('');
-  const [subjectId, setSubjectId] = useState('');
-  const [classes, setClasses] = useState<any[]>([]);
-  const [subjects, setSubjects] = useState<any[]>([]);
-  const [allTags, setAllTags] = useState<TagItem[]>([]);
-  const [selectedTags, setSelectedTags] = useState<TagItem[]>([]);
-  const [options, setOptions] = useState<{ content: string | null }[]>([{ content: '' }]);
-  const [answerIndexes, setAnswerIndexes] = useState<number[]>([]);
-  const [content, setContent] = useState<string | null>('');
-  const [explanation, setExplanation] = useState<string | null>('');
-  const [marks, setMarks] = useState<number>(1);
+  const [type, setType] = useState<'single' | 'multiple' | 'matrix-match' | 'descriptive'>(
+    cachedQuestion?.type || 'single',
+  );
+  const [classId, setClassId] = useState(cachedQuestion?.class?._id || '');
+  const [subjectId, setSubjectId] = useState(cachedQuestion?.subject?._id || '');
+  const [classes, setClasses] = useState<any[]>(() => cachedClassesResponse?.classes || []);
+  const [subjects, setSubjects] = useState<any[]>(() => cachedSubjectsResponse?.subjects || []);
+  const [allTags, setAllTags] = useState<TagItem[]>(() => cachedTagsResponse?.tags || []);
+  const [selectedTags, setSelectedTags] = useState<TagItem[]>(() => cachedQuestion?.tags || []);
+  const [options, setOptions] = useState<{ content: string | null }[]>(
+    () => cachedQuestion?.options || [{ content: '' }],
+  );
+  const [answerIndexes, setAnswerIndexes] = useState<number[]>(
+    () => cachedQuestion?.answerIndexes ?? [],
+  );
+  const [content, setContent] = useState<string | null>(cachedQuestion?.content || '');
+  const [explanation, setExplanation] = useState<string | null>(
+    cachedQuestion?.explanation || '',
+  );
+  const [marks, setMarks] = useState<number>(cachedQuestion?.marks || 1);
   const [loading, setLoading] = useState(false);
-  const [initialDataLoading, setInitialDataLoading] = useState(true);
+  const [initialDataLoading, setInitialDataLoading] = useState(() => !hasCachedSupportData);
   const [subjectsLoading, setSubjectsLoading] = useState(false);
   const [resetCounter, setResetCounter] = useState(0);
 
   // Matrix match state (consistent with create page)
-  const [matrixRows, setMatrixRows] = useState<string[]>(['']);
-  const [matrixCols, setMatrixCols] = useState<string[]>(['']);
-  const [matrixAnswers, setMatrixAnswers] = useState<number[][]>([]);
+  const [matrixRows, setMatrixRows] = useState<string[]>(
+    () =>
+      cachedQuestion?.type === 'matrix-match'
+        ? (cachedQuestion.matrixOptions || []).map((opt: { left: string }) => opt.left || '')
+        : [''],
+  );
+  const [matrixCols, setMatrixCols] = useState<string[]>(
+    () =>
+      cachedQuestion?.type === 'matrix-match'
+        ? (cachedQuestion.matrixOptions || []).map((opt: { right: string }) => opt.right || '')
+        : [''],
+  );
+  const [matrixAnswers, setMatrixAnswers] = useState<number[][]>(
+    () => cachedQuestion?.matrixAnswers || [],
+  );
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      setInitialDataLoading(true);
+      setInitialDataLoading(!hasCachedSupportData);
       try {
-        const [classesRes, tagsRes] = await Promise.all([
-          fetch('/api/classes'),
-          fetch('/api/tags/with-subjects')
+        const [classesData, tagsData] = await Promise.all([
+          fetchApiJson<{ classes?: any[] }>('/api/classes', {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load initial data.',
+            clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ tags?: TagItem[] }>('/api/tags/with-subjects', {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load initial data.',
+            clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
         ]);
-        const classesData = await classesRes.json();
-        const tagsData = await tagsRes.json();
-        if (classesData.success) setClasses(classesData.classes);
-        if (tagsData.success) setAllTags(tagsData.tags || []);
+        setClasses(classesData.classes || []);
+        setAllTags(tagsData.tags || []);
       } catch (error) {
         toast({ title: 'Error', description: 'Failed to load initial data.', variant: 'destructive' });
       } finally {
@@ -80,24 +129,31 @@ export default function EditQuestionPage() {
       }
     };
     fetchInitialData();
-  }, [toast]);
+  }, [hasCachedSupportData, toast]);
 
   useEffect(() => {
     if (!classId) {
-      setSubjects([]);
+      setSubjects(cachedSubjectsResponse?.subjects || []);
       setSubjectId('');
+      setSubjectsLoading(false);
       return;
     }
     const fetchSubjectsForClass = async () => {
-      setSubjectsLoading(true);
+      const cachedSubjects = cachedSubjectsResponse?.subjects || [];
+      if (cachedSubjects.length > 0) {
+        setSubjects(cachedSubjects);
+        setSubjectsLoading(false);
+      } else {
+        setSubjectsLoading(true);
+      }
       try {
-        const res = await fetch(`/api/subjects`);
-        const data = await res.json();
-        if (data.success) {
-          setSubjects(data.subjects || []);
-        } else {
-          toast({ title: 'Error', description: 'Failed to load subjects for the selected class.', variant: 'destructive' });
-        }
+        const data = await fetchApiJson<{ subjects?: any[] }>('/api/subjects', {
+          cache: 'no-store',
+          fallbackMessage: 'Failed to load subjects for the selected class.',
+          clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+          preferClientCache: true,
+        });
+        setSubjects(data.subjects || []);
       } catch (error) {
         toast({ title: 'Network Error', description: 'Could not fetch subjects.', variant: 'destructive' });
       } finally {
@@ -105,43 +161,49 @@ export default function EditQuestionPage() {
       }
     };
     fetchSubjectsForClass();
-  }, [classId, toast]);
+  }, [cachedSubjectsResponse?.subjects, classId, toast]);
 
   useEffect(() => {
     if (!questionId) return;
     const fetchQuestion = async () => {
-      setInitialDataLoading(true);
+      if (!cachedQuestion) {
+        setInitialDataLoading(true);
+      }
       try {
-        const res = await fetch(`/api/questions/${questionId}`);
-        const data = await res.json();
-        if (data.success && data.question) {
-          const q = data.question;
-          setType(q.type || 'single');
-          setClassId(q.class?._id || '');
-          setSubjectId(q.subject?._id || '');
-          setSelectedTags(q.tags || []);
-          setContent(q.content || '');
-          setExplanation(q.explanation || '');
-          setMarks(q.marks || 1);
-          setOptions(q.options || [{ content: '' }]);
-          setAnswerIndexes(q.answerIndexes ?? []);
-          // Matrix-match mapping
-          if (q.type === 'matrix-match') {
-            setMatrixRows(q.matrixOptions.map((opt: { left: string }) => opt.left || ''));
-            setMatrixCols(q.matrixOptions.map((opt: { right: string }) => opt.right || ''));
-            setMatrixAnswers(q.matrixAnswers || []);
-          }
-        } else {
-          toast({ title: 'Error', description: 'Failed to load question.', variant: 'destructive' });
+        const data = await fetchApiJson<{ question?: any }>(`/api/questions/${questionId}`, {
+          cache: 'no-store',
+          fallbackMessage: 'Failed to load question.',
+          clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+          preferClientCache: true,
+        });
+        if (!data.question) {
+          throw new Error('Failed to load question.');
+        }
+        const q = data.question;
+        setType(q.type || 'single');
+        setClassId(q.class?._id || '');
+        setSubjectId(q.subject?._id || '');
+        setSelectedTags(q.tags || []);
+        setContent(q.content || '');
+        setExplanation(q.explanation || '');
+        setMarks(q.marks || 1);
+        setOptions(q.options || [{ content: '' }]);
+        setAnswerIndexes(q.answerIndexes ?? []);
+        if (q.type === 'matrix-match') {
+          setMatrixRows(q.matrixOptions.map((opt: { left: string }) => opt.left || ''));
+          setMatrixCols(q.matrixOptions.map((opt: { right: string }) => opt.right || ''));
+          setMatrixAnswers(q.matrixAnswers || []);
         }
       } catch (error) {
-        toast({ title: 'Network Error', description: 'Could not fetch question.', variant: 'destructive' });
+        if (!cachedQuestion) {
+          toast({ title: 'Network Error', description: 'Could not fetch question.', variant: 'destructive' });
+        }
       } finally {
         setInitialDataLoading(false);
       }
     };
     fetchQuestion();
-  }, [questionId, toast]);
+  }, [cachedQuestion, questionId, toast]);
 
   const recommendedTagIds = useMemo(() => {
     if (!subjectId) return [];

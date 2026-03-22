@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { MessageSquareText, RefreshCcw, Wrench } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { RefreshCcw, Wrench } from "lucide-react";
 import PageHero from "@/components/layout/PageHero";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import ListPagination from "@/components/ui/list-pagination";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { fetchApiJson } from "@/lib/client/api";
 import { getSchoolKeyFromCookie } from "@/lib/client/school";
@@ -78,6 +78,17 @@ type ReportFilterOption = {
 
 type TypeFilter = "all" | "student" | "teacher" | "admin" | "exam";
 type ReportScopeFilter = "all" | "benchmark" | "student";
+const REPORT_JOB_PAGE_SIZE = 40;
+const REPORT_JOB_CACHE_TTL_MS = 30_000;
+
+type ReportJobsCacheEntry = {
+  jobs: Job[];
+  totalJobs: number;
+  pages: number;
+  page: number;
+  academicSectionOptions: ReportFilterOption[];
+  fetchedAt: number;
+};
 
 function isBenchmarkJob(job: Job) {
   return job.type !== "student";
@@ -185,7 +196,7 @@ function formatDateTime(value?: string) {
 
 export default function ManageReportJobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -198,33 +209,128 @@ export default function ManageReportJobsPage() {
     ReportFilterOption[]
   >([]);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [totalJobs, setTotalJobs] = useState(0);
+  const jobsCacheRef = useRef<Map<string, ReportJobsCacheEntry>>(new Map());
 
   const schoolKey = useMemo(() => getSchoolKeyFromCookie(), []);
 
-  const loadJobs = async ({ silent = false }: { silent?: boolean } = {}) => {
+  const buildJobsQueryString = (targetPage = page) => {
+    const qs = new URLSearchParams();
+    if (statusFilter !== "all") qs.set("status", statusFilter);
+    if (typeFilter !== "all") qs.set("type", typeFilter);
+    if (reportScopeFilter !== "all") qs.set("scope", reportScopeFilter);
+    if (academicSectionFilter !== "all") {
+      qs.set("academicSectionId", academicSectionFilter);
+    }
+    qs.set("page", String(targetPage));
+    qs.set("limit", String(REPORT_JOB_PAGE_SIZE));
+    return qs.toString();
+  };
+
+  const getJobsCacheKey = (targetPage = page) =>
+    `${schoolKey || "no-school"}::${buildJobsQueryString(targetPage)}`;
+
+  const applyJobsCacheEntry = (entry: ReportJobsCacheEntry) => {
+    setJobs(entry.jobs);
+    setTotalJobs(entry.totalJobs);
+    setPages(entry.pages);
+    setPage(entry.page);
+    setAcademicSectionOptions(entry.academicSectionOptions);
+  };
+
+  const prefetchJobsPage = async (targetPage: number, totalPageCount: number) => {
+    if (targetPage < 1 || targetPage > totalPageCount) {
+      return;
+    }
+
+    const cacheKey = getJobsCacheKey(targetPage);
+    const cachedEntry = jobsCacheRef.current.get(cacheKey);
+    if (cachedEntry && Date.now() - cachedEntry.fetchedAt < REPORT_JOB_CACHE_TTL_MS) {
+      return;
+    }
+
     try {
-      if (!silent) {
-        setLoading(true);
-      }
-      setError(null);
-      const qs = new URLSearchParams();
-      if (statusFilter !== "all") qs.set("status", statusFilter);
-      if (academicSectionFilter !== "all") {
-        qs.set("academicSectionId", academicSectionFilter);
-      }
-      const data = await fetchApiJson<any>(`/api/reports/jobs?${qs.toString()}`, {
+      const data = await fetchApiJson<any>(`/api/reports/jobs?${buildJobsQueryString(targetPage)}`, {
         cache: "no-store",
         schoolKey,
         fallbackMessage: "Failed to load report jobs.",
       });
-      setJobs(data.jobs || []);
-      setAcademicSectionOptions(
-        Array.isArray(data?.filters?.academicSections)
+      const resolvedPage = Math.max(1, Number(data.page) || targetPage);
+      jobsCacheRef.current.set(getJobsCacheKey(resolvedPage), {
+        jobs: Array.isArray(data.jobs) ? data.jobs : [],
+        totalJobs: Math.max(0, Number(data.total) || 0),
+        pages: Math.max(1, Number(data.pages) || 1),
+        page: resolvedPage,
+        academicSectionOptions: Array.isArray(data?.filters?.academicSections)
           ? data.filters.academicSections
           : [],
+        fetchedAt: Date.now(),
+      });
+    } catch {
+    }
+  };
+
+  const loadJobs = async ({
+    silent = false,
+    force = false,
+    targetPage = page,
+  }: {
+    silent?: boolean;
+    force?: boolean;
+    targetPage?: number;
+  } = {}) => {
+    const cacheKey = getJobsCacheKey(targetPage);
+    const cachedEntry = jobsCacheRef.current.get(cacheKey);
+    const hasFreshCache =
+      cachedEntry && Date.now() - cachedEntry.fetchedAt < REPORT_JOB_CACHE_TTL_MS;
+
+    if (cachedEntry) {
+      applyJobsCacheEntry(cachedEntry);
+      if (hasFreshCache && !force) {
+        setError(null);
+        if (!silent) {
+          setLoading(false);
+        }
+        void prefetchJobsPage(targetPage + 1, cachedEntry.pages);
+        return;
+      }
+    }
+
+    try {
+      if (!silent) {
+        setLoading(true);
+      }
+      if (!cachedEntry) {
+        setError(null);
+      }
+      const data = await fetchApiJson<any>(
+        `/api/reports/jobs?${buildJobsQueryString(targetPage)}`,
+        {
+          cache: "no-store",
+          schoolKey,
+          fallbackMessage: "Failed to load report jobs.",
+        },
       );
+      const resolvedPage = Math.max(1, Number(data.page) || targetPage);
+      const nextEntry = {
+        jobs: Array.isArray(data.jobs) ? data.jobs : [],
+        totalJobs: Math.max(0, Number(data.total) || 0),
+        pages: Math.max(1, Number(data.pages) || 1),
+        page: resolvedPage,
+        academicSectionOptions: Array.isArray(data?.filters?.academicSections)
+          ? data.filters.academicSections
+          : [],
+        fetchedAt: Date.now(),
+      };
+      jobsCacheRef.current.set(getJobsCacheKey(resolvedPage), nextEntry);
+      applyJobsCacheEntry(nextEntry);
+      void prefetchJobsPage(resolvedPage + 1, nextEntry.pages);
     } catch (loadError: any) {
-      setError(loadError?.message || "Failed to load report jobs.");
+      if (!cachedEntry) {
+        setError(loadError?.message || "Failed to load report jobs.");
+      }
     } finally {
       if (!silent) {
         setLoading(false);
@@ -235,7 +341,7 @@ export default function ManageReportJobsPage() {
   useEffect(() => {
     void loadJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, academicSectionFilter]);
+  }, [academicSectionFilter, page, reportScopeFilter, statusFilter, typeFilter]);
 
   const retryJob = async (jobId: string) => {
     try {
@@ -247,7 +353,7 @@ export default function ManageReportJobsPage() {
         fallbackMessage: "Retry failed.",
       });
       setNotice("Retry request queued successfully.");
-      void loadJobs({ silent: true });
+      void loadJobs({ silent: true, force: true });
     } catch (retryError: any) {
       setError(retryError?.message || "Retry failed.");
     } finally {
@@ -274,28 +380,13 @@ export default function ManageReportJobsPage() {
       setNotice(
         `Worker processed ${data.processed}, sent ${data.sent}, and failed ${data.failed}.${recoveredNote}${waitingNote}`,
       );
-      void loadJobs({ silent: true });
+      void loadJobs({ silent: true, force: true });
     } catch (workerError: any) {
       setError(workerError?.message || "Worker run failed.");
     }
   };
 
-  const visibleJobs = useMemo(
-    () =>
-      jobs.filter((job) => {
-        if (typeFilter !== "all" && job.type !== typeFilter) {
-          return false;
-        }
-        if (reportScopeFilter === "benchmark" && !isBenchmarkJob(job)) {
-          return false;
-        }
-        if (reportScopeFilter === "student" && isBenchmarkJob(job)) {
-          return false;
-        }
-        return true;
-      }),
-    [jobs, reportScopeFilter, typeFilter],
-  );
+  const visibleJobs = jobs;
 
   const summary = useMemo(() => {
     return visibleJobs.reduce(
@@ -352,14 +443,15 @@ export default function ManageReportJobsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
-              size="sm"
-              onClick={() => void loadJobs()}
+              size="default"
+              className="h-10 rounded-xl px-4"
+              onClick={() => void loadJobs({ force: true })}
               disabled={loading}
             >
               <RefreshCcw className="h-4 w-4" />
               Refresh
             </Button>
-            <Button size="sm" onClick={runWorkerNow}>
+            <Button size="default" className="h-10 rounded-xl px-4" onClick={runWorkerNow}>
               <Wrench className="h-4 w-4" />
               Run Worker Now
             </Button>
@@ -379,24 +471,24 @@ export default function ManageReportJobsPage() {
         }
         stats={[
           {
-            label: "Visible jobs",
-            value: String(summary.total),
-            meta: "Jobs visible after the current recipient and report-scope filters.",
+            label: "Filtered jobs",
+            value: String(totalJobs),
+            meta: "Matching jobs across all pages for the active filters.",
           },
           {
-            label: "Pending",
+            label: "Pending on page",
             value: String(summary.pending),
-            meta: "Queued or processing jobs still waiting for completion.",
+            meta: "Queued or processing jobs on the current page.",
           },
           {
-            label: "Sent",
+            label: "Sent on page",
             value: String(summary.sent),
-            meta: "Jobs successfully processed and dispatched.",
+            meta: "Jobs successfully processed on the current page.",
           },
           {
-            label: "Failed",
+            label: "Failed on page",
             value: String(summary.failed),
-            meta: "Jobs that may need a retry or worker follow-up.",
+            meta: "Jobs on this page that may need a retry or worker follow-up.",
           },
         ]}
       />
@@ -404,175 +496,212 @@ export default function ManageReportJobsPage() {
       {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
       {notice ? <div className="app-feedback app-feedback-success">{notice}</div> : null}
 
-      <Card className="app-filter-panel">
-        <CardHeader className="app-filter-panel-header">
-          <div className="app-filter-panel-heading">
-            <div className="app-filter-panel-copy">
-              <CardTitle className="app-filter-panel-title">Filters & Actions</CardTitle>
-              <p className="app-report-filter-panel-note">
+      <Card className="analytics-card overflow-hidden">
+        <CardHeader className="analytics-card-header">
+          <div className="analytics-toolbar-row gap-4">
+            <div className="analytics-toolbar-copy">
+              <CardTitle className="analytics-card-title">Filters & Actions</CardTitle>
+              <p className="analytics-card-description">
                 Narrow the delivery queue by dispatch state, recipient type, report scope, and class-section context.
               </p>
             </div>
-            <div className="app-filter-panel-chips">
-              <span className="app-meta-chip">{visibleJobs.length} visible</span>
-              <span className="app-meta-chip">{summary.failed} failed</span>
-              <span className="app-meta-chip">{summary.awaitingAck} waiting ack</span>
+            <div className="analytics-toolbar-meta">
+              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                {totalJobs} matching
+              </span>
+              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                {summary.failed} failed
+              </span>
+              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                {summary.awaitingAck} waiting ack
+              </span>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="app-filter-panel-body">
-          <div className="app-report-filter-layout">
-            <div className="app-report-filter-grid">
-              <div className="app-report-filter-card">
-                <p className="app-report-filter-label">
-                  Dispatch status
-                </p>
-                <div className="app-report-filter-control">
-                  <select
-                    className="app-form-input"
-                    value={statusFilter}
-                    onChange={(event) => setStatusFilter(event.target.value)}
-                  >
-                    <option value="all">All statuses</option>
-                    <option value="queued">Queued</option>
-                    <option value="processing">Processing</option>
-                    <option value="sent">Sent</option>
-                    <option value="failed">Failed</option>
-                  </select>
+        <CardContent className="space-y-3 p-3 sm:p-4">
+          <div className="analytics-toolbar">
+            <div className="app-report-filter-layout">
+              <div className="app-report-filter-grid">
+                <div className="app-report-filter-card">
+                  <p className="app-report-filter-label">Dispatch status</p>
+                  <div className="app-report-filter-control">
+                    <select
+                      className="analytics-select w-full"
+                      value={statusFilter}
+                      onChange={(event) => {
+                        setPage(1);
+                        setStatusFilter(event.target.value);
+                      }}
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="queued">Queued</option>
+                      <option value="processing">Processing</option>
+                      <option value="sent">Sent</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="app-report-filter-card">
+                  <p className="app-report-filter-label">Recipients</p>
+                  <div className="app-report-filter-control">
+                    <select
+                      className="analytics-select w-full"
+                      value={typeFilter}
+                      onChange={(event) => {
+                        setPage(1);
+                        setTypeFilter(event.target.value as TypeFilter);
+                      }}
+                    >
+                      <option value="all">All recipients</option>
+                      <option value="student">Students</option>
+                      <option value="teacher">Teachers</option>
+                      <option value="admin">Admins</option>
+                      <option value="exam">Exam team</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="app-report-filter-card">
+                  <p className="app-report-filter-label">Report scope</p>
+                  <div className="app-report-filter-control">
+                    <select
+                      className="analytics-select w-full"
+                      value={reportScopeFilter}
+                      onChange={(event) => {
+                        setPage(1);
+                        setReportScopeFilter(
+                          event.target.value as ReportScopeFilter,
+                        );
+                      }}
+                    >
+                      <option value="all">All report scopes</option>
+                      <option value="benchmark">Benchmark reports</option>
+                      <option value="student">Student reports</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="app-report-filter-card">
+                  <p className="app-report-filter-label">Class section</p>
+                  <div className="app-report-filter-control">
+                    <select
+                      className="analytics-select w-full"
+                      value={academicSectionFilter}
+                      onChange={(event) => {
+                        setPage(1);
+                        setAcademicSectionFilter(event.target.value);
+                      }}
+                    >
+                      <option value="all">All class sections</option>
+                      {academicSectionOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
-              <div className="app-report-filter-card">
-                <p className="app-report-filter-label">
-                  Recipients
+              <div className="app-report-filter-footer">
+                <p className="app-report-filter-hint">
+                  Filters refresh the queue directly from the server so each page stays lighter and quicker to open.
                 </p>
-                <div className="app-report-filter-control">
-                  <select
-                    className="app-form-input"
-                    value={typeFilter}
-                    onChange={(event) => setTypeFilter(event.target.value as TypeFilter)}
-                  >
-                    <option value="all">All recipients</option>
-                    <option value="student">Students</option>
-                    <option value="teacher">Teachers</option>
-                    <option value="admin">Admins</option>
-                    <option value="exam">Exam team</option>
-                  </select>
-                </div>
+                {hasActiveFilters ? (
+                  <div className="app-filter-summary-actions">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 rounded-xl px-4"
+                      onClick={() => {
+                        setPage(1);
+                        setStatusFilter("all");
+                        setTypeFilter("all");
+                        setReportScopeFilter("all");
+                        setAcademicSectionFilter("all");
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  </div>
+                ) : null}
               </div>
-              <div className="app-report-filter-card">
-                <p className="app-report-filter-label">
-                  Report scope
-                </p>
-                <div className="app-report-filter-control">
-                  <select
-                    className="app-form-input"
-                    value={reportScopeFilter}
-                    onChange={(event) =>
-                      setReportScopeFilter(event.target.value as ReportScopeFilter)
-                    }
-                  >
-                    <option value="all">All report scopes</option>
-                    <option value="benchmark">Benchmark reports</option>
-                    <option value="student">Student reports</option>
-                  </select>
-                </div>
+              <div className="space-y-3">
+                {summary.awaitingAck > 0 || summary.recoveredStale > 0 ? (
+                  <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
+                    {summary.awaitingAck > 0 ? (
+                      <p>
+                        {summary.awaitingAck} visible job(s) are waiting for
+                        provider acknowledgement before the worker is allowed to
+                        retry them.
+                      </p>
+                    ) : null}
+                    {summary.recoveredStale > 0 ? (
+                      <p>
+                        {summary.recoveredStale} visible job(s) were recovered
+                        from stale processing locks and now include an
+                        operations trail in the queue.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
-              <div className="app-report-filter-card">
-                <p className="app-report-filter-label">
-                  Class section
-                </p>
-                <div className="app-report-filter-control">
-                  <select
-                    className="app-form-input"
-                    value={academicSectionFilter}
-                    onChange={(event) => setAcademicSectionFilter(event.target.value)}
-                  >
-                    <option value="all">All class sections</option>
-                    {academicSectionOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div className="app-report-filter-footer">
-              <p className="app-report-filter-hint">
-                Status and class-section filters reload the server list. Recipient
-                and report-scope filters narrow the current results client-side.
-              </p>
-              {hasActiveFilters ? (
-                <div className="app-filter-summary-actions">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setStatusFilter("all");
-                      setTypeFilter("all");
-                      setReportScopeFilter("all");
-                      setAcademicSectionFilter("all");
-                    }}
-                  >
-                    Clear filters
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-            <div className="space-y-3">
-              {summary.awaitingAck > 0 || summary.recoveredStale > 0 ? (
-                <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
-                  {summary.awaitingAck > 0 ? (
-                    <p>
-                      {summary.awaitingAck} visible job(s) are waiting for provider acknowledgement before the worker is allowed to retry them.
-                    </p>
-                  ) : null}
-                  {summary.recoveredStale > 0 ? (
-                    <p>
-                      {summary.recoveredStale} visible job(s) were recovered from stale processing locks and now include an operations trail in the queue.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="app-surface overflow-hidden">
-        <CardHeader className="app-section-header">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-1">
-              <CardTitle>Dispatch Queue</CardTitle>
+      <Card className="analytics-card overflow-hidden">
+        <CardHeader className="analytics-card-header">
+          <div className="analytics-toolbar-row gap-4">
+            <div className="analytics-toolbar-copy">
+              <CardTitle className="analytics-card-title">Dispatch Queue</CardTitle>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">{summary.pending} pending</Badge>
-              <Badge variant="outline">{summary.sent} sent</Badge>
-              <Badge variant="outline">{summary.awaitingAck} waiting ack</Badge>
+            <div className="analytics-toolbar-meta">
+              {loading && jobs.length > 0 ? (
+                <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                  Refreshing...
+                </span>
+              ) : null}
+              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                {summary.pending} pending
+              </span>
+              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                {summary.sent} sent
+              </span>
+              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                {summary.awaitingAck} waiting ack
+              </span>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-0 pt-0">
-          <div className="app-table-wrap rounded-none border-x-0 border-b-0 overflow-x-auto">
-            <table className="w-full table-fixed text-sm">
-              <thead className="bg-muted/40">
+        <CardContent className="space-y-3 p-3 sm:p-4">
+          <ListPagination
+            page={page}
+            totalPages={pages}
+            totalItems={totalJobs}
+            pageSize={REPORT_JOB_PAGE_SIZE}
+            itemLabel="jobs"
+            onPageChange={setPage}
+            disabled={loading}
+          />
+          <div className="analytics-table-wrap rounded-none border-x-0 border-b-0 overflow-x-auto">
+            <table className="min-w-[74rem] w-full text-sm">
+              <thead>
                 <tr>
-                  <th className="w-[18%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <th className="analytics-th w-[16rem]">
                     Dispatch
                   </th>
-                  <th className="w-[14%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <th className="analytics-th w-[13rem]">
                     Recipient
                   </th>
-                  <th className="w-[24%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <th className="analytics-th w-[19rem]">
                     Report
                   </th>
-                  <th className="w-[18%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <th className="analytics-th w-[16rem]">
                     WA delivery
                   </th>
-                  <th className="w-[16%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <th className="analytics-th w-[14rem]">
                     Attempts
                   </th>
-                  <th className="w-[10%] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <th className="analytics-th w-[12rem]">
                     Issue & action
                   </th>
                 </tr>
@@ -581,9 +710,9 @@ export default function ManageReportJobsPage() {
                 {visibleJobs.map((job) => (
                   <tr
                     key={job._id}
-                    className="border-t border-border/60 align-top bg-background"
+                    className="analytics-row align-top"
                   >
-                    <td className="px-3 py-2">
+                    <td className="analytics-td align-top">
                       <div className="flex flex-col gap-2">
                         <div className="flex flex-wrap gap-2">
                           <span
@@ -627,7 +756,7 @@ export default function ManageReportJobsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="analytics-td align-top">
                       <div className="flex flex-col gap-1">
                         <span className="font-medium text-foreground">
                           {job.studentName || "-"}
@@ -640,7 +769,7 @@ export default function ManageReportJobsPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="analytics-td align-top">
                       <div className="flex flex-col gap-2">
                         <div className="space-y-1">
                           <span className="font-medium text-foreground">
@@ -668,14 +797,20 @@ export default function ManageReportJobsPage() {
                           </span>
                         )}
                         {job.reportUrl ? (
-                          <a
-                            href={job.reportUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="app-button-secondary h-8 w-fit px-3 text-xs"
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="default"
+                            className="h-9 w-fit rounded-xl px-3.5 text-[13px]"
                           >
-                            Open report
-                          </a>
+                            <a
+                              href={job.reportUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open report
+                            </a>
+                          </Button>
                         ) : (
                           <span className="text-xs text-muted-foreground">
                             Report file pending
@@ -683,7 +818,7 @@ export default function ManageReportJobsPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="analytics-td align-top">
                       <div className="flex flex-col gap-1">
                         <span
                           className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${getDeliveryBadgeClass(job.deliveryStatus)}`}
@@ -715,7 +850,7 @@ export default function ManageReportJobsPage() {
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="analytics-td align-top">
                       <div className="flex flex-col gap-2">
                         <div className="font-medium text-foreground">
                           {job.attempts || 0}/{job.maxAttempts || 3}
@@ -789,7 +924,7 @@ export default function ManageReportJobsPage() {
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="analytics-td align-top">
                       <div className="space-y-2">
                         <div
                           className="break-words text-xs text-rose-600"
@@ -811,8 +946,9 @@ export default function ManageReportJobsPage() {
                         ) : null}
                         {job.status === "failed" ? (
                           <Button
-                            size="sm"
+                            size="default"
                             variant="outline"
+                            className="h-9 rounded-xl px-3.5 text-[13px]"
                             onClick={() => retryJob(job._id)}
                             disabled={retryingId === job._id}
                           >
@@ -831,7 +967,7 @@ export default function ManageReportJobsPage() {
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-3 py-8 text-center text-muted-foreground"
+                      className="analytics-td py-8 text-center text-muted-foreground"
                     >
                       No jobs found.
                     </td>

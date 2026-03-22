@@ -1,30 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import QuestionPaperForm from "@/components/QuestionPaperForm";
-import PageLoadingState from "@/components/ui/page-loading-state";
 
 export default function CreateQuestionPaperPage() {
-  const [initialData, setInitialData] = useState<any>(null);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    const copy = sessionStorage.getItem("questionPaperCopy");
-    if (copy) {
-      setInitialData(JSON.parse(copy));
-      sessionStorage.removeItem("questionPaperCopy");
+  const [initialData] = useState<any>(() => {
+    if (typeof window === "undefined") {
+      return null;
     }
-    setHydrated(true);
-  }, []);
 
-  if (!hydrated) {
-    return (
-      <PageLoadingState
-        title="Loading question paper builder"
-        description="Preparing sections, question references, and paper settings."
-      />
-    );
-  }
+    try {
+      const copy = sessionStorage.getItem("questionPaperCopy");
+      if (!copy) {
+        return null;
+      }
+
+      sessionStorage.removeItem("questionPaperCopy");
+      return JSON.parse(copy);
+    } catch {
+      return null;
+    }
+  });
 
   return <QuestionPaperForm initialData={initialData} isEditMode={false} />;
 }

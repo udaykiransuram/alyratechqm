@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -73,17 +73,25 @@ export function SubjectItem({ subject, onDelete, isLoading }: SubjectItemProps) 
           </div>
 
           <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-4">
-            <Link href={buildReturnHref(`/workspace/subjects/edit/${subject._id}`)} className="flex-1">
-              <Button disabled={isLoading} size="sm" variant="outline" className="w-full">
+            <AppPrefetchLink
+              href={buildReturnHref(`/workspace/subjects/edit/${subject._id}`)}
+              className="flex-1"
+            >
+              <Button
+                disabled={isLoading}
+                size="sm"
+                variant="outline"
+                className="app-button-compact w-full"
+              >
                 Edit
               </Button>
-            </Link>
+            </AppPrefetchLink>
             <Button
               onClick={() => onDelete(subject._id)}
               disabled={isLoading}
               variant="destructive"
               size="sm"
-              className="flex-1"
+              className="app-button-compact flex-1"
             >
               {isLoading ? <Spinner /> : 'Archive'}
             </Button>
@@ -118,8 +126,8 @@ export function SubjectItemSkeleton() {
             </div>
           </div>
           <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-4">
-            <div className="h-9 flex-1 rounded-md bg-muted" />
-            <div className="h-9 flex-1 rounded-md bg-muted" />
+            <div className="h-9 flex-1 rounded-xl bg-muted" />
+            <div className="h-9 flex-1 rounded-xl bg-muted" />
           </div>
         </CardContent>
       </Card>

@@ -109,6 +109,9 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
                   ? 'Online delivery enabled for student logins. Descriptive answers will still require manual review.'
                   : 'Offline/manual workflow only.'}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Update these delivery settings in the Paper Details panel.
+              </p>
             </div>
             <Badge variant={onlineEnabled ? 'default' : 'secondary'}>
               {onlineEnabled ? 'Online' : 'Offline'}

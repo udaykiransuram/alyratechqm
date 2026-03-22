@@ -222,15 +222,18 @@ export function MultiSelectTags({
           <div
             data-tag-popover
             className={cn(
-              "flex flex-wrap gap-2 items-center min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-              "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+              "app-multi-select-trigger",
               // --- FIX: Add styles for the disabled state ---
               disabled ? "cursor-not-allowed opacity-50" : "cursor-text"
             )}
             onClick={() => !disabled && setOpen(true)}
           >
             {selectedTags.map((tag) => (
-              <Badge key={tag._id} variant="secondary" className="py-1 px-2.5 rounded-md">
+              <Badge
+                key={tag._id}
+                variant="secondary"
+                className="app-selection-badge border-transparent"
+              >
                 {tag.type?.name ? `${tag.type?.name ?? ''}: ` : ''}
                 {tag.name}
                 <button
@@ -247,7 +250,7 @@ export function MultiSelectTags({
             <Button
               variant="ghost"
               size="sm"
-              className="h-auto py-1 px-2 text-muted-foreground hover:text-accent-blue"
+              className="h-auto rounded-xl px-2.5 py-1 text-muted-foreground hover:bg-primary/5 hover:text-primary"
               onClick={(e) => { e.stopPropagation(); setOpen(true); }}
               disabled={disabled}
             >
@@ -258,7 +261,7 @@ export function MultiSelectTags({
         </PopoverTrigger>
         <PopoverContent
           forceMount
-          className="tag-popover-content w-[--radix-popover-trigger-width] p-0"
+          className="tag-popover-content app-selection-popover"
           align="start"
         >
           <Command shouldFilter={false}>
@@ -271,7 +274,7 @@ export function MultiSelectTags({
                 className="h-9 flex-1 border-none focus:ring-0"
               />
               <Select value={selectedTypeIdFilter} onValueChange={setSelectedTypeIdFilter}>
-                <SelectTrigger className="w-auto h-9 text-xs px-2 border-none">
+                <SelectTrigger className="app-control-compact h-9 w-auto border-none bg-transparent px-2.5 text-xs shadow-none">
                   <SelectValue placeholder="Filter" />
                 </SelectTrigger>
                 <SelectContent>
@@ -313,25 +316,30 @@ export function MultiSelectTags({
                   <div className="space-y-3">
                     <h4 className="font-medium text-sm text-foreground">Create New Tag</h4>
                     <input
-                      className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                      className="app-form-input h-9 px-3"
                       value={newTagName}
                       onChange={(e) => setNewTagName(e.target.value)}
                       placeholder="Tag Name"
                     />
                     <div className="flex items-center gap-2">
                       <Select value={newTagTypeId} onValueChange={setNewTagTypeId}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Select a type" /></SelectTrigger>
+                        <SelectTrigger className="app-control-compact"><SelectValue placeholder="Select a type" /></SelectTrigger>
                         <SelectContent>
                           {tagTypes.map(type => (<SelectItem key={type._id} value={type._id} className="capitalize">{type.name}</SelectItem>))}
                         </SelectContent>
                       </Select>
-                      <Button variant="outline" size="icon" onClick={() => setIsTagTypeModalOpen(true)} className="h-9 w-9 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setIsTagTypeModalOpen(true)}
+                        className="app-button-compact-icon flex-shrink-0"
+                      >
                         <PlusCircle className="h-4 w-4" />
                       </Button>
                     </div>
                     <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => setShowCreateForm(false)}>Cancel</Button>
-                      <Button type="button" size="sm" onClick={handleConfirmCreateNewTag} disabled={isCreatingNewTag}>
+                      <Button variant="outline" size="sm" className="app-button-compact" onClick={() => setShowCreateForm(false)}>Cancel</Button>
+                      <Button type="button" size="sm" className="app-button-compact" onClick={handleConfirmCreateNewTag} disabled={isCreatingNewTag}>
                         {isCreatingNewTag && <span className="mr-2 h-4 w-4"><Spinner /></span>} Create
                       </Button>
                     </div>

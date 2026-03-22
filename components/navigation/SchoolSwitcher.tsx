@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Building2, Plus, Settings2 } from "lucide-react";
 
@@ -25,7 +26,12 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchApiJson } from "@/lib/client/api";
-import { getSchoolKeyFromCookie, setSchoolSelectionCookies } from "@/lib/client/school";
+import { announceNavigationStart } from "@/lib/client/navigation-feedback";
+import {
+  announceSchoolSelectionChange,
+  getSchoolKeyFromCookie,
+  setSchoolSelectionCookies,
+} from "@/lib/client/school";
 import { cn } from "@/lib/utils";
 
 type SchoolOption = {
@@ -52,6 +58,9 @@ export default function SchoolSwitcher({
   const [form, setForm] = useState({ key: "", displayName: "" });
 
   const { toast } = useToast();
+  const router = useRouter();
+  const pathname = usePathname() || "/";
+  const searchParams = useSearchParams();
 
   const currentSchool = useMemo(
     () => schools.find((school) => school.key === current) ?? null,
@@ -95,10 +104,17 @@ export default function SchoolSwitcher({
   }
 
   function onSelect(value: string) {
+    if (!value || value === current) {
+      return;
+    }
+
     const selectedSchool = schools.find((school) => school.key === value);
+    const nextHref = `${pathname}${searchParams?.toString() ? `?${searchParams.toString()}` : ""}`;
     setCurrent(value);
     setSchoolSelectionCookies(value, selectedSchool?.displayName);
-    window.location.reload();
+    announceNavigationStart(nextHref);
+    announceSchoolSelectionChange(value, selectedSchool?.displayName);
+    router.refresh();
   }
 
   async function createSchool() {
@@ -194,9 +210,9 @@ export default function SchoolSwitcher({
         <div className="flex gap-1.5 max-sm:w-full">
           <Button
             asChild
-            variant={showCreateButton ? "ghost" : "outline"}
+            variant="outline"
             size="sm"
-            className="h-9 shrink-0 px-3 max-sm:flex-1"
+            className="app-button-compact max-sm:flex-1"
           >
             <Link href="/company/schools" title="Manage schools" onClick={onManageClick}>
               <Settings2 className="h-4 w-4" />
@@ -212,7 +228,7 @@ export default function SchoolSwitcher({
           {showCreateButton ? (
             <Dialog open={open} onOpenChange={handleDialogChange}>
               <DialogTrigger asChild>
-                <Button className="h-9 shrink-0 px-3 max-sm:flex-1" variant="outline" size="sm">
+                <Button className="app-button-compact max-sm:flex-1" variant="outline" size="sm">
                   <Plus className="h-4 w-4" />
                   <span className="hidden xl:inline">New School</span>
                   <span className="xl:hidden">New</span>

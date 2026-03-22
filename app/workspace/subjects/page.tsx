@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
 import { Plus } from 'lucide-react';
 
+import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
 import PageHero from '@/components/layout/PageHero';
 import { SubjectItem, SubjectItemSkeleton, type Subject } from '@/components/subject-item';
 import {
@@ -105,10 +105,13 @@ export default function ViewSubjectsPage() {
         description="Browse, update, and organize subject definitions and the tags used across your paper-authoring flow."
         actions={
           <Button asChild className="gap-2">
-            <Link href="/workspace/subjects/create">
+            <AppPrefetchLink
+              href="/workspace/subjects/create"
+              relatedApiPrefetches={['/api/tags']}
+            >
               <Plus className="h-4 w-4" />
               Add Subject
-            </Link>
+            </AppPrefetchLink>
           </Button>
         }
         meta={
@@ -162,9 +165,9 @@ export default function ViewSubjectsPage() {
             <div className="app-empty-state">
               <p>No subjects found yet.</p>
               <div className="mt-4 flex justify-center">
-                <Link href="/workspace/subjects/create">
+                <AppPrefetchLink href="/workspace/subjects/create">
                   <Button variant="outline">Create your first subject</Button>
-                </Link>
+                </AppPrefetchLink>
               </div>
             </div>
           ) : (

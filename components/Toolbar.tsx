@@ -21,7 +21,7 @@ export function Toolbar({ editor, onSetLink, onAddImage, onOpenMathModal }: Prop
   }
 
   return (
-    <div className="border border-input bg-transparent rounded-t-md p-1 flex items-center flex-wrap gap-1">
+    <div className="flex flex-wrap items-center gap-1 rounded-t-xl border border-input bg-transparent p-1">
       <Toggle
         size="sm"
         aria-label="Bold"

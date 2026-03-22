@@ -13,13 +13,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import QuestionItemClient from "@/components/QuestionItemClient";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
-import { fetchApiJson } from "@/lib/client/api";
+import { fetchApiJson, peekCachedApiJson } from "@/lib/client/api";
 import { getSchoolKeyFromCookie } from "@/lib/client/school";
+
+const DETAIL_PAGE_CACHE_TTL_MS = 30_000;
 
 async function getQuestionPaper(id: string) {
   const payload = await fetchApiJson<any>(`/api/question-papers/${id}`, {
     cache: "no-store",
     fallbackMessage: "Failed to load question paper.",
+    clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
   });
 
   return payload.paper;
@@ -31,10 +34,18 @@ export default function ViewQuestionPaperPage({
   params: { id: string };
 }) {
   const { navigateBack } = useBackNavigation("/workspace/question-papers");
-  const [paper, setPaper] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedPaperResponse = peekCachedApiJson<{ paper?: any }>(
+    `/api/question-papers/${params.id}`,
+    {
+      schoolKey: getSchoolKeyFromCookie(),
+      clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+    },
+  );
+  const [paper, setPaper] = useState<any>(() => cachedPaperResponse?.paper || null);
+  const [loading, setLoading] = useState(() => !cachedPaperResponse?.paper);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [schoolKey, setSchoolKey] = useState("");
+  const [schoolKey, setSchoolKey] = useState(() => getSchoolKeyFromCookie());
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -50,7 +61,11 @@ export default function ViewQuestionPaperPage({
         return;
       }
 
-      setLoading(true);
+      if (cachedPaperResponse?.paper) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
 
       try {
@@ -61,11 +76,12 @@ export default function ViewQuestionPaperPage({
         setError(err?.message || "Failed to load question paper.");
       } finally {
         setLoading(false);
+        setRefreshing(false);
       }
     };
 
     void fetchPaper();
-  }, [params.id, schoolKey]);
+  }, [cachedPaperResponse?.paper, params.id, schoolKey]);
 
   const paperSections = useMemo(
     () => (Array.isArray(paper?.sections) ? paper.sections : []),
@@ -106,7 +122,7 @@ export default function ViewQuestionPaperPage({
     [paperSections],
   );
 
-  if (!mounted) {
+  if (!mounted && !paper) {
     return (
       <PageLoadingState
         title="Loading question paper"
@@ -136,7 +152,7 @@ export default function ViewQuestionPaperPage({
     );
   }
 
-  if (loading) {
+  if (loading && !paper) {
     return (
       <PageLoadingState
         title="Loading question paper"
@@ -202,6 +218,7 @@ export default function ViewQuestionPaperPage({
           <>
             <span className="app-meta-chip">{paper.class?.name || "No class assigned"}</span>
             <span className="app-meta-chip">{paper.subject?.name || "No subject assigned"}</span>
+            {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
           </>
         }
         stats={[
@@ -231,6 +248,8 @@ export default function ViewQuestionPaperPage({
           },
         ]}
       />
+
+      {error ? <div className="app-feedback app-feedback-info">{error}</div> : null}
 
       <QuestionPaperToolbar paper={paper} />
 

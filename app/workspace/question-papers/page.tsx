@@ -1,8 +1,8 @@
 "use client";
 
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { downloadDefaultClassAnalyticsExcel } from "@/components/analytics/helpers";
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,7 @@ import { getSchoolKeyFromCookie } from "@/lib/client/school";
 
 const NO_SCHOOL_PAPERS_MESSAGE = "Select a school workspace to load question papers.";
 const PAPERS_INITIAL_PAGE_SIZE = 20;
+const PAPERS_VISIBLE_PAGE_SIZE = PAPERS_INITIAL_PAGE_SIZE;
 const PAPERS_BACKGROUND_BATCH_SIZE = 3;
 
 function mergePapersById(current: any[], next: any[]) {
@@ -61,6 +62,9 @@ function isAbortError(error: unknown) {
 }
 
 function getPaperQuestionCount(paper: any) {
+  if (typeof paper?.questionCount === "number" && Number.isFinite(paper.questionCount)) {
+    return Math.max(0, Number(paper.questionCount));
+  }
   return Array.isArray(paper?.sections)
     ? paper.sections.reduce(
         (total: number, section: any) =>
@@ -101,6 +105,7 @@ export default function QuestionPapersListPage() {
     string | null
   >(null);
   const [search, setSearch] = useState("");
+  const [visiblePaperCount, setVisiblePaperCount] = useState(PAPERS_VISIBLE_PAGE_SIZE);
   const [schoolKey, setSchoolKey] = useState("");
   const [supportDataNotice, setSupportDataNotice] = useState<string | null>(null);
   const [backgroundLoadNotice, setBackgroundLoadNotice] = useState<string | null>(null);
@@ -170,7 +175,7 @@ export default function QuestionPapersListPage() {
 
       try {
         const initialPaperData = await fetchApiJson<any>(
-          `/api/question-papers?page=1&limit=${PAPERS_INITIAL_PAGE_SIZE}`,
+          `/api/question-papers?page=1&limit=${PAPERS_INITIAL_PAGE_SIZE}&summary=1`,
           {
             cache: "no-store",
             schoolKey: cookieSchoolKey,
@@ -215,7 +220,7 @@ export default function QuestionPapersListPage() {
               const batchResults = await Promise.all(
                 batchPages.map(async (pageNumber) => {
                   const pageData = await fetchApiJson<any>(
-                    `/api/question-papers?page=${pageNumber}&limit=${PAPERS_INITIAL_PAGE_SIZE}`,
+                    `/api/question-papers?page=${pageNumber}&limit=${PAPERS_INITIAL_PAGE_SIZE}&summary=1`,
                     {
                       cache: "no-store",
                       schoolKey: cookieSchoolKey,
@@ -709,9 +714,19 @@ export default function QuestionPapersListPage() {
     return list;
   }, [classFilterId, getPaperSectionOptions, papers, search, sectionFilterId]);
 
-  const allFilteredChecked =
-    filteredPapers.length > 0 &&
-    filteredPapers.every((paper) => selectedPaperIds.includes(paper._id));
+  const visiblePapers = useMemo(() => {
+    return filteredPapers.slice(0, visiblePaperCount);
+  }, [filteredPapers, visiblePaperCount]);
+  const hasMoreVisiblePapers = filteredPapers.length > visiblePapers.length;
+  const remainingVisiblePapers = Math.max(0, filteredPapers.length - visiblePapers.length);
+
+  useEffect(() => {
+    setVisiblePaperCount(PAPERS_VISIBLE_PAGE_SIZE);
+  }, [classFilterId, sectionFilterId, search]);
+
+  const allVisibleChecked =
+    visiblePapers.length > 0 &&
+    visiblePapers.every((paper) => selectedPaperIds.includes(paper._id));
   const hasActiveFilters =
     classFilterId !== "all" || sectionFilterId !== "all" || search.trim().length > 0;
   const totalQuestionCount = useMemo(
@@ -756,17 +771,17 @@ export default function QuestionPapersListPage() {
     setSelectedPaperIds([]);
   };
 
-  const handleToggleFilteredSelection = (checked: boolean) => {
+  const handleToggleVisibleSelection = (checked: boolean) => {
     if (checked) {
       setSelectedPaperIds((previousIds) =>
-        Array.from(new Set([...previousIds, ...filteredPapers.map((paper) => paper._id)])),
+        Array.from(new Set([...previousIds, ...visiblePapers.map((paper) => paper._id)])),
       );
       return;
     }
 
-    const filteredPaperIds = new Set(filteredPapers.map((paper) => paper._id));
+    const visiblePaperIds = new Set(visiblePapers.map((paper) => paper._id));
     setSelectedPaperIds((previousIds) =>
-      previousIds.filter((paperId) => !filteredPaperIds.has(paperId)),
+      previousIds.filter((paperId) => !visiblePaperIds.has(paperId)),
     );
   };
 
@@ -816,9 +831,17 @@ export default function QuestionPapersListPage() {
         title="Papers"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Link href="/workspace/question-papers/create">
+            <AppPrefetchLink
+              href="/workspace/question-papers/create"
+              relatedApiPrefetches={[
+                '/api/classes',
+                '/api/sections',
+                '/api/subjects',
+                '/api/tags/with-subjects',
+              ]}
+            >
               <Button>Create Paper</Button>
-            </Link>
+            </AppPrefetchLink>
           </div>
         }
       />
@@ -935,17 +958,47 @@ export default function QuestionPapersListPage() {
       ) : null}
 
       <Card className="app-surface overflow-hidden">
+        {filteredPapers.length > PAPERS_VISIBLE_PAGE_SIZE ? (
+          <div className="app-section-body border-b border-border/60 bg-muted/10">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">
+                  Showing {visiblePapers.length} of {filteredPapers.length} loaded paper
+                  {filteredPapers.length === 1 ? "" : "s"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Load more when you want to expand the list without repainting the whole table.
+                </p>
+              </div>
+              {hasMoreVisiblePapers ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="app-button-compact"
+                  onClick={() =>
+                    setVisiblePaperCount((currentCount) => currentCount + PAPERS_VISIBLE_PAGE_SIZE)
+                  }
+                >
+                  Load More
+                  {remainingVisiblePapers > 0
+                    ? ` (${Math.min(PAPERS_VISIBLE_PAGE_SIZE, remainingVisiblePapers)} more)`
+                    : ""}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         <div className="app-table-wrap rounded-none border-0">
           <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12">
                     <Checkbox
-                      checked={allFilteredChecked}
+                      checked={allVisibleChecked}
                       onCheckedChange={(checked) =>
-                        handleToggleFilteredSelection(Boolean(checked))
+                        handleToggleVisibleSelection(Boolean(checked))
                       }
-                      aria-label="Select all filtered papers"
+                      aria-label="Select all visible papers"
                     />
                   </TableHead>
                   <TableHead className="w-[15rem]">Paper</TableHead>
@@ -964,7 +1017,7 @@ export default function QuestionPapersListPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredPapers.map((paper) => {
+                  visiblePapers.map((paper) => {
                     const paperSectionOptions = getPaperSectionOptions(paper);
                     const selectedAcademicSectionId =
                       getSelectedAcademicSectionId(paper);
@@ -1038,7 +1091,7 @@ export default function QuestionPapersListPage() {
                                     }))
                                   }
                                 >
-                                  <SelectTrigger className="h-9 w-full">
+                                  <SelectTrigger className="app-control-compact w-full">
                                     <SelectValue placeholder="All class sections" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1082,37 +1135,68 @@ export default function QuestionPapersListPage() {
                         <TableCell>
                           <div className="min-w-[26rem] space-y-2">
                             <div className="flex flex-wrap gap-2">
-                              <Link href={buildReturnHref(`/workspace/question-papers/view/${paper._id}`)}>
-                                <Button variant="outline" size="sm">
+                              <AppPrefetchLink
+                                href={buildReturnHref(`/workspace/question-papers/view/${paper._id}`)}
+                                relatedApiPrefetches={[`/api/question-papers/${paper._id}`]}
+                              >
+                                <Button variant="outline" size="sm" className="app-button-compact">
                                   Open
                                 </Button>
-                              </Link>
-                              <Link href={buildReturnHref(`/workspace/question-papers/edit/${paper._id}`)}>
-                                <Button variant="outline" size="sm">
+                              </AppPrefetchLink>
+                              <AppPrefetchLink
+                                href={buildReturnHref(`/workspace/question-papers/edit/${paper._id}`)}
+                                relatedApiPrefetches={[
+                                  `/api/question-papers/${paper._id}`,
+                                  '/api/classes',
+                                  '/api/sections',
+                                  '/api/subjects',
+                                ]}
+                              >
+                                <Button variant="outline" size="sm" className="app-button-compact">
                                   Edit
                                 </Button>
-                              </Link>
-                              <Link href={buildReturnHref(responsesHref)}>
-                                <Button variant="outline" size="sm">
+                              </AppPrefetchLink>
+                              <AppPrefetchLink
+                                href={buildReturnHref(responsesHref)}
+                                relatedApiPrefetches={[
+                                  `/api/question-paper-response?paper=${encodeURIComponent(
+                                    paper._id,
+                                  )}&summary=1&page=1&limit=40${
+                                    selectedAcademicSectionId !== 'all'
+                                      ? `&academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
+                                      : ''
+                                  }`,
+                                ]}
+                              >
+                                <Button variant="outline" size="sm" className="app-button-compact">
                                   Responses
                                 </Button>
-                              </Link>
-                              <Link href={buildReturnHref(uploadHref)}>
-                                <Button variant="outline" size="sm">
+                              </AppPrefetchLink>
+                              <AppPrefetchLink href={buildReturnHref(uploadHref)}>
+                                <Button variant="outline" size="sm" className="app-button-compact">
                                   Upload Excel
                                 </Button>
-                              </Link>
-                              <Link href={buildReturnHref(classAnalyticsHref)} prefetch>
-                                <Button size="sm">Analytics</Button>
-                              </Link>
+                              </AppPrefetchLink>
+                              <AppPrefetchLink
+                                href={buildReturnHref(classAnalyticsHref)}
+                                relatedApiPrefetches={[
+                                  `/api/analytics/class-tag-report/${paper._id}?groupFields=1${
+                                    selectedAcademicSectionId !== 'all'
+                                      ? `&academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
+                                      : ''
+                                  }`,
+                                ]}
+                              >
+                                <Button size="sm" className="app-button-compact">Analytics</Button>
+                              </AppPrefetchLink>
                             </div>
                             <div className="flex flex-wrap gap-2">
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="app-button-compact app-button-compact-success"
                                 onClick={() => handleSendExamReports(paper._id)}
                                 disabled={sendingReportsPaperId === paper._id}
-                                className="text-green-700 border-green-300"
                               >
                                 <MessageCircle className="h-4 w-4 mr-1" />
                                 {sendingReportsPaperId === paper._id
@@ -1122,6 +1206,7 @@ export default function QuestionPapersListPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="app-button-compact"
                                 onClick={() => handleDownloadExcel(paper._id)}
                                 disabled={excelLoadingId === paper._id}
                               >
@@ -1132,6 +1217,7 @@ export default function QuestionPapersListPage() {
                               <Button
                                 variant="destructive"
                                 size="sm"
+                                className="app-button-compact"
                                 onClick={() => handleArchive(paper._id)}
                                 disabled={deletingId === paper._id}
                               >

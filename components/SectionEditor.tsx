@@ -46,7 +46,7 @@ export function SectionEditor({
             <span className="rounded-full bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground">
               {section.questions.length} {section.questions.length === 1 ? 'Question' : 'Questions'}
             </span>
-            <Button variant="ghost" size="icon" onClick={onRemove}>
+            <Button variant="ghost" size="icon" className="app-button-compact-icon" onClick={onRemove}>
               <Trash2 className="h-4 w-4 text-destructive" />
             </Button>
           </div>
@@ -95,7 +95,13 @@ export function SectionEditor({
       <div className="space-y-3.5 px-4 py-3.5">
         {children}
         <div className="flex flex-col gap-3 border-t border-border/60 pt-3.5 sm:flex-row sm:items-center">
-          <Button variant="outline" size="sm" onClick={onAddQuestions} disabled={!canAddQuestions}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="app-button-compact"
+            onClick={onAddQuestions}
+            disabled={!canAddQuestions}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Add / Manage Questions
           </Button>

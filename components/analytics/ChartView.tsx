@@ -487,54 +487,64 @@ const ChartView = ({
         />
       </div>
       <div>
-        <h2 className="analytics-card-title mb-6">
-          Detailed Breakdown by {groupBy[0]}
-        </h2>
-        <div className="mb-4 flex flex-wrap justify-end gap-2">
-          <button
-            onClick={handleDownloadChartImage}
-            disabled={downloading}
-            className="app-button-secondary disabled:opacity-60"
-            title="Download Chart Image"
-          >
-            {downloading ? "Preparing..." : "Download Chart Image"}
-          </button>
-          <button
-            onClick={handleDownloadBarChartImage}
-            disabled={downloading}
-            className="app-button-secondary disabled:opacity-60"
-            title="Download Bar Chart Image"
-          >
-            {downloading ? "Preparing..." : "Download Bar Chart"}
-          </button>
-          <button
-            onClick={handleDownloadPieChartsImage}
-            disabled={downloading}
-            className="app-button-secondary disabled:opacity-60"
-            title="Download Pie Charts Image"
-          >
-            {downloading ? "Preparing..." : "Download Pie Charts"}
-          </button>
-          <button
-            onClick={handleDownloadRemedials}
-            disabled={downloading}
-            className="app-button-primary disabled:opacity-60"
-            title={
-              mode === "student"
-                ? "Download Remedial PDF"
-                : "Download All Remedials (ZIP)"
-            }
-          >
-            {mode === "student"
-              ? downloading
-                ? "Preparing..."
-                : "Download Remedial PDF"
-              : downloading
-                ? "Preparing..."
-                : "Download All Remedials (ZIP)"}
-          </button>
+        <div className="analytics-toolbar">
+          <div className="analytics-toolbar-row gap-4">
+            <div className="analytics-toolbar-copy">
+              <h2 className="analytics-card-title">
+                Detailed Breakdown by {groupBy[0]}
+              </h2>
+              <p className="analytics-card-description">
+                Export the chart views using the same action sizing as the rest
+                of the report.
+              </p>
+            </div>
+            <div className="analytics-toolbar-actions">
+              <button
+                onClick={handleDownloadChartImage}
+                disabled={downloading}
+                className="analytics-action-button-secondary"
+                title="Download Chart Image"
+              >
+                {downloading ? "Preparing..." : "Download Chart Image"}
+              </button>
+              <button
+                onClick={handleDownloadBarChartImage}
+                disabled={downloading}
+                className="analytics-action-button-secondary"
+                title="Download Bar Chart Image"
+              >
+                {downloading ? "Preparing..." : "Download Bar Chart"}
+              </button>
+              <button
+                onClick={handleDownloadPieChartsImage}
+                disabled={downloading}
+                className="analytics-action-button-secondary"
+                title="Download Pie Charts Image"
+              >
+                {downloading ? "Preparing..." : "Download Pie Charts"}
+              </button>
+              <button
+                onClick={handleDownloadRemedials}
+                disabled={downloading}
+                className="analytics-action-button-primary"
+                title={
+                  mode === "student"
+                    ? "Download Remedial PDF"
+                    : "Download All Remedials (ZIP)"
+                }
+              >
+                {mode === "student"
+                  ? downloading
+                    ? "Preparing..."
+                    : "Download Remedial PDF"
+                  : downloading
+                    ? "Preparing..."
+                    : "Download All Remedials (ZIP)"}
+              </button>
+            </div>
+          </div>
         </div>
-        <div ref={allPieChartsRef}>
+        <div className="mt-4" ref={allPieChartsRef}>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {firstLevelGroups.map(([key, value]) => {
               let statsForPie: any;

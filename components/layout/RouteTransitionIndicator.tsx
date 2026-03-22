@@ -6,7 +6,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { APP_NAVIGATION_START_EVENT } from "@/lib/client/navigation-feedback";
 
 const NAVIGATION_RESET_TIMEOUT_MS = 12_000;
-const NAVIGATION_INDICATOR_DELAY_MS = 80;
 
 function resolveInternalNavigationTarget(rawHref: string | null | undefined) {
   if (typeof window === "undefined") {
@@ -66,9 +65,7 @@ export default function RouteTransitionIndicator() {
       return;
     }
 
-    const visibleTimer = window.setTimeout(() => {
-      setShowIndicator(true);
-    }, NAVIGATION_INDICATOR_DELAY_MS);
+    setShowIndicator(true);
 
     const timeoutId = window.setTimeout(() => {
       setPendingHref(null);
@@ -76,7 +73,6 @@ export default function RouteTransitionIndicator() {
     }, NAVIGATION_RESET_TIMEOUT_MS);
 
     return () => {
-      window.clearTimeout(visibleTimer);
       window.clearTimeout(timeoutId);
     };
   }, [pendingHref]);
@@ -141,7 +137,7 @@ export default function RouteTransitionIndicator() {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-[10001] h-0.5 overflow-hidden bg-primary/10">
-      <div className="h-full w-40 animate-pulse rounded-full bg-primary shadow-[0_0_20px_hsl(var(--primary)/0.45)]" />
+      <div className="h-full w-40 animate-pulse rounded-full bg-primary" />
     </div>
   );
 }

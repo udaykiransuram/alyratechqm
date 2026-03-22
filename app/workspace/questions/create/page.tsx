@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import { fetchApiJson, peekCachedApiJson } from '@/lib/client/api';
 import { announceNavigationStart } from '@/lib/client/navigation-feedback';
 
 // Dynamically load Tiptap rich editor
@@ -42,16 +43,32 @@ interface SubjectWithTags {
 
 interface Class { _id: string; name: string; }
 
+const SUPPORT_DATA_CACHE_TTL_MS = 60_000;
+
 export default function CreateQuestionPage() {
   const router = useRouter();
   const { navigateBack } = useBackNavigation('/workspace/questions');
   const { toast } = useToast();
+  const cachedClassesResponse = peekCachedApiJson<{ classes?: Class[] }>('/api/classes', {
+    clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+  });
+  const cachedTagsResponse = peekCachedApiJson<{ tags?: TagItem[] }>('/api/tags/with-subjects', {
+    clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+  });
+  const cachedSubjectsResponse = peekCachedApiJson<{ subjects?: SubjectWithTags[] }>('/api/subjects', {
+    clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+  });
+  const hasCachedInitialData = Boolean(
+    cachedClassesResponse?.classes && cachedTagsResponse?.tags,
+  );
   const [classId, setClassId] = useState('');
   const [subjectId, setSubjectId] = useState('');
   
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [subjects, setSubjects] = useState<SubjectWithTags[]>([]);
-  const [allTags, setAllTags] = useState<TagItem[]>([]);
+  const [classes, setClasses] = useState<Class[]>(() => cachedClassesResponse?.classes || []);
+  const [subjects, setSubjects] = useState<SubjectWithTags[]>(
+    () => cachedSubjectsResponse?.subjects || [],
+  );
+  const [allTags, setAllTags] = useState<TagItem[]>(() => cachedTagsResponse?.tags || []);
   
   const [selectedTags, setSelectedTags] = useState<TagItem[]>([]);
   const [options, setOptions] = useState<{ content: string | null }[]>([{ content: '' }]);
@@ -62,7 +79,7 @@ export default function CreateQuestionPage() {
   const [questionType, setQuestionType] = useState<'single' | 'multiple' | 'matrix-match' | 'descriptive'>('single');
 
   const [loading, setLoading] = useState(false);
-  const [initialDataLoading, setInitialDataLoading] = useState(true);
+  const [initialDataLoading, setInitialDataLoading] = useState(() => !hasCachedInitialData);
   const [subjectsLoading, setSubjectsLoading] = useState(false);
 
   // --- Forcing UI reset ---
@@ -74,18 +91,24 @@ export default function CreateQuestionPage() {
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      setInitialDataLoading(true);
+      setInitialDataLoading(!hasCachedInitialData);
       try {
-        const [classesRes, tagsRes] = await Promise.all([
-          fetch('/api/classes'),
-          fetch('/api/tags/with-subjects')
+        const [classesData, tagsData] = await Promise.all([
+          fetchApiJson<{ classes?: Class[] }>('/api/classes', {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load initial data.',
+            clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ tags?: TagItem[] }>('/api/tags/with-subjects', {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load initial data.',
+            clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
         ]);
-        
-        const classesData = await classesRes.json();
-        const tagsData = await tagsRes.json();
-
-        if (classesData.success) setClasses(classesData.classes);
-        if (tagsData.success) setAllTags(tagsData.tags || []);
+        setClasses(classesData.classes || []);
+        setAllTags(tagsData.tags || []);
 
       } catch (error) {
         toast({ title: 'Error', description: 'Failed to load initial data.', variant: 'destructive' });
@@ -94,25 +117,32 @@ export default function CreateQuestionPage() {
       }
     };
     fetchInitialData();
-  }, [toast]);
+  }, [hasCachedInitialData, toast]);
 
   useEffect(() => {
     if (!classId) {
-      setSubjects([]);
+      setSubjects(cachedSubjectsResponse?.subjects || []);
       setSubjectId('');
+      setSubjectsLoading(false);
       return;
     }
 
     const fetchSubjectsForClass = async () => {
-      setSubjectsLoading(true);
+      const cachedSubjects = cachedSubjectsResponse?.subjects || [];
+      if (cachedSubjects.length > 0) {
+        setSubjects(cachedSubjects);
+        setSubjectsLoading(false);
+      } else {
+        setSubjectsLoading(true);
+      }
       try {
-        const res = await fetch(`/api/subjects`);
-        const data = await res.json();
-        if (data.success) {
-          setSubjects(data.subjects || []);
-        } else {
-          toast({ title: 'Error', description: 'Failed to load subjects for the selected class.', variant: 'destructive' });
-        }
+        const data = await fetchApiJson<{ subjects?: SubjectWithTags[] }>('/api/subjects', {
+          cache: 'no-store',
+          fallbackMessage: 'Failed to load subjects for the selected class.',
+          clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+          preferClientCache: true,
+        });
+        setSubjects(data.subjects || []);
       } catch (error) {
         toast({ title: 'Network Error', description: 'Could not fetch subjects.', variant: 'destructive' });
       } finally {
@@ -121,7 +151,7 @@ export default function CreateQuestionPage() {
     };
 
     fetchSubjectsForClass();
-  }, [classId, toast]);
+  }, [cachedSubjectsResponse?.subjects, classId, toast]);
 
   const recommendedTagIds = useMemo(() => {
     if (!subjectId) return [];

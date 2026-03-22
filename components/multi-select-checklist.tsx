@@ -74,6 +74,7 @@ export default function MultiSelectChecklist({
             <Button
               variant="outline"
               size="sm"
+              className="app-button-compact"
               onClick={allSelected ? clearAll : selectAll}
               disabled={selectableIds.length === 0}
             >
@@ -82,6 +83,7 @@ export default function MultiSelectChecklist({
             <Button
               variant="outline"
               size="sm"
+              className="app-button-compact"
               onClick={clearAll}
               disabled={visibleSelectedCount === 0}
             >

@@ -61,10 +61,10 @@ const SearchableMultiSelectOptionRow = memo(function SearchableMultiSelectOption
       type="button"
       onClick={() => onToggle(option.value)}
       className={cn(
-        "flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
+        "flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors",
         isSelected
-          ? "bg-accent text-accent-foreground"
-          : "hover:bg-accent/60 hover:text-accent-foreground",
+          ? "border-primary/25 bg-primary/5 text-foreground shadow-sm"
+          : "border-transparent hover:border-border/60 hover:bg-accent/45 hover:text-accent-foreground",
       )}
       role="option"
       aria-selected={isSelected}
@@ -106,7 +106,6 @@ export function SearchableMultiSelectPopover({
 }: SearchableMultiSelectPopoverProps) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
-  const [renderOptions, setRenderOptions] = useState(false);
   const [optimisticSelectedValues, setOptimisticSelectedValues] = useState(selectedValues);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const optimisticSelectedValuesRef = useRef(selectedValues);
@@ -197,21 +196,6 @@ export function SearchableMultiSelectPopover({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) {
-      setRenderOptions(false);
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      setRenderOptions(true);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [open]);
-
   const toggleValue = useCallback((value: string) => {
     const currentValues = optimisticSelectedValuesRef.current;
     const nextValues = currentValues.includes(value)
@@ -246,7 +230,7 @@ export function SearchableMultiSelectPopover({
           variant="outline"
           disabled={disabled || loading}
           className={cn(
-            "flex h-10 w-full items-center justify-start px-3 text-left font-normal",
+            "app-multi-select-trigger min-h-10 justify-start px-3 text-left font-normal",
             triggerClassName,
           )}
           aria-expanded={open}
@@ -264,7 +248,7 @@ export function SearchableMultiSelectPopover({
                 <Badge
                   key={option.value}
                   variant="secondary"
-                  className="whitespace-nowrap rounded-md px-2 py-1"
+                  className="app-selection-badge whitespace-nowrap border-transparent"
                 >
                   {option.label}
                   <button
@@ -292,7 +276,7 @@ export function SearchableMultiSelectPopover({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className={cn("w-[--radix-popover-trigger-width] p-0", contentClassName)}
+        className={cn("app-selection-popover", contentClassName)}
         align="start"
       >
         <div className="border-b border-border/60 p-3">
@@ -305,13 +289,7 @@ export function SearchableMultiSelectPopover({
             className="h-10"
           />
         </div>
-
-        {!renderOptions ? (
-          <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-            <Spinner />
-            <span className="ml-2">Opening...</span>
-          </div>
-        ) : loading ? (
+        {loading ? (
           <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
             <Spinner />
             <span className="ml-2">{loadingText}</span>

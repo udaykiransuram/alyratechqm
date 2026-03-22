@@ -44,6 +44,12 @@ export async function GET(req: NextRequest) {
     const q = url.searchParams.get("q")?.trim() || "";
     const includeEmpty =
       (url.searchParams.get("includeEmpty") || "false") === "true";
+    const limitParam = Number(url.searchParams.get("limit") || "8");
+    const limit = Math.min(
+      24,
+      Math.max(Number.isFinite(limitParam) ? Math.floor(limitParam) : 8, 1),
+    );
+    const pageParam = Number(url.searchParams.get("page") || "1");
 
     if (classId && !mongoose.Types.ObjectId.isValid(classId)) {
       return NextResponse.json(
@@ -251,7 +257,25 @@ export async function GET(req: NextRequest) {
         );
       });
 
-    return NextResponse.json({ success: true, data });
+    const totalGroups = data.length;
+    const totalStudents = students.length;
+    const pages = Math.max(1, Math.ceil(totalGroups / limit));
+    const page = Math.min(
+      Math.max(Number.isFinite(pageParam) ? Math.floor(pageParam) : 1, 1),
+      pages,
+    );
+    const start = (page - 1) * limit;
+    const pagedData = data.slice(start, start + limit);
+
+    return NextResponse.json({
+      success: true,
+      data: pagedData,
+      totalGroups,
+      totalStudents,
+      page,
+      pages,
+      limit,
+    });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },

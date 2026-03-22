@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,11 @@ import {
 import { MessageCircle } from "lucide-react";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 import { useBackNavigation, useCurrentPathWithSearch } from "@/hooks/useReturnNavigation";
-import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
+import {
+  fetchApiJson,
+  peekCachedApiJson,
+  resolveClientSchoolKey,
+} from "@/lib/client/api";
 
 interface ClassItem {
   _id: string;
@@ -61,20 +65,51 @@ interface AttemptItem {
   }>;
 }
 
+const DETAIL_PAGE_CACHE_TTL_MS = 30_000;
+
 export default function StudentDetailPage() {
   const params = useParams();
   const id = (params?.id as string) || "";
   const { navigateBack } = useBackNavigation("/workspace/students");
   const currentPath = useCurrentPathWithSearch("/workspace/students");
   const editHref = buildHrefWithReturnTo(`/workspace/students/edit/${id}`, currentPath);
+  const schoolKey = resolveClientSchoolKey();
+  const cachedUserResponse = id
+    ? peekCachedApiJson<{ user?: UserItem }>(`/api/users/${id}`, {
+        schoolKey,
+        clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+      })
+    : null;
+  const cachedClassesResponse = peekCachedApiJson<{ classes?: ClassItem[] }>("/api/classes", {
+    schoolKey,
+    clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+  });
+  const cachedSectionsResponse = peekCachedApiJson<{ sections?: AcademicSectionItem[] }>("/api/sections", {
+    schoolKey,
+    clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+  });
+  const cachedAttemptsResponse = id
+    ? peekCachedApiJson<{ responses?: AttemptItem[] }>(
+        `/api/question-paper-response?student=${encodeURIComponent(id)}`,
+        {
+          schoolKey,
+          clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+        },
+      )
+    : null;
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cachedUserResponse?.user);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<UserItem | null>(null);
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
+  const [user, setUser] = useState<UserItem | null>(() => cachedUserResponse?.user || null);
+  const [classes, setClasses] = useState<ClassItem[]>(() => cachedClassesResponse?.classes || []);
+  const [sections, setSections] = useState<AcademicSectionItem[]>(
+    () => cachedSectionsResponse?.sections || [],
+  );
 
-  const [attempts, setAttempts] = useState<AttemptItem[]>([]);
+  const [attempts, setAttempts] = useState<AttemptItem[]>(
+    () => cachedAttemptsResponse?.responses || [],
+  );
   const [attemptsError, setAttemptsError] = useState<string | null>(null);
   const [sendingResponseId, setSendingResponseId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -84,12 +119,16 @@ export default function StudentDetailPage() {
     let mounted = true;
     async function load() {
       try {
-        setLoading(true);
-        setError(null);
-        const schoolKey = resolveClientSchoolKey();
         if (!schoolKey) {
           throw new Error("Please select a school in the navbar to view student details.");
         }
+
+        if (cachedUserResponse?.user) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+        setError(null);
 
         const [userResult, classesResult, sectionsResult, attemptsResult] =
           await Promise.allSettled([
@@ -97,16 +136,19 @@ export default function StudentDetailPage() {
               cache: "no-store",
               schoolKey,
               fallbackMessage: "Failed to load user.",
+              clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
             }),
             fetchApiJson<any>("/api/classes", {
               cache: "no-store",
               schoolKey,
               fallbackMessage: "Failed to load classes.",
+              clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
             }),
             fetchApiJson<any>("/api/sections", {
               cache: "no-store",
               schoolKey,
               fallbackMessage: "Failed to load sections.",
+              clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
             }),
             fetchApiJson<any>(
               `/api/question-paper-response?student=${encodeURIComponent(id)}`,
@@ -114,6 +156,7 @@ export default function StudentDetailPage() {
                 cache: "no-store",
                 schoolKey,
                 fallbackMessage: "Failed to load attempts.",
+                clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
               },
             ),
           ]);
@@ -145,14 +188,17 @@ export default function StudentDetailPage() {
         setError(e.message || "Failed to load");
         setAttemptsError(e.message || "Failed to load attempts");
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     }
     if (id) load();
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [cachedUserResponse?.user, id, schoolKey]);
 
   const className = user?.class
     ? classes.find((classItem) => classItem._id === String(user.class))?.name || String(user.class)
@@ -233,10 +279,24 @@ export default function StudentDetailPage() {
         description="Review student profile information, class placement, credentials context, and all recorded paper attempts from one page."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={navigateBack}>Back to Students</Button>
-            <Link href={editHref}>
-              <Button>Edit Student</Button>
-            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              className="app-button-compact-secondary"
+              onClick={navigateBack}
+            >
+              Back to Students
+            </Button>
+            <AppPrefetchLink
+              href={editHref}
+              relatedApiPrefetches={[
+                `/api/users/${id}`,
+                '/api/classes',
+                '/api/sections',
+              ]}
+            >
+              <Button size="sm" className="app-button-compact">Edit Student</Button>
+            </AppPrefetchLink>
           </div>
         }
         meta={
@@ -245,6 +305,7 @@ export default function StudentDetailPage() {
             <span className="app-meta-chip">
               {user?.rollNumber ? `Username: ${user.rollNumber}` : "Roll number pending"}
             </span>
+            {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
           </>
         }
         stats={[
@@ -271,7 +332,9 @@ export default function StudentDetailPage() {
         ]}
       />
 
-      {loading ? (
+      {error && user ? <div className="app-feedback app-feedback-info">{error}</div> : null}
+
+      {loading && !user ? (
         <PageLoadingState
           title="Loading student details"
           description="Preparing the student profile, class section, and response summary."
@@ -279,7 +342,7 @@ export default function StudentDetailPage() {
           contentClassName="max-w-none"
           dense
         />
-      ) : error ? (
+      ) : error && !user ? (
         <div className="app-feedback app-feedback-error">{error}</div>
       ) : !user ? (
         <div className="app-empty-state">User not found.</div>
@@ -374,6 +437,7 @@ export default function StudentDetailPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          className="app-button-compact"
                           onClick={() => changePage(-1)}
                           disabled={page <= 1}
                         >
@@ -382,6 +446,7 @@ export default function StudentDetailPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          className="app-button-compact"
                           onClick={() => changePage(1)}
                           disabled={page >= maxPage}
                         >
@@ -455,37 +520,43 @@ export default function StudentDetailPage() {
                               <TableCell>{score}</TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <Link
+                                  <AppPrefetchLink
                                     href={buildHrefWithReturnTo(
                                       `/workspace/analytics/student-tag-report/${attempt._id}`,
                                       currentPath,
                                     )}
-                                    prefetch
+                                    relatedApiPrefetches={[
+                                      `/api/analytics/student-tag-report/${attempt._id}?groupFields=1`,
+                                    ]}
                                   >
-                                    <Button variant="outline" size="sm">
+                                    <Button variant="outline" size="sm" className="app-button-compact">
                                       Student Report
                                     </Button>
-                                  </Link>
-                                  <Link
+                                  </AppPrefetchLink>
+                                  <AppPrefetchLink
                                     href={buildHrefWithReturnTo(
                                       `/workspace/analytics/class-tag-report/${paperId}`,
                                       currentPath,
                                     )}
-                                    prefetch
+                                    relatedApiPrefetches={[
+                                      `/api/analytics/class-tag-report/${paperId}?groupFields=1`,
+                                    ]}
                                   >
-                                    <Button size="sm">Class Report</Button>
-                                  </Link>
-                                  <Link href={buildHrefWithReturnTo(`/workspace/question-papers/view/${paperId}`, currentPath)}>
-                                    <Button variant="outline" size="sm">
+                                    <Button size="sm" className="app-button-compact">Class Report</Button>
+                                  </AppPrefetchLink>
+                                  <AppPrefetchLink
+                                    href={buildHrefWithReturnTo(`/workspace/question-papers/view/${paperId}`, currentPath)}
+                                  >
+                                    <Button variant="outline" size="sm" className="app-button-compact">
                                       View Paper
                                     </Button>
-                                  </Link>
+                                  </AppPrefetchLink>
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    className="app-button-compact app-button-compact-success"
                                     onClick={() => handleSendStudentReport(attempt._id)}
                                     disabled={sendingResponseId === attempt._id}
-                                    className="border-green-300 text-green-700"
                                   >
                                     <MessageCircle className="mr-1 h-4 w-4" />
                                     {sendingResponseId === attempt._id ? "Sending…" : "Send Parent Report"}

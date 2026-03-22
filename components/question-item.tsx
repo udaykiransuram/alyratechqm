@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -66,16 +66,28 @@ export function QuestionItem({ question, onDelete, onArchive, isDeleting = false
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Link href={buildReturnHref(`/workspace/questions/view/${question._id}`)} title="View question">
+          <AppPrefetchLink
+            href={buildReturnHref(`/workspace/questions/view/${question._id}`)}
+            title="View question"
+            relatedApiPrefetches={[`/api/questions/${question._id}`]}
+          >
             <Button variant="outline" size="icon" className="h-8 w-8" disabled={isDeleting} aria-label="View question">
               <Eye className="h-4 w-4" />
             </Button>
-          </Link>
-          <Link href={buildReturnHref(`/workspace/questions/edit/${question._id}`)} title="Edit question">
+          </AppPrefetchLink>
+          <AppPrefetchLink
+            href={buildReturnHref(`/workspace/questions/edit/${question._id}`)}
+            title="Edit question"
+            relatedApiPrefetches={[
+              `/api/questions/${question._id}`,
+              '/api/classes',
+              '/api/tags/with-subjects',
+            ]}
+          >
             <Button variant="outline" size="icon" className="h-8 w-8" disabled={isDeleting} aria-label="Edit question">
               <Edit className="h-4 w-4" />
             </Button>
-          </Link>
+          </AppPrefetchLink>
           <Button
             variant="destructive"
             size="icon"

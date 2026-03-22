@@ -13,8 +13,8 @@ import { getDispatchAttemptAckWaitUntil } from "@/lib/reports/dispatchAttempts";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_PROVIDER_ACK_WAIT_MINUTES = 45;
-const REPORT_JOB_FETCH_LIMIT = 260;
-const REPORT_JOB_RESPONSE_LIMIT = 200;
+const DEFAULT_REPORT_JOB_PAGE_SIZE = 40;
+const MAX_REPORT_JOB_PAGE_SIZE = 100;
 const ACADEMIC_SECTION_OPTIONS_TTL_MS = 60 * 1000;
 const REPORT_JOB_LIST_SELECT = [
   "_id",
@@ -47,6 +47,7 @@ const REPORT_JOB_LIST_SELECT = [
   "deliveryAttempts",
   "updatedAt",
 ].join(" ");
+const REPORT_JOB_TYPES = ["student", "teacher", "admin", "exam"] as const;
 
 type ReportFilterOption = {
   value: string;
@@ -201,6 +202,25 @@ function jobNeedsAcademicHydration(job: any) {
   return false;
 }
 
+function resolveRequestedJobTypes(
+  requestedType: string,
+  requestedScope: string,
+) {
+  let allowedTypes = [...REPORT_JOB_TYPES];
+
+  if (REPORT_JOB_TYPES.includes(requestedType as (typeof REPORT_JOB_TYPES)[number])) {
+    allowedTypes = [requestedType as (typeof REPORT_JOB_TYPES)[number]];
+  }
+
+  if (requestedScope === "benchmark") {
+    allowedTypes = allowedTypes.filter((type) => type !== "student");
+  } else if (requestedScope === "student") {
+    allowedTypes = allowedTypes.filter((type) => type === "student");
+  }
+
+  return allowedTypes;
+}
+
 async function getAcademicSectionFilterOptions({
   schoolKey,
   ensureTenantModels,
@@ -257,8 +277,21 @@ export async function GET(req: NextRequest) {
   const { schoolKey } = auth;
 
   const status = req.nextUrl.searchParams.get("status");
+  const requestedType = req.nextUrl.searchParams.get("type")?.trim() || "";
+  const requestedScope = req.nextUrl.searchParams.get("scope")?.trim() || "";
   const academicSectionId =
     req.nextUrl.searchParams.get("academicSectionId")?.trim() || "";
+  const limitParam = Number(
+    req.nextUrl.searchParams.get("limit") || DEFAULT_REPORT_JOB_PAGE_SIZE,
+  );
+  const limit = Math.min(
+    MAX_REPORT_JOB_PAGE_SIZE,
+    Math.max(
+      Number.isFinite(limitParam) ? Math.floor(limitParam) : DEFAULT_REPORT_JOB_PAGE_SIZE,
+      1,
+    ),
+  );
+  const pageParam = Number(req.nextUrl.searchParams.get("page") || "1");
   if (
     academicSectionId &&
     !mongoose.Types.ObjectId.isValid(academicSectionId)
@@ -274,6 +307,15 @@ export async function GET(req: NextRequest) {
     query.status = status;
   }
 
+  const requestedTypes = resolveRequestedJobTypes(requestedType, requestedScope);
+  if (requestedTypes.length === 1) {
+    query.type = requestedTypes[0];
+  } else if (requestedTypes.length > 1 && requestedTypes.length < REPORT_JOB_TYPES.length) {
+    query.type = { $in: requestedTypes };
+  } else if (requestedTypes.length === 0) {
+    query.type = { $in: [] };
+  }
+
   let tenantModelsPromise: Promise<any> | null = null;
   const ensureTenantModels = () => {
     if (!tenantModelsPromise) {
@@ -286,14 +328,53 @@ export async function GET(req: NextRequest) {
     return tenantModelsPromise;
   };
 
-  const [jobs, academicSections] = await Promise.all([
-    ReportDispatchJob.find(query)
-      .select(REPORT_JOB_LIST_SELECT)
-      .sort({ updatedAt: -1 })
-      .limit(REPORT_JOB_FETCH_LIMIT)
-      .lean(),
+  if (academicSectionId) {
+    const { User: UserModel } = await ensureTenantModels();
+    const studentsInSection = await UserModel.find({
+      role: "student",
+      academicSection: new mongoose.Types.ObjectId(academicSectionId),
+    })
+      .select("_id")
+      .lean();
+    const studentIdsInSection = studentsInSection.map((student: any) => student._id);
+    const academicSectionClauses: any[] = [
+      { academicSection: new mongoose.Types.ObjectId(academicSectionId) },
+    ];
+
+    if (studentIdsInSection.length > 0) {
+      academicSectionClauses.push(
+        {
+          academicSection: { $exists: false },
+          student: { $in: studentIdsInSection },
+        },
+        {
+          academicSection: null,
+          student: { $in: studentIdsInSection },
+        },
+      );
+    }
+
+    query.$or = academicSectionClauses;
+  }
+
+  const [totalCount, academicSections] = await Promise.all([
+    ReportDispatchJob.countDocuments(query),
     getAcademicSectionFilterOptions({ schoolKey, ensureTenantModels }),
   ]);
+
+  const pages = Math.max(1, Math.ceil(totalCount / limit));
+  const page = Math.min(
+    Math.max(Number.isFinite(pageParam) ? Math.floor(pageParam) : 1, 1),
+    pages,
+  );
+  const skip = (page - 1) * limit;
+
+  const jobs = await ReportDispatchJob.find(query)
+    .select(REPORT_JOB_LIST_SELECT)
+    .sort({ updatedAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean();
 
   const studentIdsNeedingHydration = Array.from(
     new Set(
@@ -357,16 +438,15 @@ export async function GET(req: NextRequest) {
         activeAttemptCreatedAt: toIsoString(job.activeAttemptCreatedAt),
         deliveryAttemptSummary: buildDeliveryAttemptSummary(job),
       };
-    })
-    .filter((job: any) => {
-      if (!academicSectionId) return true;
-      return String(job.academicSectionId || "") === academicSectionId;
-    })
-    .slice(0, REPORT_JOB_RESPONSE_LIMIT);
+    });
 
   return NextResponse.json({
     success: true,
     jobs: enrichedJobs,
+    total: totalCount,
+    page,
+    pages,
+    limit,
     filters: {
       academicSections,
     },

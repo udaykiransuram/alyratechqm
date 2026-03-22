@@ -3,6 +3,12 @@
 
 const SCHOOL_KEY_COOKIE = "schoolKey";
 const SCHOOL_DISPLAY_NAME_COOKIE = "schoolDisplayName";
+export const APP_SCHOOL_SELECTION_CHANGE_EVENT = "app:school-selection-change";
+
+type SchoolSelectionChangeDetail = {
+  schoolKey: string;
+  displayName?: string | null;
+};
 
 function getCookieValue(name: string): string {
   try {
@@ -100,6 +106,24 @@ export function setSchoolSelectionCookies(
     return;
   }
   clearCookieValue(SCHOOL_DISPLAY_NAME_COOKIE);
+}
+
+export function announceSchoolSelectionChange(
+  schoolKey: string,
+  displayName?: string | null,
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent<SchoolSelectionChangeDetail>(APP_SCHOOL_SELECTION_CHANGE_EVENT, {
+      detail: {
+        schoolKey: String(schoolKey || "").trim(),
+        displayName: String(displayName || "").trim() || null,
+      },
+    }),
+  );
 }
 
 export function clearSchoolKeyCookie(): void {
