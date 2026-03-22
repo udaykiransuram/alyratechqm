@@ -71,18 +71,32 @@ export function QuestionFilterPopup({
   handleEditQuestionSave,
 }: QuestionFilterPopupProps) {
   const allQuestionsToShow = modalAvailableQuestions;
-  const disableClassSubject = selectedQuestionIds.length > 0;
+  const normalizeQuestionId = (id: string | number) => String(id);
+  const selectedQuestionIdSet = new Set(selectedQuestionIds.map((id) => normalizeQuestionId(id)));
+  const visibleQuestionIds = allQuestionsToShow.map((question) => normalizeQuestionId(question._id));
+  const visibleQuestionIdSet = new Set(visibleQuestionIds);
+  const visibleSelectedCount = visibleQuestionIds.filter((id) =>
+    selectedQuestionIdSet.has(id),
+  ).length;
   const selectedCount = selectedQuestionIds.length;
-  const hasActiveFilters = modalSearch.trim().length > 0 || selectedTags.length > 0;
+  const hiddenSelectedCount = Math.max(selectedCount - visibleSelectedCount, 0);
+  const hasActiveFilters =
+    modalSearch.trim().length > 0 ||
+    selectedTags.length > 0 ||
+    String(classId) !== 'all' ||
+    String(subjectId) !== 'all';
   const canShowSelectionControls = !loadingQuestions && allQuestionsToShow.length > 0;
-  const hasClassAndSubject = Boolean(String(classId || '').trim() && String(subjectId || '').trim());
 
   const handleToggleQuestion = (id: string | number) => {
-    setSelectedQuestionIds(
-      selectedQuestionIds.includes(id)
-        ? selectedQuestionIds.filter((item) => item !== id)
-        : [...selectedQuestionIds, id],
-    );
+    const normalizedId = normalizeQuestionId(id);
+    setSelectedQuestionIds((currentIds) => {
+      const currentIdSet = new Set(currentIds.map((item) => normalizeQuestionId(item)));
+      if (currentIdSet.has(normalizedId)) {
+        return currentIds.filter((item) => normalizeQuestionId(item) !== normalizedId);
+      }
+
+      return [...currentIds.map((item) => normalizeQuestionId(item)), normalizedId];
+    });
   };
 
   const handleQuestionCardClick = (event: MouseEvent<HTMLDivElement>, id: string | number) => {
@@ -98,6 +112,8 @@ export function QuestionFilterPopup({
     setModalSearch('');
     setSelectedTags([]);
     setQuestionTagMatchMode('any');
+    setClassId('all');
+    setSubjectId('all');
   };
 
   return (
@@ -126,13 +142,13 @@ export function QuestionFilterPopup({
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <h3 className="text-base font-semibold text-foreground">Question Bank Filters</h3>
-                  <p className="text-sm text-muted-foreground">Choose the paper scope, then refine by tags or search.</p>
+                  <p className="text-sm text-muted-foreground">Class and subject filters are optional. You can browse across the whole bank, mix questions from different classes, and assign the final paper scope later.</p>
                 </div>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2 text-xs"
+                  className="h-8 rounded-xl px-2.5 text-xs"
                   onClick={handleClearFilters}
                   disabled={!hasActiveFilters}
                 >
@@ -173,8 +189,15 @@ export function QuestionFilterPopup({
                 resetCounter={0}
                 toast={toast}
                 onCreateNewTag={async () => null}
-                disableClassSubject={disableClassSubject}
+                allowAllClassOption
+                allowAllSubjectOption
+                allClassLabel="All question classes"
+                allSubjectLabel="All subjects"
               />
+
+              <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                Selected questions stay selected while you change class, subject, tag, or search filters.
+              </div>
 
               <div className="app-field-group">
                 <Label className="app-field-label">Tag Match</Label>
@@ -182,7 +205,7 @@ export function QuestionFilterPopup({
                   <Button
                     type="button"
                     variant={questionTagMatchMode === 'any' ? 'default' : 'outline'}
-                    className="h-9 w-full"
+                    className="app-button-compact w-full"
                     onClick={() => setQuestionTagMatchMode('any')}
                     disabled={selectedTags.length === 0}
                   >
@@ -191,7 +214,7 @@ export function QuestionFilterPopup({
                   <Button
                     type="button"
                     variant={questionTagMatchMode === 'all' ? 'default' : 'outline'}
-                    className="h-9 w-full"
+                    className="app-button-compact w-full"
                     onClick={() => setQuestionTagMatchMode('all')}
                     disabled={selectedTags.length === 0}
                   >
@@ -207,11 +230,6 @@ export function QuestionFilterPopup({
                 </p>
               </div>
 
-              {selectedCount > 0 ? (
-                <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                  Clear the current selection before changing class or subject.
-                </div>
-              ) : null}
             </div>
           </aside>
 
@@ -222,10 +240,11 @@ export function QuestionFilterPopup({
                   <h3 className="text-base font-semibold text-foreground">
                     Available Questions <span className="text-muted-foreground">({allQuestionsToShow.length})</span>
                   </h3>
-                  <p className="text-sm text-muted-foreground">Review the matches and select the questions to add.</p>
+                  <p className="text-sm text-muted-foreground">Review the matches and select the questions to add. Selections from other filters stay queued until you confirm.</p>
                 </div>
                 <span className="inline-flex w-fit rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
                   {selectedCount} selected
+                  {hiddenSelectedCount > 0 ? ` • ${hiddenSelectedCount} outside current view` : ''}
                 </span>
               </div>
             </div>
@@ -235,12 +254,18 @@ export function QuestionFilterPopup({
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="select-all-questions"
-                    checked={selectedCount === allQuestionsToShow.length && allQuestionsToShow.length > 0}
+                    checked={visibleSelectedCount === allQuestionsToShow.length && allQuestionsToShow.length > 0}
                     onCheckedChange={(checked) => {
                       if (checked) {
-                        setSelectedQuestionIds(allQuestionsToShow.map((question) => question._id));
+                        setSelectedQuestionIds((currentIds) => {
+                          const next = new Set(currentIds.map((id) => String(id)));
+                          visibleQuestionIds.forEach((id) => next.add(id));
+                          return Array.from(next);
+                        });
                       } else {
-                        setSelectedQuestionIds([]);
+                        setSelectedQuestionIds((currentIds) =>
+                          currentIds.filter((id) => !visibleQuestionIdSet.has(String(id))),
+                        );
                       }
                     }}
                     ref={(element) => {
@@ -248,7 +273,8 @@ export function QuestionFilterPopup({
                         const input = element.querySelector('input[type="checkbox"]');
                         if (input) {
                           (input as HTMLInputElement).indeterminate =
-                            selectedCount > 0 && selectedCount < allQuestionsToShow.length;
+                            visibleSelectedCount > 0 &&
+                            visibleSelectedCount < allQuestionsToShow.length;
                         }
                       }
                     }}
@@ -272,28 +298,21 @@ export function QuestionFilterPopup({
                     <span>Loading questions...</span>
                   </div>
                 </div>
-              ) : !hasClassAndSubject ? (
-                <div className="app-empty-state flex h-full min-h-[280px] items-center justify-center text-center">
-                  <div className="space-y-2">
-                    <p className="font-medium text-foreground">Select class and subject to load questions.</p>
-                    <p className="text-sm text-muted-foreground">
-                      Pick the paper class and subject first, then refine with tags or search.
-                    </p>
-                  </div>
-                </div>
               ) : allQuestionsToShow.length === 0 ? (
                 <div className="app-empty-state flex h-full min-h-[280px] items-center justify-center text-center">
                   <div className="space-y-2">
                     <p className="font-medium text-foreground">No questions found.</p>
                     <p className="text-sm text-muted-foreground">
-                      Try clearing some filters or add more questions to this class and subject.
+                      Try clearing some filters, broadening the class or subject scope, or add more questions to the bank.
                     </p>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {allQuestionsToShow.map((question) => {
-                    const isSelected = selectedQuestionIds.includes(question._id);
+                    const isSelected = selectedQuestionIdSet.has(
+                      normalizeQuestionId(question._id),
+                    );
 
                     return (
                       <div

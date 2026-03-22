@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import PageHero from "@/components/layout/PageHero";
+import ListPagination from "@/components/ui/list-pagination";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
 
@@ -71,6 +72,8 @@ interface AcademicSectionItem {
   class?: { _id: string; name: string } | string;
 }
 
+const STUDENT_GROUP_PAGE_SIZE = 8;
+
 function getSectionClassId(section: AcademicSectionItem) {
   const rawClass = section.class as any;
   return typeof section.class === "string"
@@ -91,6 +94,10 @@ export default function StudentsByClassPage() {
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [includeEmpty, setIncludeEmpty] = useState(false);
+  const [groupPage, setGroupPage] = useState(1);
+  const [groupPages, setGroupPages] = useState(1);
+  const [totalGroups, setTotalGroups] = useState(0);
+  const [totalStudents, setTotalStudents] = useState(0);
 
   const [pages, setPages] = useState<Record<string, number>>({});
   const pageSize = 10;
@@ -143,10 +150,16 @@ export default function StudentsByClassPage() {
       if (selectedSection && selectedSection !== "all") params.set("sectionId", selectedSection);
       if (appliedQuery) params.set("q", appliedQuery);
       if (includeEmpty) params.set("includeEmpty", "true");
+      params.set("page", String(groupPage));
+      params.set("limit", String(STUDENT_GROUP_PAGE_SIZE));
       const res = await fetch(`/api/users/students-by-class?${params.toString()}`);
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "Failed to load students");
       setGroups(data.data || []);
+      setTotalStudents(Math.max(0, Number(data.totalStudents) || 0));
+      setTotalGroups(Math.max(0, Number(data.totalGroups) || 0));
+      setGroupPages(Math.max(1, Number(data.pages) || 1));
+      setGroupPage(Math.max(1, Number(data.page) || 1));
       const initialPages: Record<string, number> = {};
       (data.data || []).forEach((group: StudentGroup) => {
         initialPages[group.groupId] = 1;
@@ -166,12 +179,7 @@ export default function StudentsByClassPage() {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClass, selectedSection, includeEmpty, appliedQuery]);
-
-  const totalStudents = useMemo(
-    () => groups.reduce((sum, group) => sum + (group.count || 0), 0),
-    [groups],
-  );
+  }, [selectedClass, selectedSection, includeEmpty, appliedQuery, groupPage]);
   const selectedClassLabel = useMemo(() => {
     if (selectedClass === "all") return "All Classes";
     return classes.find((classItem) => classItem._id === selectedClass)?.name || "Selected Class";
@@ -189,14 +197,20 @@ export default function StudentsByClassPage() {
     Boolean(appliedQuery),
     includeEmpty,
   ].filter(Boolean).length;
+  const refreshing = loading && groups.length > 0;
 
   const onSearch = (e?: React.FormEvent) => {
     e?.preventDefault();
     const nextQuery = query.trim();
     if (nextQuery === appliedQuery) {
-      fetchData();
+      if (groupPage !== 1) {
+        setGroupPage(1);
+      } else {
+        fetchData();
+      }
       return;
     }
+    setGroupPage(1);
     setAppliedQuery(nextQuery);
   };
 
@@ -213,6 +227,7 @@ export default function StudentsByClassPage() {
   };
 
   const resetFilters = () => {
+    setGroupPage(1);
     setSelectedClass("all");
     setSelectedSection("all");
     setQuery("");
@@ -313,15 +328,19 @@ export default function StudentsByClassPage() {
         title="Students"
         description="Browse students by class and section, then update assignments from a consistent school workspace."
         actions={
-          <Link href="/workspace/students/create">
+          <AppPrefetchLink
+            href="/workspace/students/create"
+            relatedApiPrefetches={['/api/classes', '/api/sections']}
+          >
             <Button>Create Student</Button>
-          </Link>
+          </AppPrefetchLink>
         }
         meta={
           <>
             <span className="app-meta-chip">{selectedClassLabel}</span>
             <span className="app-meta-chip">{selectedSectionLabel}</span>
             {includeEmpty ? <span className="app-meta-chip">Showing empty groups</span> : null}
+            {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
           </>
         }
         stats={[
@@ -332,8 +351,8 @@ export default function StudentsByClassPage() {
           },
           {
             label: "Visible groups",
-            value: String(groups.length),
-            meta: "Class and section groupings in the current result set.",
+            value: String(totalGroups),
+            meta: "Class and section groupings across all pages in the current result set.",
           },
           {
             label: "Search query",
@@ -362,7 +381,7 @@ export default function StudentsByClassPage() {
                 {activeFilterCount > 0 ? `${activeFilterCount} active filters` : "No active filters"}
               </span>
               <span className="app-meta-chip">
-                {groups.length} grouped result{groups.length === 1 ? "" : "s"}
+                {totalGroups} grouped result{totalGroups === 1 ? "" : "s"}
               </span>
             </div>
           </div>
@@ -377,7 +396,13 @@ export default function StudentsByClassPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-            <Select value={selectedClass} onValueChange={setSelectedClass}>
+            <Select
+              value={selectedClass}
+              onValueChange={(value) => {
+                setGroupPage(1);
+                setSelectedClass(value);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Filter class" />
               </SelectTrigger>
@@ -390,7 +415,13 @@ export default function StudentsByClassPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={selectedSection} onValueChange={setSelectedSection}>
+            <Select
+              value={selectedSection}
+              onValueChange={(value) => {
+                setGroupPage(1);
+                setSelectedSection(value);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Filter section" />
               </SelectTrigger>
@@ -407,7 +438,10 @@ export default function StudentsByClassPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIncludeEmpty((prev) => !prev)}
+              onClick={() => {
+                setGroupPage(1);
+                setIncludeEmpty((prev) => !prev);
+              }}
             >
               {includeEmpty ? "Hide Empty" : "Show Empty"}
             </Button>
@@ -415,7 +449,7 @@ export default function StudentsByClassPage() {
           <div className="app-filter-summary">
             <div className="app-filter-summary-copy">
               <p className="app-filter-summary-title">
-                {totalStudents} student{totalStudents === 1 ? "" : "s"} across {groups.length} group{groups.length === 1 ? "" : "s"}
+                {totalStudents} student{totalStudents === 1 ? "" : "s"} across {totalGroups} group{totalGroups === 1 ? "" : "s"}
               </p>
               <p className="app-filter-summary-note">
                 Students remain grouped by class and section so exports and quick edits stay predictable.
@@ -430,7 +464,9 @@ export default function StudentsByClassPage() {
         </CardContent>
       </Card>
 
-      {loading ? (
+      {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+
+      {loading && groups.length === 0 ? (
         <PageLoadingState
           title="Loading students"
           description="Preparing grouped student results for the current class and section filters."
@@ -438,138 +474,159 @@ export default function StudentsByClassPage() {
           contentClassName="max-w-none"
           dense
         />
-      ) : error ? (
-        <div className="app-feedback app-feedback-error">{error}</div>
       ) : groups.length === 0 ? (
         <div className="app-empty-state">No students found.</div>
       ) : (
-        <Accordion type="multiple" className="space-y-3">
-          {groups.map((group) => {
-            const page = pages[group.groupId] || 1;
-            const start = (page - 1) * pageSize;
-            const end = start + pageSize;
-            const pageItems = group.students.slice(start, end);
-            const maxPage = Math.max(1, Math.ceil(group.students.length / pageSize));
-            return (
-              <AccordionItem
-                key={group.groupId}
-                value={group.groupId}
-                className="app-surface overflow-hidden"
-              >
-                <AccordionTrigger className="px-4 py-4 no-underline hover:no-underline sm:px-5">
-                  <div className="flex w-full items-center justify-between gap-3">
-                    <div className="flex min-w-0 flex-col gap-1 text-left">
-                      <span className="text-base font-semibold text-foreground">
-                        {group.academicSectionName || "Unassigned Section"}
-                      </span>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <span>Class: {group.className}</span>
-                        <span>•</span>
-                        <span>{group.count} student{group.count === 1 ? "" : "s"}</span>
-                      </div>
-                    </div>
-                    <span className="app-meta-chip">{group.groupName}</span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-4 px-4 pb-4 sm:px-5">
-                    <div className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="space-y-1">
-                          <p className="text-sm font-semibold text-foreground">
-                            Section actions
-                          </p>
-                          <p className="text-xs leading-5 text-muted-foreground">
-                            Page {page} of {maxPage}. Export uses the same student grouping shown here.
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => changePage(group.groupId, -1)}
-                            disabled={page <= 1}
-                          >
-                            Prev
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => changePage(group.groupId, 1)}
-                            disabled={page >= maxPage}
-                          >
-                            Next
-                          </Button>
-                          <Separator orientation="vertical" className="hidden h-6 sm:block" />
-                          <Button size="sm" onClick={() => exportCSV(group)}>
-                            Export CSV
-                          </Button>
+        <div className="space-y-3">
+          <ListPagination
+            page={groupPage}
+            totalPages={groupPages}
+            totalItems={totalGroups}
+            pageSize={STUDENT_GROUP_PAGE_SIZE}
+            itemLabel="groups"
+            onPageChange={setGroupPage}
+            disabled={loading}
+          />
+          <Accordion type="multiple" className="space-y-3">
+            {groups.map((group) => {
+              const page = pages[group.groupId] || 1;
+              const start = (page - 1) * pageSize;
+              const end = start + pageSize;
+              const pageItems = group.students.slice(start, end);
+              const maxPage = Math.max(1, Math.ceil(group.students.length / pageSize));
+              return (
+                <AccordionItem
+                  key={group.groupId}
+                  value={group.groupId}
+                  className="app-surface overflow-hidden"
+                >
+                  <AccordionTrigger className="px-4 py-4 no-underline hover:no-underline sm:px-5">
+                    <div className="flex w-full items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-col gap-1 text-left">
+                        <span className="text-base font-semibold text-foreground">
+                          {group.academicSectionName || "Unassigned Section"}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span>Class: {group.className}</span>
+                          <span>•</span>
+                          <span>{group.count} student{group.count === 1 ? "" : "s"}</span>
                         </div>
                       </div>
+                      <span className="app-meta-chip">{group.groupName}</span>
                     </div>
-                    <div className="app-table-wrap">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Roll No.</TableHead>
-                            <TableHead>Email</TableHead>
-                            <TableHead>Enrolled</TableHead>
-                            <TableHead className="w-[240px]">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {pageItems.length === 0 ? (
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 px-4 pb-4 sm:px-5">
+                      <div className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold text-foreground">
+                              Section actions
+                            </p>
+                            <p className="text-xs leading-5 text-muted-foreground">
+                              Page {page} of {maxPage}. Export uses the same student grouping shown here.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="app-button-compact"
+                              onClick={() => changePage(group.groupId, -1)}
+                              disabled={page <= 1}
+                            >
+                              Prev
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="app-button-compact"
+                              onClick={() => changePage(group.groupId, 1)}
+                              disabled={page >= maxPage}
+                            >
+                              Next
+                            </Button>
+                            <Separator orientation="vertical" className="hidden h-6 sm:block" />
+                            <Button size="sm" className="app-button-compact" onClick={() => exportCSV(group)}>
+                              Export CSV
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="app-table-wrap">
+                        <Table>
+                          <TableHeader>
                             <TableRow>
-                              <TableCell colSpan={5} className="text-center text-muted-foreground">
-                                No students on this page.
-                              </TableCell>
+                              <TableHead>Name</TableHead>
+                              <TableHead>Roll No.</TableHead>
+                              <TableHead>Email</TableHead>
+                              <TableHead>Enrolled</TableHead>
+                              <TableHead className="w-[240px]">Actions</TableHead>
                             </TableRow>
-                          ) : (
-                            pageItems.map((student) => (
-                              <TableRow key={student._id}>
-                                <TableCell className="font-medium">{student.name}</TableCell>
-                                <TableCell>{student.rollNumber || "-"}</TableCell>
-                                <TableCell>{student.email || "-"}</TableCell>
-                                <TableCell>
-                                  {student.enrolledAt
-                                    ? new Date(student.enrolledAt).toLocaleDateString()
-                                    : "-"}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <Link href={buildReturnHref(`/workspace/students/${student._id}`)}>
-                                      <Button variant="outline" size="sm">View</Button>
-                                    </Link>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => openEditModal(student, group.classId)}
-                                    >
-                                      Edit
-                                    </Button>
-                                    <Button
-                                      variant="destructive"
-                                      size="sm"
-                                      disabled={deleteLoading}
-                                      onClick={() => deleteStudent(student._id)}
-                                    >
-                                      {deleteLoading ? "Archiving…" : "Archive"}
-                                    </Button>
-                                  </div>
+                          </TableHeader>
+                          <TableBody>
+                            {pageItems.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                                  No students on this page.
                                 </TableCell>
                               </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
+                            ) : (
+                              pageItems.map((student) => (
+                                <TableRow key={student._id}>
+                                  <TableCell className="font-medium">{student.name}</TableCell>
+                                  <TableCell>{student.rollNumber || "-"}</TableCell>
+                                  <TableCell>{student.email || "-"}</TableCell>
+                                  <TableCell>
+                                    {student.enrolledAt
+                                      ? new Date(student.enrolledAt).toLocaleDateString()
+                                      : "-"}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <AppPrefetchLink
+                                        href={buildReturnHref(`/workspace/students/${student._id}`)}
+                                        relatedApiPrefetches={[
+                                          `/api/users/${student._id}`,
+                                          '/api/classes',
+                                          '/api/sections',
+                                          `/api/question-paper-response?student=${encodeURIComponent(student._id)}`,
+                                        ]}
+                                      >
+                                        <Button variant="outline" size="sm" className="app-button-compact">View</Button>
+                                      </AppPrefetchLink>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="app-button-compact"
+                                        onClick={() => openEditModal(student, group.classId)}
+                                      >
+                                        Edit
+                                      </Button>
+                                      <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        className="app-button-compact"
+                                        disabled={deleteLoading}
+                                        onClick={() => deleteStudent(student._id)}
+                                      >
+                                        {deleteLoading ? "Archiving…" : "Archive"}
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            );
-          })}
-        </Accordion>
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
+        </div>
       )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -589,7 +646,7 @@ export default function StudentsByClassPage() {
                   setEditClassId(value);
                   setEditAcademicSectionId("");
                 }}>
-                  <SelectTrigger>
+                  <SelectTrigger className="app-control-compact">
                     <SelectValue placeholder="Select class" />
                   </SelectTrigger>
                   <SelectContent>
@@ -604,7 +661,7 @@ export default function StudentsByClassPage() {
               <Label className="text-right">Section</Label>
               <div className="col-span-3">
                 <Select value={editAcademicSectionId} onValueChange={setEditAcademicSectionId}>
-                  <SelectTrigger>
+                  <SelectTrigger className="app-control-compact">
                     <SelectValue placeholder="Select section" />
                   </SelectTrigger>
                   <SelectContent>

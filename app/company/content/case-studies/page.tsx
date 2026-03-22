@@ -221,20 +221,20 @@ export default function CaseStudiesAdmin() {
 
   return (
     <div className="company-admin-page">
-      <div>
-        <h1 className="text-3xl font-bold text-teal-900">Manage Case Studies</h1>
-        <p className="text-teal-600 mt-2">Add, edit, or remove school success stories</p>
+      <div className="company-admin-header-block">
+        <h1 className="company-admin-title">Manage Case Studies</h1>
+        <p className="company-admin-description">Add, edit, or remove school success stories.</p>
       </div>
 
             {/* Form */}
       <form onSubmit={handleSubmit} className="company-admin-form">
-        <h2 className="text-xl font-semibold text-teal-900">
+        <h2 className="text-xl font-semibold text-foreground">
           {editingId ? 'Edit' : 'Add New'} Case Study
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-teal-900 mb-1">
+            <label className="company-admin-field-label">
               School Name *
             </label>
             <input
@@ -242,12 +242,11 @@ export default function CaseStudiesAdmin() {
               required
               value={formData.schoolName}
               onChange={(e) => setFormData({ ...formData, schoolName: e.target.value })}
-              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-teal-900 mb-1">
+            <label className="company-admin-field-label">
               Location *
             </label>
             <input
@@ -255,12 +254,11 @@ export default function CaseStudiesAdmin() {
               required
               value={formData.location}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-teal-900 mb-1">
+            <label className="company-admin-field-label">
               Student Count *
             </label>
             <input
@@ -268,25 +266,23 @@ export default function CaseStudiesAdmin() {
               required
               value={formData.studentCount}
               onChange={(e) => setFormData({ ...formData, studentCount: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-teal-900 mb-1">
+            <label className="company-admin-field-label">
               Display Order
             </label>
             <input
               type="number"
               value={formData.displayOrder}
               onChange={(e) => setFormData({ ...formData, displayOrder: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-teal-900 mb-1">
+          <label className="company-admin-field-label">
             Challenge *
           </label>
           <textarea
@@ -294,12 +290,11 @@ export default function CaseStudiesAdmin() {
             rows={3}
             value={formData.challenge}
             onChange={(e) => setFormData({ ...formData, challenge: e.target.value })}
-            className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-teal-900 mb-1">
+          <label className="company-admin-field-label">
             Solution *
           </label>
           <textarea
@@ -307,79 +302,78 @@ export default function CaseStudiesAdmin() {
             rows={3}
             value={formData.solution}
             onChange={(e) => setFormData({ ...formData, solution: e.target.value })}
-            className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
 
         {/* Results */}
         <div>
           <div className="flex justify-between items-center mb-2">
-            <label className="block text-sm font-medium text-teal-900">Results *</label>
+            <label className="company-admin-field-label mb-0">Results *</label>
             <button
               type="button"
               onClick={addResult}
-              className="text-sm text-teal-600 hover:text-teal-700"
+              className="company-admin-inline-add"
             >
-              + Add Result
+              Add Result
             </button>
           </div>
-          {formData.results.map((result, index) => (
-            <div key={index} className="flex gap-2 mb-2">
+          <div className="company-admin-inline-list">
+            {formData.results.map((result, index) => (
+              <div key={index} className="company-admin-inline-row">
               <input
                 type="text"
                 required
                 value={result}
                 onChange={(e) => updateResult(index, e.target.value)}
                 placeholder={`Result ${index + 1}`}
-                className="flex-1 px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="flex-1"
               />
               {formData.results.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeResult(index)}
-                  className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                  className="company-admin-inline-remove"
                 >
                   Remove
                 </button>
               )}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Metrics */}
         <div>
           <div className="flex justify-between items-center mb-2">
-            <label className="block text-sm font-medium text-teal-900">Metrics</label>
+            <label className="company-admin-field-label mb-0">Metrics</label>
             <button
               type="button"
               onClick={addMetric}
-              className="text-sm text-teal-600 hover:text-teal-700"
+              className="company-admin-inline-add"
             >
-              + Add Metric
+              Add Metric
             </button>
           </div>
-          {formData.metrics.map((metric, index) => (
-            <div key={index} className="grid grid-cols-4 gap-2 mb-2">
+          <div className="company-admin-inline-list">
+            {formData.metrics.map((metric, index) => (
+              <div key={index} className="grid grid-cols-1 gap-2 md:grid-cols-4">
               <input
                 type="text"
                 value={metric.label}
                 onChange={(e) => updateMetric(index, 'label', e.target.value)}
                 placeholder="Label"
-                className="px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
               <input
                 type="text"
                 value={metric.before}
                 onChange={(e) => updateMetric(index, 'before', e.target.value)}
                 placeholder="Before"
-                className="px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
               <input
                 type="text"
                 value={metric.after}
                 onChange={(e) => updateMetric(index, 'after', e.target.value)}
                 placeholder="After"
-                className="px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
               <div className="flex gap-1">
                 <input
@@ -387,25 +381,26 @@ export default function CaseStudiesAdmin() {
                   value={metric.improvement}
                   onChange={(e) => updateMetric(index, 'improvement', e.target.value)}
                   placeholder="Improvement"
-                  className="flex-1 px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="flex-1"
                 />
                 {formData.metrics.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removeMetric(index)}
-                    className="px-2 text-red-600 hover:bg-red-50 rounded-md"
+                    className="company-admin-inline-icon-remove"
                   >
                     ✕
                   </button>
                 )}
               </div>
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Testimonial */}
-        <div className="border-t border-teal-200 pt-4">
-          <h3 className="text-sm font-medium text-teal-900 mb-3">Optional Testimonial</h3>
+        <div className="border-t border-border/60 pt-4">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">Optional Testimonial</h3>
           <div className="space-y-3">
             <textarea
               rows={2}
@@ -415,7 +410,6 @@ export default function CaseStudiesAdmin() {
                 testimonial: { ...formData.testimonial, quote: e.target.value }
               })}
               placeholder="Quote"
-              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
             <div className="grid grid-cols-2 gap-3">
               <input
@@ -426,7 +420,6 @@ export default function CaseStudiesAdmin() {
                   testimonial: { ...formData.testimonial, author: e.target.value }
                 })}
                 placeholder="Author Name"
-                className="px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
               <input
                 type="text"
@@ -436,31 +429,28 @@ export default function CaseStudiesAdmin() {
                   testimonial: { ...formData.testimonial, role: e.target.value }
                 })}
                 placeholder="Role"
-                className="px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-6">
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
             <input
               type="checkbox"
               checked={formData.isFeatured}
               onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
-              className="w-4 h-4 text-teal-600 border-teal-300 rounded focus:ring-teal-500"
             />
-            <span className="text-sm text-teal-900">Featured</span>
+            <span>Featured</span>
           </label>
 
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
             <input
               type="checkbox"
               checked={formData.isActive}
               onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-              className="w-4 h-4 text-teal-600 border-teal-300 rounded focus:ring-teal-500"
             />
-            <span className="text-sm text-teal-900">Active</span>
+            <span>Active</span>
           </label>
         </div>
 
@@ -486,47 +476,47 @@ export default function CaseStudiesAdmin() {
 
       {/* List */}
       <div className="company-admin-surface">
-        <h2 className="text-xl font-semibold text-teal-900 mb-4">All Case Studies</h2>
+        <h2 className="mb-4 text-xl font-semibold text-foreground">All Case Studies</h2>
         <div className="space-y-4">
           {caseStudies.length === 0 ? (
-            <p className="text-teal-600 text-center py-8">No case studies yet. Create one above!</p>
+            <p className="py-8 text-center text-muted-foreground">No case studies yet. Create one above!</p>
           ) : (
             caseStudies.map((cs) => (
               <div
                 key={cs._id}
-                className="border border-teal-200 rounded-lg p-4 hover:border-teal-400 transition-colors"
+                className="company-admin-item-card"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h3 className="font-semibold text-teal-900">{cs.schoolName}</h3>
-                    <p className="text-sm text-teal-600">{cs.location} • {cs.studentCount} students</p>
+                    <h3 className="font-semibold text-foreground">{cs.schoolName}</h3>
+                    <p className="text-sm text-muted-foreground">{cs.location} • {cs.studentCount} students</p>
                   </div>
                   <div className="flex gap-2">
                     {cs.isFeatured && (
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded">
+                      <span className="company-admin-status-chip company-admin-status-chip-warning">
                         Featured
                       </span>
                     )}
-                    <span className={`px-2 py-1 text-xs rounded ${
-                      cs.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                    <span className={`company-admin-status-chip ${
+                      cs.isActive ? 'company-admin-status-chip-success' : 'company-admin-status-chip-muted'
                     }`}>
                       {cs.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </div>
                 </div>
-                <p className="text-sm text-teal-700 mb-2 line-clamp-2">{cs.challenge}</p>
+                <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">{cs.challenge}</p>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-teal-500">Order: {cs.displayOrder}</span>
+                  <span className="text-xs text-muted-foreground">Order: {cs.displayOrder}</span>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleEdit(cs)}
-                      className="px-3 py-1 text-sm text-teal-600 hover:bg-teal-50 rounded"
+                      className="app-button-compact-secondary"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(cs._id)}
-                      className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
+                      className="app-button-compact-secondary app-button-compact-danger"
                     >
                       Delete
                     </button>

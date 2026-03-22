@@ -14,6 +14,7 @@ import { QuestionFilterPopup } from '@/components/QuestionFilterPopup';
 import { useToast } from '@/components/ui/use-toast';
 import { useRouter } from 'next/navigation';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import { fetchApiJson, peekCachedApiJson } from '@/lib/client/api';
 import { announceNavigationStart } from '@/lib/client/navigation-feedback';
 import {
   Accordion,
@@ -25,7 +26,11 @@ import {
 interface TagItem { _id: string; name: string; type: { name: string } }
 interface SubjectWithTags { _id: string; name: string; tags: TagItem[] }
 interface Class { _id: string; name: string }
-interface AcademicSectionItem { _id: string; name: string }
+interface AcademicSectionItem {
+  _id: string;
+  name: string;
+  class?: { _id: string; name?: string } | string;
+}
 interface QuestionInPaper {
   question: Question;
   marks: number;
@@ -45,6 +50,12 @@ function parseStoredDate(value: unknown) {
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
+
+function getAcademicSectionClassId(section: AcademicSectionItem) {
+  return typeof section.class === 'string' ? section.class : section.class?._id || '';
+}
+
+const SUPPORT_DATA_CACHE_TTL_MS = 60_000;
 
 export default function QuestionPaperForm({ initialData, isEditMode = false }: {
   initialData?: any;
@@ -96,7 +107,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
   // Question Bank State
   const [availableQuestions, setAvailableQuestions] = useState<any[]>([]);
-  const [loadingQuestions, setLoadingQuestions] = useState(true);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
 
   // Filters
   const [selectedTags, setSelectedTags] = useState<TagItem[]>([]);
@@ -104,61 +115,79 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
   // Global State
   const [saving, setSaving] = useState(false);
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [subjects, setSubjects] = useState<SubjectWithTags[]>([]);
+  const cachedClassesResponse = peekCachedApiJson<{ classes?: Class[] }>('/api/classes', {
+    clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+  });
+  const cachedTagsResponse = peekCachedApiJson<{ tags?: TagItem[] }>('/api/tags/with-subjects', {
+    clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+  });
+  const cachedSubjectsResponse = peekCachedApiJson<{ subjects?: SubjectWithTags[] }>('/api/subjects', {
+    clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+  });
+  const cachedSectionsResponse = peekCachedApiJson<{ sections?: AcademicSectionItem[] }>('/api/sections', {
+    clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+  });
+  const hasCachedSupportData = Boolean(
+    cachedClassesResponse?.classes &&
+      cachedTagsResponse?.tags &&
+      cachedSubjectsResponse?.subjects,
+  );
+  const [classes, setClasses] = useState<Class[]>(() => cachedClassesResponse?.classes || []);
+  const [subjects, setSubjects] = useState<SubjectWithTags[]>(
+    () => cachedSubjectsResponse?.subjects || [],
+  );
   const [availableAcademicSections, setAvailableAcademicSections] = useState<AcademicSectionItem[]>([]);
-  const [allTags, setAllTags] = useState<TagItem[]>([]);
-  const [initialDataLoading, setInitialDataLoading] = useState(true);
-  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [allTags, setAllTags] = useState<TagItem[]>(() => cachedTagsResponse?.tags || []);
+  const [initialDataLoading, setInitialDataLoading] = useState(() => !hasCachedSupportData);
+  const [subjectsLoading, setSubjectsLoading] = useState(() => !cachedSubjectsResponse?.subjects);
 
   // Modal State
   const [questionModalOpen, setQuestionModalOpen] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<(string | number)[]>([]);
+  const [selectedQuestionCache, setSelectedQuestionCache] = useState<Record<string, any>>({});
   const [modalSearch, setModalSearch] = useState('');
+  const [questionFilterClassId, setQuestionFilterClassId] = useState('all');
+  const [questionFilterSubjectId, setQuestionFilterSubjectId] = useState('all');
 
   // Fetch initial data
   useEffect(() => {
     const fetchInitialData = async () => {
-      setInitialDataLoading(true);
+      setInitialDataLoading(!hasCachedSupportData);
+      setSubjectsLoading(!cachedSubjectsResponse?.subjects);
       try {
-        const [classesRes, tagsRes] = await Promise.all([
-          fetch('/api/classes'),
-          fetch('/api/tags/with-subjects')
+        const [classesData, tagsData, subjectsData] = await Promise.all([
+          fetchApiJson<{ classes?: Class[] }>('/api/classes', {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load initial data.',
+            clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ tags?: TagItem[] }>('/api/tags/with-subjects', {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load initial data.',
+            clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ subjects?: SubjectWithTags[] }>('/api/subjects', {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load initial data.',
+            clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
         ]);
-        const classesData = await classesRes.json();
-        const tagsData = await tagsRes.json();
-        if (classesData.success) setClasses(classesData.classes);
-        if (tagsData.success) setAllTags(tagsData.tags || []);
+        setClasses(classesData.classes || []);
+        setAllTags(tagsData.tags || []);
+        setSubjects(subjectsData.subjects || []);
       } catch (error) {
         toast({ title: 'Error', description: 'Failed to load initial data.', variant: 'destructive' });
       } finally {
+        setSubjectsLoading(false);
         setInitialDataLoading(false);
       }
     };
     fetchInitialData();
-  }, [toast]);
-
-  useEffect(() => {
-    if (!classId) {
-      setSubjects([]);
-      setSubjectId('');
-      return;
-    }
-    const fetchSubjectsForClass = async () => {
-      setSubjectsLoading(true);
-      try {
-        const res = await fetch(`/api/subjects?classId=${classId}`);
-        const data = await res.json();
-        if (data.success) setSubjects(data.subjects || []);
-      } catch (error) {
-        toast({ title: 'Network Error', description: 'Could not fetch subjects.', variant: 'destructive' });
-      } finally {
-        setSubjectsLoading(false);
-      }
-    };
-    fetchSubjectsForClass();
-  }, [classId, toast]);
+  }, [cachedSubjectsResponse?.subjects, hasCachedSupportData, toast]);
 
   useEffect(() => {
     const fetchAcademicSections = async () => {
@@ -168,56 +197,121 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
         return;
       }
 
-      try {
-        const res = await fetch(`/api/sections?classId=${classId}`);
-        const data = await res.json();
-        if (!data.success) {
-          throw new Error(data.message || 'Failed to load academic sections.');
-        }
+      const cachedSections = cachedSectionsResponse?.sections || [];
+      if (cachedSections.length > 0) {
+        const nextSections = cachedSections.filter(
+          (section) => getAcademicSectionClassId(section) === classId,
+        );
+        setAvailableAcademicSections(nextSections);
+        const validIds = new Set(nextSections.map((section) => section._id));
+        setAssignedAcademicSectionIds((prev) => prev.filter((id) => validIds.has(id)));
+      }
 
+      try {
+        const data = await fetchApiJson<{ sections?: AcademicSectionItem[] }>(
+          `/api/sections?classId=${classId}`,
+          {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load academic sections.',
+            clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+            preferClientCache: true,
+          },
+        );
         const nextSections = data.sections || [];
         setAvailableAcademicSections(nextSections);
         const validIds = new Set(nextSections.map((section: AcademicSectionItem) => section._id));
         setAssignedAcademicSectionIds((prev) => prev.filter((id) => validIds.has(id)));
       } catch (error) {
-        setAvailableAcademicSections([]);
+        if ((cachedSectionsResponse?.sections || []).length === 0) {
+          setAvailableAcademicSections([]);
+        }
       }
     };
 
     fetchAcademicSections();
-  }, [classId]);
+  }, [cachedSectionsResponse?.sections, classId]);
 
   useEffect(() => {
+    if (!questionModalOpen) {
+      setLoadingQuestions(false);
+      return;
+    }
+
+    const abortController = new AbortController();
     const params = new URLSearchParams();
     const questionSearch = modalSearch.trim();
 
-    if (classId) params.append('class', classId);
-    if (subjectId) params.append('subject', subjectId);
+    if (questionFilterClassId !== 'all') params.append('class', questionFilterClassId);
+    if (questionFilterSubjectId !== 'all') params.append('subject', questionFilterSubjectId);
     if (selectedTags.length) {
       params.append('tags', selectedTags.map(t => t._id).join(','));
       params.append('tagsMode', questionTagMatchMode === 'all' ? 'and' : 'or');
     }
     if (questionSearch) params.append('search', questionSearch);
 
-    const shouldFetch = Boolean((classId && subjectId) || selectedTags.length > 0 || questionSearch.length > 0);
-
-    if (!shouldFetch) {
-      setAvailableQuestions([]);
-      setLoadingQuestions(false);
-      return;
-    }
-
     setLoadingQuestions(true);
     const qs = params.toString();
     const endpoint = qs ? `/api/questions?${qs}` : '/api/questions';
 
-    fetch(endpoint)
-      .then(res => res.json())
+    fetchApiJson<{ questions?: any[] }>(endpoint, {
+      signal: abortController.signal,
+      cache: 'no-store',
+      fallbackMessage: 'Could not load questions for the current filters.',
+      clientCacheTtlMs: 15_000,
+      preferClientCache: true,
+    })
       .then(data => {
         setAvailableQuestions(data.questions || []);
       })
-      .finally(() => setLoadingQuestions(false));
-  }, [classId, subjectId, selectedTags, questionTagMatchMode, modalSearch]);
+      .catch(error => {
+        if (error?.name !== 'AbortError') {
+          toast({
+            title: 'Question bank load failed',
+            description: 'Could not load questions for the current filters.',
+            variant: 'destructive',
+          });
+        }
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) {
+          setLoadingQuestions(false);
+        }
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [
+    modalSearch,
+    questionFilterClassId,
+    questionFilterSubjectId,
+    questionModalOpen,
+    questionTagMatchMode,
+    selectedTags,
+    toast,
+  ]);
+
+  useEffect(() => {
+    if (availableQuestions.length === 0) {
+      return;
+    }
+
+    setSelectedQuestionCache((currentCache) => {
+      const nextCache = { ...currentCache };
+      let changed = false;
+
+      availableQuestions.forEach((question) => {
+        const questionId = String(question?._id || '');
+        if (!questionId) return;
+        if (nextCache[questionId] !== question) {
+          nextCache[questionId] = question;
+          changed = true;
+        }
+      });
+
+      return changed ? nextCache : currentCache;
+    });
+  }, [availableQuestions]);
 
   // Computed Values
   const totalPaperMarks = useMemo(
@@ -238,13 +332,10 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
     if (!activeSectionId) return [];
     const usedIds = sections
       .filter(s => s.id !== activeSectionId)
-      .flatMap(s => s.questions.map(q => q.question._id));
+      .flatMap(s => s.questions.map(q => String(q.question._id)));
     return availableQuestions
-      .filter(q =>
-        !usedIds.includes(q._id) &&
-        (modalSearch.trim() === '' || String(q.content || '').toLowerCase().includes(modalSearch.toLowerCase()))
-      );
-  }, [availableQuestions, sections, activeSectionId, modalSearch]);
+      .filter(q => !usedIds.includes(String(q._id)));
+  }, [availableQuestions, sections, activeSectionId]);
 
   // Section Handlers
   const handleAddSection = () => {
@@ -322,10 +413,20 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
   // Modal Handlers
   const openQuestionModal = (sectionId: string) => {
+    const currentSectionQuestions =
+      sections.find(s => s.id === sectionId)?.questions || [];
+
     setActiveSectionId(sectionId);
-    setSelectedQuestionIds(
-      sections.find(s => s.id === sectionId)?.questions.map(q => q.question._id) || []
-    );
+    setSelectedQuestionIds(currentSectionQuestions.map(q => String(q.question._id)));
+    setSelectedQuestionCache((currentCache) => {
+      const nextCache = { ...currentCache };
+      currentSectionQuestions.forEach((questionInPaper) => {
+        const questionId = String(questionInPaper.question?._id || '');
+        if (!questionId) return;
+        nextCache[questionId] = questionInPaper.question;
+      });
+      return nextCache;
+    });
     setModalSearch('');
     setQuestionModalOpen(true);
   };
@@ -337,13 +438,29 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
     // Prevent adding if marks are not set
     if (typeof activeSection.defaultMarks !== 'number' || activeSection.defaultMarks <= 0) return;
 
+    const normalizedSelectedQuestionIds = Array.from(
+      new Set(selectedQuestionIds.map((questionId) => String(questionId))),
+    );
+
+    const selectedQuestions = normalizedSelectedQuestionIds
+      .map((questionId) => selectedQuestionCache[String(questionId)])
+      .filter(Boolean);
+
+    if (selectedQuestions.length !== normalizedSelectedQuestionIds.length) {
+      toast({
+        title: 'Question selection incomplete',
+        description: 'A few selected questions are missing from the current cache. Please reopen the picker and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSections(prev =>
       prev.map(s =>
         s.id === activeSectionId
           ? {
               ...s,
-              questions: availableQuestions
-                .filter(q => selectedQuestionIds.includes(q._id))
+              questions: selectedQuestions
                 .map(q => ({
                   question: q,
                   marks: activeSection.defaultMarks as number, // always a number here
@@ -572,8 +689,6 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
                   {sections.map((section, sectionIndex) => {
                     const sectionTotalMarks = section.questions.reduce((sum, question) => sum + question.marks, 0);
                     const canAddQuestions =
-                      Boolean(classId) &&
-                      Boolean(subjectId) &&
                       section.name.trim().length > 0 &&
                       typeof section.defaultMarks === 'number' &&
                       section.defaultMarks > 0;
@@ -687,6 +802,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    className="app-button-compact"
                                     onClick={() => openQuestionModal(section.id)}
                                     disabled={!canAddQuestions}
                                   >
@@ -696,7 +812,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
                                 </div>
                                 {!canAddQuestions ? (
                                   <p className="mt-2 text-xs text-destructive">
-                                    Select the paper class and subject, then enter a section name and default marks to add questions.
+                                    Enter a section name and default marks before adding questions.
                                   </p>
                                 ) : null}
                               </div>
@@ -770,13 +886,20 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
       <QuestionFilterPopup
         open={questionModalOpen}
-        onOpenChange={setQuestionModalOpen}
+        onOpenChange={(nextOpen) => {
+          setQuestionModalOpen(nextOpen);
+          if (!nextOpen) {
+            setActiveSectionId(null);
+            setSelectedQuestionIds([]);
+            setModalSearch('');
+          }
+        }}
         classes={classes}
-        classId={classId}
-        setClassId={id => setClassId(String(id))}
+        classId={questionFilterClassId}
+        setClassId={id => setQuestionFilterClassId(String(id))}
         subjects={subjects}
-        subjectId={subjectId}
-        setSubjectId={id => setSubjectId(String(id))}
+        subjectId={questionFilterSubjectId}
+        setSubjectId={id => setQuestionFilterSubjectId(String(id))}
         subjectsLoading={subjectsLoading}
         allTags={allTags}
         selectedTags={selectedTags}
@@ -805,6 +928,10 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
           setAvailableQuestions(prev =>
             prev.map(question => (question._id === updatedQuestion._id ? updatedQuestion : question)),
           );
+          setSelectedQuestionCache((currentCache) => ({
+            ...currentCache,
+            [String(updatedQuestion._id)]: updatedQuestion,
+          }));
         }}
         toast={toast}
       />

@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import PageLoadingState from '@/components/ui/page-loading-state';
 import { Button } from '@/components/ui/button';
 import PageHero from '@/components/layout/PageHero';
+import { fetchApiJson, peekCachedApiJson } from '@/lib/client/api';
 import {
   Card,
   CardContent,
@@ -36,70 +37,104 @@ function getSectionClassId(section: AcademicSectionItem) {
   return typeof section.class === 'string' ? section.class : section.class?._id || '';
 }
 
+const EDIT_PAGE_CACHE_TTL_MS = 60_000;
+
+function buildAdminForm(user: any) {
+  return {
+    name: user.name || '',
+    email: user.email || '',
+    password: '',
+    mobileNumber: user.mobileNumber || '',
+    hasAllClasses: Boolean(user.hasAllClasses),
+    hasAllSections:
+      typeof user.hasAllSections === 'boolean' ? user.hasAllSections : true,
+    hasAllSubjects: Boolean(user.hasAllSubjects),
+    classIds: (user.classIds || []).map(String),
+    academicSectionIds: (user.academicSectionIds || []).map(String),
+    subjectIds: (user.subjectIds || []).map(String),
+  };
+}
+
 export default function EditAdminPage() {
   const params = useParams();
   const id = (params?.id as string) || '';
   const { navigateBack } = useBackNavigation(`/workspace/admins/${id}`);
+  const cachedUserResponse = id
+    ? peekCachedApiJson<{ user?: any }>(`/api/users/${id}`, {
+        clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+      })
+    : null;
+  const cachedClassesResponse = peekCachedApiJson<{ classes?: ClassItem[] }>('/api/classes', {
+    clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+  });
+  const cachedSectionsResponse = peekCachedApiJson<{ sections?: AcademicSectionItem[] }>(
+    '/api/sections',
+    {
+      clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+    },
+  );
+  const cachedSubjectsResponse = peekCachedApiJson<{ subjects?: SubjectItem[] }>('/api/subjects', {
+    clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+  });
+  const hasCachedUser = Boolean(cachedUserResponse?.user);
 
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [subjects, setSubjects] = useState<SubjectItem[]>([]);
-  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [classes, setClasses] = useState<ClassItem[]>(
+    () => cachedClassesResponse?.classes || [],
+  );
+  const [subjects, setSubjects] = useState<SubjectItem[]>(
+    () => cachedSubjectsResponse?.subjects || [],
+  );
+  const [sections, setSections] = useState<AcademicSectionItem[]>(
+    () => cachedSectionsResponse?.sections || [],
+  );
+  const [loading, setLoading] = useState(() => !hasCachedUser);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    mobileNumber: '',
-    hasAllClasses: true,
-    hasAllSections: true,
-    hasAllSubjects: true,
-    classIds: [] as string[],
-    academicSectionIds: [] as string[],
-    subjectIds: [] as string[],
-  });
+  const [form, setForm] = useState(() => buildAdminForm(cachedUserResponse?.user || {}));
 
   useEffect(() => {
     let mounted = true;
 
     async function load() {
       try {
-        setLoading(true);
-        const [userRes, classesRes, sectionsRes, subjectsRes] = await Promise.all([
-          fetch('/api/users/' + id),
-          fetch('/api/classes'),
-          fetch('/api/sections'),
-          fetch('/api/subjects'),
+        setLoading(!hasCachedUser);
+        const [userJson, classesJson, sectionsJson, subjectsJson] = await Promise.all([
+          fetchApiJson<{ user?: any }>(`/api/users/${id}`, {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load admin.',
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ classes?: ClassItem[] }>('/api/classes', {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load classes.',
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ sections?: AcademicSectionItem[] }>('/api/sections', {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load sections.',
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ subjects?: SubjectItem[] }>('/api/subjects', {
+            cache: 'no-store',
+            fallbackMessage: 'Failed to load subjects.',
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
         ]);
-        const userJson = await userRes.json();
-        const classesJson = await classesRes.json();
-        const sectionsJson = await sectionsRes.json();
-        const subjectsJson = await subjectsRes.json();
         if (!mounted) return;
-        if (!userJson.success) throw new Error(userJson.message || 'Failed to load admin');
-
-        const user = userJson.user || {};
-        setForm({
-          name: user.name || '',
-          email: user.email || '',
-          password: '',
-          mobileNumber: user.mobileNumber || '',
-          hasAllClasses: Boolean(user.hasAllClasses),
-          hasAllSections:
-            typeof user.hasAllSections === 'boolean' ? user.hasAllSections : true,
-          hasAllSubjects: Boolean(user.hasAllSubjects),
-          classIds: (user.classIds || []).map(String),
-          academicSectionIds: (user.academicSectionIds || []).map(String),
-          subjectIds: (user.subjectIds || []).map(String),
-        });
+        setForm(buildAdminForm(userJson.user || {}));
         setClasses(classesJson.classes || []);
         setSections(sectionsJson.sections || []);
         setSubjects(subjectsJson.subjects || []);
       } catch (err: any) {
-        setError(err.message || 'Failed to load');
+        if (!hasCachedUser) {
+          setError(err.message || 'Failed to load');
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -109,7 +144,7 @@ export default function EditAdminPage() {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [hasCachedUser, id]);
 
   const availableSections = useMemo(() => {
     if (form.hasAllClasses) {
@@ -154,7 +189,7 @@ export default function EditAdminPage() {
 
       const nextClassIds = nextValues;
       const nextClassIdSet = new Set(nextClassIds);
-      const nextAcademicSectionIds = prev.academicSectionIds.filter((sectionId) => {
+      const nextAcademicSectionIds = prev.academicSectionIds.filter((sectionId: string) => {
         if (prev.hasAllClasses) return true;
         const section = sections.find((item) => item._id === sectionId);
         return section ? nextClassIdSet.has(getSectionClassId(section)) : false;
@@ -190,7 +225,9 @@ export default function EditAdminPage() {
           classIds: form.hasAllClasses ? [] : form.classIds,
           academicSectionIds: form.hasAllSections
             ? []
-            : form.academicSectionIds.filter((sectionId) => availableSectionIds.has(sectionId)),
+            : form.academicSectionIds.filter((sectionId: string) =>
+                availableSectionIds.has(sectionId),
+              ),
           subjectIds: form.hasAllSubjects ? [] : form.subjectIds,
         }),
       });

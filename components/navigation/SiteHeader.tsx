@@ -1,7 +1,6 @@
 "use client";
 
 import { type ComponentType, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -39,6 +38,7 @@ import {
   UserCog,
   Users,
 } from "lucide-react";
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 
 type SidebarChild = {
   href: string;
@@ -339,7 +339,7 @@ function Brand() {
     : "Quality Management Workspace";
 
   return (
-    <Link
+    <AppPrefetchLink
       href={href}
       className="app-nav-brand flex min-w-0 items-center gap-2.5 px-1.5 py-1.5"
     >
@@ -350,7 +350,7 @@ function Brand() {
         <p className="text-[13px] font-semibold tracking-wide">ALYRA TECH</p>
         <p className="text-xs text-muted-foreground">{subtitle}</p>
       </div>
-    </Link>
+    </AppPrefetchLink>
   );
 }
 
@@ -575,7 +575,7 @@ function DesktopSidebarItem({
 
   if (directChild) {
     return (
-      <Link
+      <AppPrefetchLink
         href={directChild.href}
         title={item.label}
         aria-label={item.label}
@@ -583,7 +583,7 @@ function DesktopSidebarItem({
         onClick={() => onNavigate(directChild.href)}
       >
         {content}
-      </Link>
+      </AppPrefetchLink>
     );
   }
 
@@ -628,7 +628,7 @@ function DesktopSidebarItem({
             const childActive = activeChild?.href === child.href;
 
             return (
-              <Link
+              <AppPrefetchLink
                 key={child.href}
                 href={child.href}
                 onClick={() => {
@@ -641,7 +641,7 @@ function DesktopSidebarItem({
                 )}
               >
                 {child.label}
-              </Link>
+              </AppPrefetchLink>
             );
           })}
         </div>
@@ -749,7 +749,7 @@ function MobileSidebar({
 
                       if (directChild) {
                         return (
-                          <Link
+                          <AppPrefetchLink
                             key={item.label}
                             href={directChild.href}
                             onClick={() => {
@@ -765,7 +765,7 @@ function MobileSidebar({
                               <Icon className="h-4 w-4 shrink-0" />
                             </span>
                             <span>{item.label}</span>
-                          </Link>
+                          </AppPrefetchLink>
                         );
                       }
 
@@ -785,7 +785,7 @@ function MobileSidebar({
                               const childActive = activeChild?.href === child.href;
 
                               return (
-                                <Link
+                                <AppPrefetchLink
                                   key={child.href}
                                   href={child.href}
                                   onClick={() => {
@@ -798,7 +798,7 @@ function MobileSidebar({
                                   )}
                                 >
                                   {child.label}
-                                </Link>
+                                </AppPrefetchLink>
                               );
                             })}
                           </div>
@@ -888,7 +888,7 @@ export default function SiteHeader() {
 
   return (
     <>
-      <header className="app-nav-shell fixed inset-x-0 top-0 z-50 h-[var(--app-header-height)] border-b backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--app-nav-surface)/0.82)]">
+      <header className="app-nav-shell fixed inset-x-0 top-0 z-50 h-[var(--app-header-height)] border-b">
         <div className="flex h-full items-center justify-between gap-3 px-3 lg:px-4">
           <div className="flex min-w-0 items-center gap-3">
             {hasSidebar ? (
@@ -920,45 +920,52 @@ export default function SiteHeader() {
                     asChild
                     variant={activePath.startsWith("/student/tests") ? "default" : "outline"}
                     size="sm"
+                    className="app-button-compact"
                   >
-                    <Link href="/student/tests" onClick={() => handleNavigate("/student/tests")}>
+                    <AppPrefetchLink href="/student/tests" onClick={() => handleNavigate("/student/tests")}>
                       Tests
-                    </Link>
+                    </AppPrefetchLink>
                   </Button>
                   <Button
                     asChild
                     variant={activePath.startsWith("/student/account") ? "default" : "outline"}
                     size="sm"
+                    className="app-button-compact"
                   >
-                    <Link
+                    <AppPrefetchLink
                       href="/student/account"
                       onClick={() => handleNavigate("/student/account")}
                     >
                       Account
-                    </Link>
+                    </AppPrefetchLink>
                   </Button>
                 </>
               ) : null}
               {publicRoute ? (
                 <>
                   {pathname !== "/register" ? (
-                    <Button asChild size="sm">
-                      <Link href="/register">Register now</Link>
+                    <Button asChild size="sm" className="app-button-compact">
+                      <AppPrefetchLink href="/register">Register now</AppPrefetchLink>
                     </Button>
                   ) : null}
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/auth/signin">School Sign In</Link>
+                  <Button asChild variant="outline" size="sm" className="app-button-compact">
+                    <AppPrefetchLink href="/auth/signin">School Sign In</AppPrefetchLink>
                   </Button>
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/auth/company-signin">Company Sign In</Link>
+                  <Button asChild variant="outline" size="sm" className="app-button-compact">
+                    <AppPrefetchLink href="/auth/company-signin">Company Sign In</AppPrefetchLink>
                   </Button>
                 </>
               ) : authRoute ? (
-                <Button asChild variant="outline" size="sm">
-                  <Link href={authSwitchHref}>{authSwitchLabel}</Link>
+                <Button asChild variant="outline" size="sm" className="app-button-compact">
+                  <AppPrefetchLink href={authSwitchHref}>{authSwitchLabel}</AppPrefetchLink>
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" onClick={() => void handleSignOut()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="app-button-compact"
+                  onClick={() => void handleSignOut()}
+                >
                   Sign out
                 </Button>
               )}
@@ -968,7 +975,7 @@ export default function SiteHeader() {
       </header>
 
       {showMobileContextBar ? (
-        <div className="app-nav-shell fixed inset-x-0 top-[var(--app-header-height)] z-40 border-b px-3 py-2.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-[hsl(var(--app-nav-surface)/0.82)] md:hidden">
+        <div className="app-nav-shell fixed inset-x-0 top-[var(--app-header-height)] z-40 border-b px-3 py-2.5 shadow-sm md:hidden">
           <CurrentSchoolBadge school={currentSchool} compact />
         </div>
       ) : null}

@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { Button } from "@/components/ui/button";
 import PageHero from "@/components/layout/PageHero";
+import { fetchApiJson, peekCachedApiJson } from "@/lib/client/api";
 import {
   Card,
   CardContent,
@@ -36,64 +37,101 @@ function getSectionClassId(section: AcademicSectionItem) {
   return typeof section.class === "string" ? section.class : section.class?._id || "";
 }
 
+const EDIT_PAGE_CACHE_TTL_MS = 60_000;
+
+function buildTeacherForm(user: any) {
+  return {
+    name: user.name || "",
+    email: user.email || "",
+    password: "",
+    mobileNumber: user.mobileNumber || "",
+    classIds: (user.classIds || []).map(String),
+    academicSectionIds: (user.academicSectionIds || []).map(String),
+    hasAllSections:
+      typeof user.hasAllSections === "boolean" ? user.hasAllSections : true,
+    subjectIds: (user.subjectIds || []).map(String),
+  };
+}
+
 export default function EditTeacherPage() {
   const params = useParams();
   const id = (params?.id as string) || "";
   const { navigateBack } = useBackNavigation(`/workspace/teachers/${id}`);
+  const cachedUserResponse = id
+    ? peekCachedApiJson<{ user?: any }>(`/api/users/${id}`, {
+        clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+      })
+    : null;
+  const cachedClassesResponse = peekCachedApiJson<{ classes?: ClassItem[] }>("/api/classes", {
+    clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+  });
+  const cachedSectionsResponse = peekCachedApiJson<{ sections?: AcademicSectionItem[] }>(
+    "/api/sections",
+    {
+      clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+    },
+  );
+  const cachedSubjectsResponse = peekCachedApiJson<{ subjects?: SubjectItem[] }>("/api/subjects", {
+    clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+  });
+  const hasCachedUser = Boolean(cachedUserResponse?.user);
 
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
-  const [subjects, setSubjects] = useState<SubjectItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [classes, setClasses] = useState<ClassItem[]>(
+    () => cachedClassesResponse?.classes || [],
+  );
+  const [sections, setSections] = useState<AcademicSectionItem[]>(
+    () => cachedSectionsResponse?.sections || [],
+  );
+  const [subjects, setSubjects] = useState<SubjectItem[]>(
+    () => cachedSubjectsResponse?.subjects || [],
+  );
+  const [loading, setLoading] = useState(() => !hasCachedUser);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    password: "",
-    mobileNumber: "",
-    classIds: [] as string[],
-    academicSectionIds: [] as string[],
-    hasAllSections: true,
-    subjectIds: [] as string[],
-  });
+  const [form, setForm] = useState(() => buildTeacherForm(cachedUserResponse?.user || {}));
 
   useEffect(() => {
     let mounted = true;
     async function load() {
       try {
-        setLoading(true);
-        const [uRes, cRes, secRes, sRes] = await Promise.all([
-          fetch("/api/users/" + id),
-          fetch("/api/classes"),
-          fetch("/api/sections"),
-          fetch("/api/subjects"),
+        setLoading(!hasCachedUser);
+        const [uJson, cJson, secJson, sJson] = await Promise.all([
+          fetchApiJson<{ user?: any }>(`/api/users/${id}`, {
+            cache: "no-store",
+            fallbackMessage: "Failed to load teacher.",
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ classes?: ClassItem[] }>("/api/classes", {
+            cache: "no-store",
+            fallbackMessage: "Failed to load classes.",
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ sections?: AcademicSectionItem[] }>("/api/sections", {
+            cache: "no-store",
+            fallbackMessage: "Failed to load sections.",
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
+          fetchApiJson<{ subjects?: SubjectItem[] }>("/api/subjects", {
+            cache: "no-store",
+            fallbackMessage: "Failed to load subjects.",
+            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
+            preferClientCache: true,
+          }),
         ]);
-        const uJson = await uRes.json();
-        const cJson = await cRes.json();
-        const secJson = await secRes.json();
-        const sJson = await sRes.json();
         if (!mounted) return;
-        if (!uJson.success) throw new Error(uJson.message || "Failed to load teacher");
-        const user = uJson.user || {};
-        setForm({
-          name: user.name || "",
-          email: user.email || "",
-          password: "",
-          mobileNumber: user.mobileNumber || "",
-          classIds: (user.classIds || []).map(String),
-          academicSectionIds: (user.academicSectionIds || []).map(String),
-          hasAllSections:
-            typeof user.hasAllSections === "boolean" ? user.hasAllSections : true,
-          subjectIds: (user.subjectIds || []).map(String),
-        });
+        setForm(buildTeacherForm(uJson.user || {}));
         setClasses(cJson.classes || []);
         setSections(secJson.sections || []);
         setSubjects(sJson.subjects || []);
       } catch (e: any) {
-        setError(e.message || "Failed to load");
+        if (!hasCachedUser) {
+          setError(e.message || "Failed to load");
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -102,7 +140,7 @@ export default function EditTeacherPage() {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [hasCachedUser, id]);
 
   const availableSections = useMemo(() => {
     const selectedClassIds = new Set(form.classIds);
@@ -141,7 +179,7 @@ export default function EditTeacherPage() {
 
       const nextClassIds = nextValues;
       const nextClassIdSet = new Set(nextClassIds);
-      const nextAcademicSectionIds = prev.academicSectionIds.filter((sectionId) => {
+      const nextAcademicSectionIds = prev.academicSectionIds.filter((sectionId: string) => {
         const section = sections.find((item) => item._id === sectionId);
         return section ? nextClassIdSet.has(getSectionClassId(section)) : false;
       });
@@ -173,7 +211,9 @@ export default function EditTeacherPage() {
           hasAllSections: form.hasAllSections,
           academicSectionIds: form.hasAllSections
             ? []
-            : form.academicSectionIds.filter((sectionId) => availableSectionIds.has(sectionId)),
+            : form.academicSectionIds.filter((sectionId: string) =>
+                availableSectionIds.has(sectionId),
+              ),
           subjectIds: form.subjectIds,
         }),
       });

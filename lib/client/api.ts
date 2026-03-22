@@ -14,11 +14,84 @@ export type ApiPayload<T = any> = {
 export type FetchApiOptions = RequestInit & {
   schoolKey?: string | null;
   includeSchoolQuery?: boolean;
+  clientCacheTtlMs?: number;
+  preferClientCache?: boolean;
 };
 
 export type FetchApiJsonOptions = FetchApiOptions & {
   fallbackMessage?: string;
 };
+
+type ClientApiCacheEntry = {
+  payload: ApiPayload<any>;
+  expiresAt: number;
+};
+
+const clientApiCache = new Map<string, ClientApiCacheEntry>();
+const clientApiInflight = new Map<string, Promise<ApiPayload<any>>>();
+const DEFAULT_CLIENT_API_CACHE_TTL_MS = 30_000;
+
+function resolveRequestMethod(init?: RequestInit) {
+  return String(init?.method || 'GET').trim().toUpperCase() || 'GET';
+}
+
+function isCacheableRequest(method: string, ttlMs?: number) {
+  return typeof window !== 'undefined' && ttlMs !== undefined && ttlMs > 0 && (method === 'GET' || method === 'HEAD');
+}
+
+function isSuccessfulApiPayload(payload: ApiPayload<any>) {
+  return (
+    payload.ok &&
+    !(
+      payload.data &&
+      typeof payload.data === 'object' &&
+      'success' in payload.data &&
+      !(payload.data as any).success
+    )
+  );
+}
+
+function buildClientApiRequestUrl(
+  url: string,
+  includeSchoolQuery: boolean,
+  resolvedSchoolKey: string,
+) {
+  return includeSchoolQuery && resolvedSchoolKey ? withSchool(url, resolvedSchoolKey) : url;
+}
+
+function buildClientApiCacheKey(
+  url: string,
+  includeSchoolQuery: boolean,
+  resolvedSchoolKey: string,
+  method: string,
+) {
+  return `${method}::${buildClientApiRequestUrl(url, includeSchoolQuery, resolvedSchoolKey)}`;
+}
+
+function readFreshClientApiCacheEntry(cacheKey: string) {
+  const entry = clientApiCache.get(cacheKey);
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.expiresAt <= Date.now()) {
+    clientApiCache.delete(cacheKey);
+    return null;
+  }
+
+  return entry;
+}
+
+function writeClientApiCacheEntry(
+  cacheKey: string,
+  payload: ApiPayload<any>,
+  ttlMs: number,
+) {
+  clientApiCache.set(cacheKey, {
+    payload,
+    expiresAt: Date.now() + ttlMs,
+  });
+}
 
 export function resolveClientSchoolKey(schoolKey?: string | null) {
   return String(schoolKey ?? getSchoolKeyFromCookie() ?? '').trim();
@@ -111,19 +184,58 @@ export async function fetchApiPayload<T = any>(
   const {
     schoolKey,
     includeSchoolQuery = true,
+    clientCacheTtlMs = 0,
+    preferClientCache = false,
     headers,
     ...init
   } = options;
 
+  const method = resolveRequestMethod(init);
   const resolvedSchoolKey = resolveClientSchoolKey(schoolKey);
-  const nextUrl =
-    includeSchoolQuery && resolvedSchoolKey ? withSchool(url, resolvedSchoolKey) : url;
-  const response = await fetch(
-    nextUrl,
-    withSchoolHeaders({ ...init, headers }, resolvedSchoolKey),
-  );
+  const nextUrl = buildClientApiRequestUrl(url, includeSchoolQuery, resolvedSchoolKey);
+  const cacheKey = isCacheableRequest(method, clientCacheTtlMs)
+    ? buildClientApiCacheKey(url, includeSchoolQuery, resolvedSchoolKey, method)
+    : null;
 
-  return readApiPayload<T>(response);
+  if (cacheKey && preferClientCache) {
+    const cachedEntry = readFreshClientApiCacheEntry(cacheKey);
+    if (cachedEntry) {
+      return cachedEntry.payload as ApiPayload<T>;
+    }
+  }
+
+  if (cacheKey) {
+    const inflightRequest = clientApiInflight.get(cacheKey);
+    if (inflightRequest) {
+      return inflightRequest as Promise<ApiPayload<T>>;
+    }
+  }
+
+  const requestPromise = (async () => {
+    const response = await fetch(
+      nextUrl,
+      withSchoolHeaders({ ...init, headers }, resolvedSchoolKey),
+    );
+    const payload = await readApiPayload<T>(response);
+
+    if (cacheKey && isSuccessfulApiPayload(payload)) {
+      writeClientApiCacheEntry(cacheKey, payload, clientCacheTtlMs);
+    }
+
+    return payload;
+  })();
+
+  if (cacheKey) {
+    clientApiInflight.set(cacheKey, requestPromise as Promise<ApiPayload<any>>);
+  }
+
+  try {
+    return await requestPromise;
+  } finally {
+    if (cacheKey) {
+      clientApiInflight.delete(cacheKey);
+    }
+  }
 }
 
 export async function fetchApiJson<T = any>(
@@ -144,4 +256,46 @@ export async function fetchApiJson<T = any>(
   }
 
   return payload.data as T;
+}
+
+export function peekCachedApiJson<T = any>(
+  url: string,
+  options: FetchApiOptions = {},
+): T | null {
+  const {
+    schoolKey,
+    includeSchoolQuery = true,
+    clientCacheTtlMs = DEFAULT_CLIENT_API_CACHE_TTL_MS,
+    ...init
+  } = options;
+
+  const method = resolveRequestMethod(init);
+  if (!isCacheableRequest(method, clientCacheTtlMs)) {
+    return null;
+  }
+
+  const resolvedSchoolKey = resolveClientSchoolKey(schoolKey);
+  const cacheKey = buildClientApiCacheKey(url, includeSchoolQuery, resolvedSchoolKey, method);
+  const cachedEntry = readFreshClientApiCacheEntry(cacheKey);
+
+  if (!cachedEntry || !isSuccessfulApiPayload(cachedEntry.payload)) {
+    return null;
+  }
+
+  return cachedEntry.payload.data as T;
+}
+
+export async function prefetchApiJson<T = any>(
+  url: string,
+  options: FetchApiJsonOptions = {},
+): Promise<T | null> {
+  try {
+    return await fetchApiJson<T>(url, {
+      ...options,
+      clientCacheTtlMs: options.clientCacheTtlMs ?? DEFAULT_CLIENT_API_CACHE_TTL_MS,
+      preferClientCache: true,
+    });
+  } catch {
+    return null;
+  }
 }

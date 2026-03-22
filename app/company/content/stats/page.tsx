@@ -148,13 +148,13 @@ export default function StatsManagementPage() {
 
       {/* Section Selector */}
       <div className="mb-4">
-        <label className="mb-2 block text-sm font-semibold text-teal-950 dark:text-teal-50">
+        <label className="company-admin-field-label">
           Select Section
         </label>
         <select
           value={selectedSection}
           onChange={(e) => setSelectedSection(e.target.value as Section)}
-          className="w-full max-w-md rounded-lg border border-teal-200 bg-white px-4 py-2 text-teal-950 dark:border-teal-700 dark:bg-teal-800 dark:text-teal-50"
+          className="max-w-md"
         >
           {sections.map((section) => (
             <option key={section.value} value={section.value}>
@@ -175,7 +175,7 @@ export default function StatsManagementPage() {
               className="company-admin-section grid gap-4 md:grid-cols-4"
             >
               <div>
-                <label className="mb-1 block text-xs font-medium text-teal-800 dark:text-teal-200">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
                   Key (unique identifier)
                 </label>
                 <input
@@ -183,12 +183,11 @@ export default function StatsManagementPage() {
                   value={stat.key}
                   onChange={(e) => handleStatChange(index, 'key', e.target.value)}
                   placeholder="e.g., students_tested"
-                  className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-sm text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-teal-800 dark:text-teal-200">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
                   Label (displayed text)
                 </label>
                 <input
@@ -196,12 +195,11 @@ export default function StatsManagementPage() {
                   value={stat.label}
                   onChange={(e) => handleStatChange(index, 'label', e.target.value)}
                   placeholder="e.g., Students Tested"
-                  className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-sm text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-teal-800 dark:text-teal-200">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
                   Value
                 </label>
                 <input
@@ -209,13 +207,12 @@ export default function StatsManagementPage() {
                   value={stat.value}
                   onChange={(e) => handleStatChange(index, 'value', e.target.value)}
                   placeholder="e.g., 50,000+ or 99.5%"
-                  className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-sm text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
                 />
               </div>
 
               <div className="flex items-end gap-2">
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs font-medium text-teal-800 dark:text-teal-200">
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
                     Icon (emoji)
                   </label>
                   <input
@@ -223,12 +220,11 @@ export default function StatsManagementPage() {
                     value={stat.icon || ''}
                     onChange={(e) => handleStatChange(index, 'icon', e.target.value)}
                     placeholder="📊"
-                    className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-sm text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
                   />
                 </div>
                 <button
                   onClick={() => removeStat(index)}
-                  className="rounded bg-red-500 px-3 py-2 text-sm font-semibold text-white hover:bg-red-600"
+                  className="company-admin-inline-icon-remove"
                 >
                   ✕
                 </button>
@@ -238,9 +234,9 @@ export default function StatsManagementPage() {
 
           <button
             onClick={addNewStat}
-            className="rounded-lg border-2 border-dashed border-teal-300 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-700 transition hover:border-teal-600 hover:bg-teal-100 dark:border-teal-600 dark:bg-teal-800 dark:text-teal-200 dark:hover:bg-teal-700"
+            className="company-admin-inline-add"
           >
-            + Add New Stat
+            Add New Stat
           </button>
         </div>
       )}

@@ -46,8 +46,8 @@ const OptionTagsDisplay = ({
 
     const classes =
       tone === 'success'
-        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-        : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100';
+        ? 'analytics-chip-button-success'
+        : 'analytics-chip-button-danger';
 
     return (
       <div className="flex flex-wrap items-start justify-center gap-2">
@@ -58,7 +58,7 @@ const OptionTagsDisplay = ({
           <button
             key={`${label}-${index}`}
             type="button"
-            className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${classes}`}
+            className={`analytics-chip-button ${classes}`}
             onClick={() => onTagClick(item.option, item.tag, item.isCorrect, item.students)}
           >
             <span>

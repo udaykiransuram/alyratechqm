@@ -293,7 +293,7 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
                         key={item}
                         variant="outline"
                         size="sm"
-                        className="max-w-full truncate font-mono text-xs"
+                        className="app-button-compact max-w-full truncate font-mono text-xs"
                         onClick={() => handleRecentClick(item)}
                       >
                         {item}

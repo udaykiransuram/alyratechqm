@@ -102,7 +102,7 @@ export default function StatsTable({
       <button
         type="button"
         onClick={() => handleOpenModal(title, questionIds, groupNode)}
-        className="rounded-sm font-medium underline decoration-dotted underline-offset-4 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="analytics-inline-link-button"
         title="View students"
       >
         {count}
@@ -175,9 +175,9 @@ export default function StatsTable({
                         <button
                           key={`${tag.type}-${tag.value}-${index}`}
                           type="button"
-                          className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          className={`analytics-chip-button ${
                             isSelected
-                              ? 'border-primary bg-primary text-primary-foreground'
+                              ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
                               : 'border-border/60 bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
                           }`}
                           onClick={() => handleTagSelect(tag)}

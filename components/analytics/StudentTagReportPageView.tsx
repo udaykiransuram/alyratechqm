@@ -17,6 +17,9 @@ import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { ArrowLeft } from "lucide-react";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
 
+const REPORT_CACHE_TTL_MS = 15_000;
+const REPORT_SETUP_CACHE_TTL_MS = 60_000;
+
 const ChartView = dynamic(() => import("@/components/analytics/ChartView"), {
   ssr: false,
   loading: () => (
@@ -362,6 +365,8 @@ export function StudentTagReportPageView({
             cache: "no-store",
             schoolKey: sk,
             fallbackMessage: "Failed to load report setup.",
+            clientCacheTtlMs: REPORT_SETUP_CACHE_TTL_MS,
+            preferClientCache: true,
           },
         );
         setGroupFields(Array.isArray(data?.fields) ? data.fields : []);
@@ -483,6 +488,8 @@ export function StudentTagReportPageView({
           cache: "no-store",
           schoolKey: sk,
           fallbackMessage: "Failed to fetch tag report.",
+          clientCacheTtlMs: REPORT_CACHE_TTL_MS,
+          preferClientCache: true,
         },
       );
       setStats(data.stats || {});
@@ -520,6 +527,8 @@ export function StudentTagReportPageView({
           cache: "no-store",
           schoolKey: sk,
           fallbackMessage: "Failed to load class comparison.",
+          clientCacheTtlMs: REPORT_CACHE_TTL_MS,
+          preferClientCache: true,
         },
       );
       setClassStatsCompare(compareData.stats || {});

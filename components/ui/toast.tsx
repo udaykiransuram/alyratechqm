@@ -63,7 +63,7 @@ const ToastAction = React.forwardRef<
   <ToastPrimitives.Action
     ref={ref}
     className={cn(
-      "inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-input bg-background/80 px-3 text-sm font-medium shadow-sm ring-offset-background transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-destructive/30 group-[.destructive]:bg-background/70 group-[.destructive]:text-destructive group-[.destructive]:hover:bg-destructive/15 group-[.destructive]:focus:ring-destructive",
+      "inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-input bg-background/80 px-3 text-sm font-medium shadow-sm ring-offset-background transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-destructive/30 group-[.destructive]:bg-background/70 group-[.destructive]:text-destructive group-[.destructive]:hover:bg-destructive/15 group-[.destructive]:focus:ring-destructive",
       className,
     )}
     {...props}

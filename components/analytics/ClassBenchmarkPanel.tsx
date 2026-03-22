@@ -90,22 +90,30 @@ function getToneClass(value: any, negativeIsGood = false) {
 
 function getBadgeTone(value: any, invert = false) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "bg-muted/40 text-muted-foreground";
+    return "border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/50";
   }
   const numeric = Number(value);
   if (invert) {
-    if (numeric >= 0) return "bg-rose-100 text-rose-700";
-    return "bg-emerald-100 text-emerald-700";
+    if (numeric >= 0) {
+      return "border-rose-200 bg-rose-100 text-rose-700 hover:bg-rose-100";
+    }
+    return "border-emerald-200 bg-emerald-100 text-emerald-700 hover:bg-emerald-100";
   }
-  if (numeric >= 0) return "bg-emerald-100 text-emerald-700";
-  return "bg-rose-100 text-rose-700";
+  if (numeric >= 0) {
+    return "border-emerald-200 bg-emerald-100 text-emerald-700 hover:bg-emerald-100";
+  }
+  return "border-rose-200 bg-rose-100 text-rose-700 hover:bg-rose-100";
 }
 
 function getSeverityBadgeClass(value: any) {
   const severity = String(value || "").trim().toLowerCase();
-  if (severity === "high") return "bg-rose-100 text-rose-700";
-  if (severity === "medium") return "bg-amber-100 text-amber-700";
-  return "bg-emerald-100 text-emerald-700";
+  if (severity === "high") {
+    return "border-rose-200 bg-rose-100 text-rose-700 hover:bg-rose-100";
+  }
+  if (severity === "medium") {
+    return "border-amber-200 bg-amber-100 text-amber-700 hover:bg-amber-100";
+  }
+  return "border-emerald-200 bg-emerald-100 text-emerald-700 hover:bg-emerald-100";
 }
 
 function getAccuracyToneClass(value: any) {
@@ -198,7 +206,7 @@ function LowestSectionsCell({ row }: { row: any }) {
         <button
           type="button"
           title={breakdown}
-          className={`inline-flex rounded-full border border-border/60 px-2.5 py-1 text-xs font-medium shadow-sm transition-colors hover:opacity-90 ${getBadgeTone(
+          className={`analytics-chip-button hover:opacity-90 ${getBadgeTone(
             gapValue,
           )}`}
         >
@@ -219,7 +227,7 @@ function LowestSectionsCell({ row }: { row: any }) {
             {sections.map((section: any, index: number) => (
               <div
                 key={String(section?.academicSectionId || `${section?.academicSectionName || "section"}-${index}`)}
-                className="rounded-xl border border-border/60 bg-background p-3 shadow-sm"
+                className="analytics-data-card-compact"
               >
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-sm font-medium text-foreground">
@@ -260,7 +268,7 @@ function MostAffectedSectionsCell({ row }: { row: any }) {
         <button
           type="button"
           title={breakdown}
-          className={`inline-flex rounded-full border border-border/60 px-2.5 py-1 text-xs font-medium shadow-sm transition-colors hover:opacity-90 ${getBadgeTone(
+          className={`analytics-chip-button hover:opacity-90 ${getBadgeTone(
             gapValue,
             true,
           )}`}
@@ -282,7 +290,7 @@ function MostAffectedSectionsCell({ row }: { row: any }) {
             {sections.map((section: any, index: number) => (
               <div
                 key={String(section?.academicSectionId || `${section?.academicSectionName || "section"}-${index}`)}
-                className="rounded-xl border border-border/60 bg-background p-3 shadow-sm"
+                className="analytics-data-card-compact"
               >
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-sm font-medium text-foreground">
@@ -812,7 +820,7 @@ export default function ClassBenchmarkPanel({
         {sectionSnapshotCards.map((card) => (
           <div
             key={card.label}
-            className="rounded-xl border border-border/60 bg-background p-4 shadow-sm"
+            className="analytics-data-card"
           >
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {card.label}
@@ -935,7 +943,7 @@ export default function ClassBenchmarkPanel({
                     key={`${tag.type}:${tag.value}`}
                     type="button"
                     onClick={() => onRemoveTag(tag)}
-                    className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
+                    className="analytics-active-filter-tag"
                     title="Remove tag filter"
                   >
                     <span>
@@ -947,7 +955,7 @@ export default function ClassBenchmarkPanel({
                 <button
                   type="button"
                   onClick={onClearTags}
-                  className="app-button-secondary h-8 px-3 text-xs"
+                  className="analytics-action-button-compact"
                 >
                   Clear tag filters
                 </button>
@@ -962,7 +970,7 @@ export default function ClassBenchmarkPanel({
             {overviewCards.map((card) => (
               <div
                 key={card.label}
-                className="rounded-xl border border-border/60 bg-background p-4 shadow-sm"
+                className="analytics-data-card"
               >
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {card.label}
@@ -997,7 +1005,7 @@ export default function ClassBenchmarkPanel({
             {teacherActionCards.map((card: any) => (
               <div
                 key={card.label}
-                className="rounded-xl border border-border/60 bg-background p-4 shadow-sm"
+                className="analytics-data-card"
               >
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {card.label}
@@ -1037,7 +1045,7 @@ export default function ClassBenchmarkPanel({
             <label className="app-field-group min-w-[140px]">
               <span className="app-field-label">Rows</span>
               <select
-                className="analytics-select h-9 w-full"
+                className="analytics-select-compact w-full"
                 value={String(questionPageSize)}
                 onChange={(event) => setQuestionPageSize(Number(event.target.value))}
               >
@@ -1057,7 +1065,7 @@ export default function ClassBenchmarkPanel({
               type="button"
               onClick={() => setQuestionPage((current) => Math.max(current - 1, 1))}
               disabled={safeQuestionPage <= 1}
-              className="app-button-secondary h-9 px-3"
+              className="analytics-pagination-button"
             >
               Previous
             </button>
@@ -1065,7 +1073,7 @@ export default function ClassBenchmarkPanel({
               type="button"
               onClick={() => setQuestionPage((current) => Math.min(current + 1, questionTotalPages))}
               disabled={safeQuestionPage >= questionTotalPages}
-              className="app-button-secondary h-9 px-3"
+              className="analytics-pagination-button"
             >
               Next
             </button>
@@ -1108,7 +1116,7 @@ export default function ClassBenchmarkPanel({
                       {row.questionId ? (
                         <Link
                           href={getQuestionHref(row.questionId)}
-                          className="inline-flex rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-primary shadow-sm transition-colors hover:bg-primary/10"
+                          className="analytics-link-chip"
                         >
                           {Number.isFinite(Number(row.questionNumber))
                             ? `Q${Number(row.questionNumber)}`
@@ -1193,7 +1201,7 @@ export default function ClassBenchmarkPanel({
             <label className="app-field-group min-w-[140px]">
               <span className="app-field-label">Rows</span>
               <select
-                className="analytics-select h-9 w-full"
+                className="analytics-select-compact w-full"
                 value={String(tagPageSize)}
                 onChange={(event) => setTagPageSize(Number(event.target.value))}
               >
@@ -1213,7 +1221,7 @@ export default function ClassBenchmarkPanel({
               type="button"
               onClick={() => setTagPage((current) => Math.max(current - 1, 1))}
               disabled={safeTagPage <= 1}
-              className="app-button-secondary h-9 px-3"
+              className="analytics-pagination-button"
             >
               Previous
             </button>
@@ -1221,7 +1229,7 @@ export default function ClassBenchmarkPanel({
               type="button"
               onClick={() => setTagPage((current) => Math.min(current + 1, tagTotalPages))}
               disabled={safeTagPage >= tagTotalPages}
-              className="app-button-secondary h-9 px-3"
+              className="analytics-pagination-button"
             >
               Next
             </button>
@@ -1260,7 +1268,7 @@ export default function ClassBenchmarkPanel({
                             <Link
                               key={`${row.key}-${question.id}`}
                               href={getQuestionHref(question.id)}
-                              className="inline-flex rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-primary shadow-sm transition-colors hover:bg-primary/10"
+                              className="analytics-link-chip"
                               title={String(question?.section || "")}
                             >
                               {getQuestionChipLabel(question, row.questions)}
@@ -1329,7 +1337,7 @@ export default function ClassBenchmarkPanel({
             <label className="app-field-group min-w-[140px]">
               <span className="app-field-label">Min selected %</span>
               <select
-                className="analytics-select h-9 w-full"
+                className="analytics-select-compact w-full"
                 value={String(minDistractorPct)}
                 onChange={(event) => updateBenchmarkViewSettings({ minDistractorPct: Number(event.target.value) })}
               >
@@ -1343,7 +1351,7 @@ export default function ClassBenchmarkPanel({
             <label className="app-field-group min-w-[140px]">
               <span className="app-field-label">Min count</span>
               <select
-                className="analytics-select h-9 w-full"
+                className="analytics-select-compact w-full"
                 value={String(minDistractorCount)}
                 onChange={(event) => updateBenchmarkViewSettings({ minDistractorCount: Number(event.target.value) })}
               >
@@ -1357,7 +1365,7 @@ export default function ClassBenchmarkPanel({
             <label className="app-field-group min-w-[180px]">
               <span className="app-field-label">Sort by</span>
               <select
-                className="analytics-select h-9 w-full"
+                className="analytics-select-compact w-full"
                 value={distractorSortBy}
                 onChange={(event) =>
                   updateBenchmarkViewSettings({
@@ -1373,7 +1381,7 @@ export default function ClassBenchmarkPanel({
             <label className="app-field-group min-w-[140px]">
               <span className="app-field-label">Rows</span>
               <select
-                className="analytics-select h-9 w-full"
+                className="analytics-select-compact w-full"
                 value={String(distractorPageSize)}
                 onChange={(event) => setDistractorPageSize(Number(event.target.value))}
               >
@@ -1395,7 +1403,7 @@ export default function ClassBenchmarkPanel({
                 setDistractorPage((current) => Math.max(current - 1, 1))
               }
               disabled={safeDistractorPage <= 1}
-              className="app-button-secondary h-9 px-3"
+              className="analytics-pagination-button"
             >
               Previous
             </button>
@@ -1407,7 +1415,7 @@ export default function ClassBenchmarkPanel({
                 )
               }
               disabled={safeDistractorPage >= distractorTotalPages}
-              className="app-button-secondary h-9 px-3"
+              className="analytics-pagination-button"
             >
               Next
             </button>
@@ -1450,7 +1458,7 @@ export default function ClassBenchmarkPanel({
                       {row.questionId ? (
                         <Link
                           href={getQuestionHref(row.questionId)}
-                          className="inline-flex rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-primary shadow-sm transition-colors hover:bg-primary/10"
+                          className="analytics-link-chip"
                         >
                           {Number.isFinite(Number(row.questionNumber))
                             ? `Q${Number(row.questionNumber)}`
@@ -1506,7 +1514,7 @@ export default function ClassBenchmarkPanel({
                             {row.visibleSections.map((cohort: any) => (
                               <span
                                 key={`${row.key}-${cohort.academicSectionId}`}
-                                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getBadgeTone(cohort?.gapSelectedPct, true)}`}
+                                className={`analytics-chip-button ${getBadgeTone(cohort?.gapSelectedPct, true)}`}
                               >
                                 {compactText(cohort.academicSectionName)} {formatPercent(cohort.metrics?.selectedPct)}
                               </span>
@@ -1554,7 +1562,7 @@ export default function ClassBenchmarkPanel({
                 <label className="analytics-checkbox-card">
                   <span className="text-muted-foreground">Cards per page</span>
                   <select
-                    className="analytics-select h-8"
+                    className="analytics-select-compact"
                     value={String(insightsPageSize)}
                     onChange={(event) => {
                       setInsightsPageSize(Number(event.target.value));
@@ -1605,7 +1613,7 @@ export default function ClassBenchmarkPanel({
             {(insightsShowAll ? insights : displayedInsights).map((insight: any, index: number) => (
               <div
                 key={`${insight.type}-${index}`}
-                className="rounded-xl border border-border/60 bg-background p-4 shadow-sm"
+                className="analytics-data-card"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -1617,7 +1625,7 @@ export default function ClassBenchmarkPanel({
                     </p>
                   </div>
                   <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getSeverityBadgeClass(
+                    className={`analytics-chip-button ${getSeverityBadgeClass(
                       insight.severity,
                     )}`}
                   >

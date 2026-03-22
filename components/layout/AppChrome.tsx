@@ -1,12 +1,18 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 
+import ClientApiRequestProbe from "@/components/layout/ClientApiRequestProbe";
 import AppViewport from "@/components/layout/AppViewport";
 import RouteTransitionIndicator from "@/components/layout/RouteTransitionIndicator";
+import WorkspaceDataWarmup from "@/components/layout/WorkspaceDataWarmup";
+import {
+  APP_SCHOOL_SELECTION_CHANGE_EVENT,
+  getSchoolKeyFromCookie,
+} from "@/lib/client/school";
 import { isPublicPathname } from "@/lib/navigation/canonical-paths";
 
 const Footer = dynamic(() => import("@/components/Footer"));
@@ -17,6 +23,7 @@ const SiteHeader = dynamic(() => import("@/components/navigation/SiteHeader"));
 export default function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "/";
   const publicRoute = isPublicPathname(pathname);
+  const [schoolKey, setSchoolKey] = useState(() => getSchoolKeyFromCookie());
 
   useEffect(() => {
     if (!publicRoute) return;
@@ -28,9 +35,28 @@ export default function AppChrome({ children }: { children: ReactNode }) {
     );
   }, [publicRoute]);
 
+  useEffect(() => {
+    const handleSchoolSelectionChange = () => {
+      setSchoolKey(getSchoolKeyFromCookie());
+    };
+
+    window.addEventListener(
+      APP_SCHOOL_SELECTION_CHANGE_EVENT,
+      handleSchoolSelectionChange as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        APP_SCHOOL_SELECTION_CHANGE_EVENT,
+        handleSchoolSelectionChange as EventListener,
+      );
+    };
+  }, []);
+
   if (publicRoute) {
     return (
       <div className="public-site-shell relative flex min-h-screen flex-col overflow-x-hidden">
+        <ClientApiRequestProbe />
         <Suspense fallback={null}>
           <RouteTransitionIndicator />
         </Suspense>
@@ -49,12 +75,14 @@ export default function AppChrome({ children }: { children: ReactNode }) {
 
   return (
     <>
+      <ClientApiRequestProbe />
+      <WorkspaceDataWarmup enabled={pathname.startsWith("/workspace")} />
       <Suspense fallback={null}>
         <RouteTransitionIndicator />
       </Suspense>
       <SiteHeader />
       <main className="min-h-screen pt-[calc(var(--app-header-height)+var(--app-mobile-school-switcher-height))] transition-[margin-left] duration-200 ease-in-out md:pt-[var(--app-header-height)] lg:ml-[var(--app-sidebar-width)]">
-        <AppViewport>{children}</AppViewport>
+        <AppViewport key={schoolKey || "no-school"}>{children}</AppViewport>
       </main>
     </>
   );

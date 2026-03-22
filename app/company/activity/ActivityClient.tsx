@@ -89,12 +89,12 @@ export default function ActivityClient() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/company/schools">
-              <Button type="button" variant="outline" size="sm">
+              <Button type="button" variant="outline" size="sm" className="app-button-compact">
                 Manage Schools
               </Button>
             </Link>
             <Link href="/company/indexing">
-              <Button type="button" variant="outline" size="sm">
+              <Button type="button" variant="outline" size="sm" className="app-button-compact">
                 Maintenance Console
               </Button>
             </Link>
@@ -102,6 +102,7 @@ export default function ActivityClient() {
               type="button"
               variant="outline"
               size="sm"
+              className="app-button-compact"
               onClick={() => void loadLogs()}
               disabled={loading}
             >

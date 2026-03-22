@@ -10,11 +10,11 @@ export function TagSelector({ allTags, selectedTags, setSelectedTags }: {
 }) {
   return (
     <div>
-      <Label className="font-semibold">Tags</Label>
+      <Label className="app-field-label">Tags</Label>
       <div className="flex flex-wrap gap-2 mt-2">
         {selectedTags.length > 0 ? (
           selectedTags.map(tag => (
-            <Badge key={tag._id} variant="secondary">
+            <Badge key={tag._id} variant="secondary" className="app-selection-badge border-transparent">
               {tag.name}
             </Badge>
           ))
@@ -28,6 +28,7 @@ export function TagSelector({ allTags, selectedTags, setSelectedTags }: {
             key={tag._id}
             variant={selectedTags.some(t => t._id === tag._id) ? "secondary" : "outline"}
             size="sm"
+            className="app-button-compact"
             onClick={() => {
               setSelectedTags(
                 selectedTags.some(t => t._id === tag._id)

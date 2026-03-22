@@ -2,13 +2,18 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import PageHero from '@/components/layout/PageHero';
 import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
 import { useBackNavigation, useCurrentPathWithSearch } from '@/hooks/useReturnNavigation';
 import PageLoadingState from '@/components/ui/page-loading-state';
+import {
+  fetchApiJson,
+  peekCachedApiJson,
+  resolveClientSchoolKey,
+} from '@/lib/client/api';
 
 interface UserItem {
   _id: string;
@@ -55,40 +60,90 @@ function DetailItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+const DETAIL_PAGE_CACHE_TTL_MS = 30_000;
+
 export default function AdminDetailPage() {
   const params = useParams();
   const id = (params?.id as string) || '';
   const { navigateBack } = useBackNavigation('/workspace/admins');
   const currentPath = useCurrentPathWithSearch('/workspace/admins');
   const editHref = buildHrefWithReturnTo(`/workspace/admins/edit/${id}`, currentPath);
+  const schoolKey = resolveClientSchoolKey();
+  const cachedUserResponse = id
+    ? peekCachedApiJson<{ user?: UserItem }>(`/api/users/${id}`, {
+        schoolKey,
+        clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+      })
+    : null;
+  const cachedClassesResponse = peekCachedApiJson<{ classes?: ClassItem[] }>('/api/classes', {
+    schoolKey,
+    clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+  });
+  const cachedSectionsResponse = peekCachedApiJson<{ sections?: AcademicSectionItem[] }>('/api/sections', {
+    schoolKey,
+    clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+  });
+  const cachedSubjectsResponse = peekCachedApiJson<{ subjects?: SubjectItem[] }>('/api/subjects', {
+    schoolKey,
+    clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+  });
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cachedUserResponse?.user);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<UserItem | null>(null);
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
-  const [subjects, setSubjects] = useState<SubjectItem[]>([]);
+  const [user, setUser] = useState<UserItem | null>(() => cachedUserResponse?.user || null);
+  const [classes, setClasses] = useState<ClassItem[]>(() => cachedClassesResponse?.classes || []);
+  const [sections, setSections] = useState<AcademicSectionItem[]>(
+    () => cachedSectionsResponse?.sections || [],
+  );
+  const [subjects, setSubjects] = useState<SubjectItem[]>(
+    () => cachedSubjectsResponse?.subjects || [],
+  );
 
   useEffect(() => {
     let mounted = true;
 
     async function load() {
+      if (!schoolKey) {
+        setError('Please select a school in the navbar to view admin details.');
+        setLoading(false);
+        return;
+      }
+
       try {
-        setLoading(true);
-        const [userRes, classesRes, sectionsRes, subjectsRes] = await Promise.all([
-          fetch('/api/users/' + id),
-          fetch('/api/classes'),
-          fetch('/api/sections'),
-          fetch('/api/subjects'),
-        ]);
-        const userJson = await userRes.json();
-        const classesJson = await classesRes.json();
-        const sectionsJson = await sectionsRes.json();
-        const subjectsJson = await subjectsRes.json();
-        if (!mounted) return;
-        if (!userJson.success) {
-          throw new Error(userJson.message || 'Failed to load admin');
+        if (cachedUserResponse?.user) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
         }
+        setError(null);
+        const [userJson, classesJson, sectionsJson, subjectsJson] = await Promise.all([
+          fetchApiJson<any>(`/api/users/${id}`, {
+            cache: 'no-store',
+            schoolKey,
+            fallbackMessage: 'Failed to load admin.',
+            clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+          }),
+          fetchApiJson<any>('/api/classes', {
+            cache: 'no-store',
+            schoolKey,
+            fallbackMessage: 'Failed to load classes.',
+            clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+          }),
+          fetchApiJson<any>('/api/sections', {
+            cache: 'no-store',
+            schoolKey,
+            fallbackMessage: 'Failed to load sections.',
+            clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+          }),
+          fetchApiJson<any>('/api/subjects', {
+            cache: 'no-store',
+            schoolKey,
+            fallbackMessage: 'Failed to load subjects.',
+            clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
+          }),
+        ]);
+        if (!mounted) return;
         setUser(userJson.user);
         setClasses(classesJson.classes || []);
         setSections(sectionsJson.sections || []);
@@ -96,7 +151,10 @@ export default function AdminDetailPage() {
       } catch (err: any) {
         setError(err.message || 'Failed to load');
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     }
 
@@ -104,7 +162,7 @@ export default function AdminDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [cachedUserResponse?.user, id, schoolKey]);
 
   const classNames = useMemo(() => {
     if (user?.hasAllClasses) return ['All Classes'];
@@ -142,9 +200,17 @@ export default function AdminDetailPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={navigateBack}>Back to Admins</Button>
-            <Link href={editHref}>
+            <AppPrefetchLink
+              href={editHref}
+              relatedApiPrefetches={[
+                `/api/users/${id}`,
+                '/api/classes',
+                '/api/sections',
+                '/api/subjects',
+              ]}
+            >
               <Button>Edit Admin</Button>
-            </Link>
+            </AppPrefetchLink>
           </div>
         }
         meta={
@@ -155,6 +221,7 @@ export default function AdminDetailPage() {
                 ? "Full school access"
                 : "Restricted scope"}
             </span>
+            {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
           </>
         }
         stats={[
@@ -181,7 +248,9 @@ export default function AdminDetailPage() {
         ]}
       />
 
-      {loading ? (
+      {error && user ? <div className="app-feedback app-feedback-info">{error}</div> : null}
+
+      {loading && !user ? (
         <PageLoadingState
           title="Loading admin details"
           description="Preparing admin profile and access assignments."
@@ -189,7 +258,7 @@ export default function AdminDetailPage() {
           contentClassName="max-w-none"
           dense
         />
-      ) : error ? (
+      ) : error && !user ? (
         <div className="app-feedback app-feedback-error">{error}</div>
       ) : !user ? (
         <div className="app-empty-state">User not found.</div>

@@ -896,6 +896,58 @@
     box-shadow: 0 12px 24px -24px hsl(var(--app-shadow-deep) / 0.32);
   }
 
+  .app-button-compact {
+    @apply h-9 rounded-xl px-3.5 text-[13px];
+  }
+
+  .app-button-compact-icon {
+    @apply h-9 w-9 rounded-xl p-0;
+  }
+
+  .app-button-compact-primary {
+    @apply app-button-primary h-9 rounded-xl px-3.5 text-[13px];
+  }
+
+  .app-button-compact-secondary {
+    @apply app-button-secondary h-9 rounded-xl px-3.5 text-[13px];
+  }
+
+  .app-button-compact-success {
+    @apply border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800;
+  }
+
+  .app-button-compact-danger {
+    @apply border-rose-200 text-rose-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800;
+  }
+
+  .app-control-compact {
+    @apply h-9 rounded-xl px-3 text-[13px];
+  }
+
+  .app-multi-select-trigger {
+    @apply flex min-h-10 w-full flex-wrap items-center gap-2 rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background transition-[border-color,box-shadow,background-color] duration-200 hover:border-primary/20 focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2;
+    box-shadow: 0 12px 24px -24px hsl(var(--app-shadow-deep) / 0.32);
+  }
+
+  .app-selection-badge {
+    @apply inline-flex items-center gap-1.5 rounded-xl border border-border/60 bg-secondary/70 px-2.5 py-1 text-xs font-medium text-foreground;
+  }
+
+  .app-selection-summary {
+    @apply text-[13px] font-medium text-muted-foreground;
+  }
+
+  .app-selection-popover {
+    @apply w-[--radix-popover-trigger-width] rounded-2xl border border-border/70 p-0 shadow-xl backdrop-blur;
+    background-color: hsl(var(--popover) / 0.96);
+  }
+
+  @supports (backdrop-filter: blur(0px)) {
+    .app-selection-popover {
+      background-color: hsl(var(--popover) / 0.92);
+    }
+  }
+
   .app-feedback {
     @apply rounded-xl border px-4 py-3 text-[13px] shadow-sm;
   }
@@ -2281,6 +2333,79 @@
 
   .company-admin-page :where(input[type="checkbox"], input[type="radio"]) {
     accent-color: hsl(var(--primary));
+  }
+
+  .company-admin-field-label {
+    @apply mb-1.5 block text-sm font-semibold text-foreground;
+  }
+
+  .company-admin-field-note {
+    @apply text-xs leading-5 text-muted-foreground;
+  }
+
+  .company-admin-inline-list {
+    @apply space-y-2.5;
+  }
+
+  .company-admin-inline-row {
+    @apply flex flex-col gap-2 sm:flex-row sm:items-start;
+  }
+
+  .company-admin-inline-add {
+    @apply inline-flex items-center gap-2 rounded-xl border border-dashed border-border/70 bg-background px-3 py-2 text-sm font-medium text-primary transition-colors hover:border-primary/30 hover:bg-primary/5;
+  }
+
+  .company-admin-inline-remove {
+    @apply app-button-secondary h-10 rounded-xl px-3 text-[13px] text-rose-700 hover:bg-rose-50 hover:text-rose-800;
+  }
+
+  .company-admin-inline-icon-remove {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-xl border border-input bg-background text-rose-700 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800 disabled:pointer-events-none disabled:opacity-50;
+    box-shadow: 0 12px 24px -24px hsl(var(--app-shadow-deep) / 0.28);
+  }
+
+  .company-admin-status-chip {
+    @apply inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold;
+    border-color: hsl(var(--border) / 0.82);
+    background-color: hsl(var(--background) / 0.92);
+    color: hsl(var(--muted-foreground));
+  }
+
+  .company-admin-status-chip-success {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+  }
+
+  .company-admin-status-chip-warning {
+    @apply border-amber-200 bg-amber-50 text-amber-700;
+  }
+
+  .company-admin-status-chip-muted {
+    @apply border-border/70 bg-muted/25 text-muted-foreground;
+  }
+
+  .company-admin-item-card {
+    @apply rounded-2xl border p-4 shadow-sm;
+    border-color: hsl(var(--border) / 0.76);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.96) 0%,
+        hsl(var(--app-surface-soft) / 0.9) 100%
+      );
+    box-shadow: 0 16px 30px -30px hsl(var(--app-shadow-deep) / 0.22);
+  }
+
+  .company-admin-preview-card {
+    @apply rounded-2xl border p-4 shadow-sm;
+    border-color: hsl(var(--border) / 0.78);
+    background:
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.08) 0%, transparent 14rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.98) 0%,
+        hsl(var(--app-surface-soft) / 0.9) 100%
+      );
+    box-shadow: 0 18px 34px -34px hsl(var(--app-shadow-deep) / 0.24);
   }
 }
 

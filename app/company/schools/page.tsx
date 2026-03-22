@@ -365,12 +365,12 @@ export default function ManageSchoolsPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/company/activity">
-              <Button type="button" variant="outline" size="sm">
+              <Button type="button" variant="outline" size="sm" className="app-button-compact">
                 Operations Activity
               </Button>
             </Link>
             <Link href="/company/indexing">
-              <Button type="button" variant="outline" size="sm">
+              <Button type="button" variant="outline" size="sm" className="app-button-compact">
                 Maintenance Console
               </Button>
             </Link>
@@ -378,6 +378,7 @@ export default function ManageSchoolsPage() {
               type="button"
               variant="outline"
               size="sm"
+              className="app-button-compact"
               onClick={() => void loadSchools()}
               disabled={isLoading}
             >
@@ -624,7 +625,13 @@ export default function ManageSchoolsPage() {
             ) : error ? (
               <div className="space-y-3">
                 <div className="app-feedback app-feedback-error">{error}</div>
-                <Button type="button" variant="outline" size="sm" onClick={() => void loadSchools()}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="app-button-compact"
+                  onClick={() => void loadSchools()}
+                >
                   Retry
                 </Button>
               </div>
@@ -686,6 +693,7 @@ export default function ManageSchoolsPage() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
+                                className="app-button-compact"
                                 onClick={() => void handleOpenEditSchool(school)}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -698,7 +706,7 @@ export default function ManageSchoolsPage() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    className="text-destructive"
+                                    className="app-button-compact app-button-compact-danger"
                                     disabled={deletingId === school._id}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -718,7 +726,7 @@ export default function ManageSchoolsPage() {
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction
                                       onClick={() => handleDeleteSchool(school)}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                     >
                                       {deletingId === school._id ? <Spinner /> : "Delete"}
                                     </AlertDialogAction>

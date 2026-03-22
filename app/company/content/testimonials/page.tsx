@@ -158,19 +158,18 @@ export default function TestimonialsPage() {
 
             {/* Form */}
       <form onSubmit={handleSubmit} className="company-admin-form">
-        <h3 className="mb-4 text-lg font-bold text-teal-950 dark:text-teal-50">
+        <h3 className="mb-4 text-lg font-bold text-foreground">
           {editingId ? 'Edit Testimonial' : 'Add New Testimonial'}
         </h3>
 
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium text-teal-900 dark:text-teal-100">
+            <label className="company-admin-field-label">
               Section *
             </label>
             <select
               value={formData.section}
               onChange={(e) => setFormData({ ...formData, section: e.target.value as 'homepage' | 'benefits' | 'product' | 'casestudy' })}
-              className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
               required
             >
               {sections.map((s) => (
@@ -182,20 +181,19 @@ export default function TestimonialsPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-teal-900 dark:text-teal-100">
+            <label className="company-admin-field-label">
               Author Name *
             </label>
             <input
               type="text"
               value={formData.author}
               onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-              className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
               required
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-teal-900 dark:text-teal-100">
+            <label className="company-admin-field-label">
               Role/Designation *
             </label>
             <input
@@ -203,25 +201,23 @@ export default function TestimonialsPage() {
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
               placeholder="e.g., Principal, Parent, Teacher"
-              className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
               required
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-teal-900 dark:text-teal-100">
+            <label className="company-admin-field-label">
               School Name
             </label>
             <input
               type="text"
               value={formData.school || ''}
               onChange={(e) => setFormData({ ...formData, school: e.target.value })}
-              className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-teal-900 dark:text-teal-100">
+            <label className="company-admin-field-label">
               Location
             </label>
             <input
@@ -229,12 +225,11 @@ export default function TestimonialsPage() {
               value={formData.location || ''}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
               placeholder="e.g., Mumbai, Maharashtra"
-              className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-teal-900 dark:text-teal-100">
+            <label className="company-admin-field-label">
               Rating (1-5)
             </label>
             <input
@@ -243,44 +238,40 @@ export default function TestimonialsPage() {
               max="5"
               value={formData.rating || 5}
               onChange={(e) => setFormData({ ...formData, rating: parseInt(e.target.value) })}
-              className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
             />
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-teal-900 dark:text-teal-100">
+            <label className="company-admin-field-label">
               Quote/Testimonial *
             </label>
             <textarea
               value={formData.quote}
               onChange={(e) => setFormData({ ...formData, quote: e.target.value })}
               rows={4}
-              className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
               required
             />
           </div>
 
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm font-medium text-teal-900 dark:text-teal-100">
+            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <input
                 type="checkbox"
                 checked={formData.isActive}
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="h-4 w-4 rounded border-teal-300"
               />
               Active (visible on site)
             </label>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-teal-900 dark:text-teal-100">
+            <label className="company-admin-field-label">
               Display Order
             </label>
             <input
               type="number"
               value={formData.displayOrder}
               onChange={(e) => setFormData({ ...formData, displayOrder: parseInt(e.target.value) })}
-              className="w-full rounded border border-teal-200 bg-white px-3 py-2 text-teal-950 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-50"
             />
           </div>
         </div>
@@ -306,7 +297,7 @@ export default function TestimonialsPage() {
 
       {/* List */}
       <div>
-        <h3 className="mb-4 text-lg font-bold text-teal-950 dark:text-teal-50">Existing Testimonials</h3>
+        <h3 className="mb-4 text-lg font-bold text-foreground">Existing Testimonials</h3>
 
         {loading ? (
           <div className="company-admin-loading">Loading...</div>
@@ -319,23 +310,23 @@ export default function TestimonialsPage() {
             {testimonials.map((t) => (
               <div
                 key={t._id}
-                className="company-admin-section"
+                className="company-admin-item-card"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="rounded bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-700 dark:bg-teal-800 dark:text-teal-200">
+                      <span className="company-admin-status-chip">
                         {t.section}
                       </span>
                       {!t.isActive && (
-                        <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                        <span className="company-admin-status-chip border-rose-200 bg-rose-50 text-rose-700">
                           Inactive
                         </span>
                       )}
-                      <span className="text-xs text-teal-600">Order: {t.displayOrder}</span>
+                      <span className="text-xs text-muted-foreground">Order: {t.displayOrder}</span>
                     </div>
-                    <p className="italic text-teal-800 dark:text-teal-200">&quot;{t.quote}&quot;</p>
-                    <div className="mt-2 text-sm text-teal-700 dark:text-teal-300">
+                    <p className="italic text-foreground">&quot;{t.quote}&quot;</p>
+                    <div className="mt-2 text-sm text-muted-foreground">
                       — <strong>{t.author}</strong>, {t.role}
                       {t.school && <> • {t.school}</>}
                       {t.location && <> • {t.location}</>}
@@ -344,13 +335,13 @@ export default function TestimonialsPage() {
                   <div className="ml-4 flex gap-2">
                     <button
                       onClick={() => handleEdit(t)}
-                      className="rounded bg-teal-600 px-3 py-1 text-sm font-semibold text-white hover:bg-teal-700"
+                      className="app-button-compact-primary"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(t._id!)}
-                      className="rounded bg-red-500 px-3 py-1 text-sm font-semibold text-white hover:bg-red-600"
+                      className="app-button-compact-secondary app-button-compact-danger"
                     >
                       Delete
                     </button>

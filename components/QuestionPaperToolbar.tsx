@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Copy, Pencil } from "lucide-react";
 
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
+import { prefetchApiJson } from "@/lib/client/api";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 
 export function QuestionPaperToolbar({ paper }: { paper: any }) {
@@ -130,23 +131,56 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
     .split("\n")
     .map((name) => name.trim())
     .filter(Boolean).length;
+  const createPaperHref = "/workspace/question-papers/create";
+  const editHref = buildReturnHref(`/workspace/question-papers/edit/${paper._id}`);
+
+  const prefetchQuestionPaperForm = () => {
+    router.prefetch(createPaperHref);
+    void prefetchApiJson("/api/classes", {
+      cache: "no-store",
+      clientCacheTtlMs: 60_000,
+    });
+    void prefetchApiJson("/api/sections", {
+      cache: "no-store",
+      clientCacheTtlMs: 60_000,
+    });
+    void prefetchApiJson("/api/subjects", {
+      cache: "no-store",
+      clientCacheTtlMs: 60_000,
+    });
+    void prefetchApiJson("/api/tags/with-subjects", {
+      cache: "no-store",
+      clientCacheTtlMs: 60_000,
+    });
+  };
 
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        <Link href={buildReturnHref(`/workspace/question-papers/edit/${paper._id}`)}>
+        <AppPrefetchLink
+          href={editHref}
+          relatedApiPrefetches={[
+            `/api/question-papers/${paper._id}`,
+            "/api/classes",
+            "/api/sections",
+            "/api/subjects",
+            "/api/tags/with-subjects",
+          ]}
+        >
           <Button variant="secondary">
             <Pencil className="mr-2 h-4 w-4" />
             Edit
           </Button>
-        </Link>
+        </AppPrefetchLink>
         <Button
           variant="outline"
+          onMouseEnter={prefetchQuestionPaperForm}
+          onFocus={prefetchQuestionPaperForm}
           onClick={() => {
             const copyPayload = buildCopyPayload("");
             sessionStorage.setItem("questionPaperCopy", JSON.stringify(copyPayload));
-            announceNavigationStart("/workspace/question-papers/create");
-            router.push("/workspace/question-papers/create");
+            announceNavigationStart(createPaperHref);
+            router.push(createPaperHref);
           }}
         >
           <Copy className="mr-2 h-4 w-4" />

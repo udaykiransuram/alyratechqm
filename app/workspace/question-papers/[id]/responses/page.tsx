@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 
+import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
 import PageHero from '@/components/layout/PageHero';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import ListPagination from '@/components/ui/list-pagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -26,9 +27,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
-import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
-import { fetchApiJson } from '@/lib/client/api';
+import { fetchApiJson, peekCachedApiJson } from '@/lib/client/api';
 import { getSchoolKeyFromCookie } from '@/lib/client/school';
+import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
 
 interface ResponseItem {
   _id: string;
@@ -44,21 +45,219 @@ interface ResponseItem {
   } | null;
 }
 
+const PAPER_RESPONSES_PAGE_SIZE = 40;
+const PAPER_RESPONSES_CACHE_TTL_MS = 30_000;
+
+type ResponsePageCacheEntry = {
+  responses: ResponseItem[];
+  academicSections: Array<{ id: string; name: string }>;
+  totalResponses: number;
+  pages: number;
+  page: number;
+  fetchedAt: number;
+};
+
+function getInitialPage() {
+  if (typeof window === 'undefined') return 1;
+  try {
+    const rawPage = Number(new URL(window.location.href).searchParams.get('page') || '1');
+    return Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function getInitialAcademicSection() {
+  if (typeof window === 'undefined') return 'all';
+  try {
+    return new URL(window.location.href).searchParams.get('academicSectionId')?.trim() || 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+function buildResponsesQueryStringForCache(
+  paperId: string,
+  targetPage: number,
+  targetAcademicSection: string,
+) {
+  const queryParams = new URLSearchParams({
+    paper: paperId,
+    summary: '1',
+    page: String(targetPage),
+    limit: String(PAPER_RESPONSES_PAGE_SIZE),
+  });
+  if (targetAcademicSection !== 'all') {
+    queryParams.set('academicSectionId', targetAcademicSection);
+  }
+  return queryParams.toString();
+}
+
+function buildResponsesCacheKey(
+  schoolKey: string,
+  paperId: string,
+  targetPage: number,
+  targetAcademicSection: string,
+) {
+  return `${schoolKey}::${paperId}::${buildResponsesQueryStringForCache(
+    paperId,
+    targetPage,
+    targetAcademicSection,
+  )}`;
+}
+
+function createResponseCacheEntry(
+  data: any,
+  fallbackPage: number,
+): ResponsePageCacheEntry {
+  const resolvedPage = Math.max(1, Number(data?.page) || fallbackPage);
+  return {
+    responses: Array.isArray(data?.responses) ? data.responses : [],
+    academicSections: Array.isArray(data?.academicSections) ? data.academicSections : [],
+    totalResponses: Math.max(0, Number(data?.total) || 0),
+    pages: Math.max(1, Number(data?.pages) || 1),
+    page: resolvedPage,
+    fetchedAt: Date.now(),
+  };
+}
+
 export default function QuestionPaperResponsesPage({ params }: { params: { id: string } }) {
   const { navigateBack } = useBackNavigation('/workspace/question-papers');
-  const [responses, setResponses] = useState<ResponseItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const initialPage = getInitialPage();
+  const initialAcademicSection = getInitialAcademicSection();
+  const initialSchoolKey =
+    typeof window === 'undefined' ? '' : String(getSchoolKeyFromCookie() || '').trim();
+  const initialCachedResponse = initialSchoolKey
+    ? peekCachedApiJson<any>(
+        `/api/question-paper-response?${buildResponsesQueryStringForCache(
+          params.id,
+          initialPage,
+          initialAcademicSection,
+        )}`,
+        {
+          schoolKey: initialSchoolKey,
+          clientCacheTtlMs: PAPER_RESPONSES_CACHE_TTL_MS,
+        },
+      )
+    : null;
+  const initialCacheEntry = initialCachedResponse
+    ? createResponseCacheEntry(initialCachedResponse, initialPage)
+    : null;
+
+  const [responses, setResponses] = useState<ResponseItem[]>(
+    () => initialCacheEntry?.responses || [],
+  );
+  const [loading, setLoading] = useState(() => !initialCacheEntry);
   const [error, setError] = useState<string | null>(null);
-  const [selectedAcademicSection, setSelectedAcademicSection] = useState<string>(() => {
-    if (typeof window === 'undefined') return 'all';
-    try {
-      return new URL(window.location.href).searchParams.get('academicSectionId')?.trim() || 'all';
-    } catch {
-      return 'all';
-    }
-  });
+  const [academicSections, setAcademicSections] = useState<Array<{ id: string; name: string }>>(
+    () => initialCacheEntry?.academicSections || [],
+  );
+  const [selectedAcademicSection, setSelectedAcademicSection] =
+    useState<string>(initialAcademicSection);
+  const [page, setPage] = useState<number>(initialCacheEntry?.page || initialPage);
+  const [pages, setPages] = useState(initialCacheEntry?.pages || 1);
+  const [totalResponses, setTotalResponses] = useState(initialCacheEntry?.totalResponses || 0);
+  const responsesCacheRef = useRef<Map<string, ResponsePageCacheEntry>>(
+    new Map(
+      initialCacheEntry && initialSchoolKey
+        ? [
+            [
+              buildResponsesCacheKey(
+                initialSchoolKey,
+                params.id,
+                initialCacheEntry.page,
+                initialAcademicSection,
+              ),
+              initialCacheEntry,
+            ],
+          ]
+        : [],
+    ),
+  );
+
+  const buildResponsesQueryString = useCallback(
+    (targetPage = page, targetAcademicSection = selectedAcademicSection) => {
+      return buildResponsesQueryStringForCache(
+        params.id,
+        targetPage,
+        targetAcademicSection,
+      );
+    },
+    [page, params.id, selectedAcademicSection],
+  );
+
+  const getResponsesCacheKey = useCallback(
+    (
+      schoolKey: string,
+      targetPage = page,
+      targetAcademicSection = selectedAcademicSection,
+    ) =>
+      buildResponsesCacheKey(
+        schoolKey,
+        params.id,
+        targetPage,
+        targetAcademicSection,
+      ),
+    [page, params.id, selectedAcademicSection],
+  );
+
+  const applyResponseCacheEntry = useCallback((entry: ResponsePageCacheEntry) => {
+    setResponses(entry.responses);
+    setAcademicSections(entry.academicSections);
+    setTotalResponses(entry.totalResponses);
+    setPages(entry.pages);
+    setPage(entry.page);
+  }, []);
 
   useEffect(() => {
+    let active = true;
+
+    const prefetchResponsesPage = async (
+      schoolKey: string,
+      targetPage: number,
+      totalPageCount: number,
+      targetAcademicSection = selectedAcademicSection,
+    ) => {
+      if (targetPage < 1 || targetPage > totalPageCount) {
+        return;
+      }
+
+      const cacheKey = getResponsesCacheKey(
+        schoolKey,
+        targetPage,
+        targetAcademicSection,
+      );
+      const cachedEntry = responsesCacheRef.current.get(cacheKey);
+      if (
+        cachedEntry &&
+        Date.now() - cachedEntry.fetchedAt < PAPER_RESPONSES_CACHE_TTL_MS
+      ) {
+        return;
+      }
+
+      try {
+        const data = await fetchApiJson<any>(
+          `/api/question-paper-response?${buildResponsesQueryString(
+            targetPage,
+            targetAcademicSection,
+          )}`,
+          {
+            schoolKey,
+            fallbackMessage: 'Failed to fetch responses.',
+          },
+        );
+        responsesCacheRef.current.set(
+          getResponsesCacheKey(
+            schoolKey,
+            Math.max(1, Number(data.page) || targetPage),
+            targetAcademicSection,
+          ),
+          createResponseCacheEntry(data, targetPage),
+        );
+      } catch {
+      }
+    };
+
     const loadResponses = async () => {
       const schoolKey = getSchoolKeyFromCookie();
       if (!schoolKey) {
@@ -67,36 +266,80 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
         return;
       }
 
+      const cacheKey = getResponsesCacheKey(schoolKey);
+      const cachedEntry = responsesCacheRef.current.get(cacheKey);
+      const hasFreshCache =
+        cachedEntry &&
+        Date.now() - cachedEntry.fetchedAt < PAPER_RESPONSES_CACHE_TTL_MS;
+
+      if (cachedEntry) {
+        applyResponseCacheEntry(cachedEntry);
+        setError(null);
+        if (hasFreshCache) {
+          setLoading(false);
+          void prefetchResponsesPage(
+            schoolKey,
+            page + 1,
+            cachedEntry.pages,
+            selectedAcademicSection,
+          );
+          return;
+        }
+      }
+
       setLoading(true);
-      setError(null);
+      if (!cachedEntry) {
+        setError(null);
+      }
 
       try {
-        const data = await fetchApiJson<any>(`/api/question-paper-response?paper=${encodeURIComponent(params.id)}`, {
+        const data = await fetchApiJson<any>(
+          `/api/question-paper-response?${buildResponsesQueryString()}`,
+          {
+            schoolKey,
+            fallbackMessage: 'Failed to fetch responses.',
+          },
+        );
+
+        if (!active) {
+          return;
+        }
+        const nextEntry = createResponseCacheEntry(data, page);
+        responsesCacheRef.current.set(
+          getResponsesCacheKey(schoolKey, nextEntry.page),
+          nextEntry,
+        );
+        applyResponseCacheEntry(nextEntry);
+        void prefetchResponsesPage(
           schoolKey,
-          fallbackMessage: 'Failed to fetch responses.',
-        });
-        setResponses(Array.isArray(data.responses) ? data.responses : []);
+          nextEntry.page + 1,
+          nextEntry.pages,
+          selectedAcademicSection,
+        );
       } catch (fetchError: any) {
-        setError(fetchError?.message || 'An unexpected network error occurred.');
+        if (!cachedEntry) {
+          setError(fetchError?.message || 'An unexpected network error occurred.');
+        }
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
     void loadResponses();
-  }, [params.id]);
 
-  const academicSections = useMemo(() => {
-    const seen = new Map<string, string>();
-    responses.forEach((response) => {
-      const id = response.student?.academicSection?._id;
-      const name = response.student?.academicSection?.name;
-      if (id && name) {
-        seen.set(id, name);
-      }
-    });
-    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
-  }, [responses]);
+    return () => {
+      active = false;
+    };
+  }, [
+    applyResponseCacheEntry,
+    buildResponsesQueryString,
+    getResponsesCacheKey,
+    page,
+    params.id,
+    selectedAcademicSection,
+  ]);
 
   useEffect(() => {
     if (
@@ -107,23 +350,27 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
     }
   }, [academicSections, selectedAcademicSection]);
 
-  const filteredResponses = useMemo(() => {
+  const selectedAcademicSectionLabel = useMemo(() => {
     if (selectedAcademicSection === 'all') {
-      return responses;
+      return 'All sections';
     }
-    return responses.filter(
-      (response) => response.student?.academicSection?._id === selectedAcademicSection,
+    return (
+      academicSections.find((section) => section.id === selectedAcademicSection)?.name ||
+      'Selected section'
     );
-  }, [responses, selectedAcademicSection]);
+  }, [academicSections, selectedAcademicSection]);
 
   const responsesReturnTo = useMemo(() => {
     const searchParams = new URLSearchParams();
     if (selectedAcademicSection !== 'all') {
       searchParams.set('academicSectionId', selectedAcademicSection);
     }
+    if (page > 1) {
+      searchParams.set('page', String(page));
+    }
     const query = searchParams.toString();
     return `/workspace/question-papers/${params.id}/responses${query ? `?${query}` : ''}`;
-  }, [params.id, selectedAcademicSection]);
+  }, [page, params.id, selectedAcademicSection]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -139,7 +386,7 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
     </Button>
   );
 
-  if (loading) {
+  if (loading && responses.length === 0 && !error) {
     return (
       <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
         <PageHero
@@ -184,7 +431,13 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {backAction}
-            <Select value={selectedAcademicSection} onValueChange={setSelectedAcademicSection}>
+            <Select
+              value={selectedAcademicSection}
+              onValueChange={(value) => {
+                setPage(1);
+                setSelectedAcademicSection(value);
+              }}
+            >
               <SelectTrigger className="w-full sm:w-64">
                 <SelectValue placeholder="Class section" />
               </SelectTrigger>
@@ -201,28 +454,25 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
         }
         meta={
           <>
-            <span className="app-meta-chip">
-              {selectedAcademicSection === 'all'
-                ? 'All sections'
-                : academicSections.find((section) => section.id === selectedAcademicSection)?.name || 'Selected section'}
-            </span>
+            <span className="app-meta-chip">{selectedAcademicSectionLabel}</span>
+            {loading ? <span className="app-meta-chip">Refreshing...</span> : null}
           </>
         }
         stats={[
           {
-            label: 'All responses',
-            value: String(responses.length),
-            meta: 'Responses returned for this paper before section filtering.',
+            label: 'Filtered responses',
+            value: String(totalResponses),
+            meta: 'Matching responses across all pages for the current section filter.',
           },
           {
-            label: 'Visible responses',
-            value: String(filteredResponses.length),
-            meta: 'Rows currently shown after the section filter is applied.',
+            label: 'On this page',
+            value: String(responses.length),
+            meta: 'Rows currently shown on this page.',
           },
           {
             label: 'Section filters',
             value: String(academicSections.length),
-            meta: 'Available academic sections inferred from the response list.',
+            meta: 'Available academic sections for this paper.',
           },
         ]}
       />
@@ -232,10 +482,19 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
           <CardTitle>Response List</CardTitle>
         </CardHeader>
         <CardContent className="app-section-body">
-          {filteredResponses.length === 0 ? (
+          <ListPagination
+            page={page}
+            totalPages={pages}
+            totalItems={totalResponses}
+            pageSize={PAPER_RESPONSES_PAGE_SIZE}
+            itemLabel="responses"
+            onPageChange={setPage}
+            disabled={loading}
+          />
+          {responses.length === 0 ? (
             <div className="app-empty-state py-10">
               <p>
-                {responses.length === 0
+                {totalResponses === 0 && selectedAcademicSection === 'all'
                   ? 'No responses found for this paper yet.'
                   : 'No responses found for the selected academic section.'}
               </p>
@@ -254,7 +513,7 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredResponses.map((response) => (
+                  {responses.map((response) => (
                     <TableRow key={response._id}>
                       <TableCell>{response.student?.name || 'Anonymous Student'}</TableCell>
                       <TableCell>{response.student?.academicSection?.name || '—'}</TableCell>
@@ -268,15 +527,18 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
                         <Badge variant="secondary">{response.totalMarksAwarded ?? '—'}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Button asChild size="sm" variant="outline">
-                          <Link
+                        <Button asChild size="sm" variant="outline" className="app-button-compact">
+                          <AppPrefetchLink
                             href={buildHrefWithReturnTo(
                               `/workspace/analytics/student-tag-report/${response._id}`,
                               responsesReturnTo,
                             )}
+                            relatedApiPrefetches={[
+                              `/api/analytics/student-tag-report/${response._id}?groupFields=1`,
+                            ]}
                           >
                             View Tag Analytics
-                          </Link>
+                          </AppPrefetchLink>
                         </Button>
                       </TableCell>
                     </TableRow>

@@ -787,10 +787,26 @@ export async function GET(req: NextRequest) {
     const url = req.nextUrl;
     const paperId = url.searchParams.get("paper");
     const studentId = url.searchParams.get("student");
+    const academicSectionId =
+      url.searchParams.get("academicSectionId")?.trim() || "";
+    const summaryMode = url.searchParams.get("summary") === "1";
+    const limitParam = Number(url.searchParams.get("limit") || "40");
+    const limit = Math.min(
+      100,
+      Math.max(Number.isFinite(limitParam) ? Math.floor(limitParam) : 40, 1),
+    );
+    const pageParam = Number(url.searchParams.get("page") || "1");
 
     if (!paperId && !studentId) {
       return NextResponse.json(
         { success: false, message: "Paper ID or Student ID is required" },
+        { status: 400 },
+      );
+    }
+
+    if (academicSectionId && !mongoose.Types.ObjectId.isValid(academicSectionId)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid academicSectionId." },
         { status: 400 },
       );
     }
@@ -828,7 +844,16 @@ export async function GET(req: NextRequest) {
     }
 
     const paper = await QPModel.findById(paperId)
-      .select("sections.name sections.questions.question")
+      .select(
+        summaryMode
+          ? "class assignedAcademicSections"
+          : "class assignedAcademicSections sections.name sections.questions.question",
+      )
+      .populate({
+        path: "assignedAcademicSections",
+        model: AcademicSectionModel,
+        select: "name class",
+      })
       .lean();
 
     if (!paper) {
@@ -836,6 +861,86 @@ export async function GET(req: NextRequest) {
         { success: false, message: "Question paper not found" },
         { status: 404 },
       );
+    }
+
+    const resolvedAcademicSections = Array.isArray((paper as any).assignedAcademicSections)
+      ? (paper as any).assignedAcademicSections
+          .map((section: any) => ({
+            id: String(section?._id || ""),
+            name: String(section?.name || ""),
+          }))
+          .filter((section: any) => section.id)
+      : [];
+
+    const academicSections =
+      resolvedAcademicSections.length > 0
+        ? resolvedAcademicSections
+        : (paper as any).class
+          ? await AcademicSectionModel.find({
+              class: (paper as any).class,
+              isActive: true,
+              ...buildArchiveFilter(false),
+            })
+              .select("name")
+              .sort({ name: 1 })
+              .lean()
+              .then((sections: any[]) =>
+                sections.map((section: any) => ({
+                  id: String(section?._id || ""),
+                  name: String(section?.name || ""),
+                })),
+              )
+          : [];
+
+    if (summaryMode) {
+      let filteredStudentIds: any[] | null = null;
+      if (academicSectionId) {
+        const studentsInSection = await UserModel.find({
+          role: "student",
+          academicSection: new mongoose.Types.ObjectId(academicSectionId),
+        })
+          .select("_id")
+          .lean();
+        filteredStudentIds = studentsInSection.map((student: any) => student._id);
+      }
+
+      const responseQuery: any = { paper: paperId };
+      if (filteredStudentIds) {
+        responseQuery.student = { $in: filteredStudentIds };
+      }
+
+      const totalCount = await QPRModel.countDocuments(responseQuery);
+      const pages = Math.max(1, Math.ceil(totalCount / limit));
+      const page = Math.min(
+        Math.max(Number.isFinite(pageParam) ? Math.floor(pageParam) : 1, 1),
+        pages,
+      );
+      const skip = (page - 1) * limit;
+
+      const responses = await QPRModel.find(responseQuery)
+        .select("student submittedAt totalMarksAwarded createdAt")
+        .sort({ submittedAt: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      const hydratedResponses = await hydrateResponsesWithStudents({
+        responses,
+        UserModel,
+        AcademicSectionModel,
+        ClassModel,
+        studentSelect: "name rollNumber academicSection",
+      });
+
+      return NextResponse.json({
+        success: true,
+        responses: hydratedResponses,
+        total: totalCount,
+        page,
+        pages,
+        limit,
+        academicSections,
+      });
     }
 
     const questionInfoMap = new Map<string, number>();

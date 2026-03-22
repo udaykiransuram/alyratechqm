@@ -1140,6 +1140,7 @@ export default function ManageUsersPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          className="app-button-compact"
                           disabled={page <= 1}
                           onClick={() => loadUsers(page - 1)}
                         >
@@ -1148,6 +1149,7 @@ export default function ManageUsersPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          className="app-button-compact"
                           disabled={page >= pages}
                           onClick={() => loadUsers(page + 1)}
                         >
@@ -1219,6 +1221,7 @@ export default function ManageUsersPage() {
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    className="app-button-compact"
                                     onClick={() => {
                                       const initialAdminScope = resolveEffectiveAdminScope({
                                         role: user.role,
@@ -1635,7 +1638,7 @@ export default function ManageUsersPage() {
 
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="sm">
+                                  <Button variant="ghost" size="sm" className="app-button-compact">
                                     <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                                     Archive
                                   </Button>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
 
 type Message = {
   _id: string;
@@ -62,50 +63,80 @@ export default function AdminMessagesPage() {
               const v = e.target.value;
               if (v === 'all' || v === 'true' || v === 'false') setFilter(v);
             }}
-            className="rounded border border-teal-200 bg-white px-3 py-2 text-sm dark:border-teal-800 dark:bg-teal-900"
+            className="app-control-compact w-[8.5rem]"
           >
             <option value="all">All</option>
             <option value="false">Unread</option>
             <option value="true">Read</option>
           </select>
-          <div className="text-sm text-teal-700 dark:text-teal-300">Page {page} / {totalPages}</div>
+          <div className="app-meta-chip">Page {page} / {totalPages}</div>
           <div className="flex gap-2">
-            <button disabled={page<=1} onClick={() => setPage(p=>Math.max(1,p-1))} className="app-button-primary disabled:opacity-50">Prev</button>
-            <button disabled={page>=totalPages} onClick={() => setPage(p=>Math.min(totalPages,p+1))} className="app-button-primary disabled:opacity-50">Next</button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="app-button-compact"
+              disabled={page<=1}
+              onClick={() => setPage(p=>Math.max(1,p-1))}
+            >
+              Prev
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="app-button-compact"
+              disabled={page>=totalPages}
+              onClick={() => setPage(p=>Math.min(totalPages,p+1))}
+            >
+              Next
+            </Button>
           </div>
         </div>
       </div>
 
       <div className="company-admin-table-wrap">
-        <table className="min-w-full divide-y divide-teal-200 dark:divide-teal-800">
-          <thead className="bg-teal-50 dark:bg-teal-900/40">
+        <table className="min-w-full">
+          <thead>
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-200">From</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-200">Institution</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-200">Message</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-200">Date</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-200">Actions</th>
+              <th>From</th>
+              <th>Institution</th>
+              <th>Message</th>
+              <th>Date</th>
+              <th className="text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-teal-100 dark:divide-teal-800 bg-white dark:bg-teal-950">
+          <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-teal-700 dark:text-teal-300">Loading...</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Loading...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-teal-700 dark:text-teal-300">No messages</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">No messages</td></tr>
             ) : (
               items.map(msg => (
-                <tr key={msg._id} className={!msg.read ? 'bg-teal-50/40 dark:bg-teal-900/20' : ''}>
+                <tr key={msg._id} className={!msg.read ? 'bg-primary/5' : ''}>
                   <td className="px-4 py-3 align-top">
-                    <div className="font-semibold text-teal-900 dark:text-teal-50">{msg.name}</div>
-                    <a href={`mailto:${msg.email}`} className="text-xs text-teal-700 underline dark:text-teal-300">{msg.email}</a>
+                    <div className="font-semibold text-foreground">{msg.name}</div>
+                    <a href={`mailto:${msg.email}`} className="text-xs text-primary underline">{msg.email}</a>
                   </td>
-                  <td className="px-4 py-3 align-top text-sm text-teal-800 dark:text-teal-200">{msg.institution || '—'}</td>
-                  <td className="px-4 py-3 align-top text-sm text-teal-800 dark:text-teal-200 max-w-md">{msg.message}</td>
-                  <td className="px-4 py-3 align-top text-xs text-teal-700 dark:text-teal-300 whitespace-normal break-words">{new Date(msg.createdAt).toLocaleString()}</td>
+                  <td className="px-4 py-3 align-top text-sm text-foreground">{msg.institution || '—'}</td>
+                  <td className="max-w-md px-4 py-3 align-top text-sm text-foreground">{msg.message}</td>
+                  <td className="whitespace-normal break-words px-4 py-3 align-top text-xs text-muted-foreground">{new Date(msg.createdAt).toLocaleString()}</td>
                   <td className="px-4 py-3 align-top text-right">
                     <div className="flex justify-end gap-2">
-                      <button onClick={() => toggleRead(msg._id, !msg.read)} className={`rounded px-3 py-1 text-xs font-semibold ${msg.read ? 'bg-teal-100 text-teal-800 dark:bg-teal-800 dark:text-teal-100' : 'bg-emerald-600 text-white'}`}>{msg.read ? 'Mark Unread' : 'Mark Read'}</button>
-                      <button onClick={() => remove(msg._id)} className="rounded px-3 py-1 text-xs font-semibold bg-red-600 text-white">Delete</button>
+                      <Button
+                        size="sm"
+                        variant={msg.read ? 'outline' : 'default'}
+                        className={msg.read ? 'app-button-compact' : 'app-button-compact'}
+                        onClick={() => toggleRead(msg._id, !msg.read)}
+                      >
+                        {msg.read ? 'Mark Unread' : 'Mark Read'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="app-button-compact app-button-compact-danger"
+                        onClick={() => remove(msg._id)}
+                      >
+                        Delete
+                      </Button>
                     </div>
                   </td>
                 </tr>

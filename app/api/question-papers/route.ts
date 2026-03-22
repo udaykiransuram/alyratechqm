@@ -330,6 +330,7 @@ export async function GET(req: NextRequest) {
     const archiveFilter = buildArchiveFilter(resolveIncludeArchived(req.nextUrl));
     const pageParam = Number(req.nextUrl.searchParams.get("page") || "");
     const limitParam = Number(req.nextUrl.searchParams.get("limit") || "");
+    const summaryMode = req.nextUrl.searchParams.get("summary") === "1";
 
     let total: number | undefined;
     let page: number | undefined;
@@ -338,7 +339,9 @@ export async function GET(req: NextRequest) {
 
     let cursor = QPModel.find(archiveFilter)
       .select(
-        "title class subject totalMarks sections assignedAcademicSections duration examDate onlineEnabled onlineStartsAt onlineEndsAt createdAt updatedAt",
+        summaryMode
+          ? "title class subject totalMarks sections.questions assignedAcademicSections duration examDate onlineEnabled onlineStartsAt onlineEndsAt createdAt updatedAt"
+          : "title class subject totalMarks sections assignedAcademicSections duration examDate onlineEnabled onlineStartsAt onlineEndsAt createdAt updatedAt",
       )
       .populate({ path: "class", model: ClassModel, select: "name" })
       .populate({ path: "subject", model: SubjectModel, select: "name" })
@@ -361,7 +364,25 @@ export async function GET(req: NextRequest) {
       cursor = cursor.skip(skip).limit(limit);
     }
 
-    const papers = await cursor;
+    const rawPapers = await cursor;
+    const papers = summaryMode
+      ? rawPapers.map((paper: any) => {
+          const questionCount = Array.isArray(paper?.sections)
+            ? paper.sections.reduce(
+                (total: number, section: any) =>
+                  total +
+                  (Array.isArray(section?.questions) ? section.questions.length : 0),
+                0,
+              )
+            : 0;
+          const { sections, ...paperSummary } = paper;
+
+          return {
+            ...paperSummary,
+            questionCount,
+          };
+        })
+      : rawPapers;
 
     return NextResponse.json({ success: true, papers, total, page, pages, limit });
   } catch (error: any) {
