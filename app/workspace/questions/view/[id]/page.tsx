@@ -1,117 +1,43 @@
-'use client';
+import { ArrowLeft, CheckCircle, Grid3X3, Info } from "lucide-react";
 
-import { useEffect, useState } from 'react';
-import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import PageLoadingState from '@/components/ui/page-loading-state';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CheckCircle, Info, Grid3X3 } from 'lucide-react';
-import PageHero from '@/components/layout/PageHero';
-import { ContentRenderer } from '@/components/ContentRenderer';
-import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
-import { useBackNavigation, useCurrentPathWithSearch } from '@/hooks/useReturnNavigation';
-import {
-  fetchApiJson,
-  peekCachedApiJson,
-  resolveClientSchoolKey,
-} from '@/lib/client/api';
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import { ContentRenderer } from "@/components/ContentRenderer";
+import PageHero from "@/components/layout/PageHero";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildHrefWithReturnTo, getSafeReturnToPath } from "@/lib/navigation/returnTo";
+import { getWorkspaceQuestionById } from "@/lib/server/workspace-assessment-data";
+import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-interface Question {
-  _id: string;
-  content: string;
-  type: 'single' | 'multiple' | 'matrix-match' | 'descriptive';
-  tags?: { _id: string; name: string; type?: { name: string } }[];
-  subjects?: { _id: string; name: string; code?: string }[];
-  options?: { content: string }[];
-  answerIndexes?: number[];
-  explanation?: string;
-  marks?: number;
-  class?: { _id: string; name: string };
-  subject?: { _id: string; name: string; code?: string };
-  matrixOptions?: { left?: string; right?: string }[];
-  matrixAnswers?: number[][];
-}
+export const dynamic = "force-dynamic";
 
-const DETAIL_PAGE_CACHE_TTL_MS = 30_000;
+type ViewQuestionPageProps = {
+  params: { id: string };
+  searchParams?: { returnTo?: string | string[] };
+};
 
-export default function ViewQuestionPage({ params }: { params: { id: string } }) {
-  const { id } = params;
-  const { navigateBack } = useBackNavigation('/workspace/questions');
-  const currentPath = useCurrentPathWithSearch('/workspace/questions');
-  const editHref = buildHrefWithReturnTo(`/workspace/questions/edit/${encodeURIComponent(id)}`, currentPath);
-  const schoolKey = resolveClientSchoolKey();
-  const cachedQuestionResponse = id
-    ? peekCachedApiJson<{ question?: Question }>(`/api/questions/${id}`, {
-        schoolKey,
-        clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
-      })
-    : null;
+export default async function ViewQuestionPage({
+  params,
+  searchParams,
+}: ViewQuestionPageProps) {
+  const id = params.id;
+  const { schoolKey } = await requireWorkspaceStaffSession();
+  const rawReturnTo = Array.isArray(searchParams?.returnTo)
+    ? searchParams?.returnTo[0]
+    : searchParams?.returnTo;
+  const backHref = getSafeReturnToPath(rawReturnTo) || "/workspace/questions";
+  const currentPath = buildHrefWithReturnTo(
+    `/workspace/questions/view/${encodeURIComponent(id)}`,
+    backHref,
+  );
+  const editHref = buildHrefWithReturnTo(
+    `/workspace/questions/edit/${encodeURIComponent(id)}`,
+    currentPath,
+  );
+  const question = await getWorkspaceQuestionById(schoolKey, id);
 
-  const [question, setQuestion] = useState<Question | null>(() => cachedQuestionResponse?.question || null);
-  const [loading, setLoading] = useState(() => !cachedQuestionResponse?.question);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    const hasCachedQuestion = Boolean(cachedQuestionResponse?.question);
-
-    if (hasCachedQuestion) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-    setError(null);
-
-    void fetchApiJson<any>(`/api/questions/${id}`, {
-      cache: 'no-store',
-      schoolKey,
-      fallbackMessage: 'Failed to load question.',
-      clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
-    })
-      .then((data) => {
-        if (!active) {
-          return;
-        }
-
-        if (data.question) {
-          setQuestion(data.question as Question);
-          setError(null);
-          return;
-        }
-
-        setError(data.message || 'Question not found.');
-      })
-      .catch((fetchError: any) => {
-        if (!active) {
-          return;
-        }
-        setError(fetchError?.message || 'Network error loading question data.');
-      })
-      .finally(() => {
-        if (!active) {
-          return;
-        }
-        setLoading(false);
-        setRefreshing(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [cachedQuestionResponse?.question, id, schoolKey]);
-
-  if (loading) {
-    return (
-      <PageLoadingState
-        title="Loading question details"
-        description="Preparing the question body, answer data, and metadata."
-      />
-    );
-  }
-
-  if ((error && !question) || !question) {
+  if (!question) {
     return (
       <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
         <PageHero
@@ -119,13 +45,17 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
           title="View Question"
           description="The requested question could not be loaded."
           actions={
-            <Button variant="outline" onClick={navigateBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Questions
+            <Button asChild variant="outline">
+              <AppPrefetchLink href={backHref}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Questions
+              </AppPrefetchLink>
             </Button>
           }
         />
-        <div className="app-feedback app-feedback-error text-center">{error || 'Question not found.'}</div>
+        <div className="app-feedback app-feedback-error text-center">
+          Question not found.
+        </div>
       </div>
     );
   }
@@ -138,17 +68,19 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
         description="Detailed view of a single question, its answer data, and the metadata used across paper building."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={navigateBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+            <Button asChild variant="outline">
+              <AppPrefetchLink href={backHref}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </AppPrefetchLink>
             </Button>
             <Button asChild>
               <AppPrefetchLink
                 href={editHref}
                 relatedApiPrefetches={[
                   `/api/questions/${id}`,
-                  '/api/classes',
-                  '/api/tags/with-subjects',
+                  "/api/classes",
+                  "/api/tags/with-subjects",
                 ]}
               >
                 Edit
@@ -158,31 +90,32 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
         }
         meta={
           <>
-            <span className="app-meta-chip">{question.class?.name || 'No class assigned'}</span>
-            <span className="app-meta-chip">{question.subject?.name || 'No subject assigned'}</span>
-            {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
+            <span className="app-meta-chip">
+              {question.class?.name || "No class assigned"}
+            </span>
+            <span className="app-meta-chip">
+              {question.subject?.name || "No subject assigned"}
+            </span>
           </>
         }
         stats={[
           {
-            label: 'Question type',
+            label: "Question type",
             value: question.type,
-            meta: 'This determines how the item behaves in authoring and delivery flows.',
+            meta: "This determines how the item behaves in authoring and delivery flows.",
           },
           {
-            label: 'Marks',
-            value: String(question.marks ?? '-'),
-            meta: 'Current mark value stored for this question.',
+            label: "Marks",
+            value: String(question.marks ?? "-"),
+            meta: "Current mark value stored for this question.",
           },
           {
-            label: 'Linked tags',
+            label: "Linked tags",
             value: String(question.tags?.length ?? 0),
-            meta: 'Tags help the question appear in filters, papers, and analytics.',
+            meta: "Tags help the question appear in filters, papers, and analytics.",
           },
         ]}
       />
-
-      {error ? <div className="app-feedback app-feedback-info">{error}</div> : null}
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">
@@ -202,20 +135,26 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
               </CardHeader>
               <CardContent className="app-section-body">
                 <ul className="space-y-2.5">
-                  {question.options.map((option, index) => {
+                  {question.options.map((option: any, index: number) => {
                     const isAnswer = question.answerIndexes?.includes(index);
                     return (
                       <li
                         key={index}
                         className={`flex items-start gap-3 rounded-2xl border px-3 py-2.5 ${
                           isAnswer
-                            ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/40'
-                            : 'border-border/60 bg-muted/10'
+                            ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/40"
+                            : "border-border/60 bg-muted/10"
                         }`}
                       >
-                        {isAnswer ? <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" /> : null}
-                        <div className={`min-w-0 flex-1 prose prose-sm max-w-none dark:prose-invert ${isAnswer ? 'font-medium' : ''}`}>
-                          <ContentRenderer htmlContent={option.content || ''} />
+                        {isAnswer ? (
+                          <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" />
+                        ) : null}
+                        <div
+                          className={`min-w-0 flex-1 prose prose-sm max-w-none dark:prose-invert ${
+                            isAnswer ? "font-medium" : ""
+                          }`}
+                        >
+                          <ContentRenderer htmlContent={option.content || ""} />
                         </div>
                       </li>
                     );
@@ -225,7 +164,7 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
             </Card>
           ) : null}
 
-          {question.type === 'matrix-match' && question.matrixOptions?.length ? (
+          {question.type === "matrix-match" && question.matrixOptions?.length ? (
             <Card className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
                 <CardTitle className="flex items-center gap-2">
@@ -235,17 +174,17 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
               </CardHeader>
               <CardContent className="app-section-body">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {question.matrixOptions.map((option, index) => (
+                  {question.matrixOptions.map((option: any, index: number) => (
                     <div key={index} className="app-detail-item">
                       <p className="app-detail-label">Pair {index + 1}</p>
                       <div className="space-y-2 text-sm text-foreground">
                         <div>
-                          <span className="font-medium text-muted-foreground">Left:</span>{' '}
-                          <span>{option.left || '-'}</span>
+                          <span className="font-medium text-muted-foreground">Left:</span>{" "}
+                          <span>{option.left || "-"}</span>
                         </div>
                         <div>
-                          <span className="font-medium text-muted-foreground">Right:</span>{' '}
-                          <span>{option.right || '-'}</span>
+                          <span className="font-medium text-muted-foreground">Right:</span>{" "}
+                          <span>{option.right || "-"}</span>
                         </div>
                       </div>
                     </div>
@@ -283,15 +222,15 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
                 </div>
                 <div className="app-detail-item">
                   <p className="app-detail-label">Marks</p>
-                  <div className="app-detail-value">{question.marks ?? '-'}</div>
+                  <div className="app-detail-value">{question.marks ?? "-"}</div>
                 </div>
                 <div className="app-detail-item">
                   <p className="app-detail-label">Class</p>
-                  <div className="app-detail-value">{question.class?.name || '-'}</div>
+                  <div className="app-detail-value">{question.class?.name || "-"}</div>
                 </div>
                 <div className="app-detail-item">
                   <p className="app-detail-label">Subject</p>
-                  <div className="app-detail-value">{question.subject?.name || '-'}</div>
+                  <div className="app-detail-value">{question.subject?.name || "-"}</div>
                 </div>
               </div>
             </CardContent>
@@ -304,9 +243,10 @@ export default function ViewQuestionPage({ params }: { params: { id: string } })
             <CardContent className="app-section-body">
               {question.tags?.length ? (
                 <div className="flex flex-wrap gap-2">
-                  {question.tags.map(tag => (
+                  {question.tags.map((tag: any) => (
                     <Badge key={tag._id} variant="secondary">
-                      {tag.type?.name ? `${tag.type.name}: ` : ''}{tag.name}
+                      {tag.type?.name ? `${tag.type.name}: ` : ""}
+                      {tag.name}
                     </Badge>
                   ))}
                 </div>

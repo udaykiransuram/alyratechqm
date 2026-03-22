@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { buildArchiveFilter } from "@/lib/archive";
 import { requireTenantSession } from "@/lib/api-auth";
-import { getStudentTestModels, loadStudentUser } from "@/lib/student-test-server";
+import { getStudentTestModels, loadOnlinePapersForClass, loadStudentUser } from "@/lib/student-test-server";
 import {
   autoSubmitExpiredAttemptIfNeeded,
   deriveStudentTestStatus,
   getRemainingTimeMs,
   isStudentEligibleForPaper,
+  paperRequiresManualReview,
   paperSupportsOnlineDelivery,
   serializeStudentAttempt,
 } from "@/lib/student-tests";
@@ -41,10 +41,12 @@ export async function GET(req: NextRequest) {
       Question: QuestionModel,
       Class: ClassModel,
       Subject: SubjectModel,
-      AcademicSection: AcademicSectionModel,
     } = await getStudentTestModels(schoolKey);
 
-    const student = await loadStudentUser(UserModel, studentId);
+    const student = await loadStudentUser(UserModel, studentId, {
+      schoolKey,
+      useCache: true,
+    });
     if (!student) {
       return NextResponse.json(
         { success: false, message: "Student profile not found." },
@@ -52,28 +54,21 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const papers = await QuestionPaperModel.find({
-      class: student.class,
-      onlineEnabled: true,
-      ...buildArchiveFilter(false),
-    })
-      .select(
-        "title class subject duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections",
-      )
-      .populate({ path: "class", model: ClassModel, select: "name" })
-      .populate({ path: "subject", model: SubjectModel, select: "name" })
-      .populate({
-        path: "assignedAcademicSections",
-        model: AcademicSectionModel,
-        select: "name class",
-        populate: { path: "class", model: ClassModel, select: "name" },
-      })
-      .populate({
-        path: "sections.questions.question",
-        model: QuestionModel,
-        select: "type options answerIndexes matrixOptions matrixAnswers",
-      })
-      .lean();
+    const studentClassId = String(student.class?._id || student.class || "").trim();
+    if (!studentClassId) {
+      return NextResponse.json({ success: true, tests: [] });
+    }
+
+    const papers = await loadOnlinePapersForClass(
+      {
+        QuestionPaper: QuestionPaperModel,
+        Question: QuestionModel,
+        Class: ClassModel,
+        Subject: SubjectModel,
+      },
+      schoolKey,
+      studentClassId,
+    );
 
     const eligiblePapers = papers.filter(
       (paper: any) =>
@@ -84,7 +79,9 @@ export async function GET(req: NextRequest) {
     const attempts = await QuestionPaperResponseModel.find({
       student: studentId,
       paper: { $in: eligiblePapers.map((paper: any) => paper._id) },
-    });
+    })
+      .select("paper student startedAt submittedAt status lastSavedAt totalMarksAwarded sectionAnswers")
+      .lean();
 
     const attemptsByPaperId = new Map(
       attempts.map((attempt: any) => [String(attempt.paper), attempt]),
@@ -95,7 +92,12 @@ export async function GET(req: NextRequest) {
     for (const paper of eligiblePapers) {
       let attempt = attemptsByPaperId.get(String(paper._id)) || null;
       if (attempt) {
-        attempt = await autoSubmitExpiredAttemptIfNeeded({ attempt, paper, now });
+        attempt = await autoSubmitExpiredAttemptIfNeeded({
+          QuestionPaperResponseModel,
+          attempt,
+          paper,
+          now,
+        });
       }
 
       const status = deriveStudentTestStatus(paper, attempt, now);
@@ -130,15 +132,7 @@ export async function GET(req: NextRequest) {
               name: String(section?.name || ""),
             }))
           : [],
-        requiresManualReview: Array.isArray(paper.sections)
-          ? paper.sections.some((section: any) =>
-              Array.isArray(section?.questions)
-                ? section.questions.some(
-                    (entry: any) => String(entry?.question?.type || "") === "descriptive",
-                  )
-                : false,
-            )
-          : false,
+        requiresManualReview: paperRequiresManualReview(paper),
         status,
         remainingTimeMs,
         attempt: serializeStudentAttempt(attempt),

@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
-import { getStudentTestModels, loadOnlinePaperById, loadStudentUser } from "@/lib/student-test-server";
+import {
+  getStudentTestModels,
+  loadOnlinePaperById,
+  loadStudentUser,
+} from "@/lib/student-test-server";
 import {
   autoSubmitExpiredAttemptIfNeeded,
   deriveStudentTestStatus,
-  findOrCreateStudentAttempt,
   getAttemptDeadlineMs,
-  getPaperWindowEnd,
-  getPaperWindowStart,
   getRemainingTimeMs,
   isStudentEligibleForPaper,
   paperSupportsOnlineDelivery,
@@ -17,6 +18,9 @@ import {
 } from "@/lib/student-tests";
 
 export const dynamic = "force-dynamic";
+
+const ATTEMPT_DETAIL_PROJECTION =
+  "paper student startedAt submittedAt status lastSavedAt totalMarksAwarded sectionAnswers";
 
 export async function GET(
   req: NextRequest,
@@ -33,18 +37,19 @@ export async function GET(
 
   try {
     const models = await getStudentTestModels(schoolKey);
-    const { QuestionPaperResponse: QuestionPaperResponseModel, User: UserModel } =
-      models;
+    const { QuestionPaperResponse: QuestionPaperResponseModel, User: UserModel } = models;
 
-    const student = await loadStudentUser(UserModel, studentId);
-    if (!student) {
-      return NextResponse.json(
-        { success: false, message: "Student profile not found." },
-        { status: 404 },
-      );
-    }
+    const [paperResult, attemptResult] = await Promise.all([
+      loadOnlinePaperById(models, schoolKey, params.paperId),
+      QuestionPaperResponseModel.findOne({
+        paper: params.paperId,
+        student: studentId,
+      })
+        .select(ATTEMPT_DETAIL_PROJECTION)
+        .lean(),
+    ]);
 
-    const paper = await loadOnlinePaperById(models, params.paperId);
+    const paper = paperResult;
     if (!paper) {
       return NextResponse.json(
         { success: false, message: "Online test not found." },
@@ -63,45 +68,45 @@ export async function GET(
       );
     }
 
-    if (!isStudentEligibleForPaper(paper, student)) {
-      return NextResponse.json(
-        { success: false, message: "You are not assigned to this online test." },
-        { status: 403 },
-      );
-    }
-
-    let attempt = await QuestionPaperResponseModel.findOne({
-      paper: params.paperId,
-      student: studentId,
-    });
+    let attempt = attemptResult;
 
     if (attempt) {
-      attempt = await autoSubmitExpiredAttemptIfNeeded({ attempt, paper, now });
+      attempt = await autoSubmitExpiredAttemptIfNeeded({
+        QuestionPaperResponseModel,
+        attempt,
+        paper,
+        now,
+      });
     }
 
     if (!attempt) {
-      const windowStart = getPaperWindowStart(paper);
-      const windowEnd = getPaperWindowEnd(paper);
-
-      if (windowStart && now.getTime() < windowStart.getTime()) {
+      const student = await loadStudentUser(UserModel, studentId, {
+        schoolKey,
+        useCache: true,
+      });
+      if (!student) {
         return NextResponse.json(
-          { success: false, message: "This online test is not open yet." },
-          { status: 403 },
+          { success: false, message: "Student profile not found." },
+          { status: 404 },
         );
       }
 
-      if (windowEnd && now.getTime() > windowEnd.getTime()) {
+      if (!isStudentEligibleForPaper(paper, student)) {
         return NextResponse.json(
-          { success: false, message: "This online test is closed." },
+          { success: false, message: "You are not assigned to this online test." },
           { status: 403 },
         );
       }
+    }
 
-      attempt = await findOrCreateStudentAttempt({
-        QuestionPaperResponseModel,
-        paperId: params.paperId,
-        studentId,
-        now,
+    if (!attempt) {
+      return NextResponse.json({
+        success: true,
+        paper: sanitizePaperForStudent(paper),
+        attempt: null,
+        status: deriveStudentTestStatus(paper, null, now),
+        remainingTimeMs: null,
+        deadlineAt: null,
       });
     }
 

@@ -1,2 +1,1 @@
-'use client';
-export { default } from '../page';
+export { default, dynamic } from "../page";

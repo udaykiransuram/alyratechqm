@@ -54,6 +54,8 @@ function shouldAnnounceNavigation(event: Parameters<MouseEventHandler<HTMLAnchor
   return true;
 }
 
+const globallyPrefetchedHrefs = new Set<string>();
+
 const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
   function AppPrefetchLink(
     {
@@ -84,11 +86,12 @@ const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
 
     const prefetchRoutes = useCallback(() => {
       prefetchTargets.forEach((target) => {
-        if (prefetchedHrefsRef.current.has(target)) {
+        if (prefetchedHrefsRef.current.has(target) || globallyPrefetchedHrefs.has(target)) {
           return;
         }
 
         prefetchedHrefsRef.current.add(target);
+        globallyPrefetchedHrefs.add(target);
         router.prefetch(target);
       });
       relatedApiPrefetches?.forEach((target) => {
@@ -106,28 +109,7 @@ const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
         return;
       }
 
-      if (typeof window === "undefined") {
-        prefetchRoutes();
-        return;
-      }
-
-      if (typeof window.requestIdleCallback === "function") {
-        const idleHandle = window.requestIdleCallback(() => {
-          prefetchRoutes();
-        }, { timeout: 1200 });
-
-        return () => {
-          window.cancelIdleCallback?.(idleHandle);
-        };
-      }
-
-      const timeoutId = window.setTimeout(() => {
-        prefetchRoutes();
-      }, 180);
-
-      return () => {
-        window.clearTimeout(timeoutId);
-      };
+      prefetchRoutes();
     }, [prefetchOnMount, prefetchRoutes]);
 
     const handleMouseEnter: MouseEventHandler<HTMLAnchorElement> = (event) => {

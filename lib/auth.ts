@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
+import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
 import { ensureBootstrapCompanyAdmin } from "@/lib/company-admin";
 import { getTenantModels } from "@/lib/db-tenant";
@@ -13,6 +14,12 @@ import {
   normalizeRollNumber,
 } from "@/lib/user-credentials";
 import CompanyAdmin from "@/models/CompanyAdmin";
+import School from "@/models/School";
+
+const SCHOOL_NOT_FOUND_ERROR = "SchoolNotFound";
+const STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR = "StudentRollNumberNotFound";
+const STUDENT_DUPLICATE_ROLL_ERROR = "StudentDuplicateRollNumber";
+const STUDENT_SIGN_IN_FAILED_ERROR = "StudentSignInFailed";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -84,14 +91,27 @@ export const authOptions: NextAuthOptions = {
         }
         try {
           await connectDB();
-          const schoolKey = String(credentials.schoolKey).trim();
+          const schoolKey = String(credentials.schoolKey).trim().toLowerCase();
+          const school = await School.findOne({ key: schoolKey })
+            .select("key")
+            .lean();
+          if (!school) {
+            throw new Error(SCHOOL_NOT_FOUND_ERROR);
+          }
+
           const identifier = String(rawIdentifier).trim();
           const { User } = await getTenantModels(schoolKey, ["User"]);
           const email = normalizeEmail(identifier);
-          let user = email ? await User.findOne({ email }) : null;
+          const rollNumber = email ? "" : normalizeRollNumber(identifier);
+          const isStudentIdentifier = !email && Boolean(rollNumber);
+          let user = email
+            ? await User.findOne({
+                email,
+                ...buildArchiveFilter(false),
+              })
+            : null;
 
           if (!user) {
-            const rollNumber = normalizeRollNumber(identifier);
             const matchingStudents = await findStudentsByRollNumber(
               User,
               rollNumber,
@@ -99,12 +119,13 @@ export const authOptions: NextAuthOptions = {
             );
 
             if (matchingStudents.length > 1) {
-              throw new Error(
-                "Multiple students share this roll number. Please contact your school admin.",
-              );
+              throw new Error(STUDENT_DUPLICATE_ROLL_ERROR);
             }
 
             user = matchingStudents[0] || null;
+            if (!user && isStudentIdentifier) {
+              throw new Error(STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR);
+            }
           }
 
           if (
@@ -118,6 +139,9 @@ export const authOptions: NextAuthOptions = {
           }
 
           if (!user?.passwordHash) {
+            if (user?.role === "student" || isStudentIdentifier) {
+              throw new Error(STUDENT_SIGN_IN_FAILED_ERROR);
+            }
             return null;
           }
 
@@ -126,6 +150,9 @@ export const authOptions: NextAuthOptions = {
             user.passwordHash,
           );
           if (!isValid) {
+            if (user?.role === "student" || isStudentIdentifier) {
+              throw new Error(STUDENT_SIGN_IN_FAILED_ERROR);
+            }
             return null;
           }
           return {
@@ -140,7 +167,12 @@ export const authOptions: NextAuthOptions = {
           console.error("Error in school user authorize:", error);
           if (
             error instanceof Error &&
-            error.message.includes("Multiple students share this roll number")
+            [
+              SCHOOL_NOT_FOUND_ERROR,
+              STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR,
+              STUDENT_DUPLICATE_ROLL_ERROR,
+              STUDENT_SIGN_IN_FAILED_ERROR,
+            ].includes(error.message)
           ) {
             throw error;
           }

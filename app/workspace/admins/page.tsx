@@ -1,11 +1,7 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import ListPagination from "@/components/ui/list-pagination";
-import PageLoadingState from "@/components/ui/page-loading-state";
+import ListPaginationLinks from "@/components/ui/list-pagination-links";
 import {
   Table,
   TableBody,
@@ -16,145 +12,60 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PageHero from "@/components/layout/PageHero";
-import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
-import { fetchApiJson } from "@/lib/client/api";
-
-interface AdminUser {
-  _id: string;
-  name: string;
-  email?: string;
-  mobileNumber?: string;
-  role: "admin";
-}
+import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
+import {
+  buildWorkspaceListPageHref,
+  getWorkspaceUserDirectoryPageData,
+  requireWorkspaceStaffSession,
+  resolveWorkspaceListPage,
+} from "@/lib/server/workspace-user-directory";
 
 const ADMINS_PAGE_SIZE = 25;
-const ADMINS_PAGE_CACHE_TTL_MS = 30_000;
+const ADMINS_BASE_PATH = "/workspace/admins";
 
-type AdminPageCacheEntry = {
-  admins: AdminUser[];
-  totalAdmins: number;
-  pages: number;
-  page: number;
-  fetchedAt: number;
+export const dynamic = "force-dynamic";
+
+type AdminsPageProps = {
+  searchParams?: {
+    page?: string | string[];
+  };
 };
 
-export default function AdminsPage() {
-  const { buildReturnHref } = useReturnHrefBuilder("/workspace/admins");
-  const [admins, setAdmins] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
-  const [totalAdmins, setTotalAdmins] = useState(0);
-  const pageCacheRef = useRef<Map<number, AdminPageCacheEntry>>(new Map());
-  const refreshing = loading && admins.length > 0;
+export default async function AdminsPage({
+  searchParams,
+}: AdminsPageProps) {
+  const requestedPage = resolveWorkspaceListPage(searchParams?.page);
+  const { schoolKey } = await requireWorkspaceStaffSession();
 
-  useEffect(() => {
-    let active = true;
+  let admins: Awaited<
+    ReturnType<typeof getWorkspaceUserDirectoryPageData>
+  >["users"] = [];
+  let totalAdmins = 0;
+  let page = requestedPage;
+  let pages = 1;
+  let error: string | null = null;
 
-    const applyCacheEntry = (entry: AdminPageCacheEntry) => {
-      if (!active) {
-        return;
-      }
-      setAdmins(entry.admins);
-      setTotalAdmins(entry.totalAdmins);
-      setPages(entry.pages);
-      setPage(entry.page);
-    };
+  try {
+    const adminDirectory = await getWorkspaceUserDirectoryPageData({
+      schoolKey,
+      role: "admin",
+      page: requestedPage,
+      pageSize: ADMINS_PAGE_SIZE,
+    });
 
-    const prefetchAdminsPage = async (targetPage: number, totalPageCount: number) => {
-      if (targetPage < 1 || targetPage > totalPageCount) {
-        return;
-      }
+    admins = adminDirectory.users;
+    totalAdmins = adminDirectory.totalUsers;
+    page = adminDirectory.page;
+    pages = adminDirectory.pages;
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to load admins.";
+  }
 
-      const cachedEntry = pageCacheRef.current.get(targetPage);
-      if (
-        cachedEntry &&
-        Date.now() - cachedEntry.fetchedAt < ADMINS_PAGE_CACHE_TTL_MS
-      ) {
-        return;
-      }
-
-      try {
-        const data = await fetchApiJson<any>(
-          `/api/users?role=admin&page=${targetPage}&limit=${ADMINS_PAGE_SIZE}`,
-          {
-            cache: "no-store",
-            fallbackMessage: "Failed to load admins.",
-          },
-        );
-        const resolvedPage = Math.max(1, Number(data.page) || targetPage);
-        pageCacheRef.current.set(resolvedPage, {
-          admins: Array.isArray(data.users) ? data.users : [],
-          totalAdmins: Math.max(0, Number(data.total) || 0),
-          pages: Math.max(1, Number(data.pages) || 1),
-          page: resolvedPage,
-          fetchedAt: Date.now(),
-        });
-      } catch {
-      }
-    };
-
-    const loadAdmins = async () => {
-      const cachedEntry = pageCacheRef.current.get(page);
-      const hasFreshCache =
-        cachedEntry &&
-        Date.now() - cachedEntry.fetchedAt < ADMINS_PAGE_CACHE_TTL_MS;
-
-      if (cachedEntry) {
-        applyCacheEntry(cachedEntry);
-        setError(null);
-        if (hasFreshCache) {
-          setLoading(false);
-          void prefetchAdminsPage(page + 1, cachedEntry.pages);
-          return;
-        }
-      }
-
-      try {
-        setLoading(true);
-        if (!cachedEntry) {
-          setError(null);
-        }
-        const data = await fetchApiJson<any>(
-          `/api/users?role=admin&page=${page}&limit=${ADMINS_PAGE_SIZE}`,
-          {
-            cache: "no-store",
-            fallbackMessage: "Failed to load admins.",
-          },
-        );
-        if (!active) {
-          return;
-        }
-        const resolvedPage = Math.max(1, Number(data.page) || page);
-        const nextEntry = {
-          admins: Array.isArray(data.users) ? data.users : [],
-          totalAdmins: Math.max(0, Number(data.total) || 0),
-          pages: Math.max(1, Number(data.pages) || 1),
-          page: resolvedPage,
-          fetchedAt: Date.now(),
-        };
-        pageCacheRef.current.set(resolvedPage, nextEntry);
-        applyCacheEntry(nextEntry);
-        void prefetchAdminsPage(resolvedPage + 1, nextEntry.pages);
-      } catch (e: any) {
-        if (!active || cachedEntry) {
-          return;
-        }
-        setError(e.message || "Failed to load admins");
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void loadAdmins();
-
-    return () => {
-      active = false;
-    };
-  }, [page]);
+  const currentPath = buildWorkspaceListPageHref(ADMINS_BASE_PATH, page);
+  const previousHref =
+    page > 1 ? buildWorkspaceListPageHref(ADMINS_BASE_PATH, page - 1) : null;
+  const nextHref =
+    page < pages ? buildWorkspaceListPageHref(ADMINS_BASE_PATH, page + 1) : null;
 
   return (
     <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
@@ -166,6 +77,7 @@ export default function AdminsPage() {
           <Button asChild>
             <AppPrefetchLink
               href="/workspace/admins/create"
+              prefetchOnMount
               relatedApiPrefetches={['/api/classes', '/api/sections', '/api/subjects']}
             >
               Create Admin
@@ -176,7 +88,6 @@ export default function AdminsPage() {
           <>
             <span className="app-meta-chip">Dedicated admin page</span>
             <span className="app-meta-chip">School-scoped access</span>
-            {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
           </>
         }
         stats={[
@@ -209,26 +120,18 @@ export default function AdminsPage() {
         </CardHeader>
         <CardContent className="app-section-body">
           {error ? <div className="app-feedback app-feedback-error mb-4">{error}</div> : null}
-          {loading && admins.length === 0 ? (
-            <PageLoadingState
-              title="Loading admins"
-              description="Preparing admin accounts and access information."
-              className="px-0 py-0"
-              contentClassName="max-w-none"
-              dense
-            />
-          ) : admins.length === 0 ? (
+          {!error && admins.length === 0 ? (
             <div className="app-empty-state">No admins found.</div>
-          ) : (
+          ) : !error ? (
             <div className="space-y-3">
-              <ListPagination
+              <ListPaginationLinks
                 page={page}
                 totalPages={pages}
                 totalItems={totalAdmins}
                 pageSize={ADMINS_PAGE_SIZE}
                 itemLabel="admins"
-                onPageChange={setPage}
-                disabled={loading}
+                previousHref={previousHref}
+                nextHref={nextHref}
               />
               <div className="app-table-wrap"><Table>
                 <TableHeader>
@@ -252,7 +155,10 @@ export default function AdminsPage() {
                       <TableCell className="text-right">
                         <Button asChild variant="outline" size="sm" className="app-button-compact">
                           <AppPrefetchLink
-                            href={buildReturnHref(`/workspace/admins/${admin._id}`)}
+                            href={buildHrefWithReturnTo(
+                              `${ADMINS_BASE_PATH}/${admin._id}`,
+                              currentPath,
+                            )}
                             relatedApiPrefetches={[
                               `/api/users/${admin._id}`,
                               '/api/classes',
@@ -270,7 +176,7 @@ export default function AdminsPage() {
               </Table>
               </div>
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
     </div>

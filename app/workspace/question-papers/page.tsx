@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import PageHero from "@/components/layout/PageHero";
+import ListPagination from "@/components/ui/list-pagination";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { MessageCircle } from "lucide-react";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
@@ -32,7 +33,7 @@ import { getSchoolKeyFromCookie } from "@/lib/client/school";
 
 const NO_SCHOOL_PAPERS_MESSAGE = "Select a school workspace to load question papers.";
 const PAPERS_INITIAL_PAGE_SIZE = 20;
-const PAPERS_VISIBLE_PAGE_SIZE = PAPERS_INITIAL_PAGE_SIZE;
+const PAPERS_PAGE_SIZE = PAPERS_INITIAL_PAGE_SIZE;
 const PAPERS_BACKGROUND_BATCH_SIZE = 3;
 
 function mergePapersById(current: any[], next: any[]) {
@@ -105,7 +106,7 @@ export default function QuestionPapersListPage() {
     string | null
   >(null);
   const [search, setSearch] = useState("");
-  const [visiblePaperCount, setVisiblePaperCount] = useState(PAPERS_VISIBLE_PAGE_SIZE);
+  const [paperPage, setPaperPage] = useState(1);
   const [schoolKey, setSchoolKey] = useState("");
   const [supportDataNotice, setSupportDataNotice] = useState<string | null>(null);
   const [backgroundLoadNotice, setBackgroundLoadNotice] = useState<string | null>(null);
@@ -714,15 +715,22 @@ export default function QuestionPapersListPage() {
     return list;
   }, [classFilterId, getPaperSectionOptions, papers, search, sectionFilterId]);
 
+  const filteredPaperPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredPapers.length / PAPERS_PAGE_SIZE)),
+    [filteredPapers.length],
+  );
   const visiblePapers = useMemo(() => {
-    return filteredPapers.slice(0, visiblePaperCount);
-  }, [filteredPapers, visiblePaperCount]);
-  const hasMoreVisiblePapers = filteredPapers.length > visiblePapers.length;
-  const remainingVisiblePapers = Math.max(0, filteredPapers.length - visiblePapers.length);
+    const startIndex = (paperPage - 1) * PAPERS_PAGE_SIZE;
+    return filteredPapers.slice(startIndex, startIndex + PAPERS_PAGE_SIZE);
+  }, [filteredPapers, paperPage]);
 
   useEffect(() => {
-    setVisiblePaperCount(PAPERS_VISIBLE_PAGE_SIZE);
+    setPaperPage(1);
   }, [classFilterId, sectionFilterId, search]);
+
+  useEffect(() => {
+    setPaperPage((currentPage) => Math.min(currentPage, filteredPaperPages));
+  }, [filteredPaperPages]);
 
   const allVisibleChecked =
     visiblePapers.length > 0 &&
@@ -833,6 +841,7 @@ export default function QuestionPapersListPage() {
           <div className="flex flex-wrap items-center gap-2">
             <AppPrefetchLink
               href="/workspace/question-papers/create"
+              prefetchOnMount
               relatedApiPrefetches={[
                 '/api/classes',
                 '/api/sections',
@@ -958,34 +967,16 @@ export default function QuestionPapersListPage() {
       ) : null}
 
       <Card className="app-surface overflow-hidden">
-        {filteredPapers.length > PAPERS_VISIBLE_PAGE_SIZE ? (
+        {filteredPapers.length > PAPERS_PAGE_SIZE ? (
           <div className="app-section-body border-b border-border/60 bg-muted/10">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">
-                  Showing {visiblePapers.length} of {filteredPapers.length} loaded paper
-                  {filteredPapers.length === 1 ? "" : "s"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Load more when you want to expand the list without repainting the whole table.
-                </p>
-              </div>
-              {hasMoreVisiblePapers ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="app-button-compact"
-                  onClick={() =>
-                    setVisiblePaperCount((currentCount) => currentCount + PAPERS_VISIBLE_PAGE_SIZE)
-                  }
-                >
-                  Load More
-                  {remainingVisiblePapers > 0
-                    ? ` (${Math.min(PAPERS_VISIBLE_PAGE_SIZE, remainingVisiblePapers)} more)`
-                    : ""}
-                </Button>
-              ) : null}
-            </div>
+            <ListPagination
+              page={paperPage}
+              totalPages={filteredPaperPages}
+              totalItems={filteredPapers.length}
+              pageSize={PAPERS_PAGE_SIZE}
+              itemLabel="papers"
+              onPageChange={setPaperPage}
+            />
           </div>
         ) : null}
         <div className="app-table-wrap rounded-none border-0">

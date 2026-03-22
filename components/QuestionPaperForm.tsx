@@ -1,16 +1,13 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { Button }  from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Plus, X } from 'lucide-react';
 import PageHero from '@/components/layout/PageHero';
-import { PaperDetailsForm } from '@/components/PaperDetailsForm';
-import { PaperSummary } from '@/components/PaperSummary';
-import { SectionEditor } from '@/components/SectionEditor';
-import { Question, QuestionItem } from '@/components/question-items';
-import { QuestionFilterPopup } from '@/components/QuestionFilterPopup';
+import type { Question } from '@/components/question-items';
 import { useToast } from '@/components/ui/use-toast';
 import { useRouter } from 'next/navigation';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
@@ -22,6 +19,150 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+
+function SidebarPanelSkeleton({
+  title,
+  rows = 4,
+}: {
+  title: string;
+  rows?: number;
+}) {
+  return (
+    <div className="app-surface overflow-hidden">
+      <div className="app-section-header">
+        <div className="text-base font-semibold text-foreground">{title}</div>
+      </div>
+      <div className="app-section-body space-y-3.5">
+        {Array.from({ length: rows }).map((_, index) => (
+          <div key={index} className="space-y-2">
+            <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+            <div className="h-10 w-full animate-pulse rounded-xl bg-muted/70" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SectionEditorLoadingState() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-background">
+      <div className="space-y-3.5 border-b border-border/60 bg-muted/20 px-4 py-3.5">
+        <div className="h-8 w-1/2 animate-pulse rounded bg-muted" />
+        <div className="h-20 w-full animate-pulse rounded-2xl bg-muted/70" />
+        <div className="grid grid-cols-2 gap-3 sm:w-56">
+          <div className="h-10 animate-pulse rounded-xl bg-muted/70" />
+          <div className="h-10 animate-pulse rounded-xl bg-muted/70" />
+        </div>
+      </div>
+      <div className="space-y-3.5 px-4 py-3.5">
+        <div className="h-32 w-full animate-pulse rounded-2xl bg-muted/60" />
+        <div className="h-10 w-52 animate-pulse rounded-xl bg-muted/70" />
+      </div>
+    </div>
+  );
+}
+
+function CompactQuestionCardSkeleton() {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background p-4">
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <div className="h-6 w-20 animate-pulse rounded-full bg-muted" />
+          <div className="h-6 w-24 animate-pulse rounded-full bg-muted" />
+          <div className="h-6 w-20 animate-pulse rounded-full bg-muted" />
+        </div>
+        <div className="h-4 w-full animate-pulse rounded bg-muted" />
+        <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
+        <div className="h-10 w-full animate-pulse rounded-xl bg-muted/60" />
+      </div>
+    </div>
+  );
+}
+
+function QuestionFilterModalLoadingState() {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/75 px-3 py-4">
+      <div className="flex h-[min(92vh,860px)] w-full max-w-[1320px] flex-col overflow-hidden rounded-[28px] border border-border/60 bg-background shadow-2xl">
+        <div className="border-b border-border/60 bg-muted/20 px-4 py-3.5">
+          <div className="space-y-2">
+            <div className="h-6 w-48 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-72 animate-pulse rounded bg-muted/80" />
+          </div>
+        </div>
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 bg-muted/20 p-3 sm:p-4 lg:grid-cols-[minmax(300px,320px)_minmax(0,1fr)]">
+          <div className="app-surface space-y-3.5 p-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="space-y-2">
+                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                <div className="h-10 w-full animate-pulse rounded-xl bg-muted/70" />
+              </div>
+            ))}
+          </div>
+          <div className="app-surface flex min-h-0 flex-col p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="space-y-2">
+                <div className="h-5 w-40 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-64 animate-pulse rounded bg-muted/80" />
+              </div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs text-muted-foreground">
+                <Spinner />
+                Loading
+              </span>
+            </div>
+            <div className="min-h-0 flex-1 space-y-3 overflow-hidden">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <CompactQuestionCardSkeleton key={index} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const PaperDetailsForm = dynamic(
+  () =>
+    import('@/components/PaperDetailsForm').then(
+      (module) => module.PaperDetailsForm,
+    ),
+  {
+    loading: () => <SidebarPanelSkeleton title="Paper Details" rows={6} />,
+  },
+);
+
+const PaperSummary = dynamic(
+  () => import('@/components/PaperSummary').then((module) => module.PaperSummary),
+  {
+    loading: () => <SidebarPanelSkeleton title="Paper Summary" rows={5} />,
+  },
+);
+
+const SectionEditor = dynamic(
+  () => import('@/components/SectionEditor').then((module) => module.SectionEditor),
+  {
+    loading: () => <SectionEditorLoadingState />,
+  },
+);
+
+const QuestionItem = dynamic(
+  () => import('@/components/question-items').then((module) => module.QuestionItem),
+  {
+    loading: () => <CompactQuestionCardSkeleton />,
+  },
+);
+
+const QuestionFilterPopup = dynamic(
+  () =>
+    import('@/components/QuestionFilterPopup').then(
+      (module) => module.QuestionFilterPopup,
+    ),
+  {
+    ssr: false,
+    loading: () => <QuestionFilterModalLoadingState />,
+  },
+);
 
 interface TagItem { _id: string; name: string; type: { name: string } }
 interface SubjectWithTags { _id: string; name: string; tags: TagItem[] }
@@ -45,6 +186,17 @@ interface Section {
   questions: QuestionInPaper[];
 }
 
+type QuestionPaperFormProps = {
+  initialData?: any;
+  isEditMode?: boolean;
+  initialClasses?: Class[];
+  initialSubjects?: SubjectWithTags[];
+  initialTags?: TagItem[];
+  initialAcademicSections?: AcademicSectionItem[];
+  initialSupportDataLoaded?: boolean;
+  initialSupportMessage?: string | null;
+};
+
 function parseStoredDate(value: unknown) {
   if (!value) return null;
   const parsed = new Date(String(value));
@@ -57,13 +209,20 @@ function getAcademicSectionClassId(section: AcademicSectionItem) {
 
 const SUPPORT_DATA_CACHE_TTL_MS = 60_000;
 
-export default function QuestionPaperForm({ initialData, isEditMode = false }: {
-  initialData?: any;
-  isEditMode?: boolean;
-}) {
+export default function QuestionPaperForm({
+  initialData,
+  isEditMode = false,
+  initialClasses,
+  initialSubjects,
+  initialTags,
+  initialAcademicSections,
+  initialSupportDataLoaded = false,
+  initialSupportMessage = null,
+}: QuestionPaperFormProps) {
   const { toast } = useToast();
   const router = useRouter();
   const { navigateBack } = useBackNavigation('/workspace/question-papers');
+  const hasProvidedSupportData = initialSupportDataLoaded;
 
   // State initialization (use initialData if present)
   const [paperTitle, setPaperTitle] = useState(initialData?.title || '');
@@ -132,14 +291,29 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
       cachedTagsResponse?.tags &&
       cachedSubjectsResponse?.subjects,
   );
-  const [classes, setClasses] = useState<Class[]>(() => cachedClassesResponse?.classes || []);
-  const [subjects, setSubjects] = useState<SubjectWithTags[]>(
-    () => cachedSubjectsResponse?.subjects || [],
+  const [classes, setClasses] = useState<Class[]>(
+    () => initialClasses ?? cachedClassesResponse?.classes ?? [],
   );
-  const [availableAcademicSections, setAvailableAcademicSections] = useState<AcademicSectionItem[]>([]);
-  const [allTags, setAllTags] = useState<TagItem[]>(() => cachedTagsResponse?.tags || []);
-  const [initialDataLoading, setInitialDataLoading] = useState(() => !hasCachedSupportData);
-  const [subjectsLoading, setSubjectsLoading] = useState(() => !cachedSubjectsResponse?.subjects);
+  const [subjects, setSubjects] = useState<SubjectWithTags[]>(
+    () => initialSubjects ?? cachedSubjectsResponse?.subjects ?? [],
+  );
+  const [availableAcademicSections, setAvailableAcademicSections] = useState<AcademicSectionItem[]>(
+    () =>
+      classId
+        ? (initialAcademicSections ?? cachedSectionsResponse?.sections ?? []).filter(
+            (section) => getAcademicSectionClassId(section) === classId,
+          )
+        : [],
+  );
+  const [allTags, setAllTags] = useState<TagItem[]>(
+    () => initialTags ?? cachedTagsResponse?.tags ?? [],
+  );
+  const [initialDataLoading, setInitialDataLoading] = useState(
+    () => !(hasProvidedSupportData || hasCachedSupportData),
+  );
+  const [subjectsLoading, setSubjectsLoading] = useState(
+    () => !(hasProvidedSupportData || cachedSubjectsResponse?.subjects),
+  );
 
   // Modal State
   const [questionModalOpen, setQuestionModalOpen] = useState(false);
@@ -152,6 +326,12 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
 
   // Fetch initial data
   useEffect(() => {
+    if (hasProvidedSupportData) {
+      setInitialDataLoading(false);
+      setSubjectsLoading(false);
+      return;
+    }
+
     const fetchInitialData = async () => {
       setInitialDataLoading(!hasCachedSupportData);
       setSubjectsLoading(!cachedSubjectsResponse?.subjects);
@@ -187,9 +367,30 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
       }
     };
     fetchInitialData();
-  }, [cachedSubjectsResponse?.subjects, hasCachedSupportData, toast]);
+  }, [
+    cachedSubjectsResponse?.subjects,
+    hasCachedSupportData,
+    hasProvidedSupportData,
+    toast,
+  ]);
 
   useEffect(() => {
+    if (initialAcademicSections) {
+      if (!classId) {
+        setAvailableAcademicSections([]);
+        setAssignedAcademicSectionIds([]);
+        return;
+      }
+
+      const nextSections = initialAcademicSections.filter(
+        (section) => getAcademicSectionClassId(section) === classId,
+      );
+      setAvailableAcademicSections(nextSections);
+      const validIds = new Set(nextSections.map((section) => section._id));
+      setAssignedAcademicSectionIds((prev) => prev.filter((id) => validIds.has(id)));
+      return;
+    }
+
     const fetchAcademicSections = async () => {
       if (!classId) {
         setAvailableAcademicSections([]);
@@ -229,7 +430,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
     };
 
     fetchAcademicSections();
-  }, [cachedSectionsResponse?.sections, classId]);
+  }, [cachedSectionsResponse?.sections, classId, initialAcademicSections]);
 
   useEffect(() => {
     if (!questionModalOpen) {
@@ -321,6 +522,18 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
   const totalQuestions = useMemo(
     () => sections.reduce((sum, section) => sum + section.questions.length, 0),
     [sections]
+  );
+  const normalizedAllTags = useMemo(
+    () =>
+      allTags.map((tag) => ({
+        _id: tag._id,
+        name: tag.name,
+        type: {
+          _id: (tag.type as any)?._id ?? '',
+          name: (tag.type as any)?.name ?? '',
+        },
+      })),
+    [allTags],
   );
   const pageTitle = isEditMode ? 'Edit Question Paper' : 'Create Question Paper';
   const pageSubtitle = isEditMode
@@ -663,6 +876,10 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
         ]}
       />
 
+      {initialSupportMessage ? (
+        <div className="app-feedback app-feedback-info">{initialSupportMessage}</div>
+      ) : null}
+
       <div className="app-editor-grid">
         <main className="app-editor-main">
           <div className="app-surface overflow-hidden">
@@ -747,14 +964,7 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
                                           question={questionInPaper.question}
                                           classes={classes}
                                           subjects={subjects}
-                                          allTags={allTags.map(tag => ({
-                                            _id: tag._id,
-                                            name: tag.name,
-                                            type: {
-                                              _id: (tag.type as any)?._id ?? '',
-                                              name: (tag.type as any)?.name ?? '',
-                                            },
-                                          }))}
+                                          allTags={normalizedAllTags}
                                           onSave={async updated => {
                                             setSections(prev =>
                                               prev.map(sectionItem => ({
@@ -884,57 +1094,59 @@ export default function QuestionPaperForm({ initialData, isEditMode = false }: {
         </aside>
       </div>
 
-      <QuestionFilterPopup
-        open={questionModalOpen}
-        onOpenChange={(nextOpen) => {
-          setQuestionModalOpen(nextOpen);
-          if (!nextOpen) {
-            setActiveSectionId(null);
-            setSelectedQuestionIds([]);
-            setModalSearch('');
-          }
-        }}
-        classes={classes}
-        classId={questionFilterClassId}
-        setClassId={id => setQuestionFilterClassId(String(id))}
-        subjects={subjects}
-        subjectId={questionFilterSubjectId}
-        setSubjectId={id => setQuestionFilterSubjectId(String(id))}
-        subjectsLoading={subjectsLoading}
-        allTags={allTags}
-        selectedTags={selectedTags}
-        setSelectedTags={setSelectedTags}
-        questionTagMatchMode={questionTagMatchMode}
-        setQuestionTagMatchMode={setQuestionTagMatchMode}
-        initialDataLoading={initialDataLoading}
-        modalSearch={modalSearch}
-        setModalSearch={setModalSearch}
-        loadingQuestions={loadingQuestions}
-        modalAvailableQuestions={modalAvailableQuestions}
-        selectedQuestionIds={selectedQuestionIds}
-        setSelectedQuestionIds={setSelectedQuestionIds}
-        handleConfirmQuestions={handleConfirmQuestions}
-        handleEditQuestionSave={async updatedQuestion => {
-          setSections(prev =>
-            prev.map(section => ({
-              ...section,
-              questions: section.questions.map(question =>
-                question.question._id === updatedQuestion._id
-                  ? { ...question, question: updatedQuestion }
-                  : question,
-              ),
-            })),
-          );
-          setAvailableQuestions(prev =>
-            prev.map(question => (question._id === updatedQuestion._id ? updatedQuestion : question)),
-          );
-          setSelectedQuestionCache((currentCache) => ({
-            ...currentCache,
-            [String(updatedQuestion._id)]: updatedQuestion,
-          }));
-        }}
-        toast={toast}
-      />
+      {questionModalOpen || activeSectionId ? (
+        <QuestionFilterPopup
+          open={questionModalOpen}
+          onOpenChange={(nextOpen) => {
+            setQuestionModalOpen(nextOpen);
+            if (!nextOpen) {
+              setActiveSectionId(null);
+              setSelectedQuestionIds([]);
+              setModalSearch('');
+            }
+          }}
+          classes={classes}
+          classId={questionFilterClassId}
+          setClassId={id => setQuestionFilterClassId(String(id))}
+          subjects={subjects}
+          subjectId={questionFilterSubjectId}
+          setSubjectId={id => setQuestionFilterSubjectId(String(id))}
+          subjectsLoading={subjectsLoading}
+          allTags={normalizedAllTags}
+          selectedTags={selectedTags}
+          setSelectedTags={setSelectedTags}
+          questionTagMatchMode={questionTagMatchMode}
+          setQuestionTagMatchMode={setQuestionTagMatchMode}
+          initialDataLoading={initialDataLoading}
+          modalSearch={modalSearch}
+          setModalSearch={setModalSearch}
+          loadingQuestions={loadingQuestions}
+          modalAvailableQuestions={modalAvailableQuestions}
+          selectedQuestionIds={selectedQuestionIds}
+          setSelectedQuestionIds={setSelectedQuestionIds}
+          handleConfirmQuestions={handleConfirmQuestions}
+          handleEditQuestionSave={async updatedQuestion => {
+            setSections(prev =>
+              prev.map(section => ({
+                ...section,
+                questions: section.questions.map(question =>
+                  question.question._id === updatedQuestion._id
+                    ? { ...question, question: updatedQuestion }
+                    : question,
+                ),
+              })),
+            );
+            setAvailableQuestions(prev =>
+              prev.map(question => (question._id === updatedQuestion._id ? updatedQuestion : question)),
+            );
+            setSelectedQuestionCache((currentCache) => ({
+              ...currentCache,
+              [String(updatedQuestion._id)]: updatedQuestion,
+            }));
+          }}
+          toast={toast}
+        />
+      ) : null}
     </div>
   );
 }

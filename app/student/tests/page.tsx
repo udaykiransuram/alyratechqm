@@ -1,16 +1,36 @@
 "use client";
 
-import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import PageHero from "@/components/layout/PageHero";
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PageLoadingState from "@/components/ui/page-loading-state";
+import {
+  SearchableCommandSelect,
+  type SearchableCommandOption,
+} from "@/components/ui/searchable-command-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { fetchApiJson } from "@/lib/client/api";
+import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 
 type StudentTest = {
   _id: string;
@@ -27,6 +47,7 @@ type StudentTest = {
   remainingTimeMs?: number | null;
   requiresManualReview?: boolean;
   attempt?: {
+    _id?: string;
     submittedAt?: string | null;
     status?: string;
     totalMarksAwarded?: number;
@@ -41,6 +62,18 @@ const STATUS_LABELS: Record<string, string> = {
   auto_submitted: "Auto Submitted",
   expired: "Expired",
 };
+
+const DISPLAY_STATUS_ORDER: Record<string, number> = {
+  in_progress: 0,
+  available: 1,
+  upcoming: 2,
+  auto_submitted: 3,
+  submitted: 4,
+  expired: 5,
+};
+
+const ALL_TESTS_VALUE = "all-tests";
+const ALL_SUBJECTS_VALUE = "all-subjects";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
@@ -68,11 +101,97 @@ function getStatusVariant(status: string) {
   return "outline";
 }
 
+function getActionLabel(test: StudentTest) {
+  if (test.status === "in_progress") return "Continue";
+  if (test.status === "available") return "Start";
+  if (test.status === "submitted" || test.status === "auto_submitted") {
+    return "Open Analysis Report";
+  }
+  return "Open";
+}
+
+function getTimingChip(test: StudentTest) {
+  if (test.status === "in_progress") {
+    return `Time left ${formatRemainingTime(test.remainingTimeMs)}`;
+  }
+
+  if (
+    (test.status === "submitted" || test.status === "auto_submitted") &&
+    test.attempt?.submittedAt
+  ) {
+    return `Submitted ${formatDateTime(test.attempt.submittedAt)}`;
+  }
+
+  if (test.status === "upcoming") {
+    return `Opens ${formatDateTime(test.onlineStartsAt || test.examDate)}`;
+  }
+
+  if (test.onlineEndsAt) {
+    return `Closes ${formatDateTime(test.onlineEndsAt)}`;
+  }
+
+  return `Opens ${formatDateTime(test.onlineStartsAt || test.examDate)}`;
+}
+
+function getTestSortTimestamp(test: StudentTest) {
+  const candidateValues = [
+    test.status === "submitted" || test.status === "auto_submitted"
+      ? test.attempt?.submittedAt
+      : null,
+    test.onlineStartsAt,
+    test.examDate,
+    test.onlineEndsAt,
+  ];
+
+  for (const value of candidateValues) {
+    if (!value) continue;
+    const timestamp = new Date(value).getTime();
+    if (!Number.isNaN(timestamp)) {
+      return timestamp;
+    }
+  }
+
+  return 0;
+}
+
+function compareStudentTests(left: StudentTest, right: StudentTest) {
+  const leftRank = DISPLAY_STATUS_ORDER[left.status] ?? 99;
+  const rightRank = DISPLAY_STATUS_ORDER[right.status] ?? 99;
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+
+  const timestampDiff = getTestSortTimestamp(right) - getTestSortTimestamp(left);
+  if (timestampDiff !== 0) {
+    return timestampDiff;
+  }
+
+  return String(left.title || "").localeCompare(String(right.title || ""));
+}
+
+function getTestActionDetails(test: StudentTest) {
+  const detailHref = `/student/tests/${test._id}`;
+  const reportHref = test.attempt?._id
+    ? buildHrefWithReturnTo(`/student/reports/${test.attempt._id}`, "/student/tests")
+    : null;
+  const opensReport =
+    reportHref &&
+    (test.status === "submitted" || test.status === "auto_submitted");
+
+  return {
+    actionLabel: getActionLabel(test),
+    actionHref: opensReport ? reportHref : detailHref,
+    relatedApiPrefetches: opensReport ? undefined : [`/api/student/tests/${test._id}`],
+  };
+}
+
 function StudentTestsPageContent() {
   const searchParams = useSearchParams();
   const [tests, setTests] = useState<StudentTest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [testFilter, setTestFilter] = useState(ALL_TESTS_VALUE);
+  const [subjectFilter, setSubjectFilter] = useState(ALL_SUBJECTS_VALUE);
 
   useEffect(() => {
     let mounted = true;
@@ -105,52 +224,106 @@ function StudentTestsPageContent() {
 
   const submissionNotice = useMemo(() => {
     return searchParams.get("submitted") === "1"
-      ? "Your test has been submitted successfully."
+      ? "Test submitted."
       : null;
   }, [searchParams]);
 
-  const inProgressCount = useMemo(
-    () => tests.filter((test) => test.status === "in_progress").length,
-    [tests],
-  );
+  const subjectOptions = useMemo(() => {
+    const subjectMap = new Map<string, string>();
 
-  const submittedCount = useMemo(
-    () =>
-      tests.filter(
-        (test) =>
-          test.status === "submitted" || test.status === "auto_submitted",
-      ).length,
-    [tests],
-  );
+    tests.forEach((test) => {
+      const subjectId = String(test.subject?._id || "").trim();
+      const subjectName = String(test.subject?.name || "").trim();
+      if (subjectId && subjectName) {
+        subjectMap.set(subjectId, subjectName);
+      }
+    });
 
-  const availableCount = useMemo(
-    () => tests.filter((test) => test.status === "available").length,
-    [tests],
-  );
+    return Array.from(subjectMap.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [tests]);
+
+  const sortedTests = useMemo(() => {
+    return [...tests].sort(compareStudentTests);
+  }, [tests]);
+
+  const testOptions = useMemo<SearchableCommandOption[]>(() => {
+    return [
+      {
+        value: ALL_TESTS_VALUE,
+        label: "All tests",
+      },
+      ...sortedTests.map((test) => ({
+        value: test._id,
+        label: String(test.title || "Untitled test").trim() || "Untitled test",
+        description: [test.subject?.name, test.class?.name]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+          .join(" • "),
+        keywords: [
+          String(test.subject?.name || "").trim(),
+          String(test.class?.name || "").trim(),
+        ].filter(Boolean),
+      })),
+    ];
+  }, [sortedTests]);
+
+  const filteredTests = useMemo(() => {
+    return sortedTests.filter((test) => {
+      const matchesTest =
+        testFilter === ALL_TESTS_VALUE || test._id === testFilter;
+      const matchesSubject =
+        subjectFilter === ALL_SUBJECTS_VALUE ||
+        String(test.subject?._id || "") === subjectFilter;
+
+      return matchesTest && matchesSubject;
+    });
+  }, [sortedTests, subjectFilter, testFilter]);
+
+  const recentAssignedTest = useMemo(() => {
+    return (
+      sortedTests.find(
+        (test) => test.status === "in_progress" || test.status === "available",
+      ) ||
+      sortedTests.find((test) => test.status === "upcoming") ||
+      null
+    );
+  }, [sortedTests]);
+
+  const recentAssignedTestMeta = useMemo(() => {
+    if (!recentAssignedTest) return "";
+
+    const parts = [
+      String(recentAssignedTest.subject?.name || "").trim(),
+      String(recentAssignedTest.class?.name || "").trim(),
+      getTimingChip(recentAssignedTest),
+    ].filter(Boolean);
+
+    return parts.join(" • ");
+  }, [recentAssignedTest]);
+
+  const recentAssignedTestAction = useMemo(() => {
+    return recentAssignedTest ? getTestActionDetails(recentAssignedTest) : null;
+  }, [recentAssignedTest]);
+
+  const showFilters = tests.length > 1 || subjectOptions.length > 1;
+  const filterActive =
+    testFilter !== ALL_TESTS_VALUE || subjectFilter !== ALL_SUBJECTS_VALUE;
 
   if (loading) {
     return (
       <PageLoadingState
-        title="Loading assigned tests"
-        description="Preparing your available online tests and saved attempts."
+        title="Loading tests"
+        description="Preparing your exams."
       />
     );
   }
 
   if (error) {
     return (
-      <div className="app-page-shell max-w-6xl px-4 py-6 sm:px-0">
-        <PageHero
-          eyebrow="Student Portal"
-          title="Student Tests"
-          description="Review assigned tests, continue active attempts, and submit online assessments."
-          meta={
-            <>
-              <span className="app-meta-chip">Autosave enabled</span>
-              <span className="app-meta-chip">Server-side deadlines</span>
-            </>
-          }
-        >
+      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+        <PageHero eyebrow="Student Portal" title="Tests">
           <StudentPortalNav />
         </PageHero>
         <div className="app-feedback app-feedback-error">{error}</div>
@@ -159,40 +332,8 @@ function StudentTestsPageContent() {
   }
 
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-6 sm:px-0">
-      <PageHero
-        eyebrow="Student Portal"
-        title="Student Tests"
-        description="Start assigned online tests, resume saved work, and review submitted attempts."
-        meta={
-          <>
-            <span className="app-meta-chip">Objective and descriptive support</span>
-            <span className="app-meta-chip">Resume saved attempts</span>
-          </>
-        }
-        stats={[
-          {
-            label: "Assigned tests",
-            value: String(tests.length),
-            meta: "All papers currently visible to your account.",
-          },
-          {
-            label: "Ready now",
-            value: String(availableCount),
-            meta: "Tests currently open and available to start.",
-          },
-          {
-            label: "In progress",
-            value: String(inProgressCount),
-            meta: "Attempts with active saved work and remaining time.",
-          },
-          {
-            label: "Submitted",
-            value: String(submittedCount),
-            meta: "Completed or auto-submitted attempts.",
-          },
-        ]}
-      >
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+      <PageHero eyebrow="Student Portal" title="Tests">
         <StudentPortalNav />
       </PageHero>
 
@@ -202,110 +343,250 @@ function StudentTestsPageContent() {
         </div>
       ) : null}
 
-            {tests.length === 0 ? (
-        <Card className="app-surface">
-          <CardContent className="app-empty-state py-12">
-            No online tests are assigned to you right now.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {tests.map((test) => {
-            const actionLabel =
-              test.status === "in_progress"
-                ? "Continue Test"
-                : test.status === "available"
-                  ? "Start Test"
-                  : test.status === "submitted" || test.status === "auto_submitted"
-                    ? "View Submission"
-                    : "View Details";
-
-            return (
-              <Card key={test._id} className="app-surface overflow-hidden">
-                <CardHeader className="app-section-header space-y-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <CardTitle className="text-xl">{test.title}</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        {test.subject?.name || "Subject"} • {test.class?.name || "Class"}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant={getStatusVariant(test.status)}>
-                        {STATUS_LABELS[test.status] || test.status}
-                      </Badge>
-                      <Badge variant="outline">{test.totalMarks} marks</Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        Duration
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-foreground">
-                        {test.duration} minutes
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        Passing Marks
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-foreground">
-                        {test.passingMarks} / {test.totalMarks}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        Opens
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-foreground">
-                        {formatDateTime(test.onlineStartsAt || test.examDate)}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        Closes
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-foreground">
-                        {formatDateTime(test.onlineEndsAt)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {test.status === "in_progress" ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                      Time remaining: {formatRemainingTime(test.remainingTimeMs)}
-                    </div>
-                  ) : null}
-
-                  {(test.status === "submitted" || test.status === "auto_submitted") &&
-                  test.attempt ? (
-                    <div className="space-y-2">
-                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                        {test.requiresManualReview ? "Auto-graded score" : "Score"}:{" "}
-                        {test.attempt.totalMarksAwarded ?? 0} / {test.totalMarks}
-                      </div>
-                      {test.requiresManualReview ? (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                          Descriptive answers are still pending manual review.
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  <div className="flex items-center justify-end">
-                    <Button asChild>
-                      <Link href={`/student/tests/${test._id}`}>{actionLabel}</Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+      {recentAssignedTest ? (
+        <div className="app-toolbar">
+          <div className="app-toolbar-row">
+            <div className="app-toolbar-copy">
+              <p className="app-toolbar-title">Latest Assigned Test</p>
+              <p className="app-toolbar-note">
+                {recentAssignedTest.title}
+                {recentAssignedTestMeta ? ` • ${recentAssignedTestMeta}` : ""}
+              </p>
+            </div>
+            <div className="app-toolbar-actions">
+              <span className="app-meta-chip">
+                {STATUS_LABELS[recentAssignedTest.status] || recentAssignedTest.status}
+              </span>
+              {recentAssignedTestAction ? (
+                <Button asChild size="sm" className="app-button-compact">
+                  <AppPrefetchLink
+                    href={recentAssignedTestAction.actionHref}
+                    relatedApiPrefetches={recentAssignedTestAction.relatedApiPrefetches}
+                  >
+                    {recentAssignedTestAction.actionLabel}
+                  </AppPrefetchLink>
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </div>
-      )}
+      ) : null}
+
+      <div className="app-toolbar space-y-4">
+        {showFilters ? (
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_15rem]">
+            <div className="space-y-2">
+              <label className="app-field-label">
+                Test
+              </label>
+              <SearchableCommandSelect
+                value={testFilter}
+                options={testOptions}
+                onValueChange={setTestFilter}
+                placeholder="All tests"
+                searchPlaceholder="Search tests..."
+                emptyText="No tests found."
+                triggerClassName="h-10 rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <label
+                htmlFor="student-test-subject"
+                className="app-field-label"
+              >
+                Subject
+              </label>
+              <Select
+                value={subjectFilter}
+                onValueChange={setSubjectFilter}
+              >
+                <SelectTrigger
+                  id="student-test-subject"
+                  className="h-10"
+                >
+                  <SelectValue placeholder="All subjects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_SUBJECTS_VALUE}>
+                    All subjects
+                  </SelectItem>
+                  {subjectOptions.map((subject) => (
+                    <SelectItem key={subject.value} value={subject.value}>
+                      {subject.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : null}
+
+        <div
+          className={
+            showFilters
+              ? "flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3.5"
+              : "flex flex-wrap items-center justify-between gap-3"
+          }
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="app-meta-chip">
+              {filteredTests.length} exam{filteredTests.length === 1 ? "" : "s"}
+            </span>
+            {testFilter !== ALL_TESTS_VALUE ? (
+              <span className="app-meta-chip">
+                {
+                  testOptions.find((option) => option.value === testFilter)
+                    ?.label
+                }
+              </span>
+            ) : null}
+            {subjectFilter !== ALL_SUBJECTS_VALUE ? (
+              <span className="app-meta-chip">
+                {
+                  subjectOptions.find((option) => option.value === subjectFilter)
+                    ?.label
+                }
+              </span>
+            ) : null}
+          </div>
+          {filterActive ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTestFilter(ALL_TESTS_VALUE);
+                setSubjectFilter(ALL_SUBJECTS_VALUE);
+              }}
+            >
+              Clear Filters
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      <Card className="app-surface overflow-hidden">
+        <CardHeader className="app-section-header">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>Assigned Tests</CardTitle>
+            <span className="app-meta-chip">
+              {filteredTests.length === tests.length
+                ? `${tests.length} total`
+                : `${filteredTests.length} of ${tests.length}`}
+            </span>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          {filteredTests.length === 0 ? (
+            <div className="app-empty-state rounded-none border-0 py-12">
+              {filterActive
+                ? "No exams match the current filters."
+                : "No online tests are assigned right now."}
+            </div>
+          ) : (
+            <div className="app-table-wrap rounded-none border-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[18rem]">Test</TableHead>
+                    <TableHead className="w-[11rem]">Subject</TableHead>
+                    <TableHead className="w-[11rem]">Class</TableHead>
+                    <TableHead className="w-[8rem]">Duration</TableHead>
+                    <TableHead className="w-[9rem]">Marks</TableHead>
+                    <TableHead className="w-[14rem]">Status</TableHead>
+                    <TableHead className="w-[12rem]">Score</TableHead>
+                    <TableHead className="text-right min-w-[10rem]">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTests.map((test) => {
+                    const actionDetails = getTestActionDetails(test);
+                    const subjectLabel = String(test.subject?.name || "").trim();
+                    const classLabel = String(test.class?.name || "").trim();
+                    const scoreVisible =
+                      (test.status === "submitted" ||
+                        test.status === "auto_submitted") &&
+                      test.attempt;
+
+                    return (
+                      <TableRow key={test._id}>
+                        <TableCell>
+                          <div className="min-w-[15rem] space-y-2">
+                            <div className="font-medium leading-5">{test.title}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {test.onlineEndsAt
+                                ? `Closes ${formatDateTime(test.onlineEndsAt)}`
+                                : "Online test"}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{subjectLabel || "-"}</TableCell>
+                        <TableCell>{classLabel || "-"}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium">{test.duration} min</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatDateTime(test.onlineStartsAt || test.examDate)}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium">{test.totalMarks} total</div>
+                            <div className="text-xs text-muted-foreground">
+                              Pass {test.passingMarks}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="min-w-[12rem] space-y-2">
+                            <Badge variant={getStatusVariant(test.status)}>
+                              {STATUS_LABELS[test.status] || test.status}
+                            </Badge>
+                            <div className="text-xs leading-5 text-muted-foreground">
+                              {getTimingChip(test)}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {scoreVisible ? (
+                            <div className="min-w-[10rem] space-y-1">
+                              <div className="font-medium">
+                                {test.attempt?.totalMarksAwarded ?? 0} / {test.totalMarks}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {test.requiresManualReview
+                                  ? "Auto-graded only"
+                                  : "Final score"}
+                              </div>
+                              {test.requiresManualReview ? (
+                                <div className="text-xs text-muted-foreground">
+                                  Manual review pending
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button asChild size="sm" className="app-button-compact min-w-[9rem]">
+                            <AppPrefetchLink
+                              href={actionDetails.actionHref}
+                              relatedApiPrefetches={actionDetails.relatedApiPrefetches}
+                            >
+                              {actionDetails.actionLabel}
+                            </AppPrefetchLink>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -315,8 +596,8 @@ export default function StudentTestsPage() {
     <Suspense
       fallback={
         <PageLoadingState
-          title="Loading assigned tests"
-          description="Preparing your available online tests and saved attempts."
+          title="Loading tests"
+          description="Preparing your exams."
         />
       }
     >

@@ -64,6 +64,7 @@ const QuestionPaperResponseSchema = new Schema<IQuestionPaperResponse>({
 }, { timestamps: true });
 
 QuestionPaperResponseSchema.index({ paper: 1, student: 1 }, { unique: true, name: 'paper_student_unique_1' });
+QuestionPaperResponseSchema.index({ student: 1, paper: 1 }, { name: 'student_paper_lookup_1' });
 
 const modelRegistry = getModelRegistry();
 

@@ -103,11 +103,17 @@ function formatTimeInput(value: Date | null | undefined) {
   return `${padDateSegment(date.getHours())}:${padDateSegment(date.getMinutes())}`;
 }
 
-function combineDateAndTimeInput(dateValue: string, timeValue: string) {
-  if (!dateValue || !timeValue) return null;
+function combineDateAndTimeInput(
+  dateValue: string,
+  timeValue: string,
+  options?: { defaultTime?: string },
+) {
+  if (!dateValue) return null;
 
   const parsedDate = parseDateInput(dateValue);
-  const parsedTime = parseTimeInput(timeValue);
+  const parsedTime = parseTimeInput(
+    timeValue || options?.defaultTime || '00:00',
+  );
   if (!parsedDate || !parsedTime) return null;
 
   parsedDate.setHours(parsedTime.hours, parsedTime.minutes, 0, 0);
@@ -365,9 +371,15 @@ export function PaperDetailsForm({
                           return;
                         }
 
+                        const effectiveTimeValue =
+                          onlineStartsAtTimeInput || '00:00';
+                        if (!onlineStartsAtTimeInput) {
+                          setOnlineStartsAtTimeInput(effectiveTimeValue);
+                        }
+
                         const parsedDate = combineDateAndTimeInput(
                           nextDateValue,
-                          onlineStartsAtTimeInput,
+                          effectiveTimeValue,
                         );
                         if (parsedDate) {
                           setOnlineStartsAt(parsedDate);
@@ -379,16 +391,17 @@ export function PaperDetailsForm({
                       step={60}
                       value={onlineStartsAtTimeInput}
                       onChange={(e) => {
-                        const nextTimeValue = e.target.value;
-                        setOnlineStartsAtTimeInput(nextTimeValue);
-                        if (!nextTimeValue) {
+                        const effectiveTimeValue =
+                          e.target.value || (onlineStartsAtDateInput ? '00:00' : '');
+                        setOnlineStartsAtTimeInput(effectiveTimeValue);
+                        if (!onlineStartsAtDateInput) {
                           setOnlineStartsAt(null);
                           return;
                         }
 
                         const parsedDate = combineDateAndTimeInput(
                           onlineStartsAtDateInput,
-                          nextTimeValue,
+                          effectiveTimeValue,
                         );
                         if (parsedDate) {
                           setOnlineStartsAt(parsedDate);
@@ -434,9 +447,15 @@ export function PaperDetailsForm({
                           return;
                         }
 
+                        const effectiveTimeValue =
+                          onlineEndsAtTimeInput || '00:00';
+                        if (!onlineEndsAtTimeInput) {
+                          setOnlineEndsAtTimeInput(effectiveTimeValue);
+                        }
+
                         const parsedDate = combineDateAndTimeInput(
                           nextDateValue,
-                          onlineEndsAtTimeInput,
+                          effectiveTimeValue,
                         );
                         if (parsedDate) {
                           setOnlineEndsAt(parsedDate);
@@ -448,16 +467,17 @@ export function PaperDetailsForm({
                       step={60}
                       value={onlineEndsAtTimeInput}
                       onChange={(e) => {
-                        const nextTimeValue = e.target.value;
-                        setOnlineEndsAtTimeInput(nextTimeValue);
-                        if (!nextTimeValue) {
+                        const effectiveTimeValue =
+                          e.target.value || (onlineEndsAtDateInput ? '00:00' : '');
+                        setOnlineEndsAtTimeInput(effectiveTimeValue);
+                        if (!onlineEndsAtDateInput) {
                           setOnlineEndsAt(null);
                           return;
                         }
 
                         const parsedDate = combineDateAndTimeInput(
                           onlineEndsAtDateInput,
-                          nextTimeValue,
+                          effectiveTimeValue,
                         );
                         if (parsedDate) {
                           setOnlineEndsAt(parsedDate);

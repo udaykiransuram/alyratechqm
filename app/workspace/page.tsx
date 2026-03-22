@@ -131,6 +131,7 @@ export default function WorkspaceHomePage() {
           <>
             <AppPrefetchLink
               href="/workspace/question-papers/create"
+              prefetchOnMount
               className="app-button-primary"
               relatedApiPrefetches={[
                 "/api/classes",

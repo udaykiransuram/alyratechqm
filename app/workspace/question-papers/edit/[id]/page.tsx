@@ -1,20 +1,18 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
-
-import PageHero from "@/components/layout/PageHero";
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import QuestionPaperForm from "@/components/QuestionPaperForm";
+import PageHero from "@/components/layout/PageHero";
 import { Button } from "@/components/ui/button";
-import PageLoadingState from "@/components/ui/page-loading-state";
-import { useBackNavigation } from "@/hooks/useReturnNavigation";
+import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
+import { getWorkspaceQuestionPaperById } from "@/lib/server/workspace-assessment-data";
 import {
-  fetchApiJson,
-  peekCachedApiJson,
-  resolveClientSchoolKey,
-} from "@/lib/client/api";
+  getWorkspaceClasses,
+  getWorkspaceSections,
+  getWorkspaceSubjects,
+  getWorkspaceTagsWithSubjects,
+} from "@/lib/server/workspace-support-data";
+import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-const EDIT_PAGE_CACHE_TTL_MS = 60_000;
+export const dynamic = "force-dynamic";
 
 function buildQuestionPaperInitialData(rawData: any) {
   return {
@@ -32,8 +30,8 @@ function buildQuestionPaperInitialData(rawData: any) {
     assignedAcademicSectionIds: (rawData.assignedAcademicSections || []).map(
       (section: any) => String(section?._id || section),
     ),
-    sections: (rawData.sections || []).map((section: any) => ({
-      id: section._id || `section-${Math.random()}`,
+    sections: (rawData.sections || []).map((section: any, sectionIndex: number) => ({
+      id: section._id || `section-${sectionIndex + 1}`,
       name: section.name ?? "",
       description: section.description ?? "",
       defaultMarks: section.marks ?? 1,
@@ -41,129 +39,62 @@ function buildQuestionPaperInitialData(rawData: any) {
         Array.isArray(section.questions) && section.questions.length > 0
           ? (section.questions[0].negativeMarks ?? 0)
           : 0,
-      questions: (section.questions || []).map((question: any) => {
-        const questionObj =
-          typeof question.question === "object" ? question.question : {};
-        return {
-          question: questionObj,
-          marks: question.marks ?? section.marks ?? 1,
-          negativeMarks: question.negativeMarks ?? 0,
-        };
-      }),
+      questions: (section.questions || []).map((question: any) => ({
+        question:
+          typeof question.question === "object" && question.question
+            ? question.question
+            : {},
+        marks: question.marks ?? section.marks ?? 1,
+        negativeMarks: question.negativeMarks ?? 0,
+      })),
     })),
   };
 }
 
-export default function EditQuestionPaperPage({
-  params,
-}: {
+type EditQuestionPaperPageProps = {
   params: { id: string };
-}) {
+  searchParams?: { returnTo?: string | string[] };
+};
+
+export default async function EditQuestionPaperPage({
+  params,
+  searchParams,
+}: EditQuestionPaperPageProps) {
   const id = params.id || "";
-  const { navigateBack } = useBackNavigation(
-    id ? `/workspace/question-papers/view/${id}` : "/workspace/question-papers",
-  );
-  const cachedPaperResponse = id
-    ? peekCachedApiJson<{ paper?: any }>(`/api/question-papers/${id}`, {
-        clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
-      })
-    : null;
-  const [initialData, setInitialData] = useState<any>(() =>
-    cachedPaperResponse?.paper
-      ? buildQuestionPaperInitialData(cachedPaperResponse.paper)
-      : null,
-  );
-  const [loading, setLoading] = useState(() => !cachedPaperResponse?.paper);
-  const [error, setError] = useState<string | null>(null);
+  const { schoolKey } = await requireWorkspaceStaffSession();
+  const rawReturnTo = Array.isArray(searchParams?.returnTo)
+    ? searchParams?.returnTo[0]
+    : searchParams?.returnTo;
+  const backHref =
+    getSafeReturnToPath(rawReturnTo) ||
+    (id ? `/workspace/question-papers/view/${id}` : "/workspace/question-papers");
 
-  useEffect(() => {
-    let mounted = true;
+  const [paper, supportResults] = await Promise.all([
+    id ? getWorkspaceQuestionPaperById(schoolKey, id) : Promise.resolve(null),
+    Promise.allSettled([
+      getWorkspaceClasses(schoolKey),
+      getWorkspaceSections(schoolKey),
+      getWorkspaceSubjects(schoolKey),
+      getWorkspaceTagsWithSubjects(schoolKey),
+    ]),
+  ]);
 
-    async function loadPaper() {
-      const schoolKey = resolveClientSchoolKey();
-      if (!schoolKey) {
-        if (mounted) {
-          setLoading(false);
-          setError("Please select a school in the navbar first.");
-        }
-        return;
-      }
+  let supportMessage: string | null = null;
+  const classes =
+    supportResults[0]?.status === "fulfilled" ? supportResults[0].value : [];
+  const sections =
+    supportResults[1]?.status === "fulfilled" ? supportResults[1].value : [];
+  const subjects =
+    supportResults[2]?.status === "fulfilled" ? supportResults[2].value : [];
+  const tags =
+    supportResults[3]?.status === "fulfilled" ? supportResults[3].value.tags : [];
 
-      try {
-        setLoading(!cachedPaperResponse?.paper);
-        const data = await fetchApiJson<{ paper?: any }>(
-          `/api/question-papers/${id}`,
-          {
-            cache: "no-store",
-            schoolKey,
-            fallbackMessage: "Failed to load question paper.",
-            clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
-            preferClientCache: true,
-          },
-        );
-
-        if (!mounted) {
-          return;
-        }
-
-        if (!data.paper) {
-          throw new Error("Question paper not found.");
-        }
-
-        setInitialData(buildQuestionPaperInitialData(data.paper));
-        setError(null);
-      } catch (loadError: any) {
-        if (mounted && !cachedPaperResponse?.paper) {
-          setError(loadError?.message || "Failed to load question paper.");
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    if (id) {
-      void loadPaper();
-    } else {
-      setLoading(false);
-      setError("Question paper not found.");
-    }
-
-    return () => {
-      mounted = false;
-    };
-  }, [cachedPaperResponse?.paper, id]);
-
-  if (loading && !initialData) {
-    return (
-      <PageLoadingState
-        title="Loading question paper editor"
-        description="Preparing the paper structure, questions, and schedule settings."
-      />
-    );
+  if (supportResults.some((result) => result.status === "rejected")) {
+    supportMessage =
+      "Some editor options could not be loaded. You can still edit the paper, but class, section, subject, or tag controls may be limited until you refresh.";
   }
 
-  if (error && !initialData) {
-    return (
-      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-        <PageHero
-          eyebrow="Assessments"
-          title="Edit Question Paper"
-          description={error}
-          actions={
-            <Button variant="outline" onClick={navigateBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          }
-        />
-        <div className="app-empty-state">Question paper not found.</div>
-      </div>
-    );
-  }
-
-  if (!initialData) {
+  if (!paper) {
     return (
       <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
         <PageHero
@@ -171,9 +102,8 @@ export default function EditQuestionPaperPage({
           title="Edit Question Paper"
           description="The requested paper could not be loaded."
           actions={
-            <Button variant="outline" onClick={navigateBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+            <Button asChild variant="outline">
+              <AppPrefetchLink href={backHref}>Back</AppPrefetchLink>
             </Button>
           }
         />
@@ -182,5 +112,16 @@ export default function EditQuestionPaperPage({
     );
   }
 
-  return <QuestionPaperForm initialData={initialData} isEditMode={true} />;
+  return (
+    <QuestionPaperForm
+      initialData={buildQuestionPaperInitialData(paper)}
+      isEditMode
+      initialClasses={classes}
+      initialSubjects={subjects}
+      initialTags={tags}
+      initialAcademicSections={sections}
+      initialSupportDataLoaded
+      initialSupportMessage={supportMessage}
+    />
+  );
 }

@@ -1,11 +1,7 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import ListPagination from "@/components/ui/list-pagination";
-import PageLoadingState from "@/components/ui/page-loading-state";
+import ListPaginationLinks from "@/components/ui/list-pagination-links";
 import {
   Table,
   TableBody,
@@ -16,145 +12,63 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PageHero from "@/components/layout/PageHero";
-import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
-import { fetchApiJson } from "@/lib/client/api";
-
-interface TeacherUser {
-  _id: string;
-  name: string;
-  email?: string;
-  mobileNumber?: string;
-  role: "teacher";
-}
+import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
+import {
+  buildWorkspaceListPageHref,
+  getWorkspaceUserDirectoryPageData,
+  requireWorkspaceStaffSession,
+  resolveWorkspaceListPage,
+} from "@/lib/server/workspace-user-directory";
 
 const TEACHERS_PAGE_SIZE = 25;
-const TEACHERS_PAGE_CACHE_TTL_MS = 30_000;
+const TEACHERS_BASE_PATH = "/workspace/teachers";
 
-type TeacherPageCacheEntry = {
-  teachers: TeacherUser[];
-  totalTeachers: number;
-  pages: number;
-  page: number;
-  fetchedAt: number;
+export const dynamic = "force-dynamic";
+
+type TeachersPageProps = {
+  searchParams?: {
+    page?: string | string[];
+  };
 };
 
-export default function TeachersPage() {
-  const { buildReturnHref } = useReturnHrefBuilder("/workspace/teachers");
-  const [teachers, setTeachers] = useState<TeacherUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
-  const [totalTeachers, setTotalTeachers] = useState(0);
-  const pageCacheRef = useRef<Map<number, TeacherPageCacheEntry>>(new Map());
-  const refreshing = loading && teachers.length > 0;
+export default async function TeachersPage({
+  searchParams,
+}: TeachersPageProps) {
+  const requestedPage = resolveWorkspaceListPage(searchParams?.page);
+  const { schoolKey } = await requireWorkspaceStaffSession();
 
-  useEffect(() => {
-    let active = true;
+  let teachers: Awaited<
+    ReturnType<typeof getWorkspaceUserDirectoryPageData>
+  >["users"] = [];
+  let totalTeachers = 0;
+  let page = requestedPage;
+  let pages = 1;
+  let error: string | null = null;
 
-    const applyCacheEntry = (entry: TeacherPageCacheEntry) => {
-      if (!active) {
-        return;
-      }
-      setTeachers(entry.teachers);
-      setTotalTeachers(entry.totalTeachers);
-      setPages(entry.pages);
-      setPage(entry.page);
-    };
+  try {
+    const teacherDirectory = await getWorkspaceUserDirectoryPageData({
+      schoolKey,
+      role: "teacher",
+      page: requestedPage,
+      pageSize: TEACHERS_PAGE_SIZE,
+    });
 
-    const prefetchTeachersPage = async (targetPage: number, totalPageCount: number) => {
-      if (targetPage < 1 || targetPage > totalPageCount) {
-        return;
-      }
+    teachers = teacherDirectory.users;
+    totalTeachers = teacherDirectory.totalUsers;
+    page = teacherDirectory.page;
+    pages = teacherDirectory.pages;
+  } catch (err) {
+    error =
+      err instanceof Error ? err.message : "Failed to load teachers.";
+  }
 
-      const cachedEntry = pageCacheRef.current.get(targetPage);
-      if (
-        cachedEntry &&
-        Date.now() - cachedEntry.fetchedAt < TEACHERS_PAGE_CACHE_TTL_MS
-      ) {
-        return;
-      }
-
-      try {
-        const data = await fetchApiJson<any>(
-          `/api/users?role=teacher&page=${targetPage}&limit=${TEACHERS_PAGE_SIZE}`,
-          {
-            cache: "no-store",
-            fallbackMessage: "Failed to load teachers.",
-          },
-        );
-        const resolvedPage = Math.max(1, Number(data.page) || targetPage);
-        pageCacheRef.current.set(resolvedPage, {
-          teachers: Array.isArray(data.users) ? data.users : [],
-          totalTeachers: Math.max(0, Number(data.total) || 0),
-          pages: Math.max(1, Number(data.pages) || 1),
-          page: resolvedPage,
-          fetchedAt: Date.now(),
-        });
-      } catch {
-      }
-    };
-
-    const loadTeachers = async () => {
-      const cachedEntry = pageCacheRef.current.get(page);
-      const hasFreshCache =
-        cachedEntry &&
-        Date.now() - cachedEntry.fetchedAt < TEACHERS_PAGE_CACHE_TTL_MS;
-
-      if (cachedEntry) {
-        applyCacheEntry(cachedEntry);
-        setError(null);
-        if (hasFreshCache) {
-          setLoading(false);
-          void prefetchTeachersPage(page + 1, cachedEntry.pages);
-          return;
-        }
-      }
-
-      try {
-        setLoading(true);
-        if (!cachedEntry) {
-          setError(null);
-        }
-        const data = await fetchApiJson<any>(
-          `/api/users?role=teacher&page=${page}&limit=${TEACHERS_PAGE_SIZE}`,
-          {
-            cache: "no-store",
-            fallbackMessage: "Failed to load teachers.",
-          },
-        );
-        if (!active) {
-          return;
-        }
-        const resolvedPage = Math.max(1, Number(data.page) || page);
-        const nextEntry = {
-          teachers: Array.isArray(data.users) ? data.users : [],
-          totalTeachers: Math.max(0, Number(data.total) || 0),
-          pages: Math.max(1, Number(data.pages) || 1),
-          page: resolvedPage,
-          fetchedAt: Date.now(),
-        };
-        pageCacheRef.current.set(resolvedPage, nextEntry);
-        applyCacheEntry(nextEntry);
-        void prefetchTeachersPage(resolvedPage + 1, nextEntry.pages);
-      } catch (e: any) {
-        if (!active || cachedEntry) {
-          return;
-        }
-        setError(e.message || "Failed to load teachers");
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void loadTeachers();
-
-    return () => {
-      active = false;
-    };
-  }, [page]);
+  const currentPath = buildWorkspaceListPageHref(TEACHERS_BASE_PATH, page);
+  const previousHref =
+    page > 1 ? buildWorkspaceListPageHref(TEACHERS_BASE_PATH, page - 1) : null;
+  const nextHref =
+    page < pages
+      ? buildWorkspaceListPageHref(TEACHERS_BASE_PATH, page + 1)
+      : null;
 
   return (
     <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
@@ -166,6 +80,7 @@ export default function TeachersPage() {
           <Button asChild>
             <AppPrefetchLink
               href="/workspace/teachers/create"
+              prefetchOnMount
               relatedApiPrefetches={['/api/classes', '/api/sections', '/api/subjects']}
             >
               Create Teacher
@@ -176,7 +91,6 @@ export default function TeachersPage() {
           <>
             <span className="app-meta-chip">Dedicated teacher page</span>
             <span className="app-meta-chip">Scope-aware access</span>
-            {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
           </>
         }
         stats={[
@@ -203,7 +117,7 @@ export default function TeachersPage() {
         ]}
       />
 
-            <Card className="app-surface overflow-hidden">
+      <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header space-y-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1">
@@ -220,26 +134,18 @@ export default function TeachersPage() {
         </CardHeader>
         <CardContent className="app-section-body">
           {error ? <div className="app-feedback app-feedback-error mb-4">{error}</div> : null}
-          {loading && teachers.length === 0 ? (
-            <PageLoadingState
-              title="Loading teachers"
-              description="Preparing teacher accounts and assigned access scopes."
-              className="px-0 py-0"
-              contentClassName="max-w-none"
-              dense
-            />
-          ) : teachers.length === 0 ? (
+          {!error && teachers.length === 0 ? (
             <div className="app-empty-state">No teachers found.</div>
-          ) : (
+          ) : !error ? (
             <div className="space-y-3">
-              <ListPagination
+              <ListPaginationLinks
                 page={page}
                 totalPages={pages}
                 totalItems={totalTeachers}
                 pageSize={TEACHERS_PAGE_SIZE}
                 itemLabel="teachers"
-                onPageChange={setPage}
-                disabled={loading}
+                previousHref={previousHref}
+                nextHref={nextHref}
               />
               <div className="app-table-wrap">
                 <Table>
@@ -271,7 +177,10 @@ export default function TeachersPage() {
                         <TableCell className="text-right">
                           <Button asChild variant="outline" size="sm" className="app-button-compact">
                             <AppPrefetchLink
-                              href={buildReturnHref(`/workspace/teachers/${teacher._id}`)}
+                              href={buildHrefWithReturnTo(
+                                `${TEACHERS_BASE_PATH}/${teacher._id}`,
+                                currentPath,
+                              )}
                               relatedApiPrefetches={[
                                 `/api/users/${teacher._id}`,
                                 '/api/classes',
@@ -289,7 +198,7 @@ export default function TeachersPage() {
                 </Table>
               </div>
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
     </div>

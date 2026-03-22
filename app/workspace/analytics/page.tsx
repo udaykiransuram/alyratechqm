@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { BarChart2, BookOpen, FileSpreadsheet, MessageSquareText } from "lucide-react";
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import PageHero from "@/components/layout/PageHero";
 
 const analyticsCards = [
@@ -66,13 +66,14 @@ export default function AnalyticsHubPage() {
                 </div>
               </div>
 
-              <Link
+              <AppPrefetchLink
                 href={card.href}
+                prefetchOnMount
                 className="mt-auto inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80"
               >
                 <BarChart2 className="h-4 w-4" />
                 {card.cta}
-              </Link>
+              </AppPrefetchLink>
             </div>
           );
         })}

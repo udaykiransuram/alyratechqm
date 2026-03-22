@@ -2,19 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
 import { validateStudentSectionAnswers } from "@/lib/question-paper/grading";
-import { getStudentTestModels, loadOnlinePaperById, loadStudentUser } from "@/lib/student-test-server";
+import { getStudentTestModels, loadOnlinePaperRuntimeById } from "@/lib/student-test-server";
 import {
   finalizeAttemptAsSubmitted,
-  findOrCreateStudentAttempt,
   getAttemptDeadlineMs,
-  getPaperWindowEnd,
-  getPaperWindowStart,
-  isStudentEligibleForPaper,
   paperSupportsOnlineDelivery,
   serializeStudentAttempt,
 } from "@/lib/student-tests";
 
 export const dynamic = "force-dynamic";
+
+const ATTEMPT_SUBMIT_PROJECTION =
+  "paper student startedAt submittedAt status lastSavedAt totalMarksAwarded sectionAnswers";
 
 export async function POST(
   req: NextRequest,
@@ -31,18 +30,19 @@ export async function POST(
 
   try {
     const models = await getStudentTestModels(schoolKey);
-    const { QuestionPaperResponse: QuestionPaperResponseModel, User: UserModel } =
-      models;
+    const { QuestionPaperResponse: QuestionPaperResponseModel } = models;
 
-    const student = await loadStudentUser(UserModel, studentId);
-    if (!student) {
-      return NextResponse.json(
-        { success: false, message: "Student profile not found." },
-        { status: 404 },
-      );
-    }
+    const [paperResult, attemptResult] = await Promise.all([
+      loadOnlinePaperRuntimeById(models, schoolKey, params.paperId),
+      QuestionPaperResponseModel.findOne({
+        paper: params.paperId,
+        student: studentId,
+      })
+        .select(ATTEMPT_SUBMIT_PROJECTION)
+        .lean(),
+    ]);
 
-    const paper = await loadOnlinePaperById(models, params.paperId);
+    const paper = paperResult;
     if (!paper) {
       return NextResponse.json(
         { success: false, message: "Online test not found." },
@@ -61,42 +61,16 @@ export async function POST(
       );
     }
 
-    if (!isStudentEligibleForPaper(paper, student)) {
-      return NextResponse.json(
-        { success: false, message: "You are not assigned to this online test." },
-        { status: 403 },
-      );
-    }
-
-    let attempt = await QuestionPaperResponseModel.findOne({
-      paper: params.paperId,
-      student: studentId,
-    });
+    let attempt = attemptResult;
 
     if (!attempt) {
-      const windowStart = getPaperWindowStart(paper);
-      const windowEnd = getPaperWindowEnd(paper);
-
-      if (windowStart && now.getTime() < windowStart.getTime()) {
-        return NextResponse.json(
-          { success: false, message: "This online test is not open yet." },
-          { status: 403 },
-        );
-      }
-
-      if (windowEnd && now.getTime() > windowEnd.getTime()) {
-        return NextResponse.json(
-          { success: false, message: "This online test is closed." },
-          { status: 403 },
-        );
-      }
-
-      attempt = await findOrCreateStudentAttempt({
-        QuestionPaperResponseModel,
-        paperId: params.paperId,
-        studentId,
-        now,
-      });
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Start the test before submitting it.",
+        },
+        { status: 409 },
+      );
     }
 
     if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
@@ -130,12 +104,20 @@ export async function POST(
       deadlineMs !== null && autoSubmitted ? new Date(deadlineMs) : now;
 
     attempt = await finalizeAttemptAsSubmitted({
+      QuestionPaperResponseModel,
       attempt,
       paper,
       sectionAnswers: normalized.sectionAnswers,
       autoSubmitted,
       submittedAt,
     });
+
+    if (!attempt) {
+      return NextResponse.json(
+        { success: false, message: "This attempt could not be submitted." },
+        { status: 409 },
+      );
+    }
 
     return NextResponse.json({
       success: true,
