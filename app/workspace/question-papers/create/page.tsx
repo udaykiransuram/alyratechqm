@@ -1,26 +1,46 @@
-"use client";
+import CreateQuestionPaperPageClient from "./CreateQuestionPaperPageClient";
+import {
+  getWorkspaceClasses,
+  getWorkspaceSections,
+  getWorkspaceSubjects,
+  getWorkspaceTagsWithSubjects,
+} from "@/lib/server/workspace-support-data";
+import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-import { useState } from "react";
-import QuestionPaperForm from "@/components/QuestionPaperForm";
+export const dynamic = "force-dynamic";
 
-export default function CreateQuestionPaperPage() {
-  const [initialData] = useState<any>(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
+export default async function CreateQuestionPaperPage() {
+  const { schoolKey } = await requireWorkspaceStaffSession();
 
-    try {
-      const copy = sessionStorage.getItem("questionPaperCopy");
-      if (!copy) {
-        return null;
-      }
+  try {
+    const [classes, sections, subjects, tagResult] = await Promise.all([
+      getWorkspaceClasses(schoolKey),
+      getWorkspaceSections(schoolKey),
+      getWorkspaceSubjects(schoolKey),
+      getWorkspaceTagsWithSubjects(schoolKey),
+    ]);
 
-      sessionStorage.removeItem("questionPaperCopy");
-      return JSON.parse(copy);
-    } catch {
-      return null;
-    }
-  });
-
-  return <QuestionPaperForm initialData={initialData} isEditMode={false} />;
+    return (
+      <CreateQuestionPaperPageClient
+        initialClasses={classes}
+        initialSections={sections}
+        initialSubjects={subjects}
+        initialTags={tagResult.tags}
+      />
+    );
+  } catch (error) {
+    return (
+      <CreateQuestionPaperPageClient
+        initialClasses={[]}
+        initialSections={[]}
+        initialSubjects={[]}
+        initialTags={[]}
+        initialMessage={
+          error instanceof Error
+            ? error.message
+            : "Failed to load question paper setup data."
+        }
+      />
+    );
+  }
 }

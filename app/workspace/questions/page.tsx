@@ -553,6 +553,7 @@ export default function ViewQuestionsPage() {
             <Button asChild className="gap-2">
               <AppPrefetchLink
                 href="/workspace/questions/create"
+                prefetchOnMount
                 relatedApiPrefetches={[
                   '/api/classes',
                   '/api/subjects',

@@ -1,10 +1,38 @@
 import React, { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MultiSelectTags } from '@/components/ui/multi-select-tags';
 import { fetchApiJson, resolveClientSchoolKey } from '@/lib/client/api';
 import { cn } from '@/lib/utils';
+
+function TagSelectorLoadingState() {
+  return (
+    <div className="space-y-2">
+      <div className="flex h-10 items-center justify-between rounded-xl border border-border/60 bg-muted/10 px-3">
+        <span className="text-sm text-muted-foreground">Loading tag selector...</span>
+        <div className="flex items-center gap-2">
+          <div className="h-5 w-12 animate-pulse rounded-full bg-muted" />
+          <div className="h-5 w-14 animate-pulse rounded-full bg-muted" />
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Class and subject filters are ready. Tags will appear in a moment.
+      </p>
+    </div>
+  );
+}
+
+const MultiSelectTags = dynamic(
+  () =>
+    import('@/components/ui/multi-select-tags').then(
+      (module) => module.MultiSelectTags,
+    ),
+  {
+    ssr: false,
+    loading: () => <TagSelectorLoadingState />,
+  },
+);
 
 interface MetadataSelectorProps {
   classes: { _id: string; name: string }[];

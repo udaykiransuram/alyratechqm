@@ -1,31 +1,17 @@
 import { NextResponse } from "next/server";
 
-import { connectDB } from "@/lib/db";
-import School from "@/models/School";
+import { getPublicSchoolOptions } from "@/lib/server/public-school-data";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type SchoolDoc = {
-  key?: string;
-  displayName?: string;
-};
-
 export async function GET() {
   try {
-    await connectDB();
-
-    const schools = (await School.find({})
-      .sort({ displayName: 1 })
-      .select("key displayName")
-      .lean()) as SchoolDoc[];
+    const schools = await getPublicSchoolOptions();
 
     return NextResponse.json({
       success: true,
-      schools: schools.map((school) => ({
-        key: String(school.key || ""),
-        displayName: String(school.displayName || ""),
-      })),
+      schools,
     });
   } catch (error: unknown) {
     return NextResponse.json(

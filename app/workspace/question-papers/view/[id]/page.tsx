@@ -1,8 +1,6 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import PageHero from "@/components/layout/PageHero";
 import { PaperSummary } from "@/components/PaperSummary";
 import { PrintEditToolbar } from "@/components/PrintEditToolbar";
@@ -10,175 +8,31 @@ import { QuestionPaperToolbar } from "@/components/QuestionPaperToolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import PageLoadingState from "@/components/ui/page-loading-state";
 import QuestionItemClient from "@/components/QuestionItemClient";
-import { useBackNavigation } from "@/hooks/useReturnNavigation";
-import { fetchApiJson, peekCachedApiJson } from "@/lib/client/api";
-import { getSchoolKeyFromCookie } from "@/lib/client/school";
+import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
+import { getWorkspaceQuestionPaperById } from "@/lib/server/workspace-assessment-data";
+import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-const DETAIL_PAGE_CACHE_TTL_MS = 30_000;
+export const dynamic = "force-dynamic";
 
-async function getQuestionPaper(id: string) {
-  const payload = await fetchApiJson<any>(`/api/question-papers/${id}`, {
-    cache: "no-store",
-    fallbackMessage: "Failed to load question paper.",
-    clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
-  });
-
-  return payload.paper;
-}
-
-export default function ViewQuestionPaperPage({
-  params,
-}: {
+type ViewQuestionPaperPageProps = {
   params: { id: string };
-}) {
-  const { navigateBack } = useBackNavigation("/workspace/question-papers");
-  const cachedPaperResponse = peekCachedApiJson<{ paper?: any }>(
-    `/api/question-papers/${params.id}`,
-    {
-      schoolKey: getSchoolKeyFromCookie(),
-      clientCacheTtlMs: DETAIL_PAGE_CACHE_TTL_MS,
-    },
-  );
-  const [paper, setPaper] = useState<any>(() => cachedPaperResponse?.paper || null);
-  const [loading, setLoading] = useState(() => !cachedPaperResponse?.paper);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [schoolKey, setSchoolKey] = useState(() => getSchoolKeyFromCookie());
-  const [mounted, setMounted] = useState(false);
+  searchParams?: { returnTo?: string | string[] };
+};
 
-  useEffect(() => {
-    setMounted(true);
-    setSchoolKey(getSchoolKeyFromCookie());
-  }, []);
-
-  useEffect(() => {
-    const fetchPaper = async () => {
-      if (!schoolKey) {
-        setPaper(null);
-        setLoading(false);
-        return;
-      }
-
-      if (cachedPaperResponse?.paper) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-      setError(null);
-
-      try {
-        const fetchedPaper = await getQuestionPaper(params.id);
-        setPaper(fetchedPaper);
-      } catch (err: any) {
-        setPaper(null);
-        setError(err?.message || "Failed to load question paper.");
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    };
-
-    void fetchPaper();
-  }, [cachedPaperResponse?.paper, params.id, schoolKey]);
-
-  const paperSections = useMemo(
-    () => (Array.isArray(paper?.sections) ? paper.sections : []),
-    [paper?.sections],
-  );
-
-  const assignedAcademicSectionNames = useMemo(
-    () =>
-      (Array.isArray(paper?.assignedAcademicSections)
-        ? paper.assignedAcademicSections
-        : []
-      )
-        .map((section: any) => section?.name || "-")
-        .filter(Boolean),
-    [paper?.assignedAcademicSections],
-  );
-
-  const summarySections = useMemo(
-    () =>
-      paperSections.map((section: any, sectionIndex: number) => {
-        const questions = Array.isArray(section?.questions) ? section.questions : [];
-
-        return {
-          id: section?._id || `section-${sectionIndex}`,
-          name: section?.name || `Section ${sectionIndex + 1}`,
-          defaultMarks: section?.marks,
-          defaultNegativeMarks: questions[0]?.negativeMarks ?? 0,
-          questions: questions
-            .filter(Boolean)
-            .map((item: any) => ({
-              question:
-                item?.question && typeof item.question === "object" ? item.question : { tags: [] },
-              marks: item?.marks ?? 0,
-              negativeMarks: item?.negativeMarks ?? 0,
-            })),
-        };
-      }),
-    [paperSections],
-  );
-
-  if (!mounted && !paper) {
-    return (
-      <PageLoadingState
-        title="Loading question paper"
-        description="Resolving the selected school workspace and paper details."
-      />
-    );
-  }
-
-  if (!schoolKey) {
-    return (
-      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-        <PageHero
-          eyebrow="Assessments"
-          title="No School Selected"
-          description="Select a school workspace before viewing question papers."
-          actions={
-            <Button variant="outline" onClick={navigateBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          }
-        />
-        <div className="app-empty-state">
-          A school context is required before this paper can be viewed.
-        </div>
-      </div>
-    );
-  }
-
-  if (loading && !paper) {
-    return (
-      <PageLoadingState
-        title="Loading question paper"
-        description="Preparing the paper summary, sections, and linked questions."
-      />
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-        <PageHero
-          eyebrow="Assessments"
-          title="Question Paper"
-          description="The requested paper could not be loaded."
-          actions={
-            <Button variant="outline" onClick={navigateBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Papers
-            </Button>
-          }
-        />
-        <div className="app-feedback app-feedback-error text-center">{error}</div>
-      </div>
-    );
-  }
+export default async function ViewQuestionPaperPage({
+  params,
+  searchParams,
+}: ViewQuestionPaperPageProps) {
+  const { schoolKey } = await requireWorkspaceStaffSession();
+  const rawReturnTo = Array.isArray(searchParams?.returnTo)
+    ? searchParams?.returnTo[0]
+    : searchParams?.returnTo;
+  const backHref =
+    getSafeReturnToPath(rawReturnTo) || "/workspace/question-papers";
+  const paper = params.id
+    ? await getWorkspaceQuestionPaperById(schoolKey, params.id)
+    : null;
 
   if (!paper) {
     return (
@@ -186,11 +40,13 @@ export default function ViewQuestionPaperPage({
         <PageHero
           eyebrow="Assessments"
           title="Question Paper"
-          description="This paper may not belong to the currently selected school."
+          description="The requested paper could not be loaded."
           actions={
-            <Button variant="outline" onClick={navigateBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Papers
+            <Button asChild variant="outline">
+              <AppPrefetchLink href={backHref}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Papers
+              </AppPrefetchLink>
             </Button>
           }
         />
@@ -198,6 +54,35 @@ export default function ViewQuestionPaperPage({
       </div>
     );
   }
+
+  const paperSections = Array.isArray(paper.sections) ? paper.sections : [];
+  const assignedAcademicSectionNames = (
+    Array.isArray(paper.assignedAcademicSections)
+      ? paper.assignedAcademicSections
+      : []
+  )
+    .map((section: any) => section?.name || "-")
+    .filter(Boolean);
+  const summarySections = paperSections.map((section: any, sectionIndex: number) => {
+    const questions = Array.isArray(section?.questions) ? section.questions : [];
+
+    return {
+      id: section?._id || `section-${sectionIndex}`,
+      name: section?.name || `Section ${sectionIndex + 1}`,
+      defaultMarks: section?.marks,
+      defaultNegativeMarks: questions[0]?.negativeMarks ?? 0,
+      questions: questions
+        .filter(Boolean)
+        .map((item: any) => ({
+          question:
+            item?.question && typeof item.question === "object"
+              ? item.question
+              : { tags: [] },
+          marks: item?.marks ?? 0,
+          negativeMarks: item?.negativeMarks ?? 0,
+        })),
+    };
+  });
 
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
@@ -207,18 +92,23 @@ export default function ViewQuestionPaperPage({
         description="Review paper details, sections, question composition, and scoring rules from one consistent assessment workspace."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={navigateBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+            <Button asChild variant="outline">
+              <AppPrefetchLink href={backHref}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </AppPrefetchLink>
             </Button>
             <PrintEditToolbar paperId={paper._id} />
           </div>
         }
         meta={
           <>
-            <span className="app-meta-chip">{paper.class?.name || "No class assigned"}</span>
-            <span className="app-meta-chip">{paper.subject?.name || "No subject assigned"}</span>
-            {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
+            <span className="app-meta-chip">
+              {paper.class?.name || "No class assigned"}
+            </span>
+            <span className="app-meta-chip">
+              {paper.subject?.name || "No subject assigned"}
+            </span>
           </>
         }
         stats={[
@@ -241,15 +131,15 @@ export default function ViewQuestionPaperPage({
           },
           {
             label: "Assigned sections",
-            value: assignedAcademicSectionNames.length ? String(assignedAcademicSectionNames.length) : "All",
+            value: assignedAcademicSectionNames.length
+              ? String(assignedAcademicSectionNames.length)
+              : "All",
             meta: assignedAcademicSectionNames.length
               ? assignedAcademicSectionNames.join(", ")
               : "Available to all sections in the selected class.",
           },
         ]}
       />
-
-      {error ? <div className="app-feedback app-feedback-info">{error}</div> : null}
 
       <QuestionPaperToolbar paper={paper} />
 
@@ -330,33 +220,46 @@ export default function ViewQuestionPaperPage({
             <div className="app-empty-state">No sections are available in this paper yet.</div>
           ) : (
             paperSections.map((section: any, sectionIndex: number) => {
-              const sectionQuestions = Array.isArray(section?.questions) ? section.questions : [];
+              const sectionQuestions = Array.isArray(section?.questions)
+                ? section.questions
+                : [];
 
               return (
-                <Card key={section?._id || sectionIndex} className="app-surface overflow-hidden">
+                <Card
+                  key={section?._id || sectionIndex}
+                  className="app-surface overflow-hidden"
+                >
                   <CardHeader className="app-section-header">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <CardTitle className="text-lg">
-                          {`Section ${sectionIndex + 1}: ${section?.name || 'Untitled Section'}`}
+                          {`Section ${sectionIndex + 1}: ${section?.name || "Untitled Section"}`}
                         </CardTitle>
                         {section?.description ? (
-                          <p className="mt-2 text-sm text-muted-foreground">{section.description}</p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {section.description}
+                          </p>
                         ) : null}
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline">{sectionQuestions.length} Questions</Badge>
+                        <Badge variant="outline">
+                          {sectionQuestions.length} Questions
+                        </Badge>
                         <Badge variant="secondary">{section?.marks ?? 0} Marks</Badge>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="app-section-body space-y-3">
                     {sectionQuestions.length === 0 ? (
-                      <div className="app-empty-state">No questions were added to this section.</div>
+                      <div className="app-empty-state">
+                        No questions were added to this section.
+                      </div>
                     ) : (
                       sectionQuestions.map((item: any, questionIndex: number) => {
                         const question =
-                          item?.question && typeof item.question === "object" ? item.question : null;
+                          item?.question && typeof item.question === "object"
+                            ? item.question
+                            : null;
 
                         return (
                           <div
@@ -370,7 +273,9 @@ export default function ViewQuestionPaperPage({
                               <div className="flex items-center gap-2">
                                 <Badge variant="outline">{item?.marks ?? 0} Marks</Badge>
                                 {(item?.negativeMarks ?? 0) > 0 ? (
-                                  <Badge variant="destructive">{item.negativeMarks} Negative</Badge>
+                                  <Badge variant="destructive">
+                                    {item.negativeMarks} Negative
+                                  </Badge>
                                 ) : null}
                               </div>
                             </div>
@@ -381,7 +286,9 @@ export default function ViewQuestionPaperPage({
                                 question={{
                                   ...question,
                                   tags: Array.isArray(question.tags) ? question.tags : [],
-                                  options: Array.isArray(question.options) ? question.options : [],
+                                  options: Array.isArray(question.options)
+                                    ? question.options
+                                    : [],
                                   answerIndexes: Array.isArray(question.answerIndexes)
                                     ? question.answerIndexes
                                     : [],

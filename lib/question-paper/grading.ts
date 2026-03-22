@@ -11,6 +11,8 @@ export type NormalizedQuestionSpec = {
   matrixColumnIndexes: Set<number>;
 };
 
+const paperQuestionLookupCache = new WeakMap<object, Map<string, NormalizedQuestionSpec>>();
+
 export function arraysEqual(a: number[], b: number[]) {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
     return false;
@@ -137,6 +139,13 @@ function getQuestionSpec(
 }
 
 export function buildPaperQuestionLookup(paper: any) {
+  if (paper && typeof paper === "object") {
+    const cachedLookup = paperQuestionLookupCache.get(paper);
+    if (cachedLookup) {
+      return cachedLookup;
+    }
+  }
+
   const lookup = new Map<string, NormalizedQuestionSpec>();
 
   (Array.isArray(paper?.sections) ? paper.sections : []).forEach((section: any) => {
@@ -151,6 +160,10 @@ export function buildPaperQuestionLookup(paper: any) {
       },
     );
   });
+
+  if (paper && typeof paper === "object") {
+    paperQuestionLookupCache.set(paper, lookup);
+  }
 
   return lookup;
 }

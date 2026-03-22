@@ -37,11 +37,22 @@ export interface TagItem {
   type: TagType;
 }
 
+function normalizeTagType(type: Partial<TagType> | null | undefined): TagType | null {
+  const id = String(type?._id || '').trim();
+  const name = String(type?.name || '').trim();
+  if (!id || !name) {
+    return null;
+  }
+
+  return { _id: id, name };
+}
+
 interface MultiSelectTagsProps {
   selectedTags: TagItem[];
   allTags: TagItem[];
   onSelectedTagsChange: (selected: TagItem[]) => void;
   onCreateNewTag?: (tagName: string, typeId: string) => Promise<TagItem | null>;
+  availableTagTypes?: TagType[];
   isLoading?: boolean;
   recommendedTagIds?: string[];
   disabled?: boolean; // --- FIX: Add a disabled prop ---
@@ -54,6 +65,7 @@ export function MultiSelectTags({
   allTags,
   onSelectedTagsChange,
   onCreateNewTag,
+  availableTagTypes,
   isLoading,
   recommendedTagIds = [],
   disabled = false, // --- FIX: Set default value for the disabled prop ---
@@ -68,24 +80,55 @@ export function MultiSelectTags({
   const [newTagTypeId, setNewTagTypeId] = React.useState('');
   const [isCreatingNewTag, setIsCreatingNewTag] = React.useState(false);
 
-  const [tagTypes, setTagTypes] = React.useState<TagType[]>([]);
+  const hasProvidedTagTypes = availableTagTypes !== undefined;
+  const [tagTypes, setTagTypes] = React.useState<TagType[]>(
+    () =>
+      Array.isArray(availableTagTypes)
+        ? availableTagTypes
+            .map((type) => normalizeTagType(type))
+            .filter((type): type is TagType => Boolean(type))
+        : [],
+  );
   const [isTagTypeModalOpen, setIsTagTypeModalOpen] = React.useState(false);
 
   const { toast } = useToast();
   const deferredInputValue = React.useDeferredValue(inputValue);
 
   React.useEffect(() => {
+    if (hasProvidedTagTypes) {
+      setTagTypes(
+        Array.isArray(availableTagTypes)
+          ? availableTagTypes
+              .map((type) => normalizeTagType(type))
+              .filter((type): type is TagType => Boolean(type))
+          : [],
+      );
+      return;
+    }
+
+    let active = true;
     const fetchTagTypes = async () => {
       try {
         const res = await fetch('/api/tag-types');
         const data = await res.json();
-        if (data.success) setTagTypes(data.tagTypes);
+        if (active && data.success) {
+          setTagTypes(
+            (Array.isArray(data.tagTypes) ? data.tagTypes : [])
+              .map((type: unknown) =>
+                normalizeTagType(type as Partial<TagType> | null | undefined),
+              )
+              .filter((type: TagType | null): type is TagType => Boolean(type)),
+          );
+        }
       } catch (error) {
         console.error("Failed to fetch tag types.");
       }
     };
     fetchTagTypes();
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [availableTagTypes, hasProvidedTagTypes]);
 
   React.useEffect(() => {
     if (!open) {
@@ -105,7 +148,10 @@ export function MultiSelectTags({
   const uniqueTagTypesForFilter = React.useMemo(() => {
     const typeMap = new Map<string, TagType>();
     allTags.forEach(tag => {
-      if (tag.type) typeMap.set(tag.type._id, tag.type);
+      const normalizedType = normalizeTagType(tag.type);
+      if (normalizedType) {
+        typeMap.set(normalizedType._id, normalizedType);
+      }
     });
     return Array.from(typeMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [allTags]);

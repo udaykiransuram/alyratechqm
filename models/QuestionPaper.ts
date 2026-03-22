@@ -171,6 +171,11 @@ const QuestionPaperSchema = new Schema<IQuestionPaper>(
 
 applyArchiveFields(QuestionPaperSchema);
 
+QuestionPaperSchema.index(
+  { class: 1, onlineEnabled: 1, isArchived: 1 },
+  { name: "class_online_enabled_archived_lookup" },
+);
+
 const modelRegistry = getModelRegistry();
 
 const existingQuestionPaperModel = modelRegistry.QuestionPaper as

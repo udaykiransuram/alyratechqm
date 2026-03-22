@@ -149,6 +149,11 @@ function getActiveSidebarChild(pathname: string, children: SidebarChild[]) {
   return activeChild;
 }
 
+function shouldPrefetchSidebarLinkOnMount(href: string) {
+  const normalizedHref = normalizeSidebarPath(href);
+  return normalizedHref.startsWith("/workspace/") && normalizedHref.endsWith("/create");
+}
+
 const schoolSidebarGroups: SidebarGroup[] = [
   {
     title: "Workspace",
@@ -577,6 +582,7 @@ function DesktopSidebarItem({
     return (
       <AppPrefetchLink
         href={directChild.href}
+        prefetchOnMount={shouldPrefetchSidebarLinkOnMount(directChild.href)}
         title={item.label}
         aria-label={item.label}
         className={triggerClassName}
@@ -631,6 +637,7 @@ function DesktopSidebarItem({
               <AppPrefetchLink
                 key={child.href}
                 href={child.href}
+                prefetchOnMount={shouldPrefetchSidebarLinkOnMount(child.href)}
                 onClick={() => {
                   onNavigate(child.href);
                   setOpen(false);
@@ -752,6 +759,7 @@ function MobileSidebar({
                           <AppPrefetchLink
                             key={item.label}
                             href={directChild.href}
+                            prefetchOnMount={shouldPrefetchSidebarLinkOnMount(directChild.href)}
                             onClick={() => {
                               onNavigate(directChild.href);
                               setOpen(false);
@@ -788,6 +796,7 @@ function MobileSidebar({
                                 <AppPrefetchLink
                                   key={child.href}
                                   href={child.href}
+                                  prefetchOnMount={shouldPrefetchSidebarLinkOnMount(child.href)}
                                   onClick={() => {
                                     onNavigate(child.href);
                                     setOpen(false);

@@ -330,6 +330,7 @@ export default function StudentsByClassPage() {
         actions={
           <AppPrefetchLink
             href="/workspace/students/create"
+            prefetchOnMount
             relatedApiPrefetches={['/api/classes', '/api/sections']}
           >
             <Button>Create Student</Button>

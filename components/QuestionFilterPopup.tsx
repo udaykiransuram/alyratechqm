@@ -1,3 +1,5 @@
+import dynamic from 'next/dynamic';
+import { useMemo } from 'react';
 import type { Dispatch, SetStateAction, MouseEvent } from 'react';
 
 import {
@@ -8,14 +10,60 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { MetadataSelector } from '@/components/MetadataSelector';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { Checkbox } from '@/components/ui/checkbox';
-import { QuestionItem } from '@/components/question-items';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+
+function MetadataSelectorLoadingState() {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="space-y-2">
+          <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+          <div className="h-10 w-full animate-pulse rounded-xl bg-muted/70" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function QuestionCardLoadingState() {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background p-4 shadow-none">
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <div className="h-6 w-20 animate-pulse rounded-full bg-muted" />
+          <div className="h-6 w-24 animate-pulse rounded-full bg-muted" />
+          <div className="h-6 w-20 animate-pulse rounded-full bg-muted" />
+        </div>
+        <div className="h-4 w-full animate-pulse rounded bg-muted" />
+        <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
+        <div className="h-10 w-full animate-pulse rounded-xl bg-muted/60" />
+      </div>
+    </div>
+  );
+}
+
+const MetadataSelector = dynamic(
+  () =>
+    import('@/components/MetadataSelector').then(
+      (module) => module.MetadataSelector,
+    ),
+  {
+    loading: () => <MetadataSelectorLoadingState />,
+  },
+);
+
+const QuestionItem = dynamic(
+  () =>
+    import('@/components/question-items').then((module) => module.QuestionItem),
+  {
+    loading: () => <QuestionCardLoadingState />,
+  },
+);
 
 type QuestionFilterPopupProps = {
   open: boolean;
@@ -70,6 +118,17 @@ export function QuestionFilterPopup({
   toast,
   handleEditQuestionSave,
 }: QuestionFilterPopupProps) {
+  const normalizedAllTags = useMemo(
+    () =>
+      allTags.map((tag) => ({
+        ...tag,
+        type: {
+          _id: (tag.type as any)?._id ?? '',
+          name: (tag.type as any)?.name ?? '',
+        },
+      })),
+    [allTags],
+  );
   const allQuestionsToShow = modalAvailableQuestions;
   const normalizeQuestionId = (id: string | number) => String(id);
   const selectedQuestionIdSet = new Set(selectedQuestionIds.map((id) => normalizeQuestionId(id)));
@@ -338,19 +397,13 @@ export function QuestionFilterPopup({
                             <QuestionItem
                               compact
                               className={cn(
-                                'w-full border-border/50 bg-background shadow-none',
-                                isSelected ? 'border-primary/60' : 'hover:border-border/60',
-                              )}
+                            'w-full border-border/50 bg-background shadow-none',
+                            isSelected ? 'border-primary/60' : 'hover:border-border/60',
+                          )}
                               question={question}
                               classes={classes}
                               subjects={subjects}
-                              allTags={allTags.map((tag) => ({
-                                ...tag,
-                                type: {
-                                  _id: (tag.type as any)?._id ?? '',
-                                  name: (tag.type as any)?.name ?? '',
-                                },
-                              }))}
+                              allTags={normalizedAllTags}
                               onSave={handleEditQuestionSave}
                             />
                           </div>

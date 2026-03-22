@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
 import { ContentRenderer } from "@/components/ContentRenderer";
+import PageHero from "@/components/layout/PageHero";
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import StudentPortalNav from "@/components/student/StudentPortalNav";
 import {
   AlertDialog,
@@ -42,6 +43,11 @@ type StudentPaper = {
   duration: number;
   passingMarks: number;
   totalMarks: number;
+  examDate?: string | null;
+  onlineStartsAt?: string | null;
+  onlineEndsAt?: string | null;
+  class?: { _id: string; name: string } | null;
+  subject?: { _id: string; name: string } | null;
   sections: Array<{
     name: string;
     description?: string;
@@ -71,6 +77,15 @@ type StudentAttempt = {
   }>;
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  available: "Available",
+  in_progress: "In Progress",
+  upcoming: "Upcoming",
+  submitted: "Submitted",
+  auto_submitted: "Auto Submitted",
+  expired: "Expired",
+};
+
 type StudentAnswerState = {
   selectedOptions: number[];
   answerText: string;
@@ -88,6 +103,13 @@ function formatRemainingTime(value: number | null) {
     return `${hours}h ${minutes}m ${seconds}s`;
   }
   return `${minutes}m ${seconds}s`;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString();
 }
 
 function getOptionLabel(index: number) {
@@ -244,6 +266,7 @@ export default function StudentTestPage() {
   const params = useParams();
   const router = useRouter();
   const paperId = String(params?.paperId || "");
+  const testsHref = "/student/tests";
 
   const [paper, setPaper] = useState<StudentPaper | null>(null);
   const [attempt, setAttempt] = useState<StudentAttempt | null>(null);
@@ -251,6 +274,8 @@ export default function StudentTestPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState("available");
+  const [isStarting, setIsStarting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
@@ -301,6 +326,9 @@ export default function StudentTestPage() {
   const unansweredCount = Math.max(0, questionList.length - answeredCount);
   const attemptLocked =
     attempt?.status === "submitted" || attempt?.status === "auto_submitted";
+  const attemptStarted = Boolean(attempt?._id && attempt?.startedAt);
+  const paperSubjectLabel = String(paper?.subject?.name || "").trim();
+  const paperClassLabel = String(paper?.class?.name || "").trim();
 
   useEffect(() => {
     answersRef.current = answers;
@@ -326,6 +354,7 @@ export default function StudentTestPage() {
 
         setPaper(nextPaper);
         setAttempt(nextAttempt);
+        setTestStatus(String(data.status || "available"));
         setAnswers(nextAnswers);
         answersRef.current = nextAnswers;
         lastSavedSignatureRef.current = JSON.stringify(
@@ -355,7 +384,9 @@ export default function StudentTestPage() {
   }, [paperId]);
 
   async function saveAttempt(force = false) {
-    if (!paper || attemptLocked || isSubmitting || isSaving) return;
+    if (!paper || !attemptStarted || attemptLocked || isSubmitting || isSaving) {
+      return;
+    }
 
     const payload = buildSectionAnswersPayloadFromState(paper, answersRef.current);
     const signature = JSON.stringify(payload);
@@ -375,6 +406,8 @@ export default function StudentTestPage() {
       setRemainingTimeMs(
         typeof data.remainingTimeMs === "number" ? data.remainingTimeMs : null,
       );
+      setDeadlineAt(data.deadlineAt || null);
+      setTestStatus(String(data.status || "in_progress"));
       lastSavedSignatureRef.current = signature;
       setActionError(null);
     } catch (error: any) {
@@ -385,7 +418,9 @@ export default function StudentTestPage() {
   }
 
   async function submitAttempt(auto = false) {
-    if (!paper || submitTriggeredRef.current || isSubmitting) return;
+    if (!paper || !attemptStarted || submitTriggeredRef.current || isSubmitting) {
+      return;
+    }
 
     submitTriggeredRef.current = true;
     setIsSubmitting(true);
@@ -416,11 +451,42 @@ export default function StudentTestPage() {
     }
   }
 
+  async function startAttempt() {
+    if (!paper || attemptStarted || isStarting || isSubmitting) {
+      return;
+    }
+
+    setIsStarting(true);
+    setActionError(null);
+
+    try {
+      const data = await fetchApiJson<any>(`/api/student/tests/${paperId}/attempt`, {
+        method: "POST",
+        fallbackMessage: "Failed to start the online test.",
+      });
+
+      const nextAttempt = data.attempt || null;
+      setAttempt(nextAttempt);
+      setTestStatus(String(data.status || "in_progress"));
+      setRemainingTimeMs(
+        typeof data.remainingTimeMs === "number" ? data.remainingTimeMs : null,
+      );
+      setDeadlineAt(data.deadlineAt || null);
+      lastSavedSignatureRef.current = JSON.stringify(
+        buildSectionAnswersPayloadFromState(paper, answersRef.current),
+      );
+    } catch (error: any) {
+      setActionError(error?.message || "Failed to start the online test.");
+    } finally {
+      setIsStarting(false);
+    }
+  }
+
   saveAttemptRef.current = saveAttempt;
   submitAttemptRef.current = submitAttempt;
 
   useEffect(() => {
-    if (!deadlineAt || attemptLocked) return;
+    if (!deadlineAt || !attemptStarted || attemptLocked) return;
 
     const interval = window.setInterval(() => {
       const nextRemainingTime = new Date(deadlineAt).getTime() - Date.now();
@@ -436,10 +502,10 @@ export default function StudentTestPage() {
     return () => {
       window.clearInterval(interval);
     };
-  }, [attemptLocked, deadlineAt]);
+  }, [attemptLocked, attemptStarted, deadlineAt]);
 
   useEffect(() => {
-    if (!paper || attemptLocked) return;
+    if (!paper || !attemptStarted || attemptLocked) return;
 
     const interval = window.setInterval(() => {
       void saveAttemptRef.current();
@@ -448,7 +514,7 @@ export default function StudentTestPage() {
     return () => {
       window.clearInterval(interval);
     };
-  }, [attemptLocked, paper]);
+  }, [attemptLocked, attemptStarted, paper]);
 
   function updateSingleChoice(questionId: string, optionIndex: number) {
     setAnswers((current) => ({
@@ -545,31 +611,30 @@ export default function StudentTestPage() {
   if (loading) {
     return (
       <PageLoadingState
-        title="Loading online test"
-        description="Preparing the paper, saved answers, and timer."
+        title="Loading test"
+        description="Preparing your exam."
       />
     );
   }
 
   if (loadError || !paper) {
     return (
-      <div className="app-page-shell max-w-6xl px-4 py-6 sm:px-0">
-        <StudentPortalNav />
-        <div className="app-spotlight-card app-spotlight-card-strong">
-          <p className="app-spotlight-label">Student portal</p>
-          <h1 className="app-spotlight-title">Unable to open this test</h1>
-          <p className="app-spotlight-copy">
-            The paper could not be prepared for this session. You can go back to
-            the assigned-test list and try again.
-          </p>
-        </div>
+      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+        <PageHero
+          eyebrow="Student Portal"
+          title="Test"
+          actions={
+            <Button asChild variant="outline">
+              <AppPrefetchLink href={testsHref} prefetchOnMount>
+                Back to Tests
+              </AppPrefetchLink>
+            </Button>
+          }
+        >
+          <StudentPortalNav />
+        </PageHero>
         <div className="app-feedback app-feedback-error">
           {loadError || "The requested online test could not be loaded."}
-        </div>
-        <div className="flex justify-start">
-          <Button asChild variant="outline">
-            <Link href="/student/tests">Back to Tests</Link>
-          </Button>
         </div>
       </div>
     );
@@ -583,228 +648,300 @@ export default function StudentTestPage() {
       attempt?.status === "auto_submitted" ? "Auto submitted" : "Submitted";
 
     return (
-      <div className="app-page-shell max-w-5xl px-4 py-6 sm:px-0">
-        <StudentPortalNav />
-        <div className="app-spotlight-card app-spotlight-card-strong">
-          <p className="app-spotlight-label">Submission complete</p>
-          <h1 className="app-spotlight-title">{paper.title}</h1>
-          <p className="app-spotlight-copy">
-            This attempt has already been submitted, so the runner is now in review-only mode.
-          </p>
-          <div className="app-spotlight-actions">
-            <span className="app-meta-chip">{submissionStatus}</span>
-            <span className="app-meta-chip">Submitted at: {submittedAtLabel}</span>
+      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+        <PageHero
+          eyebrow="Student Portal"
+          title={paper.title}
+          actions={
+            <Button asChild variant="outline">
+              <AppPrefetchLink href={testsHref} prefetchOnMount>
+                Back to Tests
+              </AppPrefetchLink>
+            </Button>
+          }
+        >
+          <div className="space-y-4">
+            <div className="app-page-meta">
+              {paperSubjectLabel ? (
+                <span className="app-meta-chip">{paperSubjectLabel}</span>
+              ) : null}
+              {paperClassLabel ? (
+                <span className="app-meta-chip">{paperClassLabel}</span>
+              ) : null}
+              <span className="app-meta-chip">{submissionStatus}</span>
+              <span className="app-meta-chip">{submittedAtLabel}</span>
+            </div>
+            <StudentPortalNav />
           </div>
-        </div>
+        </PageHero>
 
-        <Card className="app-surface">
+        <Card className="app-surface overflow-hidden">
           <CardHeader className="app-section-header">
             <CardTitle>Submission Summary</CardTitle>
           </CardHeader>
-          <CardContent className="app-surface-body">
-            <div className="app-inline-stat-grid">
-              <div className="app-inline-stat">
-                <p className="app-inline-stat-label">Status</p>
-                <p className="app-inline-stat-value">{submissionStatus}</p>
-                <p className="app-inline-stat-copy">
-                  This attempt is now read-only in the runner.
-                </p>
+          <CardContent className="app-section-body">
+            <div className="app-detail-grid">
+              <div className="app-detail-item">
+                <p className="app-detail-label">Status</p>
+                <div className="app-detail-value">{submissionStatus}</div>
               </div>
-              <div className="app-inline-stat">
-                <p className="app-inline-stat-label">Submitted At</p>
-                <p className="app-inline-stat-value">{submittedAtLabel}</p>
-                <p className="app-inline-stat-copy">
-                  Recorded using the server-side submission timestamp.
-                </p>
-              </div>
-              <div className="app-inline-stat">
-                <p className="app-inline-stat-label">
+              <div className="app-detail-item">
+                <p className="app-detail-label">
                   {hasManualReviewQuestions ? "Auto-Graded Score" : "Score"}
                 </p>
-                <p className="app-inline-stat-value">
+                <div className="app-detail-value">
                   {attempt?.totalMarksAwarded ?? 0} / {paper.totalMarks}
-                </p>
-                <p className="app-inline-stat-copy">
-                  {hasManualReviewQuestions
-                    ? "Final marks may change after manual review."
-                    : "This score reflects the graded paper result."}
-                </p>
+                </div>
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Questions</p>
+                <div className="app-detail-value">{questionList.length}</div>
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Submitted</p>
+                <div className="app-detail-value">{submittedAtLabel}</div>
               </div>
             </div>
 
             {hasManualReviewQuestions ? (
-              <div className="app-exam-alert app-exam-alert-warning">
-                Descriptive answers may still need manual review. The score shown here includes only the auto-graded portion so far.
+              <div className="app-feedback app-feedback-info">
+                Manual review is still pending for descriptive answers.
               </div>
             ) : null}
-
-            <div className="flex justify-end">
-              <Button asChild>
-                <Link href="/student/tests">Back to Test List</Link>
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  return (
-    <div className="app-page-shell max-w-7xl px-4 py-6 sm:px-0">
-      <StudentPortalNav />
+  if (!attemptStarted) {
+    const effectiveStart = formatDateTime(paper.onlineStartsAt || paper.examDate);
+    const effectiveEnd = formatDateTime(paper.onlineEndsAt);
+    const statusLabel = STATUS_LABELS[testStatus] || testStatus;
+    const canStartNow = testStatus === "available";
 
-      <div className="app-spotlight-card app-spotlight-card-strong">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <p className="app-spotlight-label">Active test</p>
-              <h1 className="app-spotlight-title">{paper.title}</h1>
-              <p className="app-spotlight-copy">
-                Move through the palette, keep your answers updated, and submit once the paper is complete.
-              </p>
+    return (
+      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+        <PageHero
+          eyebrow="Student Portal"
+          title={paper.title}
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button asChild variant="outline">
+                <AppPrefetchLink href={testsHref} prefetchOnMount>
+                  Back to Tests
+                </AppPrefetchLink>
+              </Button>
+              <Button
+                onClick={() => void startAttempt()}
+                disabled={!canStartNow || isStarting}
+              >
+                {isStarting ? <Spinner /> : "Start Test"}
+              </Button>
             </div>
+          }
+        >
+          <div className="space-y-4">
             <div className="app-page-meta">
-              <span className="app-meta-chip">One attempt only</span>
-              <span className="app-meta-chip">Autosave every 30 seconds</span>
-              {hasManualReviewQuestions ? (
-                <span className="app-meta-chip">Manual review after submit</span>
+              <span className="app-meta-chip">{statusLabel}</span>
+              {paperSubjectLabel ? (
+                <span className="app-meta-chip">{paperSubjectLabel}</span>
               ) : null}
+              {paperClassLabel ? (
+                <span className="app-meta-chip">{paperClassLabel}</span>
+              ) : null}
+              <span className="app-meta-chip">{paper.duration} min</span>
             </div>
+            <StudentPortalNav />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="app-meta-chip">
-              {isSaving ? "Saving progress..." : "Autosave active"}
-            </span>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/student/tests">Back to Tests</Link>
-            </Button>
+        </PageHero>
+
+        {actionError ? (
+          <div className="app-feedback app-feedback-error">{actionError}</div>
+        ) : null}
+
+        {testStatus === "upcoming" ? (
+          <div className="app-feedback app-feedback-info">
+            This test has not opened yet. Online access starts at {effectiveStart}.
+          </div>
+        ) : null}
+
+        {testStatus === "expired" ? (
+          <div className="app-feedback app-feedback-error">
+            This test is closed and can no longer be started.
+          </div>
+        ) : null}
+
+        <div className="app-toolbar">
+          <div className="app-toolbar-row">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="app-meta-chip">{questionList.length} questions</span>
+              <span className="app-meta-chip">Opens {effectiveStart}</span>
+              <span className="app-meta-chip">Closes {effectiveEnd}</span>
+              <span className="app-meta-chip">Passing {paper.passingMarks}</span>
+            </div>
           </div>
         </div>
 
-        <div className="app-inline-stat-grid">
-          <div className="app-inline-stat">
-            <p className="app-inline-stat-label">Current Question</p>
-            <p className="app-inline-stat-value">
-              {Math.min(currentIndex + 1, questionList.length)} of {questionList.length}
-            </p>
-            <p className="app-inline-stat-copy">
-              Navigate through the paper using the palette or the next and previous controls.
-            </p>
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header">
+            <CardTitle>Test Details</CardTitle>
+          </CardHeader>
+          <CardContent className="app-section-body">
+            <div className="app-detail-grid">
+              <div className="app-detail-item">
+                <p className="app-detail-label">Status</p>
+                <div className="app-detail-value">{statusLabel}</div>
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Subject</p>
+                <div className="app-detail-value">{paperSubjectLabel || "—"}</div>
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Class</p>
+                <div className="app-detail-value">{paperClassLabel || "—"}</div>
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Questions</p>
+                <div className="app-detail-value">{questionList.length}</div>
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Duration</p>
+                <div className="app-detail-value">{paper.duration} min</div>
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Passing Marks</p>
+                <div className="app-detail-value">{paper.passingMarks}</div>
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Total Marks</p>
+                <div className="app-detail-value">{paper.totalMarks}</div>
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Online Start</p>
+                <div className="app-detail-value">{effectiveStart}</div>
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Online End</p>
+                <div className="app-detail-value">{effectiveEnd}</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {hasManualReviewQuestions ? (
+          <div className="app-feedback app-feedback-info">
+            Descriptive answers will be reviewed after submission.
           </div>
-          <div className="app-inline-stat">
-            <p className="app-inline-stat-label">Answered</p>
-            <p className="app-inline-stat-value">
-              {answeredCount} answered, {unansweredCount} remaining
-            </p>
-            <p className="app-inline-stat-copy">
-              Only saved responses will be submitted with the attempt.
-            </p>
-          </div>
-          <div className="app-inline-stat">
-            <p className="app-inline-stat-label">Time Remaining</p>
-            <p className="app-inline-stat-value">
-              {formatRemainingTime(remainingTimeMs)}
-            </p>
-            <p className="app-inline-stat-copy">
-              The server enforces the deadline even if the page stays open.
-            </p>
-          </div>
-        </div>
+        ) : null}
+
+        {paper.instructions ? (
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Instructions</CardTitle>
+            </CardHeader>
+            <CardContent className="app-section-body prose prose-sm max-w-none dark:prose-invert">
+              <p>{paper.instructions}</p>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
+    );
+  }
+
+  return (
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+      <PageHero
+        eyebrow="Student Portal"
+        title={paper.title}
+        actions={
+          <Button asChild variant="outline">
+            <AppPrefetchLink href={testsHref} prefetchOnMount>
+              Back to Tests
+            </AppPrefetchLink>
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <div className="app-page-meta">
+            {paperSubjectLabel ? (
+              <span className="app-meta-chip">{paperSubjectLabel}</span>
+            ) : null}
+            {paperClassLabel ? (
+              <span className="app-meta-chip">{paperClassLabel}</span>
+            ) : null}
+            <span className="app-meta-chip">{paper.duration} min</span>
+          </div>
+          <StudentPortalNav />
+        </div>
+      </PageHero>
 
       {actionError ? (
         <div className="app-feedback app-feedback-error">{actionError}</div>
       ) : null}
 
+      <div className="app-toolbar">
+        <div className="app-toolbar-row">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="app-meta-chip">
+              {formatRemainingTime(remainingTimeMs)}
+            </span>
+            <span className="app-meta-chip">
+              {answeredCount}/{questionList.length} answered
+            </span>
+            <span className="app-meta-chip">
+              Question {Math.min(currentIndex + 1, questionList.length)} of {questionList.length}
+            </span>
+            <span className="app-meta-chip">
+              {isSaving ? "Saving..." : "Autosave on"}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="app-exam-shell">
         <aside className="app-exam-sidebar">
-          <Card className="app-surface">
+          <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle>Exam Summary</CardTitle>
+              <CardTitle>Session Summary</CardTitle>
             </CardHeader>
-            <CardContent className="app-surface-body">
-              <div className="app-exam-alert app-exam-alert-warning">
-                Time remaining: {formatRemainingTime(remainingTimeMs)}
+            <CardContent className="app-section-body space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Time Left</p>
+                  <div className="app-detail-value">
+                    {formatRemainingTime(remainingTimeMs)}
+                  </div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Questions</p>
+                  <div className="app-detail-value">{questionList.length}</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Answered</p>
+                  <div className="app-detail-value">{answeredCount}</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Remaining</p>
+                  <div className="app-detail-value">{unansweredCount}</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Total Marks</p>
+                  <div className="app-detail-value">{paper.totalMarks}</div>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Passing Marks</p>
+                  <div className="app-detail-value">{paper.passingMarks}</div>
+                </div>
               </div>
 
               {hasManualReviewQuestions ? (
-                <div className="app-exam-alert app-exam-alert-info">
-                  This paper includes descriptive answers that will be reviewed manually after submission.
+                <div className="app-feedback app-feedback-info">
+                  Descriptive answers need manual review after submission.
                 </div>
               ) : null}
 
-              <div className="app-exam-summary-grid">
-                <div className="app-exam-stat-card">
-                  <p className="app-exam-stat-label">Questions</p>
-                  <p className="app-exam-stat-value">{questionList.length}</p>
-                </div>
-                <div className="app-exam-stat-card">
-                  <p className="app-exam-stat-label">Answered</p>
-                  <p className="app-exam-stat-value">{answeredCount}</p>
-                </div>
-                <div className="app-exam-stat-card">
-                  <p className="app-exam-stat-label">Total Marks</p>
-                  <p className="app-exam-stat-value">{paper.totalMarks}</p>
-                </div>
-                <div className="app-exam-stat-card">
-                  <p className="app-exam-stat-label">Passing Marks</p>
-                  <p className="app-exam-stat-value">{paper.passingMarks}</p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-foreground">
-                    Question Palette
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {answeredCount}/{questionList.length} answered
-                  </p>
-                </div>
-                <div className="app-exam-palette">
-                  {questionList.map((item, index) => {
-                    const selected = hasAnswerForQuestion(
-                      item.question,
-                      answers[item.question._id],
-                    );
-                    const active = index === currentIndex;
-
-                    return (
-                      <button
-                        key={item.question._id}
-                        type="button"
-                        onClick={() => void jumpToQuestion(index)}
-                        className={cn(
-                          "app-exam-palette-button",
-                          active && "app-exam-palette-button-active",
-                          !active &&
-                            selected &&
-                            "app-exam-palette-button-complete",
-                        )}
-                      >
-                        {index + 1}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="app-exam-palette-legend">
-                  <div className="app-exam-palette-legend-item">
-                    <span className="app-exam-palette-swatch bg-primary" />
-                    <span>Current</span>
-                  </div>
-                  <div className="app-exam-palette-legend-item">
-                    <span className="app-exam-palette-swatch bg-emerald-400" />
-                    <span>Answered</span>
-                  </div>
-                  <div className="app-exam-palette-legend-item">
-                    <span className="app-exam-palette-swatch bg-border" />
-                    <span>Unanswered</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
+              <div className="space-y-2 border-t border-border/60 pt-4">
                 <AlertDialog
                   open={submitDialogOpen}
                   onOpenChange={setSubmitDialogOpen}
@@ -852,15 +989,57 @@ export default function StudentTestPage() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle>Question Palette</CardTitle>
+                <span className="app-meta-chip">
+                  {answeredCount}/{questionList.length} answered
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="app-section-body space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Jump to any question at any time.
+              </p>
+              <div className="app-exam-palette">
+                {questionList.map((item, index) => {
+                  const selected = hasAnswerForQuestion(
+                    item.question,
+                    answers[item.question._id],
+                  );
+                  const active = index === currentIndex;
+
+                  return (
+                    <button
+                      key={item.question._id}
+                      type="button"
+                      onClick={() => void jumpToQuestion(index)}
+                      className={cn(
+                        "app-exam-palette-button",
+                        active && "app-exam-palette-button-active",
+                        !active &&
+                          selected &&
+                          "app-exam-palette-button-complete",
+                      )}
+                    >
+                      {index + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </aside>
 
         <main className="space-y-4">
           {paper.instructions ? (
-            <Card className="app-surface">
+            <Card className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
                 <CardTitle>Instructions</CardTitle>
               </CardHeader>
-              <CardContent className="app-surface-body prose prose-sm max-w-none dark:prose-invert">
+              <CardContent className="app-section-body prose prose-sm max-w-none dark:prose-invert">
                 <p>{paper.instructions}</p>
               </CardContent>
             </Card>
@@ -868,7 +1047,7 @@ export default function StudentTestPage() {
 
           {currentQuestion && currentAnswer ? (
             <Card className="app-surface overflow-hidden">
-              <CardHeader className="app-section-header space-y-3">
+              <CardHeader className="app-section-header">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="space-y-1.5">
                     <p className="app-spotlight-label">{currentQuestion.sectionName}</p>
@@ -896,7 +1075,7 @@ export default function StudentTestPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="app-surface-body app-exam-question-shell">
+              <CardContent className="app-section-body app-exam-question-shell">
                 <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
                   <ContentRenderer htmlContent={currentQuestion.question.content} />
                 </div>
@@ -904,11 +1083,6 @@ export default function StudentTestPage() {
                 {currentQuestion.question.type === "single" ||
                 currentQuestion.question.type === "multiple" ? (
                   <div className="space-y-3.5">
-                    <div className="app-feedback app-feedback-info">
-                      {currentQuestion.question.type === "multiple"
-                        ? "Select one or more options. Every change is included in autosave."
-                        : "Select the best answer. Choosing another option replaces the previous one."}
-                    </div>
                     {currentQuestion.question.options.map((option, optionIndex) => {
                       const selected =
                         currentAnswer.selectedOptions.includes(optionIndex);
@@ -954,10 +1128,7 @@ export default function StudentTestPage() {
                           >
                             {getOptionLabel(optionIndex)}
                           </span>
-                          <div className="app-exam-option-content">
-                            <p className="app-exam-option-kicker">
-                              {selected ? "Selected option" : "Answer option"}
-                            </p>
+                          <div className="min-w-0 flex-1">
                             <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
                               <ContentRenderer htmlContent={option.content} />
                             </div>
@@ -970,9 +1141,6 @@ export default function StudentTestPage() {
 
                 {currentQuestion.question.type === "descriptive" ? (
                   <div className="space-y-3">
-                    <div className="app-exam-alert app-exam-alert-info">
-                      Your response will be saved online and reviewed manually after submission.
-                    </div>
                     <Textarea
                       value={currentAnswer.answerText}
                       onChange={(event) =>

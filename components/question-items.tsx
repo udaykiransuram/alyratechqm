@@ -1,16 +1,23 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Edit, Trash2 } from 'lucide-react';
 import { Spinner } from './ui/spinner';
 import { ContentRenderer } from './ContentRenderer';
-import { EditQuestionModal } from './EditQuestionModal';
 import { toast as showToast } from 'sonner';
 import { Separator } from './ui/separator';
 import { cn } from '@/lib/utils';
+
+const EditQuestionModal = dynamic(
+  () => import('./EditQuestionModal').then((module) => module.EditQuestionModal),
+  {
+    ssr: false,
+  },
+);
 
 export interface TagType { _id: string; name: string; }
 export interface Tag { _id: string; name: string; type: TagType; }
@@ -166,7 +173,7 @@ export function QuestionItem({
         ) : null}
       </Card>
 
-      {!readOnly ? (
+      {!readOnly && isEditModalOpen ? (
         <EditQuestionModal
           open={isEditModalOpen}
           onOpenChange={setEditModalOpen}

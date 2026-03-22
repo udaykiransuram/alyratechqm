@@ -17,10 +17,12 @@ export async function ensureIndexesForTenantDbName(dbName: string) {
   // Question Papers
   await ix('questionpapers', { createdAt: -1 }, { name: 'qp_createdAt_desc' });
   await ix('questionpapers', { class: 1, subject: 1, createdAt: -1 }, { name: 'qp_class_subject_createdAt' });
+  await ix('questionpapers', { class: 1, onlineEnabled: 1, isArchived: 1 }, { name: 'class_online_enabled_archived_lookup' });
   // Responses
   await ix('questionpaperresponses', { paper: 1 }, { name: 'qpr_paper_1' });
   await ix('questionpaperresponses', { student: 1 }, { name: 'qpr_student_1' });
   await ix('questionpaperresponses', { paper: 1, student: 1 }, { name: 'qpr_paper_student_1' });
+  await ix('questionpaperresponses', { student: 1, paper: 1 }, { name: 'qpr_student_paper_1' });
   // Subjects
   await ix('subjects', { name: 1 }, { name: 'subject_name_1' });
   await ix('subjects', { code: 1 }, { name: 'subject_code_1' });

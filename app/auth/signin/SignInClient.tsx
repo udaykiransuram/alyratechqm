@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { signIn } from "next-auth/react";
+import { useEffect, useMemo, useState } from "react";
+import { getSession, signIn } from "next-auth/react";
 import {
   Building2,
   Eye,
@@ -18,17 +17,16 @@ import {
   SearchableCommandSelect,
   type SearchableCommandOption,
 } from "@/components/ui/searchable-command-select";
+import { getDefaultRouteForRole } from "@/lib/auth-types";
 import { getAuthErrorMessage } from "@/lib/auth-runtime";
 import {
   getSchoolKeyFromCookie,
   setSchoolSelectionCookies,
 } from "@/lib/client/school";
 import { toast } from "@/components/ui/use-toast";
+import type { PublicSchoolOption } from "@/lib/server/public-school-data";
 
-type SchoolOption = {
-  key: string;
-  displayName: string;
-};
+type SchoolOption = PublicSchoolOption;
 
 type SchoolsResponse = {
   success?: boolean;
@@ -36,23 +34,116 @@ type SchoolsResponse = {
   message?: string;
 };
 
-export default function SignInClient() {
-  const searchParams = useSearchParams();
+type SignInClientProps = {
+  initialSchools?: SchoolOption[];
+  initialSchoolKey?: string;
+  requestedCallbackUrl?: string;
+  pageError?: string;
+};
+
+function normalizeSchoolKey(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeSchoolOptions(
+  schools: SchoolOption[] | undefined,
+): SchoolOption[] {
+  if (!Array.isArray(schools)) {
+    return [];
+  }
+
+  return schools
+    .map((school) => ({
+      key: normalizeSchoolKey(school?.key),
+      displayName: String(school?.displayName || "").trim(),
+    }))
+    .filter((school) => school.key && school.displayName);
+}
+
+export default function SignInClient({
+  initialSchools = [],
+  initialSchoolKey = "",
+  requestedCallbackUrl = "",
+  pageError = "",
+}: SignInClientProps) {
+  const normalizedInitialSchools = useMemo(
+    () => normalizeSchoolOptions(initialSchools),
+    [initialSchools],
+  );
+  const normalizedInitialSchoolKey = normalizeSchoolKey(initialSchoolKey);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [schoolKey, setSchoolKey] = useState("");
-  const [schools, setSchools] = useState<SchoolOption[]>([]);
-  const [schoolsLoading, setSchoolsLoading] = useState(true);
+  const [schoolKey, setSchoolKey] = useState(
+    normalizedInitialSchoolKey ||
+      (normalizedInitialSchools.length === 1
+        ? normalizedInitialSchools[0].key
+        : ""),
+  );
+  const [schools, setSchools] =
+    useState<SchoolOption[]>(normalizedInitialSchools);
+  const [schoolsLoading, setSchoolsLoading] = useState(
+    normalizedInitialSchools.length === 0,
+  );
   const [schoolsError, setSchoolsError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const callbackUrl = searchParams.get("callbackUrl")?.trim() || "/workspace";
+  const callbackUrl = requestedCallbackUrl || "/workspace";
   const pageErrorMessage = getAuthErrorMessage(
-    searchParams.get("error"),
+    pageError,
     "school",
   );
+  const trimmedIdentifier = identifier.trim();
+  const isStudentStyleIdentifier =
+    trimmedIdentifier.length > 0 && !trimmedIdentifier.includes("@");
+  const selectedSchool = schools.find((school) => school.key === schoolKey);
+  const showStudentPasswordShortcut =
+    isStudentStyleIdentifier &&
+    Boolean(trimmedIdentifier) &&
+    password !== trimmedIdentifier;
+  const identifierHint = !trimmedIdentifier
+    ? "Students: roll number. Staff: email."
+    : isStudentStyleIdentifier
+      ? "Roll number sign in."
+      : "Email sign in.";
+  const passwordHint = isStudentStyleIdentifier
+    ? "Default password is the same as the roll number unless it was changed."
+    : "";
+
   useEffect(() => {
     let mounted = true;
+
+    if (normalizedInitialSchools.length > 0) {
+      setSchools(normalizedInitialSchools);
+      setSchoolsError("");
+      setSchoolsLoading(false);
+
+      const rememberedSchoolKey = normalizeSchoolKey(getSchoolKeyFromCookie());
+      const rememberedSchool = normalizedInitialSchools.find(
+        (school: SchoolOption) => school.key === rememberedSchoolKey,
+      );
+      const resolvedSchool =
+        rememberedSchool ||
+        normalizedInitialSchools.find(
+          (school: SchoolOption) => school.key === normalizedInitialSchoolKey,
+        ) ||
+        (normalizedInitialSchools.length === 1
+          ? normalizedInitialSchools[0]
+          : null);
+
+      if (resolvedSchool) {
+        setSchoolKey((currentSchoolKey) =>
+          currentSchoolKey || resolvedSchool.key,
+        );
+        setSchoolSelectionCookies(
+          resolvedSchool.key,
+          resolvedSchool.displayName,
+        );
+      }
+
+      return () => {
+        mounted = false;
+      };
+    }
 
     async function loadSchools() {
       try {
@@ -71,19 +162,17 @@ export default function SignInClient() {
         if (!mounted) return;
 
         const nextSchools = Array.isArray(data.schools)
-          ? data.schools
-              .map((school) => ({
-                key: String(school?.key || "").trim(),
-                displayName: String(school?.displayName || "").trim(),
-              }))
-              .filter(
-                (school: SchoolOption) => school.key && school.displayName,
-              )
+          ? normalizeSchoolOptions(
+              data.schools.map((school) => ({
+                key: String(school?.key || ""),
+                displayName: String(school?.displayName || ""),
+              })),
+            )
           : [];
 
         setSchools(nextSchools);
 
-        const rememberedSchoolKey = getSchoolKeyFromCookie();
+        const rememberedSchoolKey = normalizeSchoolKey(getSchoolKeyFromCookie());
         const rememberedSchool = nextSchools.find(
           (school: SchoolOption) => school.key === rememberedSchoolKey,
         );
@@ -126,17 +215,32 @@ export default function SignInClient() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [normalizedInitialSchoolKey, normalizedInitialSchools]);
 
   const schoolOptions: SearchableCommandOption[] = schools.map((school) => ({
     value: school.key,
     label: school.displayName,
   }));
 
+  const handleSchoolChange = (nextSchoolKey: string) => {
+    const normalizedSchoolKey = nextSchoolKey.trim().toLowerCase();
+    setSchoolKey(normalizedSchoolKey);
+    const selectedSchool = schools.find(
+      (school) => school.key === normalizedSchoolKey,
+    );
+    if (selectedSchool) {
+      setSchoolSelectionCookies(
+        normalizedSchoolKey,
+        selectedSchool.displayName,
+      );
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const trimmedSchoolKey = schoolKey.trim();
+    const trimmedSchoolKey = schoolKey.trim().toLowerCase();
+    const submittedIdentifier = identifier.trim();
     if (!trimmedSchoolKey) {
       toast({
         title: "Select your school",
@@ -150,7 +254,7 @@ export default function SignInClient() {
 
     const result = await signIn("school-user", {
       redirect: false,
-      identifier,
+      identifier: submittedIdentifier,
       password,
       schoolKey: trimmedSchoolKey,
       callbackUrl,
@@ -159,8 +263,11 @@ export default function SignInClient() {
     setIsLoading(false);
 
     if (!result || !result.ok) {
-      const errorMessage = getAuthErrorMessage(result?.error, "school")
-        || "Login failed. Please check your credentials and try again.";
+      const errorMessage =
+        getAuthErrorMessage(result?.error, "school") ||
+        (isStudentStyleIdentifier
+          ? "Student sign in failed. Use the roll number as the username. The default password matches the roll number until it is changed."
+          : "Login failed. Please check your credentials and try again.");
       toast({
         title: "Error",
         description: errorMessage,
@@ -174,6 +281,21 @@ export default function SignInClient() {
       trimmedSchoolKey,
       selectedSchool?.displayName,
     );
+
+    if (requestedCallbackUrl) {
+      window.location.assign(result.url || requestedCallbackUrl);
+      return;
+    }
+
+    try {
+      const session = await getSession();
+      const role = session?.user?.role;
+      if (role) {
+        window.location.assign(getDefaultRouteForRole(role));
+        return;
+      }
+    } catch {}
+
     window.location.assign(result.url || callbackUrl);
   };
 
@@ -200,28 +322,22 @@ export default function SignInClient() {
               <div className="app-auth-icon">
                 <School className="h-6 w-6" />
               </div>
-              <div className="space-y-3">
-                <p className="app-auth-kicker">School Workspace Access</p>
-                <h1 className="app-auth-title">Sign in to your school portal</h1>
+              <div className="space-y-2">
+                <p className="app-auth-kicker">School Access</p>
+                <h1 className="app-auth-title">School sign in</h1>
                 <p className="app-auth-copy">
-                  Admins and teachers continue with email and password. Students
-                  use their roll number as the username, with the default first
-                  password matching that roll number until it is changed.
+                  Students use roll number. Staff use email.
                 </p>
               </div>
             </div>
           </section>
 
           <section className="app-auth-panel app-auth-panel-form">
-            <div className="space-y-2">
-              <p className="app-auth-kicker">School Sign In</p>
+            <div className="space-y-1">
+              <p className="app-auth-kicker">Login</p>
               <h2 className="text-2xl font-semibold tracking-[-0.03em] text-foreground">
-                Continue to the quality workspace
+                Sign in
               </h2>
-              <p className="app-auth-copy max-w-none">
-                Choose your school first, then use email or roll number with the
-                matching password.
-              </p>
             </div>
 
             <form
@@ -248,22 +364,40 @@ export default function SignInClient() {
                 <SearchableCommandSelect
                   value={schoolKey}
                   options={schoolOptions}
-                  onValueChange={setSchoolKey}
+                  onValueChange={handleSchoolChange}
                   placeholder={schoolsLoading ? "Loading schools..." : schools.length > 0 ? "Search and select your school" : "No schools available"}
                   searchPlaceholder="Search schools..."
                   emptyText="No schools found."
                   disabled={schoolsLoading || schools.length === 0}
                 />
+                {selectedSchool ? (
+                  <div className="rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                    Signing in to{" "}
+                    <span className="font-semibold text-foreground">
+                      {selectedSchool.displayName}
+                    </span>
+                    .
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Choose the school first so student roll-number sign in uses
+                    the right records.
+                  </p>
+                )}
               </div>
 
               <div className="app-field-group">
                 <label className="app-field-label" htmlFor="identifier">
-                  Email or Roll Number
+                  Username
                 </label>
                 <Input
                   id="identifier"
                   type="text"
-                  placeholder="you@school.com or STU-1024"
+                  placeholder={
+                    isStudentStyleIdentifier
+                      ? "Roll number"
+                      : "Email or roll number"
+                  }
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   autoCapitalize="none"
@@ -271,8 +405,10 @@ export default function SignInClient() {
                   spellCheck={false}
                   autoComplete="username"
                   className="h-11"
+                  autoFocus={Boolean(selectedSchool) || schools.length === 1}
                   required
                 />
+                <p className="text-xs text-muted-foreground">{identifierHint}</p>
               </div>
 
               <div className="app-field-group">
@@ -312,6 +448,18 @@ export default function SignInClient() {
                     )}
                   </button>
                 </div>
+                {showStudentPasswordShortcut ? (
+                  <button
+                    type="button"
+                    onClick={() => setPassword(trimmedIdentifier)}
+                    className="w-fit text-xs font-medium text-foreground underline-offset-4 transition hover:underline"
+                  >
+                    Use the roll number as the password
+                  </button>
+                ) : null}
+                {passwordHint ? (
+                  <p className="text-xs text-muted-foreground">{passwordHint}</p>
+                ) : null}
               </div>
 
               <Button

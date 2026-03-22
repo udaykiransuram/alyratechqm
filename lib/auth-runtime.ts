@@ -59,5 +59,21 @@ export function getAuthErrorMessage(
       : "Sign in failed. Please check your selected school, username, and password.";
   }
 
+  if (normalizedError === "SchoolNotFound") {
+    return "The selected school could not be found. Please choose your school again.";
+  }
+
+  if (normalizedError === "StudentRollNumberNotFound") {
+    return "No active student account matched that roll number in the selected school.";
+  }
+
+  if (normalizedError === "StudentDuplicateRollNumber") {
+    return "Multiple students share this roll number. Please contact your school admin.";
+  }
+
+  if (normalizedError === "StudentSignInFailed") {
+    return "Student sign in failed. Use the roll number as the username. The default password matches the roll number until it is changed.";
+  }
+
   return normalizedError;
 }

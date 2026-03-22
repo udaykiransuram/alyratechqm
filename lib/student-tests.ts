@@ -55,6 +55,13 @@ export function paperSupportsOnlineDelivery(paper: any) {
   });
 }
 
+export function paperRequiresManualReview(paper: any) {
+  const lookup = buildPaperQuestionLookup(paper);
+  if (lookup.size === 0) return false;
+
+  return Array.from(lookup.values()).some((spec) => spec.type === "descriptive");
+}
+
 export function isStudentEligibleForPaper(paper: any, student: any) {
   const studentClassId = normalizeId(student?.class?._id || student?.class);
   const paperClassId = normalizeId(paper?.class?._id || paper?.class);
@@ -210,13 +217,15 @@ export async function findOrCreateStudentAttempt({
   paperId,
   studentId,
   now = new Date(),
+  lean = false,
 }: {
   QuestionPaperResponseModel: any;
   paperId: string;
   studentId: string;
   now?: Date;
+  lean?: boolean;
 }) {
-  return QuestionPaperResponseModel.findOneAndUpdate(
+  const query = QuestionPaperResponseModel.findOneAndUpdate(
     {
       paper: paperId,
       student: studentId,
@@ -237,16 +246,16 @@ export async function findOrCreateStudentAttempt({
       setDefaultsOnInsert: true,
     },
   );
+
+  return lean ? query.lean() : query;
 }
 
-export async function finalizeAttemptAsSubmitted({
-  attempt,
+function buildSubmittedAttemptUpdate({
   paper,
   sectionAnswers,
   autoSubmitted = false,
   submittedAt,
 }: {
-  attempt: any;
   paper: any;
   sectionAnswers: Array<{
     sectionName: string;
@@ -261,11 +270,59 @@ export async function finalizeAttemptAsSubmitted({
   submittedAt?: Date;
 }) {
   const graded = gradeObjectiveSectionAnswers(sectionAnswers, paper);
-  attempt.sectionAnswers = graded.sectionAnswers;
-  attempt.totalMarksAwarded = graded.totalMarksAwarded;
-  attempt.status = autoSubmitted ? "auto_submitted" : "submitted";
-  attempt.submittedAt = submittedAt || new Date();
-  attempt.lastSavedAt = new Date();
+
+  return {
+    sectionAnswers: graded.sectionAnswers,
+    totalMarksAwarded: graded.totalMarksAwarded,
+    status: autoSubmitted ? "auto_submitted" : "submitted",
+    submittedAt: submittedAt || new Date(),
+    lastSavedAt: new Date(),
+  };
+}
+
+export async function finalizeAttemptAsSubmitted({
+  attempt,
+  paper,
+  sectionAnswers,
+  autoSubmitted = false,
+  submittedAt,
+  QuestionPaperResponseModel,
+}: {
+  attempt: any;
+  paper: any;
+  sectionAnswers: Array<{
+    sectionName: string;
+    answers: Array<{
+      question: string;
+      selectedOptions?: number[];
+      matrixSelections?: number[][];
+      answerText?: string;
+    }>;
+  }>;
+  autoSubmitted?: boolean;
+  submittedAt?: Date;
+  QuestionPaperResponseModel?: any;
+}) {
+  const update = buildSubmittedAttemptUpdate({
+    paper,
+    sectionAnswers,
+    autoSubmitted,
+    submittedAt,
+  });
+
+  if (QuestionPaperResponseModel && attempt?._id && typeof attempt?.save !== "function") {
+    return QuestionPaperResponseModel.findOneAndUpdate(
+      { _id: attempt._id },
+      { $set: update },
+      { new: true },
+    ).lean();
+  }
+
+  attempt.sectionAnswers = update.sectionAnswers;
+  attempt.totalMarksAwarded = update.totalMarksAwarded;
+  attempt.status = update.status;
+  attempt.submittedAt = update.submittedAt;
+  attempt.lastSavedAt = update.lastSavedAt;
   await attempt.save();
 
   return attempt;
@@ -275,10 +332,12 @@ export async function autoSubmitExpiredAttemptIfNeeded({
   attempt,
   paper,
   now = new Date(),
+  QuestionPaperResponseModel,
 }: {
   attempt: any;
   paper: any;
   now?: Date;
+  QuestionPaperResponseModel?: any;
 }) {
   if (!attempt) return null;
   if (attempt?.status === "submitted" || attempt?.status === "auto_submitted") {
@@ -303,5 +362,6 @@ export async function autoSubmitExpiredAttemptIfNeeded({
     sectionAnswers,
     autoSubmitted: true,
     submittedAt: new Date(deadlineMs),
+    QuestionPaperResponseModel,
   });
 }

@@ -10,6 +10,8 @@ import '@/models/TagType';
 import '@/models/Tag';
 import '@/models/User';
 import '@/models/Question';
+import '@/models/QuestionPaper';
+import '@/models/QuestionPaperResponse';
 
 export async function provisionTenant(schoolKey: string) {
   if (!schoolKey) throw new Error('schoolKey is required');
@@ -24,7 +26,17 @@ export async function provisionTenant(schoolKey: string) {
   );
 
   // Pre-provision core collections and indexes
-  const modelNames = ['Subject','Class','AcademicSection','TagType','Tag','User','Question'] as const;
+  const modelNames = [
+    'Subject',
+    'Class',
+    'AcademicSection',
+    'TagType',
+    'Tag',
+    'User',
+    'Question',
+    'QuestionPaper',
+    'QuestionPaperResponse',
+  ] as const;
   for (const name of modelNames) {
     try {
       const M = conn.model(name);
