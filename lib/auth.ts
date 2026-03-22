@@ -101,7 +101,9 @@ export const authOptions: NextAuthOptions = {
 
           const identifier = String(rawIdentifier).trim();
           const { User } = await getTenantModels(schoolKey, ["User"]);
-          const email = normalizeEmail(identifier);
+          const email = identifier.includes("@")
+            ? normalizeEmail(identifier)
+            : undefined;
           const rollNumber = email ? "" : normalizeRollNumber(identifier);
           const isStudentIdentifier = !email && Boolean(rollNumber);
           let user = email
