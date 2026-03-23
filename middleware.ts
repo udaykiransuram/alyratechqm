@@ -52,6 +52,17 @@ function isWorkspacePage(path: string) {
   return path === "/workspace" || path.startsWith("/workspace/");
 }
 
+function allowsAuthPageWithExistingSession(
+  error: string | null,
+  signedOut: string | null,
+) {
+  return (
+    error === "Configuration" ||
+    error === "StudentSessionExpired" ||
+    signedOut === "1"
+  );
+}
+
 function resolveTokenAccountType(token: any) {
   if (token?.accountType === "company_admin") return "company_admin";
   if (token?.accountType === "school_user") return "school_user";
@@ -67,7 +78,8 @@ function resolveDefaultPath(token: any) {
 
 function getClientIp(req: NextRequest) {
   const forwardedFor = req.headers.get("x-forwarded-for");
-  return String(req.ip || forwardedFor || "unknown")
+  const realIp = req.headers.get("x-real-ip");
+  return String(realIp || forwardedFor || "unknown")
     .split(",")[0]
     .trim();
 }
@@ -196,7 +208,13 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next();
     }
 
-    if (isAuthRoute && req.nextUrl.searchParams.get("error") === "Configuration") {
+    if (
+      isAuthRoute &&
+      allowsAuthPageWithExistingSession(
+        req.nextUrl.searchParams.get("error"),
+        req.nextUrl.searchParams.get("signedOut"),
+      )
+    ) {
       return NextResponse.next();
     }
 
@@ -240,6 +258,15 @@ export async function middleware(req: NextRequest) {
         accountType === "school_user" && String(token?.role || "") === "student";
 
       if (isAuthRoute) {
+        if (
+          allowsAuthPageWithExistingSession(
+            req.nextUrl.searchParams.get("error"),
+            req.nextUrl.searchParams.get("signedOut"),
+          )
+        ) {
+          return NextResponse.next();
+        }
+
         return NextResponse.redirect(new URL(defaultPath, req.url));
       }
 
@@ -272,7 +299,7 @@ export async function middleware(req: NextRequest) {
     const isAuthCallbackRequest =
       req.method === "POST" && path.startsWith("/api/auth/callback/");
 
-    if (isAuthCallbackRequest) {
+    if (process.env.NODE_ENV === "production" && isAuthCallbackRequest) {
       const authRateLimit = consumeRateLimit({
         key: `${requestIp}|auth|${path}`,
         max: 10,

@@ -285,6 +285,8 @@ export default function StudentTestPage() {
 
   const answersRef = useRef<Record<string, StudentAnswerState>>({});
   const lastSavedSignatureRef = useRef<string>("");
+  const saveInFlightRef = useRef(false);
+  const saveQueuedRef = useRef(false);
   const submitTriggeredRef = useRef(false);
   const saveAttemptRef = useRef<(force?: boolean) => Promise<void>>(async () => {});
   const submitAttemptRef = useRef<(auto?: boolean) => Promise<void>>(async () => {});
@@ -384,35 +386,65 @@ export default function StudentTestPage() {
   }, [paperId]);
 
   async function saveAttempt(force = false) {
-    if (!paper || !attemptStarted || attemptLocked || isSubmitting || isSaving) {
+    if (!paper || !attemptStarted || attemptLocked || isSubmitting) {
       return;
     }
 
-    const payload = buildSectionAnswersPayloadFromState(paper, answersRef.current);
-    const signature = JSON.stringify(payload);
-    if (!force && signature === lastSavedSignatureRef.current) {
+    if (saveInFlightRef.current) {
+      saveQueuedRef.current = true;
       return;
     }
 
+    saveInFlightRef.current = true;
     setIsSaving(true);
+
     try {
-      const data = await fetchApiJson<any>(`/api/student/tests/${paperId}/attempt`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sectionAnswers: payload }),
-        fallbackMessage: "Failed to save your attempt.",
-      });
-      setAttempt(data.attempt || null);
-      setRemainingTimeMs(
-        typeof data.remainingTimeMs === "number" ? data.remainingTimeMs : null,
-      );
-      setDeadlineAt(data.deadlineAt || null);
-      setTestStatus(String(data.status || "in_progress"));
-      lastSavedSignatureRef.current = signature;
-      setActionError(null);
-    } catch (error: any) {
-      setActionError(error?.message || "Failed to save your attempt.");
+      let shouldForceSave = force;
+
+      while (true) {
+        saveQueuedRef.current = false;
+
+        const payload = buildSectionAnswersPayloadFromState(
+          paper,
+          answersRef.current,
+        );
+        const signature = JSON.stringify(payload);
+        if (!shouldForceSave && signature === lastSavedSignatureRef.current) {
+          break;
+        }
+
+        try {
+          const data = await fetchApiJson<any>(
+            `/api/student/tests/${paperId}/attempt`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sectionAnswers: payload }),
+              fallbackMessage: "Failed to save your attempt.",
+            },
+          );
+          setAttempt(data.attempt || null);
+          setRemainingTimeMs(
+            typeof data.remainingTimeMs === "number"
+              ? data.remainingTimeMs
+              : null,
+          );
+          setDeadlineAt(data.deadlineAt || null);
+          setTestStatus(String(data.status || "in_progress"));
+          lastSavedSignatureRef.current = signature;
+          setActionError(null);
+        } catch (error: any) {
+          setActionError(error?.message || "Failed to save your attempt.");
+          break;
+        }
+
+        shouldForceSave = false;
+        if (!saveQueuedRef.current) {
+          break;
+        }
+      }
     } finally {
+      saveInFlightRef.current = false;
       setIsSaving(false);
     }
   }
@@ -604,8 +636,12 @@ export default function StudentTestPage() {
   }
 
   async function jumpToQuestion(index: number) {
-    await saveAttempt();
+    if (index === currentIndex) {
+      return;
+    }
+
     setCurrentIndex(index);
+    void saveAttempt();
   }
 
   if (loading) {

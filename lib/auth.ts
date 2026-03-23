@@ -9,6 +9,13 @@ import { getTenantModels } from "@/lib/db-tenant";
 import type { AccountType, AppRole, SchoolUserRole } from "@/lib/auth-types";
 import { getNextAuthSecret } from "@/lib/auth-runtime";
 import {
+  claimStudentSession,
+  clearStudentLoginRateLimit,
+  clearStudentSessionIfMatch,
+  consumeStudentLoginRateLimit,
+} from "@/lib/redis";
+import { createStudentSessionId, getStudentSessionFreshnessCutoff } from "@/lib/student-session";
+import {
   findStudentsByRollNumber,
   normalizeEmail,
   normalizeRollNumber,
@@ -20,6 +27,9 @@ const SCHOOL_NOT_FOUND_ERROR = "SchoolNotFound";
 const STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR = "StudentRollNumberNotFound";
 const STUDENT_DUPLICATE_ROLL_ERROR = "StudentDuplicateRollNumber";
 const STUDENT_SIGN_IN_FAILED_ERROR = "StudentSignInFailed";
+const STUDENT_PASSWORD_NOT_SET_ERROR = "StudentPasswordNotProvisioned";
+const STUDENT_ALREADY_SIGNED_IN_ERROR = "StudentAlreadySignedIn";
+const STUDENT_SIGN_IN_RATE_LIMITED_ERROR = "StudentSignInRateLimited";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -106,6 +116,25 @@ export const authOptions: NextAuthOptions = {
             : undefined;
           const rollNumber = email ? "" : normalizeRollNumber(identifier);
           const isStudentIdentifier = !email && Boolean(rollNumber);
+
+          if (isStudentIdentifier) {
+            let rateLimit = null;
+            try {
+              rateLimit = await consumeStudentLoginRateLimit(
+                schoolKey,
+                rollNumber,
+              );
+            } catch (error) {
+              console.error(
+                "Failed to consume student login rate limit. Continuing without Redis rate limit:",
+                error,
+              );
+            }
+            if (rateLimit?.limited) {
+              throw new Error(STUDENT_SIGN_IN_RATE_LIMITED_ERROR);
+            }
+          }
+
           let user = email
             ? await User.findOne({
                 email,
@@ -130,19 +159,13 @@ export const authOptions: NextAuthOptions = {
             }
           }
 
-          if (
-            user?.role === "student" &&
-            !user.passwordHash &&
-            normalizeRollNumber(user.rollNumber) &&
-            credentials.password === normalizeRollNumber(user.rollNumber)
-          ) {
-            user.passwordHash = await bcrypt.hash(credentials.password, 10);
-            await user.save();
-          }
-
           if (!user?.passwordHash) {
             if (user?.role === "student" || isStudentIdentifier) {
-              throw new Error(STUDENT_SIGN_IN_FAILED_ERROR);
+              throw new Error(
+                user?.role === "student"
+                  ? STUDENT_PASSWORD_NOT_SET_ERROR
+                  : STUDENT_SIGN_IN_FAILED_ERROR,
+              );
             }
             return null;
           }
@@ -157,6 +180,83 @@ export const authOptions: NextAuthOptions = {
             }
             return null;
           }
+
+          let studentSessionId: string | undefined;
+          if (user.role === "student") {
+            const now = new Date();
+            studentSessionId = createStudentSessionId();
+            let claimedRedisSession: boolean | null = null;
+            try {
+              claimedRedisSession = await claimStudentSession(
+                schoolKey,
+                String(user._id),
+                studentSessionId,
+              );
+            } catch (error) {
+              console.error(
+                "Failed to claim Redis student session. Falling back to DB session lock:",
+                error,
+              );
+            }
+
+            if (claimedRedisSession === false) {
+              throw new Error(STUDENT_ALREADY_SIGNED_IN_ERROR);
+            }
+
+            if (claimedRedisSession !== true) {
+              const sessionLockResult = await User.updateOne(
+                {
+                  _id: user._id,
+                  role: "student",
+                  $or: [
+                    { activeStudentSessionId: { $exists: false } },
+                    { activeStudentSessionId: null },
+                    { activeStudentSessionId: "" },
+                    { activeStudentSessionLastSeenAt: { $exists: false } },
+                    {
+                      activeStudentSessionLastSeenAt: {
+                        $lt: getStudentSessionFreshnessCutoff(now),
+                      },
+                    },
+                  ],
+                },
+                {
+                  $set: {
+                    activeStudentSessionId: studentSessionId,
+                    activeStudentSessionLastSeenAt: now,
+                  },
+                },
+              );
+
+              if (sessionLockResult.matchedCount !== 1) {
+                throw new Error(STUDENT_ALREADY_SIGNED_IN_ERROR);
+              }
+            } else {
+              await User.updateOne(
+                {
+                  _id: user._id,
+                  role: "student",
+                },
+                {
+                  $set: {
+                    activeStudentSessionId: studentSessionId,
+                    activeStudentSessionLastSeenAt: now,
+                  },
+                },
+              );
+            }
+
+            await clearStudentLoginRateLimit(schoolKey, rollNumber).catch(
+              (error) => {
+                console.error(
+                  "Failed to clear student login rate limit after successful sign in:",
+                  error,
+                );
+                return undefined;
+              },
+            );
+          }
+
           return {
             id: String(user._id),
             name: user.name,
@@ -164,6 +264,7 @@ export const authOptions: NextAuthOptions = {
             accountType: "school_user" as AccountType,
             role: user.role as SchoolUserRole,
             schoolKey,
+            studentSessionId,
           };
         } catch (error) {
           console.error("Error in school user authorize:", error);
@@ -174,6 +275,9 @@ export const authOptions: NextAuthOptions = {
               STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR,
               STUDENT_DUPLICATE_ROLL_ERROR,
               STUDENT_SIGN_IN_FAILED_ERROR,
+              STUDENT_PASSWORD_NOT_SET_ERROR,
+              STUDENT_ALREADY_SIGNED_IN_ERROR,
+              STUDENT_SIGN_IN_RATE_LIMITED_ERROR,
             ].includes(error.message)
           ) {
             throw error;
@@ -199,6 +303,7 @@ export const authOptions: NextAuthOptions = {
         token.accountType = user.accountType;
         token.role = user.role;
         token.schoolKey = user.schoolKey;
+        token.studentSessionId = user.studentSessionId;
       }
       return token;
     },
@@ -214,6 +319,7 @@ export const authOptions: NextAuthOptions = {
         session.user.accountType = token.accountType;
         session.user.role = token.role;
         session.user.schoolKey = token.schoolKey;
+        session.user.studentSessionId = token.studentSessionId;
       }
       return session;
     },
@@ -227,6 +333,53 @@ export const authOptions: NextAuthOptions = {
       }
 
       return baseUrl;
+    },
+  },
+  events: {
+    async signOut(message) {
+      const token = "token" in message ? message.token : undefined;
+      const studentSessionId =
+        typeof token?.studentSessionId === "string"
+          ? token.studentSessionId.trim()
+          : "";
+
+      if (
+        token?.accountType !== "school_user" ||
+        token?.role !== "student" ||
+        !token?.id ||
+        !token?.schoolKey ||
+        !studentSessionId
+      ) {
+        return;
+      }
+
+      try {
+        await clearStudentSessionIfMatch(
+          String(token.schoolKey),
+          String(token.id),
+          studentSessionId,
+        ).catch((error) => {
+          console.error("Failed to clear Redis student session on sign out:", error);
+          return null;
+        });
+
+        const { User } = await getTenantModels(String(token.schoolKey), ["User"]);
+        await User.updateOne(
+          {
+            _id: token.id,
+            role: "student",
+            activeStudentSessionId: studentSessionId,
+          },
+          {
+            $unset: {
+              activeStudentSessionId: 1,
+              activeStudentSessionLastSeenAt: 1,
+            },
+          },
+        );
+      } catch (error) {
+        console.error("Error clearing active student session on sign out:", error);
+      }
     },
   },
   secret: getNextAuthSecret(),

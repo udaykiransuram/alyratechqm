@@ -1,13 +1,14 @@
 import { StudentTagReportPageView } from "@/components/analytics/StudentTagReportPageView";
 
-export default function StudentReportDetailPage({
+export default async function StudentReportDetailPage({
   params,
 }: {
-  params: { responseId: string };
+  params: Promise<{ responseId: string }>;
 }) {
+  const resolvedParams = await params;
   return (
     <StudentTagReportPageView
-      params={params}
+      params={resolvedParams}
       portalMode="student"
       defaultBackHref="/student/account"
     />

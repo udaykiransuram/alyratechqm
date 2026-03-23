@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
+import {
+  isExamRuntimeEnabled,
+  resolveExamRuntimeErrorStatus,
+  submitStudentExamRuntimeAttempt,
+} from "@/lib/exam-runtime";
 import { validateStudentSectionAnswers } from "@/lib/question-paper/grading";
 import { getStudentTestModels, loadOnlinePaperRuntimeById } from "@/lib/student-test-server";
 import {
@@ -29,6 +34,17 @@ export async function POST(
   const now = new Date();
 
   try {
+    if (await isExamRuntimeEnabled()) {
+      const body = await req.json().catch(() => ({}));
+      const result = await submitStudentExamRuntimeAttempt({
+        schoolKey,
+        studentId,
+        paperId: params.paperId,
+        sectionAnswers: body?.sectionAnswers,
+      });
+      return NextResponse.json(result);
+    }
+
     const models = await getStudentTestModels(schoolKey);
     const { QuestionPaperResponse: QuestionPaperResponseModel } = models;
 
@@ -125,6 +141,14 @@ export async function POST(
       status: attempt.status,
     });
   } catch (error: any) {
+    if (await isExamRuntimeEnabled()) {
+      const message = error?.message || "Failed to submit test.";
+      return NextResponse.json(
+        { success: false, message },
+        { status: resolveExamRuntimeErrorStatus(message) },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error?.message || "Failed to submit test." },
       { status: 500 },

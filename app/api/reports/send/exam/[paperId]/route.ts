@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 import { requireTenantSession } from "@/lib/api-auth";
 import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
@@ -122,6 +123,16 @@ export async function POST(
       { status: 400 },
     );
   }
+
+  await syncExamRuntimeMongoProjectionsForPaper(schoolKey, params.paperId).catch(
+    (error) => {
+      console.error(
+        "Failed to sync exam runtime attempts into Mongo projections before report dispatch:",
+        error,
+      );
+      return new Map<string, string>();
+    },
+  );
 
   const paperClassObjectId = new mongoose.Types.ObjectId(paperClassId);
   const paperSubjectObjectId =

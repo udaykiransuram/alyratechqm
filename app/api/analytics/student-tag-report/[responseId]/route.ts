@@ -9,6 +9,7 @@ import path from "node:path";
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { resolveExamRuntimeMongoResponseId } from "@/lib/exam-runtime";
 import "@/models/User";
 import "@/models/Subject";
 import "@/models/Class";
@@ -92,7 +93,7 @@ function dedupeStatsArrays(obj: any) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { responseId: string } },
+  { params }: { params: Promise<{ responseId: string }> },
 ) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["admin", "teacher", "student"],
@@ -100,10 +101,20 @@ export async function GET(
   if (!auth.ok) return auth.response;
 
   const tenantKey = auth.schoolKey as string;
+  const { responseId } = await params;
+  let resolvedResponseId = String(responseId || "").trim();
+  if (
+    resolvedResponseId &&
+    !mongoose.Types.ObjectId.isValid(resolvedResponseId)
+  ) {
+    resolvedResponseId =
+      (await resolveExamRuntimeMongoResponseId(tenantKey, resolvedResponseId)) ||
+      resolvedResponseId;
+  }
   const isStudentSession = auth.session.user.role === "student";
   const responseQuery = isStudentSession
-    ? { _id: params.responseId, student: auth.session.user.id }
-    : { _id: params.responseId };
+    ? { _id: resolvedResponseId, student: auth.session.user.id }
+    : { _id: resolvedResponseId };
 
   // Validate params and query
   const groupByParam = req.nextUrl.searchParams.get("groupBy");
@@ -127,6 +138,19 @@ export async function GET(
         .map((s) => s.trim())
         .filter(Boolean)
     : [];
+  const jsonParam = req.nextUrl.searchParams.get("json") || undefined;
+  const groupFieldsParam =
+    req.nextUrl.searchParams.get("groupFields") || undefined;
+  const classLevelParam =
+    req.nextUrl.searchParams.get("classLevel") || undefined;
+
+  if (!mongoose.Types.ObjectId.isValid(resolvedResponseId)) {
+    return NextResponse.json(
+      { success: false, message: "Invalid responseId." },
+      { status: 400 },
+    );
+  }
+
   const querySchema = z.object({
     responseId: objectIdSchema,
     groupBy: z.array(z.string()).max(5).optional(),
@@ -138,16 +162,21 @@ export async function GET(
     academicSectionId: objectIdSchema.optional(),
   });
   const qRes = parseOr400(querySchema, {
-    responseId: params.responseId,
+    responseId: resolvedResponseId,
     groupBy: groupByParts,
-    json: req.nextUrl.searchParams.get("json"),
-    groupFields: req.nextUrl.searchParams.get("groupFields"),
-    classLevel: req.nextUrl.searchParams.get("classLevel"),
+    json: jsonParam,
+    groupFields: groupFieldsParam,
+    classLevel: classLevelParam,
     classId: filterClassId || undefined,
     subjectId: filterSubjectId || undefined,
     academicSectionId: filterAcademicSectionId || undefined,
   });
-  // Do not block on validation; proceed best-effort. If responseId is invalid, DB lookup will yield 404 later.
+  if (!qRes.ok) {
+    return NextResponse.json(
+      { success: false, message: qRes.message || "Invalid responseId." },
+      { status: qRes.status || 400 },
+    );
+  }
 
   // --- Handle groupFields=1 for dynamic grouping options ---
 

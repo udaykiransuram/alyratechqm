@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
+import {
+  isExamRuntimeEnabled,
+  listStudentExamRuntimeTests,
+  resolveExamRuntimeErrorStatus,
+} from "@/lib/exam-runtime";
 import { getStudentTestModels, loadOnlinePapersForClass, loadStudentUser } from "@/lib/student-test-server";
 import {
   autoSubmitExpiredAttemptIfNeeded,
@@ -34,6 +39,11 @@ export async function GET(req: NextRequest) {
   const now = new Date();
 
   try {
+    if (await isExamRuntimeEnabled()) {
+      const tests = await listStudentExamRuntimeTests(schoolKey, studentId);
+      return NextResponse.json({ success: true, tests });
+    }
+
     const {
       QuestionPaper: QuestionPaperModel,
       QuestionPaperResponse: QuestionPaperResponseModel,
@@ -155,6 +165,14 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, tests });
   } catch (error: any) {
+    if (await isExamRuntimeEnabled()) {
+      const message = error?.message || "Failed to load student tests.";
+      return NextResponse.json(
+        { success: false, message },
+        { status: resolveExamRuntimeErrorStatus(message) },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error?.message || "Failed to load student tests." },
       { status: 500 },

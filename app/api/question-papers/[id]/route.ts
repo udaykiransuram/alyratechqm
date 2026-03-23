@@ -10,6 +10,10 @@ import {
 } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
 import { requireTenantSession } from "@/lib/api-auth";
+import {
+  disableExamPaperSnapshotsForPaperId,
+  syncExamPaperSnapshotForPaperId,
+} from "@/lib/exam-runtime";
 import { isOnlineQuestionType } from "@/lib/question-paper/grading";
 
 function resolveSchoolKey(req: NextRequest) {
@@ -365,6 +369,20 @@ export async function PUT(
       details: { paperId: String(updated._id) },
     });
 
+    if (onlineEnabled) {
+      await syncExamPaperSnapshotForPaperId(
+        schoolKey,
+        String(updated._id),
+      ).catch((error) => {
+        console.error("Failed to sync exam paper snapshot after update:", error);
+      });
+    } else {
+      await disableExamPaperSnapshotsForPaperId(
+        schoolKey,
+        String(updated._id),
+      ).catch(() => undefined);
+    }
+
     return NextResponse.json({ success: true, paper: updated });
   } catch (error: any) {
     return NextResponse.json(
@@ -410,6 +428,11 @@ export async function DELETE(
       summary: `Archived question paper ${archived.title}.`,
       details: { paperId: String(archived._id) },
     });
+
+    await disableExamPaperSnapshotsForPaperId(
+      schoolKey,
+      String(archived._id),
+    ).catch(() => undefined);
 
     return NextResponse.json({
       success: true,

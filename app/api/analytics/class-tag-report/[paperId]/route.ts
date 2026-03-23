@@ -18,6 +18,7 @@ import {
   buildPaperQuestionLookup,
   evaluateQuestionAnswer,
 } from "@/lib/question-paper/grading";
+import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
 import { z } from "zod";
 import { objectIdSchema, schoolKeySchema, parseOr400 } from "@/lib/validation";
 
@@ -287,6 +288,16 @@ export async function GET(
     paperTitle = paperObj.title || "";
     paperSections = paperObj.sections || [];
     const questionLookup = buildPaperQuestionLookup({ sections: paperSections });
+
+    await syncExamRuntimeMongoProjectionsForPaper(tenantKey, params.paperId).catch(
+      (error) => {
+        console.error(
+          "Failed to sync exam runtime attempts into Mongo projections for class analytics:",
+          error,
+        );
+        return new Map<string, string>();
+      },
+    );
 
     responses = await QPRModel.find({ paper: params.paperId })
       .populate({

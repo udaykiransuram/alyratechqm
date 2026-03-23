@@ -15,12 +15,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
-  PopoverTrigger,
 } from "@/components/ui/popover";
 import {
   BarChart2,
@@ -65,6 +64,13 @@ type CurrentSchoolInfo = {
 const SIDEBAR_EXPANDED_WIDTH = "var(--app-sidebar-expanded-width)";
 const SIDEBAR_COLLAPSED_WIDTH = "var(--app-sidebar-collapsed-width)";
 const SIDEBAR_STORAGE_KEY = "app-sidebar-collapsed";
+const SIDEBAR_SIDE_STORAGE_KEY = "app-sidebar-side";
+const SIDEBAR_WIDTH_STORAGE_KEY = "app-sidebar-width";
+const SIDEBAR_DEFAULT_WIDTH = 272;
+const SIDEBAR_MIN_WIDTH = 220;
+const SIDEBAR_MAX_WIDTH = 420;
+
+type SidebarSide = "left" | "right";
 
 function isCompanyRoute(pathname: string) {
   return pathname === "/company" || pathname.startsWith("/company/");
@@ -140,7 +146,8 @@ function getActiveSidebarChild(pathname: string, children: SidebarChild[]) {
 
     if (
       !activeChild ||
-      normalizeSidebarPath(child.href).length > normalizeSidebarPath(activeChild.href).length
+      normalizeSidebarPath(child.href).length >
+        normalizeSidebarPath(activeChild.href).length
     ) {
       activeChild = child;
     }
@@ -151,7 +158,10 @@ function getActiveSidebarChild(pathname: string, children: SidebarChild[]) {
 
 function shouldPrefetchSidebarLinkOnMount(href: string) {
   const normalizedHref = normalizeSidebarPath(href);
-  return normalizedHref.startsWith("/workspace/") && normalizedHref.endsWith("/create");
+  return (
+    normalizedHref.startsWith("/workspace/") &&
+    normalizedHref.endsWith("/create")
+  );
 }
 
 const schoolSidebarGroups: SidebarGroup[] = [
@@ -173,7 +183,10 @@ const schoolSidebarGroups: SidebarGroup[] = [
         icon: BookOpen,
         children: [
           { href: "/workspace/question-papers", label: "All Question Papers" },
-          { href: "/workspace/question-papers/create", label: "Create Question Paper" },
+          {
+            href: "/workspace/question-papers/create",
+            label: "Create Question Paper",
+          },
         ],
       },
       {
@@ -247,7 +260,10 @@ const schoolSidebarGroups: SidebarGroup[] = [
           { href: "/workspace/manage/classes", label: "All Classes" },
           { href: "/workspace/manage/classes/create", label: "Create Class" },
           { href: "/workspace/manage/sections", label: "All Sections" },
-          { href: "/workspace/manage/sections/create", label: "Create Section" },
+          {
+            href: "/workspace/manage/sections/create",
+            label: "Create Section",
+          },
         ],
       },
     ],
@@ -370,7 +386,12 @@ function getSchoolInitials(label: string, key: string) {
     return `${words[0][0] || ""}${words[1][0] || ""}`.toUpperCase();
   }
 
-  return source.replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase() || "SC";
+  return (
+    source
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, 2)
+      .toUpperCase() || "SC"
+  );
 }
 
 function useCurrentSchoolInfo(enabled: boolean): CurrentSchoolInfo {
@@ -407,7 +428,9 @@ function useCurrentSchoolInfo(enabled: boolean): CurrentSchoolInfo {
 
     void (async () => {
       try {
-        const response = await fetch("/api/public/schools", { cache: "no-store" });
+        const response = await fetch("/api/public/schools", {
+          cache: "no-store",
+        });
         const data = (await response.json()) as {
           schools?: Array<{ key?: string; displayName?: string }>;
         };
@@ -479,9 +502,8 @@ function CurrentSchoolBadge({
   compact?: boolean;
 }) {
   const label = school.label || "No school selected";
-  const title = school.key && school.label
-    ? `${school.label} (${school.key})`
-    : label;
+  const title =
+    school.key && school.label ? `${school.label} (${school.key})` : label;
 
   return (
     <div
@@ -541,6 +563,11 @@ function DesktopSidebarItem({
     setOpen(true);
   };
 
+  const toggleMenu = () => {
+    clearCloseTimeout();
+    setOpen((currentOpen) => !currentOpen);
+  };
+
   const scheduleClose = () => {
     clearCloseTimeout();
     closeTimeoutRef.current = window.setTimeout(() => {
@@ -568,13 +595,20 @@ function DesktopSidebarItem({
 
   const content = (
     <>
-      <span className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
+      <span
+        className={cn(
+          "flex items-center",
+          collapsed ? "justify-center" : "gap-3",
+        )}
+      >
         <span className="app-sidebar-item-icon">
           <Icon className="h-4 w-4 shrink-0" />
         </span>
         {!collapsed && <span className="truncate">{item.label}</span>}
       </span>
-      {!collapsed && !directChild && <span className="text-xs opacity-70">›</span>}
+      {!collapsed && !directChild && (
+        <span className="text-xs opacity-70">›</span>
+      )}
     </>
   );
 
@@ -603,19 +637,22 @@ function DesktopSidebarItem({
         setOpen(nextOpen);
       }}
     >
-      <PopoverTrigger asChild>
+      <PopoverAnchor asChild>
         <button
           type="button"
           title={item.label}
           aria-label={item.label}
+          aria-haspopup="dialog"
+          aria-expanded={open}
           className={triggerClassName}
           onMouseEnter={openMenu}
           onMouseLeave={scheduleClose}
           onFocus={openMenu}
+          onClick={toggleMenu}
         >
           {content}
         </button>
-      </PopoverTrigger>
+      </PopoverAnchor>
       <PopoverContent
         side="right"
         align="start"
@@ -627,9 +664,7 @@ function DesktopSidebarItem({
         onMouseLeave={scheduleClose}
       >
         <div className="space-y-0.5">
-          <p className="app-nav-popover-title">
-            {item.label}
-          </p>
+          <p className="app-nav-popover-title">{item.label}</p>
           {item.children.map((child) => {
             const childActive = activeChild?.href === child.href;
 
@@ -675,7 +710,7 @@ function SidebarNavGroups({
         .map((group) => (
           <div key={group.title}>
             {collapsed ? (
-                <div className="mb-2 px-2" aria-hidden="true">
+              <div className="mb-2 px-2" aria-hidden="true">
                 <div className="app-nav-divider h-px rounded-full" />
               </div>
             ) : (
@@ -722,12 +757,17 @@ function MobileSidebar({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="icon" className="rounded-xl lg:hidden">
-          <Menu className="h-5 w-5" />
-          <span className="sr-only">Open menu</span>
-        </Button>
-      </DialogTrigger>
+      <Button
+        variant="outline"
+        size="icon"
+        className="rounded-xl lg:hidden"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
+        <Menu className="h-5 w-5" />
+        <span className="sr-only">Open menu</span>
+      </Button>
       <DialogContent className="app-nav-mobile-dialog inset-0 h-[100dvh] w-screen translate-x-0 translate-y-0 rounded-none p-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:w-full sm:max-w-sm sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl">
         <DialogHeader className="border-b border-[hsl(var(--app-nav-border)/0.85)] px-5 py-4">
           <DialogTitle>Navigation</DialogTitle>
@@ -751,7 +791,10 @@ function MobileSidebar({
                       const Icon = item.icon;
                       const directChild =
                         item.children.length === 1 ? item.children[0] : null;
-                      const activeChild = getActiveSidebarChild(activePath, item.children);
+                      const activeChild = getActiveSidebarChild(
+                        activePath,
+                        item.children,
+                      );
                       const isActive = activeChild !== null;
 
                       if (directChild) {
@@ -759,7 +802,9 @@ function MobileSidebar({
                           <AppPrefetchLink
                             key={item.label}
                             href={directChild.href}
-                            prefetchOnMount={shouldPrefetchSidebarLinkOnMount(directChild.href)}
+                            prefetchOnMount={shouldPrefetchSidebarLinkOnMount(
+                              directChild.href,
+                            )}
                             onClick={() => {
                               onNavigate(directChild.href);
                               setOpen(false);
@@ -778,10 +823,7 @@ function MobileSidebar({
                       }
 
                       return (
-                        <div
-                          key={item.label}
-                          className="app-nav-panel p-1.5"
-                        >
+                        <div key={item.label} className="app-nav-panel p-1.5">
                           <div className="flex items-center gap-3 px-2 py-1.5 text-sm font-medium">
                             <span className="app-sidebar-item-icon">
                               <Icon className="h-4 w-4 shrink-0" />
@@ -790,20 +832,25 @@ function MobileSidebar({
                           </div>
                           <div className="space-y-0.5">
                             {item.children.map((child) => {
-                              const childActive = activeChild?.href === child.href;
+                              const childActive =
+                                activeChild?.href === child.href;
 
                               return (
                                 <AppPrefetchLink
                                   key={child.href}
                                   href={child.href}
-                                  prefetchOnMount={shouldPrefetchSidebarLinkOnMount(child.href)}
+                                  prefetchOnMount={shouldPrefetchSidebarLinkOnMount(
+                                    child.href,
+                                  )}
                                   onClick={() => {
                                     onNavigate(child.href);
                                     setOpen(false);
                                   }}
                                   className={cn(
                                     "app-sidebar-subitem block rounded-lg px-3 py-1.5 text-sm transition-colors",
-                                    childActive ? "app-sidebar-subitem-active font-medium" : null,
+                                    childActive
+                                      ? "app-sidebar-subitem-active font-medium"
+                                      : null,
                                   )}
                                 >
                                   {child.label}
@@ -827,7 +874,10 @@ function MobileSidebar({
 export default function SiteHeader() {
   const pathname = usePathname() || "/";
   const [collapsed, setCollapsed] = useState(false);
+  const [sidebarSide, setSidebarSide] = useState<SidebarSide>("left");
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const isResizingRef = useRef(false);
   const publicRoute = isPublicRoute(pathname);
   const schoolWorkspaceRoute =
     !isAuthRoute(pathname) &&
@@ -842,12 +892,12 @@ export default function SiteHeader() {
     ? companySidebarGroups
     : schoolSidebarGroups;
   const showMobileContextBar = schoolWorkspaceRoute;
-  const authSwitchHref = pathname === "/auth/company-signin"
-    ? "/auth/signin"
-    : "/auth/company-signin";
-  const authSwitchLabel = pathname === "/auth/company-signin"
-    ? "School Sign In"
-    : "Company Sign In";
+  const authSwitchHref =
+    pathname === "/auth/company-signin"
+      ? "/auth/signin"
+      : "/auth/company-signin";
+  const authSwitchLabel =
+    pathname === "/auth/company-signin" ? "School Sign In" : "Company Sign In";
   const currentSchool = useCurrentSchoolInfo(schoolWorkspaceRoute);
   const activePath = pendingPath || pathname;
 
@@ -865,18 +915,83 @@ export default function SiteHeader() {
       if (savedState === "true") {
         setCollapsed(true);
       }
-    } catch {
-    }
+
+      const savedSide = window.localStorage.getItem(SIDEBAR_SIDE_STORAGE_KEY);
+      if (savedSide === "left" || savedSide === "right") {
+        setSidebarSide(savedSide);
+      }
+
+      const savedWidth = Number(
+        window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY),
+      );
+      if (Number.isFinite(savedWidth)) {
+        setSidebarWidth(
+          Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, savedWidth)),
+        );
+      }
+    } catch {}
   }, []);
 
   useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isResizingRef.current || collapsed || !hasSidebar) {
+        return;
+      }
+
+      const nextWidth =
+        sidebarSide === "left"
+          ? event.clientX
+          : window.innerWidth - event.clientX;
+
+      const clampedWidth = Math.min(
+        SIDEBAR_MAX_WIDTH,
+        Math.max(SIDEBAR_MIN_WIDTH, nextWidth),
+      );
+
+      setSidebarWidth(clampedWidth);
+    };
+
+    const stopResize = () => {
+      if (!isResizingRef.current) {
+        return;
+      }
+
+      isResizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize);
+    window.addEventListener("pointercancel", stopResize);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+      stopResize();
+    };
+  }, [collapsed, hasSidebar, sidebarSide]);
+
+  useEffect(() => {
+    const effectiveSidebarWidth =
+      hasSidebar && !collapsed
+        ? `${sidebarWidth}px`
+        : hasSidebar && collapsed
+          ? SIDEBAR_COLLAPSED_WIDTH
+          : "0px";
+
     document.documentElement.style.setProperty(
       "--app-sidebar-width",
-      hasSidebar
-        ? collapsed
-          ? SIDEBAR_COLLAPSED_WIDTH
-          : SIDEBAR_EXPANDED_WIDTH
-        : "0px",
+      effectiveSidebarWidth,
+    );
+    document.documentElement.style.setProperty(
+      "--app-sidebar-left-width",
+      hasSidebar && sidebarSide === "left" ? effectiveSidebarWidth : "0px",
+    );
+    document.documentElement.style.setProperty(
+      "--app-sidebar-right-width",
+      hasSidebar && sidebarSide === "right" ? effectiveSidebarWidth : "0px",
     );
     document.documentElement.style.setProperty(
       "--app-mobile-school-switcher-height",
@@ -885,14 +1000,38 @@ export default function SiteHeader() {
 
     try {
       window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
-    } catch {
+      window.localStorage.setItem(SIDEBAR_SIDE_STORAGE_KEY, sidebarSide);
+      window.localStorage.setItem(
+        SIDEBAR_WIDTH_STORAGE_KEY,
+        String(sidebarWidth),
+      );
+    } catch {}
+  }, [collapsed, hasSidebar, showMobileContextBar, sidebarSide, sidebarWidth]);
+
+  const startSidebarResize = () => {
+    if (collapsed || !hasSidebar) {
+      return;
     }
-  }, [collapsed, hasSidebar, showMobileContextBar]);
+
+    isResizingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
 
   async function handleSignOut() {
-    await signOut({
-      callbackUrl: companyRoute ? "/auth/company-signin" : "/auth/signin",
-    });
+    const targetUrl = new URL(
+      companyRoute ? "/auth/company-signin" : "/auth/signin",
+      window.location.origin,
+    );
+    targetUrl.searchParams.set("signedOut", "1");
+
+    try {
+      await signOut({
+        redirect: false,
+      });
+    } catch {}
+
+    window.location.assign(targetUrl.toString());
   }
 
   return (
@@ -914,7 +1053,9 @@ export default function SiteHeader() {
 
           <div className="hidden min-w-0 flex-1 items-center justify-end md:flex">
             <div className="flex items-center gap-3">
-              {schoolWorkspaceRoute ? <CurrentSchoolBadge school={currentSchool} /> : null}
+              {schoolWorkspaceRoute ? (
+                <CurrentSchoolBadge school={currentSchool} />
+              ) : null}
               {companyRoute ? (
                 <div className="app-nav-chip flex h-9 items-center px-3 text-[13px] font-medium text-foreground">
                   Company Admin Portal
@@ -927,17 +1068,28 @@ export default function SiteHeader() {
                   </div>
                   <Button
                     asChild
-                    variant={activePath.startsWith("/student/tests") ? "default" : "outline"}
+                    variant={
+                      activePath.startsWith("/student/tests")
+                        ? "default"
+                        : "outline"
+                    }
                     size="sm"
                     className="app-button-compact"
                   >
-                    <AppPrefetchLink href="/student/tests" onClick={() => handleNavigate("/student/tests")}>
+                    <AppPrefetchLink
+                      href="/student/tests"
+                      onClick={() => handleNavigate("/student/tests")}
+                    >
                       Tests
                     </AppPrefetchLink>
                   </Button>
                   <Button
                     asChild
-                    variant={activePath.startsWith("/student/account") ? "default" : "outline"}
+                    variant={
+                      activePath.startsWith("/student/account")
+                        ? "default"
+                        : "outline"
+                    }
                     size="sm"
                     className="app-button-compact"
                   >
@@ -954,19 +1106,42 @@ export default function SiteHeader() {
                 <>
                   {pathname !== "/register" ? (
                     <Button asChild size="sm" className="app-button-compact">
-                      <AppPrefetchLink href="/register">Register now</AppPrefetchLink>
+                      <AppPrefetchLink href="/register">
+                        Register now
+                      </AppPrefetchLink>
                     </Button>
                   ) : null}
-                  <Button asChild variant="outline" size="sm" className="app-button-compact">
-                    <AppPrefetchLink href="/auth/signin">School Sign In</AppPrefetchLink>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="app-button-compact"
+                  >
+                    <AppPrefetchLink href="/auth/signin">
+                      School Sign In
+                    </AppPrefetchLink>
                   </Button>
-                  <Button asChild variant="outline" size="sm" className="app-button-compact">
-                    <AppPrefetchLink href="/auth/company-signin">Company Sign In</AppPrefetchLink>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="app-button-compact"
+                  >
+                    <AppPrefetchLink href="/auth/company-signin">
+                      Company Sign In
+                    </AppPrefetchLink>
                   </Button>
                 </>
               ) : authRoute ? (
-                <Button asChild variant="outline" size="sm" className="app-button-compact">
-                  <AppPrefetchLink href={authSwitchHref}>{authSwitchLabel}</AppPrefetchLink>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="app-button-compact"
+                >
+                  <AppPrefetchLink href={authSwitchHref}>
+                    {authSwitchLabel}
+                  </AppPrefetchLink>
                 </Button>
               ) : (
                 <Button
@@ -990,58 +1165,112 @@ export default function SiteHeader() {
       ) : null}
 
       {hasSidebar ? (
-        <aside className="app-sidebar-shell fixed bottom-0 left-0 top-[var(--app-header-height)] hidden w-[var(--app-sidebar-width)] border-r transition-[width] duration-200 ease-in-out lg:block">
-        <div className="flex h-full flex-col">
-          <div className={cn("border-b border-[hsl(var(--app-nav-border)/0.85)] py-2.5", collapsed ? "px-1.5" : "px-3")}>
+        <aside
+          className={cn(
+            "app-sidebar-shell fixed bottom-0 top-[var(--app-header-height)] hidden w-[var(--app-sidebar-width)] transition-[width] duration-200 ease-in-out lg:block",
+            sidebarSide === "left" ? "left-0 border-r" : "right-0 border-l",
+          )}
+        >
+          <div className="flex h-full flex-col">
             <div
               className={cn(
-                "flex items-center",
-                collapsed ? "justify-center" : "justify-between",
+                "border-b border-[hsl(var(--app-nav-border)/0.85)] py-2.5",
+                collapsed ? "px-1.5" : "px-3",
               )}
             >
-              {!collapsed && (
-                <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  Navigation
-                </p>
-              )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                className="h-8 w-8 rounded-xl hover:bg-[hsl(var(--app-nav-hover)/0.72)]"
-                onClick={() => setCollapsed((value) => !value)}
-              >
-                {collapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
+              <div
+                className={cn(
+                  "flex items-center",
+                  collapsed ? "justify-center" : "justify-between",
                 )}
-                <span className="sr-only">
-                  {collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                </span>
-              </Button>
+              >
+                {!collapsed && (
+                  <div className="flex items-center gap-2 px-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Navigation
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      title={
+                        sidebarSide === "left"
+                          ? "Move sidebar to right"
+                          : "Move sidebar to left"
+                      }
+                      aria-label={
+                        sidebarSide === "left"
+                          ? "Move sidebar to right"
+                          : "Move sidebar to left"
+                      }
+                      className="h-7 rounded-lg px-2 text-xs hover:bg-[hsl(var(--app-nav-hover)/0.72)]"
+                      onClick={() =>
+                        setSidebarSide((value) =>
+                          value === "left" ? "right" : "left",
+                        )
+                      }
+                    >
+                      {sidebarSide === "left" ? "Right" : "Left"}
+                    </Button>
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  className="h-8 w-8 rounded-xl hover:bg-[hsl(var(--app-nav-hover)/0.72)]"
+                  onClick={() => setCollapsed((value) => !value)}
+                >
+                  {collapsed ? (
+                    sidebarSide === "left" ? (
+                      <ChevronRight className="h-4 w-4" />
+                    ) : (
+                      <ChevronLeft className="h-4 w-4" />
+                    )
+                  ) : sidebarSide === "left" ? (
+                    <ChevronLeft className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">
+                    {collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  </span>
+                </Button>
+              </div>
+              {collapsed && schoolWorkspaceRoute ? (
+                <CollapsedSchoolBadge school={currentSchool} />
+              ) : null}
             </div>
-            {collapsed && schoolWorkspaceRoute ? (
-              <CollapsedSchoolBadge school={currentSchool} />
+
+            <div
+              className={cn(
+                "flex-1 overflow-y-auto py-4",
+                collapsed ? "px-1.5" : "px-3",
+              )}
+            >
+              <SidebarNavGroups
+                collapsed={collapsed}
+                groups={activeSidebarGroups}
+                activePath={activePath}
+                onNavigate={handleNavigate}
+              />
+            </div>
+
+            {!collapsed ? (
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize sidebar"
+                onPointerDown={startSidebarResize}
+                className={cn(
+                  "absolute bottom-0 top-0 z-10 w-2 cursor-col-resize select-none bg-transparent transition-colors hover:bg-primary/10",
+                  sidebarSide === "left" ? "-right-1" : "-left-1",
+                )}
+              />
             ) : null}
           </div>
-
-          <div
-            className={cn(
-              "flex-1 overflow-y-auto py-4",
-              collapsed ? "px-1.5" : "px-3",
-            )}
-          >
-            <SidebarNavGroups
-              collapsed={collapsed}
-              groups={activeSidebarGroups}
-              activePath={activePath}
-              onNavigate={handleNavigate}
-            />
-          </div>
-        </div>
         </aside>
       ) : null}
     </>

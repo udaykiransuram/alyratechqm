@@ -3,6 +3,7 @@ import {
   withSchool,
   withSchoolHeaders,
 } from '@/lib/client/school';
+import { signOut } from 'next-auth/react';
 
 export type ApiPayload<T = any> = {
   ok: boolean;
@@ -30,6 +31,11 @@ type ClientApiCacheEntry = {
 const clientApiCache = new Map<string, ClientApiCacheEntry>();
 const clientApiInflight = new Map<string, Promise<ApiPayload<any>>>();
 const DEFAULT_CLIENT_API_CACHE_TTL_MS = 30_000;
+const STUDENT_SESSION_EXPIRED_CODE = 'StudentSessionExpired';
+const STUDENT_SESSION_EXPIRED_MESSAGE =
+  'This student session is no longer active. Please sign in again.';
+
+let studentSessionRedirectPromise: Promise<never> | null = null;
 
 function resolveRequestMethod(init?: RequestInit) {
   return String(init?.method || 'GET').trim().toUpperCase() || 'GET';
@@ -155,6 +161,60 @@ export function getApiErrorMessage(
   return fallback;
 }
 
+function getApiMessage(payload: Pick<ApiPayload<any>, 'data'>) {
+  return payload.data && typeof (payload.data as any)?.message === 'string'
+    ? String((payload.data as any).message).trim()
+    : '';
+}
+
+function getApiCode(payload: Pick<ApiPayload<any>, 'data'>) {
+  return payload.data && typeof (payload.data as any)?.code === 'string'
+    ? String((payload.data as any).code).trim()
+    : '';
+}
+
+function isExpiredStudentSessionPayload(
+  payload: Pick<ApiPayload<any>, 'status' | 'data'>,
+) {
+  if (payload.status !== 401) {
+    return false;
+  }
+
+  const code = getApiCode(payload);
+  if (code === STUDENT_SESSION_EXPIRED_CODE) {
+    return true;
+  }
+
+  return getApiMessage(payload) === STUDENT_SESSION_EXPIRED_MESSAGE;
+}
+
+async function redirectToExpiredStudentSessionSignIn(): Promise<never> {
+  if (typeof window === 'undefined') {
+    throw new Error(STUDENT_SESSION_EXPIRED_MESSAGE);
+  }
+
+  if (!studentSessionRedirectPromise) {
+    studentSessionRedirectPromise = (async () => {
+      const signInUrl = new URL('/auth/signin', window.location.origin);
+      signInUrl.searchParams.set('error', STUDENT_SESSION_EXPIRED_CODE);
+      signInUrl.searchParams.set('signedOut', '1');
+      signInUrl.searchParams.set('callbackUrl', window.location.href);
+
+      try {
+        await signOut({
+          redirect: false,
+        });
+      } catch {}
+
+      window.location.assign(signInUrl.toString());
+
+      return await new Promise<never>(() => {});
+    })();
+  }
+
+  return studentSessionRedirectPromise;
+}
+
 
 export function buildPartialLoadMessage(
   labels: string[],
@@ -252,6 +312,10 @@ export async function fetchApiJson<T = any>(
       'success' in payload.data &&
       !(payload.data as any).success)
   ) {
+    if (isExpiredStudentSessionPayload(payload)) {
+      return await redirectToExpiredStudentSessionSignIn();
+    }
+
     throw new Error(getApiErrorMessage(payload, fallbackMessage));
   }
 

@@ -19,6 +19,8 @@ export interface IUser extends Document {
   // Student-specific fields (optional)
   rollNumber?: string;
   enrolledAt?: Date;
+  activeStudentSessionId?: string;
+  activeStudentSessionLastSeenAt?: Date;
 }
 
 const UserSchema: Schema<IUser> = new Schema(
@@ -74,6 +76,17 @@ const UserSchema: Schema<IUser> = new Schema(
       default: function (this: IUser) {
         return this.role === "student" ? Date.now() : undefined;
       },
+    },
+    activeStudentSessionId: {
+      type: String,
+      required: false,
+      select: false,
+      trim: true,
+    },
+    activeStudentSessionLastSeenAt: {
+      type: Date,
+      required: false,
+      select: false,
     },
   },
   { timestamps: true },
@@ -157,6 +170,8 @@ if (
     !existingUserModel.schema.path("academicSectionIds") ||
     !existingUserModel.schema.path("classIds") ||
     !existingUserModel.schema.path("hasAllSections") ||
+    !existingUserModel.schema.path("activeStudentSessionId") ||
+    !existingUserModel.schema.path("activeStudentSessionLastSeenAt") ||
     !hasArchiveFields(existingUserModel))
 ) {
   delete modelRegistry.User;

@@ -340,6 +340,17 @@ export async function PUT(
 
     const explicitPasswordProvided =
       typeof password === "string" && password.trim().length > 0;
+    if (role === "student" && explicitPasswordProvided) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Student passwords can only be changed by the student from the student account page.",
+        },
+        { status: 400 },
+      );
+    }
+
     const effectivePassword = resolveUserPasswordInput({
       role,
       rollNumber: normalizedRollNumber,

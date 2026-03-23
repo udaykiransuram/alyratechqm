@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 
 import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
@@ -121,7 +121,12 @@ function createResponseCacheEntry(
   };
 }
 
-export default function QuestionPaperResponsesPage({ params }: { params: { id: string } }) {
+export default function QuestionPaperResponsesPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
   const { navigateBack } = useBackNavigation('/workspace/question-papers');
   const initialPage = getInitialPage();
   const initialAcademicSection = getInitialAcademicSection();
@@ -130,7 +135,7 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
   const initialCachedResponse = initialSchoolKey
     ? peekCachedApiJson<any>(
         `/api/question-paper-response?${buildResponsesQueryStringForCache(
-          params.id,
+          id,
           initialPage,
           initialAcademicSection,
         )}`,
@@ -164,7 +169,7 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
             [
               buildResponsesCacheKey(
                 initialSchoolKey,
-                params.id,
+                id,
                 initialCacheEntry.page,
                 initialAcademicSection,
               ),
@@ -178,12 +183,12 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
   const buildResponsesQueryString = useCallback(
     (targetPage = page, targetAcademicSection = selectedAcademicSection) => {
       return buildResponsesQueryStringForCache(
-        params.id,
+        id,
         targetPage,
         targetAcademicSection,
       );
     },
-    [page, params.id, selectedAcademicSection],
+    [id, page, selectedAcademicSection],
   );
 
   const getResponsesCacheKey = useCallback(
@@ -194,11 +199,11 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
     ) =>
       buildResponsesCacheKey(
         schoolKey,
-        params.id,
+        id,
         targetPage,
         targetAcademicSection,
       ),
-    [page, params.id, selectedAcademicSection],
+    [id, page, selectedAcademicSection],
   );
 
   const applyResponseCacheEntry = useCallback((entry: ResponsePageCacheEntry) => {
@@ -336,8 +341,8 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
     applyResponseCacheEntry,
     buildResponsesQueryString,
     getResponsesCacheKey,
+    id,
     page,
-    params.id,
     selectedAcademicSection,
   ]);
 
@@ -369,8 +374,8 @@ export default function QuestionPaperResponsesPage({ params }: { params: { id: s
       searchParams.set('page', String(page));
     }
     const query = searchParams.toString();
-    return `/workspace/question-papers/${params.id}/responses${query ? `?${query}` : ''}`;
-  }, [page, params.id, selectedAcademicSection]);
+    return `/workspace/question-papers/${id}/responses${query ? `?${query}` : ''}`;
+  }, [id, page, selectedAcademicSection]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

@@ -4,6 +4,7 @@ import { getTenantModels } from "@/lib/db-tenant";
 import { buildArchiveFilter } from "@/lib/archive";
 import { requireTenantSession } from "@/lib/api-auth";
 import { recordTenantAudit } from "@/lib/audit";
+import { syncExamPaperSnapshotForPaperId } from "@/lib/exam-runtime";
 import { isOnlineQuestionType } from "@/lib/question-paper/grading";
 
 function normalizeIds(value: unknown) {
@@ -294,6 +295,18 @@ export async function POST(req: NextRequest) {
         summary: `Created question paper copy ${newPaper.title || title}.`,
         details: { paperId: String(newPaper._id), source: "copy_multiple" },
       });
+
+      if (onlineEnabled) {
+        await syncExamPaperSnapshotForPaperId(
+          schoolKey,
+          String(newPaper._id),
+        ).catch((error) => {
+          console.error(
+            "Failed to sync exam paper snapshot after copy:",
+            error,
+          );
+        });
+      }
 
       createdPapers.push(newPaper);
     }
