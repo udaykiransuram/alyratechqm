@@ -25,7 +25,7 @@ function resolveSchoolKey(req: NextRequest) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const schoolKey = resolveSchoolKey(req);
@@ -35,8 +35,9 @@ export async function GET(
       { status: 400 },
     );
   }
+  const { id } = await params;
 
-  if (!mongoose.Types.ObjectId.isValid(params.id)) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json(
       { success: false, message: "Invalid section ID" },
       { status: 400 },
@@ -51,7 +52,7 @@ export async function GET(
     } = await getTenantModels(schoolKey, ["AcademicSection", "Class"]);
 
     const section = await AcademicSectionModel.findOne({
-      _id: params.id,
+      _id: id,
       ...buildArchiveFilter(includeArchived),
     })
       .populate({ path: "class", model: ClassModel, select: "name" })
@@ -75,7 +76,7 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const schoolKey = resolveSchoolKey(req);
@@ -85,8 +86,9 @@ export async function PUT(
       { status: 400 },
     );
   }
+  const { id } = await params;
 
-  if (!mongoose.Types.ObjectId.isValid(params.id)) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json(
       { success: false, message: "Invalid section ID" },
       { status: 400 },
@@ -128,7 +130,7 @@ export async function PUT(
 
     const normalizedName = String(name).trim();
     const duplicate = await AcademicSectionModel.findOne({
-      _id: { $ne: params.id },
+      _id: { $ne: id },
       class: classId,
       name: normalizedName,
       ...buildArchiveFilter(false),
@@ -147,7 +149,7 @@ export async function PUT(
 
     const updated = await AcademicSectionModel.findOneAndUpdate(
       {
-        _id: params.id,
+        _id: id,
         ...buildArchiveFilter(false),
       },
       {
@@ -179,7 +181,7 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const schoolKey = resolveSchoolKey(req);
@@ -189,8 +191,9 @@ export async function DELETE(
       { status: 400 },
     );
   }
+  const { id } = await params;
 
-  if (!mongoose.Types.ObjectId.isValid(params.id)) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json(
       { success: false, message: "Invalid section ID" },
       { status: 400 },
@@ -203,7 +206,7 @@ export async function DELETE(
 
     const inUseCount = await UserModel.countDocuments({
       ...buildArchiveFilter(false),
-      $or: [{ academicSection: params.id }, { academicSectionIds: params.id }],
+      $or: [{ academicSection: id }, { academicSectionIds: id }],
     });
 
     if (inUseCount > 0) {
@@ -218,7 +221,7 @@ export async function DELETE(
 
     const archived = await AcademicSectionModel.findOneAndUpdate(
       {
-        _id: params.id,
+        _id: id,
         ...buildArchiveFilter(false),
       },
       buildArchivedUpdate(),

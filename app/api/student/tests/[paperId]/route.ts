@@ -29,12 +29,13 @@ const ATTEMPT_DETAIL_PROJECTION =
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { paperId: string } },
+  { params }: { params: Promise<{ paperId: string }> },
 ) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
   });
   if (!auth.ok) return auth.response;
+  const { paperId } = await params;
 
   const schoolKey = auth.schoolKey as string;
   const studentId = auth.session.user.id;
@@ -45,7 +46,7 @@ export async function GET(
       const result = await getStudentExamRuntimeDetail(
         schoolKey,
         studentId,
-        params.paperId,
+        paperId,
       );
       return NextResponse.json(result);
     }
@@ -54,9 +55,9 @@ export async function GET(
     const { QuestionPaperResponse: QuestionPaperResponseModel, User: UserModel } = models;
 
     const [paperResult, attemptResult] = await Promise.all([
-      loadOnlinePaperById(models, schoolKey, params.paperId),
+      loadOnlinePaperById(models, schoolKey, paperId),
       QuestionPaperResponseModel.findOne({
-        paper: params.paperId,
+        paper: paperId,
         student: studentId,
       })
         .select(ATTEMPT_DETAIL_PROJECTION)

@@ -19,11 +19,12 @@ function resolveSchoolKey(req: NextRequest){
 // UPDATE a question by ID (supports all types)
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   await connectDB();
   const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  const { id } = await params;
 
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question','Tag','TagType','Class','Subject']);
 
@@ -65,7 +66,7 @@ export async function PUT(
       }
     }
 
-    const question = await QuestionModel.findOne({ _id: params.id, ...buildArchiveFilter(false) });
+    const question = await QuestionModel.findOne({ _id: id, ...buildArchiveFilter(false) });
     if (!question) {
       return NextResponse.json({ success: false, message: 'Question not found.' }, { status: 404 });
     }
@@ -97,7 +98,7 @@ export async function PUT(
 
     await question.save();
 
-    const updatedQuestion = await QuestionModel.findById(params.id)
+    const updatedQuestion = await QuestionModel.findById(id)
       .populate('subject', 'name')
       .populate('class', 'name')
       .populate({ path: 'tags', populate: { path: 'type', select: 'name' } });
@@ -118,20 +119,21 @@ export async function PUT(
 // DELETE a question by ID
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   await connectDB();
   const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  const { id } = await params;
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question']);
 
   try {
-    if (!mongoose.Types.ObjectId.isValid(params.id)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ success: false, message: 'Invalid question ID' }, { status: 400 });
     }
 
     const archivedQuestion = await QuestionModel.findOneAndUpdate(
-      { _id: params.id, ...buildArchiveFilter(false) },
+      { _id: id, ...buildArchiveFilter(false) },
       buildArchivedUpdate(),
       { new: true, runValidators: true }
     );
@@ -157,10 +159,11 @@ export async function DELETE(
 }
 
 // PATCH - Update a question (supports all types)
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await connectDB();
   const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  const { id } = await params;
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question']);
 
   try {
@@ -226,7 +229,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     const updatedQuestion = await QuestionModel.findOneAndUpdate(
-      { _id: params.id, ...buildArchiveFilter(false) },
+      { _id: id, ...buildArchiveFilter(false) },
       update,
       { new: true, runValidators: true }
     )
@@ -248,13 +251,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await connectDB();
   const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  const { id } = await params;
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question']);
   try {
-    const question = await QuestionModel.findOne({ _id: params.id, ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)) })
+    const question = await QuestionModel.findOne({ _id: id, ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)) })
       .populate('subject', 'name')
       .populate('class', 'name')
       .populate({ path: 'tags', populate: { path: 'type', select: 'name' } });

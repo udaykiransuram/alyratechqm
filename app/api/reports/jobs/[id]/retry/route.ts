@@ -28,22 +28,23 @@ function resolveSchoolKey(req: NextRequest) {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const auth = await requireTenantSession(req, {
     allowRoles: ["admin", "teacher"],
   });
   if (!auth.ok) return auth.response;
+  const { id } = await params;
   const { schoolKey } = auth;
-  if (!mongoose.Types.ObjectId.isValid(params.id)) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json(
       { success: false, message: "Invalid job id" },
       { status: 400 },
     );
   }
 
-  const job = await ReportDispatchJob.findOne({ _id: params.id, schoolKey });
+  const job = await ReportDispatchJob.findOne({ _id: id, schoolKey });
   if (!job) {
     return NextResponse.json(
       { success: false, message: "Job not found" },

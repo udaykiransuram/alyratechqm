@@ -6,9 +6,9 @@ import Registration from '@/models/Registration';
 export const dynamic = 'force-dynamic';
 
 type SuccessPageProps = {
-  params: {
+  params: Promise<{
     orderId: string;
-  };
+  }>;
 };
 
 type RegistrationDoc = {
@@ -20,9 +20,10 @@ type RegistrationDoc = {
 };
 
 export default async function SuccessPage({ params }: SuccessPageProps) {
+  const { orderId } = await params;
   await connectDB();
   const registration = await Registration.findOne({
-    orderId: params.orderId,
+    orderId,
   }).lean<RegistrationDoc>();
 
   if (!registration) {

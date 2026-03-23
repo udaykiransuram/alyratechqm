@@ -22,12 +22,13 @@ const ATTEMPT_SUBMIT_PROJECTION =
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { paperId: string } },
+  { params }: { params: Promise<{ paperId: string }> },
 ) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
   });
   if (!auth.ok) return auth.response;
+  const { paperId } = await params;
 
   const schoolKey = auth.schoolKey as string;
   const studentId = auth.session.user.id;
@@ -39,7 +40,7 @@ export async function POST(
       const result = await submitStudentExamRuntimeAttempt({
         schoolKey,
         studentId,
-        paperId: params.paperId,
+        paperId,
         sectionAnswers: body?.sectionAnswers,
       });
       return NextResponse.json(result);
@@ -49,9 +50,9 @@ export async function POST(
     const { QuestionPaperResponse: QuestionPaperResponseModel } = models;
 
     const [paperResult, attemptResult] = await Promise.all([
-      loadOnlinePaperRuntimeById(models, schoolKey, params.paperId),
+      loadOnlinePaperRuntimeById(models, schoolKey, paperId),
       QuestionPaperResponseModel.findOne({
-        paper: params.paperId,
+        paper: paperId,
         student: studentId,
       })
         .select(ATTEMPT_SUBMIT_PROJECTION)

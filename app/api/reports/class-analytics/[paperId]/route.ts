@@ -97,7 +97,7 @@ function flattenStatsRows(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { paperId: string } },
+  { params }: { params: Promise<{ paperId: string }> },
 ) {
   const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) {
@@ -106,6 +106,7 @@ export async function GET(
       { status: 400 },
     );
   }
+  const { paperId } = await params;
 
   try {
     const origin = new URL(req.url).origin;
@@ -146,7 +147,7 @@ export async function GET(
     const sharedHeaders = { "x-school-key": schoolKey };
 
     const groupFieldsUrl = new URL(
-      `/api/analytics/class-tag-report/${encodeURIComponent(params.paperId)}`,
+      `/api/analytics/class-tag-report/${encodeURIComponent(paperId)}`,
       origin,
     );
     groupFieldsUrl.searchParams.set("groupFields", "1");
@@ -179,7 +180,7 @@ export async function GET(
             .filter(Boolean);
 
     const analyticsUrl = new URL(
-      `/api/analytics/class-tag-report/${encodeURIComponent(params.paperId)}`,
+      `/api/analytics/class-tag-report/${encodeURIComponent(paperId)}`,
       origin,
     );
     analyticsUrl.searchParams.set("json", "1");
@@ -203,7 +204,7 @@ export async function GET(
     }
 
     const benchmarkUrl = new URL(
-      `/api/analytics/benchmark-report/${encodeURIComponent(params.paperId)}`,
+      `/api/analytics/benchmark-report/${encodeURIComponent(paperId)}`,
       origin,
     );
     benchmarkUrl.searchParams.set("school", schoolKey);

@@ -7,16 +7,18 @@ import FAQ from "@/models/FAQ";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { id: string } };
-
-export async function PUT(req: NextRequest, { params }: RouteContext) {
+export async function PUT(
+  req: NextRequest,
+  context: RouteContext<"/api/admin/faq/[id]">,
+) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
+  const { id } = await context.params;
 
   try {
     await connectDB();
     const body = await req.json();
-    const doc = await FAQ.findByIdAndUpdate(params.id, body, { new: true, runValidators: true });
+    const doc = await FAQ.findByIdAndUpdate(id, body, { new: true, runValidators: true });
     if (!doc) return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
     return NextResponse.json({ success: true, data: doc });
   } catch (error: unknown) {
@@ -27,13 +29,17 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: RouteContext) {
+export async function DELETE(
+  req: NextRequest,
+  context: RouteContext<"/api/admin/faq/[id]">,
+) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
+  const { id } = await context.params;
 
   try {
     await connectDB();
-    const doc = await FAQ.findByIdAndDelete(params.id);
+    const doc = await FAQ.findByIdAndDelete(id);
     if (!doc) return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

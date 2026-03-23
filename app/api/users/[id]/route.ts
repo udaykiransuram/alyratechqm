@@ -142,7 +142,7 @@ async function validateStudentAcademicSection(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const auth = await requireTenantSession(req, {
@@ -150,9 +150,9 @@ export async function GET(
   });
   if (!auth.ok) return auth.response;
   const schoolKey = auth.schoolKey as string;
+  const { id: userId } = await params;
 
   try {
-    const userId = params.id;
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return NextResponse.json(
         { success: false, message: "Invalid user ID" },
@@ -181,7 +181,7 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const auth = await requireTenantSession(req, {
@@ -189,9 +189,9 @@ export async function PUT(
   });
   if (!auth.ok) return auth.response;
   const schoolKey = auth.schoolKey as string;
+  const { id: userId } = await params;
 
   try {
-    const userId = params.id;
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return NextResponse.json(
         { success: false, message: "Invalid user ID" },
@@ -471,7 +471,7 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const auth = await requireTenantSession(req, {
@@ -479,9 +479,9 @@ export async function DELETE(
   });
   if (!auth.ok) return auth.response;
   const schoolKey = auth.schoolKey as string;
+  const { id: userId } = await params;
 
   try {
-    const userId = params.id;
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return NextResponse.json(
         { success: false, message: "Invalid user ID" },

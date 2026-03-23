@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, PlusCircle } from 'lucide-react';
+import { useParams } from 'next/navigation';
 
 import PageHero from '@/components/layout/PageHero';
 import { CreateTagTypeModal } from '@/components/CreateTagTypeModal';
@@ -41,8 +42,8 @@ interface Subject {
   code?: string;
 }
 
-export default function EditTagPage({ params }: { params: { id: string } }) {
-  const { id: tagId } = params;
+export default function EditTagPage() {
+  const { id: tagId } = useParams<{ id: string }>();
   const { toast } = useToast();
   const { navigateBack } = useBackNavigation('/workspace/tags');
 

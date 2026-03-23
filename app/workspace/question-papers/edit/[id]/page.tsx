@@ -52,19 +52,20 @@ function buildQuestionPaperInitialData(rawData: any) {
 }
 
 type EditQuestionPaperPageProps = {
-  params: { id: string };
-  searchParams?: { returnTo?: string | string[] };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string | string[] }>;
 };
 
 export default async function EditQuestionPaperPage({
   params,
   searchParams,
 }: EditQuestionPaperPageProps) {
-  const id = params.id || "";
+  const { id = "" } = await params;
+  const resolvedSearchParams = await searchParams;
   const { schoolKey } = await requireWorkspaceStaffSession();
-  const rawReturnTo = Array.isArray(searchParams?.returnTo)
-    ? searchParams?.returnTo[0]
-    : searchParams?.returnTo;
+  const rawReturnTo = Array.isArray(resolvedSearchParams?.returnTo)
+    ? resolvedSearchParams.returnTo[0]
+    : resolvedSearchParams?.returnTo;
   const backHref =
     getSafeReturnToPath(rawReturnTo) ||
     (id ? `/workspace/question-papers/view/${id}` : "/workspace/question-papers");

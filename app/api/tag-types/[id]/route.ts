@@ -8,7 +8,7 @@ import '@/models/TagType';
 const isValidObjectId = (id: string) => mongoose.Types.ObjectId.isValid(id);
 
 // GET /api/tag-types/[id]
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await connectDB();
   const url = new URL(req.url);
   const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
   if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
 
-  const { id } = params;
+  const { id } = await params;
   if (!isValidObjectId(id)) return NextResponse.json({ success: false, message: 'Invalid TagType ID' }, { status: 400 });
 
   try {
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // PATCH /api/tag-types/[id]
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await connectDB();
   const url = new URL(req.url);
   const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
   if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
 
-  const { id } = params;
+  const { id } = await params;
   if (!isValidObjectId(id)) return NextResponse.json({ success: false, message: 'Invalid TagType ID' }, { status: 400 });
 
   try {
@@ -69,7 +69,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE /api/tag-types/[id]
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await connectDB();
   const url = new URL(req.url);
   const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
@@ -78,7 +78,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
   if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
 
-  const { id } = params;
+  const { id } = await params;
   if (!isValidObjectId(id)) return NextResponse.json({ success: false, message: 'Invalid TagType ID' }, { status: 400 });
 
   try {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { ChevronLeft } from 'lucide-react';
+import { useParams } from 'next/navigation';
 
 import PageHero from '@/components/layout/PageHero';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
@@ -23,8 +24,8 @@ interface Subject {
   tags: TagItem[];
 }
 
-export default function EditSubjectPage({ params }: { params: { id: string } }) {
-  const { id: subjectId } = params;
+export default function EditSubjectPage() {
+  const { id: subjectId } = useParams<{ id: string }>();
   const { toast } = useToast();
   const { navigateBack } = useBackNavigation('/workspace/subjects');
 

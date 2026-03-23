@@ -60,13 +60,14 @@ async function resolveBootstrapAdmin(school: any) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { schoolId: string } },
+  { params }: { params: Promise<{ schoolId: string }> },
 ) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
   await connectDB();
+  const { schoolId } = await params;
 
-  if (!isValidObjectId(params.schoolId)) {
+  if (!isValidObjectId(schoolId)) {
     return NextResponse.json(
       { success: false, message: "Invalid school id." },
       { status: 400 },
@@ -74,7 +75,7 @@ export async function GET(
   }
 
   try {
-    const school = await School.findById(params.schoolId);
+    const school = await School.findById(schoolId);
     if (!school) {
       return NextResponse.json(
         { success: false, message: "School not found." },
@@ -102,13 +103,14 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { schoolId: string } },
+  { params }: { params: Promise<{ schoolId: string }> },
 ) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
   await connectDB();
+  const { schoolId } = await params;
 
-  if (!isValidObjectId(params.schoolId)) {
+  if (!isValidObjectId(schoolId)) {
     return NextResponse.json(
       { success: false, message: "Invalid school id." },
       { status: 400 },
@@ -116,7 +118,7 @@ export async function PATCH(
   }
 
   try {
-    const school = await School.findById(params.schoolId);
+    const school = await School.findById(schoolId);
     if (!school) {
       return NextResponse.json(
         { success: false, message: "School not found." },
@@ -245,13 +247,14 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { schoolId: string } },
+  { params }: { params: Promise<{ schoolId: string }> },
 ) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
   await connectDB();
+  const { schoolId } = await params;
 
-  if (!isValidObjectId(params.schoolId)) {
+  if (!isValidObjectId(schoolId)) {
     return NextResponse.json(
       { success: false, message: "Invalid school id." },
       { status: 400 },
@@ -259,7 +262,7 @@ export async function DELETE(
   }
 
   try {
-    const school = await School.findById(params.schoolId);
+    const school = await School.findById(schoolId);
     if (!school) {
       return NextResponse.json(
         { success: false, message: "School not found." },

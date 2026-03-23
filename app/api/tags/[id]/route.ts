@@ -22,14 +22,14 @@ function escapeRegex(value: string) {
 
 const isValidObjectId = (id: string): boolean => mongoose.Types.ObjectId.isValid(id);
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await connectDB();
   const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) {
     return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   if (!isValidObjectId(id)) {
     return NextResponse.json({ success: false, message: 'Invalid Tag ID' }, { status: 400 });
   }
@@ -64,14 +64,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await connectDB();
   const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) {
     return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   if (!isValidObjectId(id)) {
     return NextResponse.json({ success: false, message: 'Invalid Tag ID' }, { status: 400 });
   }
@@ -139,14 +139,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await connectDB();
   const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) {
     return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   if (!isValidObjectId(id)) {
     return NextResponse.json({ success: false, message: 'Invalid Tag ID' }, { status: 400 });
   }
