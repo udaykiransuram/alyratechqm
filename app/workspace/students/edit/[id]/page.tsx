@@ -36,7 +36,6 @@ function buildStudentForm(user: any) {
   return {
     name: user.name || "",
     email: user.email || "",
-    password: "",
     mobileNumber: user.mobileNumber || "",
     class: user.class ? String(user.class) : "",
     academicSection: user.academicSection ? String(user.academicSection) : "",
@@ -156,7 +155,6 @@ export default function EditStudentPage() {
           role: "student",
           email: form.email.trim(),
           mobileNumber: form.mobileNumber.trim(),
-          password: form.password || undefined,
           class: form.class,
           academicSection: form.academicSection,
           rollNumber: form.rollNumber.trim(),
@@ -228,9 +226,9 @@ export default function EditStudentPage() {
             meta: "Changes are applied to the current school tenant only.",
           },
           {
-            label: "Password reset",
-            value: "Auto-sync",
-            meta: "If the student still uses the default roll-number password, changing the roll number updates it automatically.",
+            label: "Password control",
+            value: "Student only",
+            meta: "Admins can update roll numbers, and the default password syncs only when the student still uses that roll-number password.",
           },
         ]}
       />
@@ -270,16 +268,11 @@ export default function EditStudentPage() {
                   <div className="app-form-section-heading">
                     <p className="app-form-section-title">Credentials</p>
                   </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="password">New Password</label>
-                    <input id="password" name="password" placeholder="Leave blank to keep the current password" value={form.password} onChange={handleChange} type="password" className="app-form-input" />
-                    <p className="text-xs text-muted-foreground">
-                      Leave this blank to keep the current password. If this
-                      student still uses the default roll-number password,
-                      changing the roll number will sync that default
-                      automatically.
-                    </p>
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Students manage their own passwords from the student account page.
+                    If the student still uses the default roll-number password, changing the
+                    roll number here will keep that default in sync automatically.
+                  </p>
                 </div>
 
                 <div className="app-section">

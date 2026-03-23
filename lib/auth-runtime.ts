@@ -75,5 +75,21 @@ export function getAuthErrorMessage(
     return "Student sign in failed. Use the roll number as the username. The default password matches the roll number until it is changed.";
   }
 
+  if (normalizedError === "StudentPasswordNotProvisioned") {
+    return "This student account does not have a stored password yet. Reset student passwords to their roll numbers, then try signing in again.";
+  }
+
+  if (normalizedError === "StudentAlreadySignedIn") {
+    return "This student is already signed in on another device. Sign out there first or wait a few minutes for the previous session to expire.";
+  }
+
+  if (normalizedError === "StudentSessionExpired") {
+    return "Your student session ended. Please sign in again.";
+  }
+
+  if (normalizedError === "StudentSignInRateLimited") {
+    return "Too many student login attempts were made. Please wait a few minutes and try again.";
+  }
+
   return normalizedError;
 }

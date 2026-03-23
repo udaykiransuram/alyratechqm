@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
+import {
+  isExamRuntimeEnabled,
+  resolveExamRuntimeErrorStatus,
+  saveStudentExamRuntimeAttempt,
+  startStudentExamRuntimeAttempt,
+} from "@/lib/exam-runtime";
 import { validateStudentSectionAnswers } from "@/lib/question-paper/grading";
 import {
   getStudentTestModels,
@@ -39,6 +45,15 @@ export async function POST(
   const now = new Date();
 
   try {
+    if (await isExamRuntimeEnabled()) {
+      const result = await startStudentExamRuntimeAttempt(
+        schoolKey,
+        studentId,
+        params.paperId,
+      );
+      return NextResponse.json(result);
+    }
+
     const models = await getStudentTestModels(schoolKey);
     const { QuestionPaperResponse: QuestionPaperResponseModel, User: UserModel } = models;
 
@@ -147,6 +162,14 @@ export async function POST(
       deadlineAt: attempt?.submittedAt || null,
     });
   } catch (error: any) {
+    if (await isExamRuntimeEnabled()) {
+      const message = error?.message || "Failed to start test.";
+      return NextResponse.json(
+        { success: false, message },
+        { status: resolveExamRuntimeErrorStatus(message) },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error?.message || "Failed to start test." },
       { status: 500 },
@@ -168,6 +191,17 @@ export async function PATCH(
   const now = new Date();
 
   try {
+    if (await isExamRuntimeEnabled()) {
+      const body = await req.json().catch(() => ({}));
+      const result = await saveStudentExamRuntimeAttempt({
+        schoolKey,
+        studentId,
+        paperId: params.paperId,
+        sectionAnswers: body?.sectionAnswers ?? [],
+      });
+      return NextResponse.json(result);
+    }
+
     const models = await getStudentTestModels(schoolKey);
     const { QuestionPaperResponse: QuestionPaperResponseModel } = models;
 
@@ -295,6 +329,14 @@ export async function PATCH(
       deadlineAt: deadlineMs ? new Date(deadlineMs).toISOString() : null,
     });
   } catch (error: any) {
+    if (await isExamRuntimeEnabled()) {
+      const message = error?.message || "Failed to save attempt.";
+      return NextResponse.json(
+        { success: false, message },
+        { status: resolveExamRuntimeErrorStatus(message) },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error?.message || "Failed to save attempt." },
       { status: 500 },

@@ -2,6 +2,16 @@ import { getServerSession, type Session } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import type { AccountType, AppRole, SchoolUserRole } from "@/lib/auth-types";
+import { getTenantModels } from "@/lib/db-tenant";
+import {
+  isRedisConfigured,
+  readStudentSession,
+  refreshStudentSessionIfMatch,
+} from "@/lib/redis";
+import {
+  isStudentSessionFresh,
+  shouldRefreshStudentSessionHeartbeat,
+} from "@/lib/student-session";
 
 type RequireTenantSessionOptions = {
   allowRoles?: SchoolUserRole[];
@@ -49,6 +59,140 @@ function extractRequestedSchoolKey(
 
 function normalizeSchoolKey(value: unknown) {
   return String(value || "").trim();
+}
+
+function buildStudentSessionInvalidResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      code: "StudentSessionExpired",
+      message: "This student session is no longer active. Please sign in again.",
+    },
+    { status: 401 },
+  );
+}
+
+async function validateStudentSession(session: Session, schoolKey: string) {
+  const studentSessionId = String(session.user.studentSessionId || "").trim();
+  if (!studentSessionId) {
+    return buildStudentSessionInvalidResponse();
+  }
+
+  if (isRedisConfigured()) {
+    try {
+      const activeStudentSessionId = await readStudentSession(
+        schoolKey,
+        session.user.id,
+      );
+
+      if (activeStudentSessionId && activeStudentSessionId !== studentSessionId) {
+        return buildStudentSessionInvalidResponse();
+      }
+
+      if (!activeStudentSessionId) {
+        throw new Error("Redis student session missing or unavailable.");
+      }
+
+      const refreshed = await refreshStudentSessionIfMatch(
+        schoolKey,
+        session.user.id,
+        studentSessionId,
+      );
+
+      if (refreshed === false) {
+        return buildStudentSessionInvalidResponse();
+      }
+
+      const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
+      await UserModel.updateOne(
+        {
+          _id: session.user.id,
+          role: "student",
+          activeStudentSessionId: studentSessionId,
+        },
+        {
+          $set: {
+            activeStudentSessionLastSeenAt: new Date(),
+          },
+        },
+      ).catch(() => undefined);
+
+      return null;
+    } catch (error) {
+      console.error(
+        "Failed to validate Redis student session. Falling back to DB session validation:",
+        error,
+      );
+    }
+  }
+
+  try {
+    const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
+    const student = await UserModel.findById(session.user.id)
+      .select("role +activeStudentSessionId +activeStudentSessionLastSeenAt")
+      .lean();
+
+    if (!student || student.role !== "student") {
+      return buildStudentSessionInvalidResponse();
+    }
+
+    const activeStudentSessionId = String(
+      student.activeStudentSessionId || "",
+    ).trim();
+    if (!activeStudentSessionId || activeStudentSessionId !== studentSessionId) {
+      return buildStudentSessionInvalidResponse();
+    }
+
+    const now = new Date();
+    if (!isStudentSessionFresh(student.activeStudentSessionLastSeenAt, now)) {
+      await UserModel.updateOne(
+        {
+          _id: session.user.id,
+          role: "student",
+          activeStudentSessionId: studentSessionId,
+        },
+        {
+          $unset: {
+            activeStudentSessionId: 1,
+            activeStudentSessionLastSeenAt: 1,
+          },
+        },
+      ).catch(() => undefined);
+
+      return buildStudentSessionInvalidResponse();
+    }
+
+    if (
+      shouldRefreshStudentSessionHeartbeat(
+        student.activeStudentSessionLastSeenAt,
+        now,
+      )
+    ) {
+      await UserModel.updateOne(
+        {
+          _id: session.user.id,
+          role: "student",
+          activeStudentSessionId: studentSessionId,
+        },
+        {
+          $set: {
+            activeStudentSessionLastSeenAt: now,
+          },
+        },
+      ).catch(() => undefined);
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Failed to validate student session:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Failed to validate the active student session.",
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export async function requireTenantSession(
@@ -157,6 +301,33 @@ export async function requireTenantSession(
         { status: 403 },
       ),
     };
+  }
+
+  if (session.user.role === "student") {
+    if (!resolvedSchoolKey) {
+      return {
+        ok: false as const,
+        response: NextResponse.json(
+          {
+            success: false,
+            message: "Student session is missing school context.",
+          },
+          { status: 403 },
+        ),
+      };
+    }
+
+    const invalidStudentSessionResponse = await validateStudentSession(
+      session,
+      resolvedSchoolKey,
+    );
+
+    if (invalidStudentSessionResponse) {
+      return {
+        ok: false as const,
+        response: invalidStudentSessionResponse,
+      };
+    }
   }
 
   if (resolvedOptions.requireSchoolKey === false) {

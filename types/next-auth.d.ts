@@ -9,6 +9,7 @@ declare module "next-auth" {
       accountType: AccountType;
       role: AppRole;
       schoolKey?: string;
+      studentSessionId?: string;
     } & DefaultSession["user"];
   }
 
@@ -16,6 +17,7 @@ declare module "next-auth" {
     accountType: AccountType;
     role: AppRole;
     schoolKey?: string;
+    studentSessionId?: string;
   }
 }
 
@@ -24,5 +26,6 @@ declare module "next-auth/jwt" {
     accountType: AccountType;
     role: AppRole;
     schoolKey?: string;
+    studentSessionId?: string;
   }
 }

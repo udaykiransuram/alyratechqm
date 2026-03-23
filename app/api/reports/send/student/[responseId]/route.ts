@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { resolveExamRuntimeMongoResponseId } from "@/lib/exam-runtime";
 import ReportDispatchJob from "../../../../../../models/ReportDispatchJob";
 import { hydrateResponsesWithStudents } from "@/lib/analytics/hydrateResponses";
 import { requireTenantSession } from "@/lib/api-auth";
@@ -30,7 +31,7 @@ function resolveSchoolKey(req: NextRequest) {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { responseId: string } },
+  { params }: { params: Promise<{ responseId: string }> },
 ) {
   await connectDB();
   const auth = await requireTenantSession(req, {
@@ -39,8 +40,14 @@ export async function POST(
   });
   if (!auth.ok) return auth.response;
   const { schoolKey } = auth;
+  const { responseId } = await params;
   const shouldTriggerWorker =
     req.nextUrl.searchParams.get("triggerWorker") !== "0";
+  const resolvedResponseId =
+    (await resolveExamRuntimeMongoResponseId(
+      schoolKey,
+      String(responseId || ""),
+    )) || String(responseId || "");
 
   // Fast-fail config issues so UI does not show misleading "sent"/"queued" state
   if (!process.env.WHATSAPP_ACCESS_TOKEN) {
@@ -75,7 +82,7 @@ export async function POST(
     "Class",
     "AcademicSection",
   ]);
-  const rawResponse = await QPRModel.findById(params.responseId)
+  const rawResponse = await QPRModel.findById(resolvedResponseId)
     .populate("paper", "title")
     .lean();
 

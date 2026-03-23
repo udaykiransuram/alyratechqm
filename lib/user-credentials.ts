@@ -9,6 +9,11 @@ export function normalizeRollNumber(value: unknown) {
   return String(value || "").trim();
 }
 
+export function getDefaultStudentPassword(rollNumber: unknown) {
+  const normalizedRollNumber = normalizeRollNumber(rollNumber);
+  return normalizedRollNumber || undefined;
+}
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -58,14 +63,13 @@ export function resolveUserPasswordInput({
   rollNumber?: string;
   password?: string;
 }) {
+  if (role === "student") {
+    return getDefaultStudentPassword(rollNumber);
+  }
+
   const rawPassword = typeof password === "string" ? password : "";
   if (rawPassword.trim()) {
     return rawPassword;
-  }
-
-  if (role === "student") {
-    const normalizedRollNumber = normalizeRollNumber(rollNumber);
-    return normalizedRollNumber || undefined;
   }
 
   return undefined;

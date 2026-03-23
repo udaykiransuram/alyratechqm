@@ -13,6 +13,7 @@ import {
   buildBenchmarkReport,
   parseBenchmarkTagFilters,
 } from "@/lib/analytics/benchmarkReport";
+import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
 import {
   objectIdSchema,
   parseOr400,
@@ -231,6 +232,16 @@ export async function GET(
 
     const eligibleStudentIdSet = new Set(
       eligibleStudents.map((student: any) => toIdString(student)),
+    );
+
+    await syncExamRuntimeMongoProjectionsForPaper(schoolKey, params.paperId).catch(
+      (error) => {
+        console.error(
+          "Failed to sync exam runtime attempts into Mongo projections for benchmark analytics:",
+          error,
+        );
+        return new Map<string, string>();
+      },
     );
 
     const rawResponses = await QPRModel.find({ paper: params.paperId })

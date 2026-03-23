@@ -15,7 +15,9 @@ export const metadata: Metadata = {
 };
 
 type SignInPageProps = {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?:
+    | Promise<Record<string, string | string[] | undefined>>
+    | Record<string, string | string[] | undefined>;
 };
 
 function getFirstSearchParam(
@@ -25,9 +27,10 @@ function getFirstSearchParam(
 }
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
-  const [schools, cookieStore] = await Promise.all([
+  const [schools, cookieStore, resolvedSearchParams] = await Promise.all([
     getPublicSchoolOptions(),
     cookies(),
+    Promise.resolve(searchParams),
   ]);
 
   const rememberedSchoolKey = String(
@@ -45,8 +48,8 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     <SignInClient
       initialSchools={schools}
       initialSchoolKey={autoSelectedSchool?.key}
-      requestedCallbackUrl={getFirstSearchParam(searchParams?.callbackUrl)}
-      pageError={getFirstSearchParam(searchParams?.error)}
+      requestedCallbackUrl={getFirstSearchParam(resolvedSearchParams?.callbackUrl)}
+      pageError={getFirstSearchParam(resolvedSearchParams?.error)}
     />
   );
 }

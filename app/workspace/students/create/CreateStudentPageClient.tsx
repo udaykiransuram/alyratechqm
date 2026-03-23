@@ -32,7 +32,6 @@ export default function CreateStudentPageClient({
   const [form, setForm] = useState({
     name: "",
     email: "",
-    password: "",
     mobileNumber: "",
     class: "",
     academicSection: "",
@@ -74,7 +73,12 @@ export default function CreateStudentPageClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...form,
+          name: form.name,
+          email: form.email,
+          mobileNumber: form.mobileNumber,
+          class: form.class,
+          academicSection: form.academicSection,
+          rollNumber: form.rollNumber,
           role: "student",
           enrolledAt: form.enrolledAt ? new Date(form.enrolledAt) : undefined,
         }),
@@ -86,7 +90,6 @@ export default function CreateStudentPageClient({
       setForm({
         name: "",
         email: "",
-        password: "",
         mobileNumber: "",
         class: "",
         academicSection: "",
@@ -267,8 +270,8 @@ export default function CreateStudentPageClient({
           },
           {
             label: "Credential model",
-            value: "Roll number + password",
-            meta: "This page now opens with server-loaded placement data.",
+            value: "Roll number default",
+            meta: "Students start with the roll number as both username and default password.",
           },
         ]}
       />
@@ -336,20 +339,10 @@ export default function CreateStudentPageClient({
                   <div className="app-form-section-heading">
                     <p className="app-form-section-title">Credentials</p>
                   </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="password">
-                      Password
-                    </label>
-                    <input
-                      id="password"
-                      name="password"
-                      placeholder="Leave blank to use roll number"
-                      value={form.password}
-                      onChange={handleChange}
-                      type="password"
-                      className="app-form-input"
-                    />
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Student usernames and initial passwords are set to the roll number.
+                    Students can change their own password later from the student account page.
+                  </p>
                 </div>
 
                 <div className="app-section">

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
 import {
+  getStudentExamRuntimeDetail,
+  isExamRuntimeEnabled,
+  resolveExamRuntimeErrorStatus,
+} from "@/lib/exam-runtime";
+import {
   getStudentTestModels,
   loadOnlinePaperById,
   loadStudentUser,
@@ -36,6 +41,15 @@ export async function GET(
   const now = new Date();
 
   try {
+    if (await isExamRuntimeEnabled()) {
+      const result = await getStudentExamRuntimeDetail(
+        schoolKey,
+        studentId,
+        params.paperId,
+      );
+      return NextResponse.json(result);
+    }
+
     const models = await getStudentTestModels(schoolKey);
     const { QuestionPaperResponse: QuestionPaperResponseModel, User: UserModel } = models;
 
@@ -121,6 +135,14 @@ export async function GET(
       deadlineAt: deadlineMs ? new Date(deadlineMs).toISOString() : null,
     });
   } catch (error: any) {
+    if (await isExamRuntimeEnabled()) {
+      const message = error?.message || "Failed to load online test.";
+      return NextResponse.json(
+        { success: false, message },
+        { status: resolveExamRuntimeErrorStatus(message) },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error?.message || "Failed to load online test." },
       { status: 500 },

@@ -6,6 +6,10 @@ import { getTenantModels } from "@/lib/db-tenant";
 import { buildArchiveFilter, resolveIncludeArchived } from "@/lib/archive";
 import { requireTenantSession } from "@/lib/api-auth";
 import { recordTenantAudit } from "@/lib/audit";
+import {
+  disableExamPaperSnapshotsForPaperId,
+  syncExamPaperSnapshotForPaperId,
+} from "@/lib/exam-runtime";
 import { isOnlineQuestionType } from "@/lib/question-paper/grading";
 import "@/models/QuestionPaperResponse";
 import "@/models/Class";
@@ -296,6 +300,20 @@ export async function POST(req: NextRequest) {
       summary: `Created question paper ${title}.`,
       details: { paperId: String(paper._id) },
     });
+
+    if (onlineEnabled) {
+      await syncExamPaperSnapshotForPaperId(
+        schoolKey,
+        String(paper._id),
+      ).catch((error) => {
+        console.error("Failed to sync exam paper snapshot after create:", error);
+      });
+    } else {
+      await disableExamPaperSnapshotsForPaperId(
+        schoolKey,
+        String(paper._id),
+      ).catch(() => undefined);
+    }
 
     return NextResponse.json({ success: true, paper }, { status: 201 });
   } catch (error: any) {

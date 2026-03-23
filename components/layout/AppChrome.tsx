@@ -81,7 +81,7 @@ export default function AppChrome({ children }: { children: ReactNode }) {
         <RouteTransitionIndicator />
       </Suspense>
       <SiteHeader />
-      <main className="min-h-screen pt-[calc(var(--app-header-height)+var(--app-mobile-school-switcher-height))] transition-[margin-left] duration-200 ease-in-out md:pt-[var(--app-header-height)] lg:ml-[var(--app-sidebar-width)]">
+      <main className="min-h-screen pt-[calc(var(--app-header-height)+var(--app-mobile-school-switcher-height))] transition-[margin-left,margin-right] duration-200 ease-in-out md:pt-[var(--app-header-height)] lg:ml-[var(--app-sidebar-left-width,0px)] lg:mr-[var(--app-sidebar-right-width,0px)]">
         <AppViewport key={schoolKey || "no-school"}>{children}</AppViewport>
       </main>
     </>

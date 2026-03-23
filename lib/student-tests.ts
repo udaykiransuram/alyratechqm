@@ -115,6 +115,19 @@ export function sanitizePaperForStudent(paper: any) {
           name: String(paper.subject?.name || ""),
         }
       : null,
+    assignedAcademicSections: Array.isArray(paper?.assignedAcademicSections)
+      ? paper.assignedAcademicSections.map((section: any) => ({
+          _id: normalizeId(section?._id || section),
+          name: String(section?.name || ""),
+          class:
+            section?.class
+              ? {
+                  _id: normalizeId(section.class?._id || section.class),
+                  name: String(section.class?.name || ""),
+                }
+              : null,
+        }))
+      : [],
     sections: (Array.isArray(paper?.sections) ? paper.sections : []).map(
       (section: any) => ({
         name: String(section?.name || ""),
@@ -136,6 +149,10 @@ export function sanitizePaperForStudent(paper: any) {
                       content: String(option?.content || ""),
                     }))
                   : [],
+                matrixOptions: matrixOptions.map((option: any) => ({
+                  left: String(option?.left || ""),
+                  right: String(option?.right || ""),
+                })),
                 matrixRows: matrixOptions
                   .map((option: any) => String(option?.left || "").trim())
                   .filter(Boolean),

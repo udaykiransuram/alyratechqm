@@ -1,4 +1,5 @@
 import { getTenantModels } from "@/lib/db-tenant";
+import { resolveExamRuntimeMongoResponseId } from "@/lib/exam-runtime";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 import {
   createPendingDeliveryAttempt,
@@ -392,11 +393,17 @@ export async function runReportDispatchWorker({
           throw new Error("Invalid student job payload: responseId missing");
         }
 
+        const resolvedResponseId =
+          (await resolveExamRuntimeMongoResponseId(
+            job.schoolKey,
+            String(job.responseId),
+          )) || String(job.responseId);
+
         const { QuestionPaperResponse: QPRModel } = await getTenantModels(
           job.schoolKey,
           ["QuestionPaperResponse", "QuestionPaper", "User"],
         );
-        const response = await QPRModel.findById(job.responseId)
+        const response = await QPRModel.findById(resolvedResponseId)
           .populate("student", "name")
           .populate("paper", "title")
           .lean();

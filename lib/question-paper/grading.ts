@@ -13,6 +13,10 @@ export type NormalizedQuestionSpec = {
 
 const paperQuestionLookupCache = new WeakMap<object, Map<string, NormalizedQuestionSpec>>();
 
+function isDefined<T>(value: T | null | undefined): value is T {
+  return value !== null && typeof value !== "undefined";
+}
+
 export function arraysEqual(a: number[], b: number[]) {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
     return false;
@@ -498,7 +502,7 @@ export function gradeObjectiveSectionAnswers(
             marksAwarded,
           };
         })
-        .filter(Boolean);
+        .filter(isDefined);
 
       if (answers.length === 0) return null;
 
@@ -507,7 +511,7 @@ export function gradeObjectiveSectionAnswers(
         answers,
       };
     })
-    .filter(Boolean);
+    .filter(isDefined);
 
   return {
     sectionAnswers: gradedSections,

@@ -6,6 +6,7 @@ import { buildArchiveFilter } from "@/lib/archive";
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
 import { normalizeMatrixSelections } from "@/lib/question-paper/grading";
 import {
   findStudentsByRollNumber,
@@ -862,6 +863,19 @@ export async function GET(req: NextRequest) {
         { status: 404 },
       );
     }
+
+    await syncExamRuntimeMongoProjectionsForPaper(
+      schoolKey,
+      String(paperId || ""),
+    ).catch(
+      (error) => {
+        console.error(
+          "Failed to sync exam runtime attempts into Mongo projections for question paper responses:",
+          error,
+        );
+        return new Map<string, string>();
+      },
+    );
 
     const resolvedAcademicSections = Array.isArray((paper as any).assignedAcademicSections)
       ? (paper as any).assignedAcademicSections

@@ -377,6 +377,7 @@ export default function ManageUsersPage() {
     setFormData((prev) => ({
       ...prev,
       role: value,
+      password: value === "student" ? "" : prev.password,
       classId: value === "student" ? prev.classId : "",
       academicSection: value === "student" ? prev.academicSection : "",
       rollNumber: value === "student" ? prev.rollNumber : "",
@@ -488,10 +489,12 @@ export default function ManageUsersPage() {
       const body: any = {
         name: formData.name,
         email: formData.email,
-        password: formData.password,
         mobileNumber: formData.mobileNumber,
         role: formData.role,
       };
+      if (formData.role !== "student" && formData.password.trim()) {
+        body.password = formData.password;
+      }
       if (formData.role === "student") {
         body.class = formData.classId;
         body.academicSection = formData.academicSection || undefined;
@@ -612,7 +615,11 @@ export default function ManageUsersPage() {
         email: editData.email,
         mobileNumber: editData.mobileNumber,
       };
-      if (editData.password && editData.password.trim()) {
+      if (
+        editData.role !== "student" &&
+        editData.password &&
+        editData.password.trim()
+      ) {
         body.password = editData.password;
       }
 
@@ -832,12 +839,12 @@ export default function ManageUsersPage() {
                       {activeRolePreset?.description ||
                         "Choose the account type before filling the form."}
                     </p>
-                    <p className="mt-1.5">
-                      {formData.role === "student"
-                        ? "Students sign in with their roll number. If you leave the password blank, the roll number becomes the default password."
-                        : formData.role === "admin"
-                          ? "Admins stay inside the same school tenant and can manage users, classes, sections, papers, analytics, and reports."
-                          : "Teachers get scoped access based on the classes, sections, and subjects you assign below."}
+                      <p className="mt-1.5">
+                        {formData.role === "student"
+                        ? "Students sign in with their roll number. Their initial password is also set to the roll number, and only the student can change it later."
+                          : formData.role === "admin"
+                            ? "Admins stay inside the same school tenant and can manage users, classes, sections, papers, analytics, and reports."
+                            : "Teachers get scoped access based on the classes, sections, and subjects you assign below."}
                     </p>
                   </div>
                 </div>
@@ -885,21 +892,24 @@ export default function ManageUsersPage() {
                       />
                     </div>
                   </div>
-                  <div className="app-field-group">
-                    <Label htmlFor="create-password">Password</Label>
-                    <Input
-                      id="create-password"
-                      name="password"
-                      type="password"
-                      placeholder={
-                        formData.role === "student"
-                          ? "Leave blank to use roll number"
-                          : "Password"
-                      }
-                      value={formData.password}
-                      onChange={handleInputChange}
-                    />
-                  </div>
+                  {formData.role === "student" ? (
+                    <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                      Student passwords are initialized to the roll number. Students can
+                      change their own password later from the student account page.
+                    </div>
+                  ) : (
+                    <div className="app-field-group">
+                      <Label htmlFor="create-password">Password</Label>
+                      <Input
+                        id="create-password"
+                        name="password"
+                        type="password"
+                        placeholder="Password"
+                        value={formData.password}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                  )}
                 </div>
                 {formData.role === "student" && (
                   <div className="app-section space-y-3">
@@ -1264,7 +1274,7 @@ export default function ManageUsersPage() {
                                       Edit User: {editData.name}
                                     </DialogTitle>
                                     <DialogDescription>
-                                      Update profile details, reset password when needed, and refine the user scope from the same dialog.
+                                      Update profile details and refine the user scope from the same dialog.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="max-h-[68vh] space-y-4 overflow-y-auto py-2 pr-1">
@@ -1315,35 +1325,32 @@ export default function ManageUsersPage() {
                                       <div className="app-form-section-heading">
                                         <p className="app-form-section-title">Credentials and role</p>
                                       </div>
-                                      <div className="space-y-2">
-                                      <Label htmlFor="edit-password">
-                                        Reset Password
-                                      </Label>
-                                      <Input
-                                        id="edit-password"
-                                        type="password"
-                                        placeholder={
-                                          editData.role === "student"
-                                            ? "Leave blank to keep current password"
-                                            : "Leave blank to keep the current password"
-                                        }
-                                        value={editData.password || ""}
-                                        onChange={(e) =>
-                                          setEditData((d) => ({
-                                            ...d,
-                                            password: e.target.value,
-                                          }))
-                                        }
-                                      />
                                       {editData.role === "student" ? (
-                                        <p className="text-xs text-muted-foreground">
-                                          Leave this blank to keep the current password. If the
-                                          student is still using the default roll-number password,
-                                          changing the roll number will sync that default
-                                          automatically.
-                                        </p>
-                                      ) : null}
-                                    </div>
+                                        <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                                          Students change their own passwords from the student
+                                          account page. If the student is still using the default
+                                          roll-number password, changing the roll number here will
+                                          keep that default in sync automatically.
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          <Label htmlFor="edit-password">
+                                            Reset Password
+                                          </Label>
+                                          <Input
+                                            id="edit-password"
+                                            type="password"
+                                            placeholder="Leave blank to keep the current password"
+                                            value={editData.password || ""}
+                                            onChange={(e) =>
+                                              setEditData((d) => ({
+                                                ...d,
+                                                password: e.target.value,
+                                              }))
+                                            }
+                                          />
+                                        </div>
+                                      )}
                                       <div className="space-y-2">
                                         <Label htmlFor="edit-role">Role</Label>
                                         <Select
@@ -1352,6 +1359,8 @@ export default function ManageUsersPage() {
                                             setEditData((d) => ({
                                               ...d,
                                               role: value as User["role"],
+                                              password:
+                                                value === "student" ? "" : d.password || "",
                                               class:
                                                 value === "student" ? d.class || "" : "",
                                               academicSection:

@@ -97,8 +97,9 @@ function toggleSelectedTagList(
 export default function ClassTagReportPage({
   params,
 }: {
-  params: { paperId: string };
+  params: Promise<{ paperId: string }>;
 }) {
+  const { paperId } = React.use(params);
   const { navigateBack } = useBackNavigation("/workspace/question-papers");
   const [stats, setStats] = useState<any>({});
   const [paper, setPaper] = useState<string>("");
@@ -237,7 +238,7 @@ export default function ClassTagReportPage({
     void (async () => {
       try {
         const data = await fetchApiJson<any>(
-          `/api/analytics/class-tag-report/${params.paperId}?groupFields=1`,
+          `/api/analytics/class-tag-report/${paperId}?groupFields=1`,
           {
             cache: "no-store",
             schoolKey: sk,
@@ -285,7 +286,7 @@ export default function ClassTagReportPage({
         setError(setupError?.message || "Failed to load report setup.");
       }
     })();
-  }, [params.paperId]);
+  }, [paperId]);
 
   const handleOpenModal = (
     title: string,
@@ -347,7 +348,7 @@ export default function ClassTagReportPage({
 
       try {
         const data = await fetchApiJson<any>(
-          `/api/analytics/benchmark-report/${params.paperId}?${searchParams.toString()}`,
+          `/api/analytics/benchmark-report/${paperId}?${searchParams.toString()}`,
           {
             cache: "no-store",
             schoolKey: sk,
@@ -366,7 +367,7 @@ export default function ClassTagReportPage({
         setBenchmarkLoading(false);
       }
     },
-    [groupBy, params.paperId, schoolKey, selectedAcademicSectionId, selectedTags],
+    [groupBy, paperId, schoolKey, selectedAcademicSectionId, selectedTags],
   );
 
   const fetchAnalytics = React.useCallback(
@@ -392,7 +393,7 @@ export default function ClassTagReportPage({
 
       try {
         const data = await fetchApiJson<any>(
-          `/api/analytics/class-tag-report/${params.paperId}?${searchParams.toString()}`,
+          `/api/analytics/class-tag-report/${paperId}?${searchParams.toString()}`,
           {
             cache: "no-store",
             schoolKey: sk,
@@ -413,7 +414,7 @@ export default function ClassTagReportPage({
         setLoading(false);
       }
     },
-    [fetchBenchmark, groupBy, params.paperId, schoolKey, selectedAcademicSectionId],
+    [fetchBenchmark, groupBy, paperId, schoolKey, selectedAcademicSectionId],
   );
 
   useEffect(() => {
@@ -965,7 +966,7 @@ export default function ClassTagReportPage({
                   tableRef={tableRef}
                   mode="class"
                   paperTitle={paper}
-                  paperId={params.paperId}
+                  paperId={paperId}
                   academicSectionId={selectedAcademicSectionId}
                   selectedTags={selectedTags}
                   benchmarkData={benchmarkData}
