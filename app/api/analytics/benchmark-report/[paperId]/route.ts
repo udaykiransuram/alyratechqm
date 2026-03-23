@@ -42,9 +42,10 @@ function resolveSchoolKey(req: NextRequest) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { paperId: string } },
+  { params }: { params: Promise<{ paperId: string }> },
 ) {
   const schoolKey = resolveSchoolKey(req);
+  const { paperId } = await params;
   const parsedSchool = parseOr400(z.object({ schoolKey: schoolKeySchema }), {
     schoolKey,
   });
@@ -92,7 +93,7 @@ export async function GET(
       tags: z.array(z.string()).optional(),
     }),
     {
-      paperId: params.paperId,
+      paperId,
       academicSectionId: rawAcademicSectionId || undefined,
       groupBy,
       baseline: baselineMode,
@@ -123,7 +124,7 @@ export async function GET(
       "Subject",
     ]);
 
-    const paper = await QuestionPaperModel.findById(params.paperId)
+    const paper = await QuestionPaperModel.findById(paperId)
       .populate({ path: "class", model: ClassModel, select: "name" })
       .populate({ path: "subject", model: SubjectModel, select: "name" })
       .populate({
@@ -234,7 +235,7 @@ export async function GET(
       eligibleStudents.map((student: any) => toIdString(student)),
     );
 
-    await syncExamRuntimeMongoProjectionsForPaper(schoolKey, params.paperId).catch(
+    await syncExamRuntimeMongoProjectionsForPaper(schoolKey, paperId).catch(
       (error) => {
         console.error(
           "Failed to sync exam runtime attempts into Mongo projections for benchmark analytics:",
@@ -244,7 +245,7 @@ export async function GET(
       },
     );
 
-    const rawResponses = await QPRModel.find({ paper: params.paperId })
+    const rawResponses = await QPRModel.find({ paper: paperId })
       .select("paper student startedAt submittedAt totalMarksAwarded sectionAnswers")
       .lean();
     const hydratedResponses = await hydrateResponsesWithStudents({

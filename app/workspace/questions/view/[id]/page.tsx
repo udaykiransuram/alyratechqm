@@ -13,19 +13,20 @@ import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-direct
 export const dynamic = "force-dynamic";
 
 type ViewQuestionPageProps = {
-  params: { id: string };
-  searchParams?: { returnTo?: string | string[] };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string | string[] }>;
 };
 
 export default async function ViewQuestionPage({
   params,
   searchParams,
 }: ViewQuestionPageProps) {
-  const id = params.id;
+  const { id } = await params;
+  const resolvedSearchParams = await searchParams;
   const { schoolKey } = await requireWorkspaceStaffSession();
-  const rawReturnTo = Array.isArray(searchParams?.returnTo)
-    ? searchParams?.returnTo[0]
-    : searchParams?.returnTo;
+  const rawReturnTo = Array.isArray(resolvedSearchParams?.returnTo)
+    ? resolvedSearchParams.returnTo[0]
+    : resolvedSearchParams?.returnTo;
   const backHref = getSafeReturnToPath(rawReturnTo) || "/workspace/questions";
   const currentPath = buildHrefWithReturnTo(
     `/workspace/questions/view/${encodeURIComponent(id)}`,

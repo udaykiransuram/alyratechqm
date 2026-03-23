@@ -7,15 +7,17 @@ import CaseStudy from "@/models/CaseStudy";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { id: string } };
-
-export async function GET(req: NextRequest, { params }: RouteContext) {
+export async function GET(
+  req: NextRequest,
+  context: RouteContext<"/api/admin/case-studies/[id]">,
+) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
+  const { id } = await context.params;
 
   try {
     await connectDB();
-    const caseStudy = await CaseStudy.findById(params.id);
+    const caseStudy = await CaseStudy.findById(id);
     if (!caseStudy) {
       return NextResponse.json({ success: false, error: "Case study not found" }, { status: 404 });
     }
@@ -28,14 +30,18 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function PUT(req: NextRequest, { params }: RouteContext) {
+export async function PUT(
+  req: NextRequest,
+  context: RouteContext<"/api/admin/case-studies/[id]">,
+) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
+  const { id } = await context.params;
 
   try {
     await connectDB();
     const body = await req.json();
-    const caseStudy = await CaseStudy.findByIdAndUpdate(params.id, body, { new: true, runValidators: true });
+    const caseStudy = await CaseStudy.findByIdAndUpdate(id, body, { new: true, runValidators: true });
     if (!caseStudy) {
       return NextResponse.json({ success: false, error: "Case study not found" }, { status: 404 });
     }
@@ -48,13 +54,17 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: RouteContext) {
+export async function DELETE(
+  req: NextRequest,
+  context: RouteContext<"/api/admin/case-studies/[id]">,
+) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
+  const { id } = await context.params;
 
   try {
     await connectDB();
-    const caseStudy = await CaseStudy.findByIdAndDelete(params.id);
+    const caseStudy = await CaseStudy.findByIdAndDelete(id);
     if (!caseStudy) {
       return NextResponse.json({ success: false, error: "Case study not found" }, { status: 404 });
     }

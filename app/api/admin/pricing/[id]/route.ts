@@ -7,15 +7,17 @@ import PricingPlan from "@/models/PricingPlan";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { id: string } };
-
-export async function GET(req: NextRequest, { params }: RouteContext) {
+export async function GET(
+  req: NextRequest,
+  context: RouteContext<"/api/admin/pricing/[id]">,
+) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
+  const { id } = await context.params;
 
   try {
     await connectDB();
-    const plan = await PricingPlan.findById(params.id);
+    const plan = await PricingPlan.findById(id);
     if (!plan) {
       return NextResponse.json({ success: false, error: "Pricing plan not found" }, { status: 404 });
     }
@@ -28,14 +30,18 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function PUT(req: NextRequest, { params }: RouteContext) {
+export async function PUT(
+  req: NextRequest,
+  context: RouteContext<"/api/admin/pricing/[id]">,
+) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
+  const { id } = await context.params;
 
   try {
     await connectDB();
     const body = await req.json();
-    const plan = await PricingPlan.findByIdAndUpdate(params.id, body, { new: true, runValidators: true });
+    const plan = await PricingPlan.findByIdAndUpdate(id, body, { new: true, runValidators: true });
     if (!plan) {
       return NextResponse.json({ success: false, error: "Pricing plan not found" }, { status: 404 });
     }
@@ -48,13 +54,17 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: RouteContext) {
+export async function DELETE(
+  req: NextRequest,
+  context: RouteContext<"/api/admin/pricing/[id]">,
+) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
+  const { id } = await context.params;
 
   try {
     await connectDB();
-    const plan = await PricingPlan.findByIdAndDelete(params.id);
+    const plan = await PricingPlan.findByIdAndDelete(id);
     if (!plan) {
       return NextResponse.json({ success: false, error: "Pricing plan not found" }, { status: 404 });
     }

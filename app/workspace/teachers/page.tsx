@@ -26,15 +26,16 @@ const TEACHERS_BASE_PATH = "/workspace/teachers";
 export const dynamic = "force-dynamic";
 
 type TeachersPageProps = {
-  searchParams?: {
+  searchParams: Promise<{
     page?: string | string[];
-  };
+  }>;
 };
 
 export default async function TeachersPage({
   searchParams,
 }: TeachersPageProps) {
-  const requestedPage = resolveWorkspaceListPage(searchParams?.page);
+  const resolvedSearchParams = await searchParams;
+  const requestedPage = resolveWorkspaceListPage(resolvedSearchParams?.page);
   const { schoolKey } = await requireWorkspaceStaffSession();
 
   let teachers: Awaited<

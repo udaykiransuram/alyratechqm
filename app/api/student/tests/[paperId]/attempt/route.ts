@@ -33,12 +33,13 @@ const ATTEMPT_RUNTIME_PROJECTION =
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { paperId: string } },
+  { params }: { params: Promise<{ paperId: string }> },
 ) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
   });
   if (!auth.ok) return auth.response;
+  const { paperId } = await params;
 
   const schoolKey = auth.schoolKey as string;
   const studentId = auth.session.user.id;
@@ -49,7 +50,7 @@ export async function POST(
       const result = await startStudentExamRuntimeAttempt(
         schoolKey,
         studentId,
-        params.paperId,
+        paperId,
       );
       return NextResponse.json(result);
     }
@@ -58,9 +59,9 @@ export async function POST(
     const { QuestionPaperResponse: QuestionPaperResponseModel, User: UserModel } = models;
 
     const [paperResult, attemptResult] = await Promise.all([
-      loadOnlinePaperRuntimeById(models, schoolKey, params.paperId),
+      loadOnlinePaperRuntimeById(models, schoolKey, paperId),
       QuestionPaperResponseModel.findOne({
-        paper: params.paperId,
+        paper: paperId,
         student: studentId,
       })
         .select(ATTEMPT_RUNTIME_PROJECTION)
@@ -136,7 +137,7 @@ export async function POST(
 
         attempt = await findOrCreateStudentAttempt({
           QuestionPaperResponseModel,
-          paperId: params.paperId,
+          paperId,
           studentId,
           now,
           lean: true,
@@ -179,12 +180,13 @@ export async function POST(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { paperId: string } },
+  { params }: { params: Promise<{ paperId: string }> },
 ) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
   });
   if (!auth.ok) return auth.response;
+  const { paperId } = await params;
 
   const schoolKey = auth.schoolKey as string;
   const studentId = auth.session.user.id;
@@ -196,7 +198,7 @@ export async function PATCH(
       const result = await saveStudentExamRuntimeAttempt({
         schoolKey,
         studentId,
-        paperId: params.paperId,
+        paperId,
         sectionAnswers: body?.sectionAnswers ?? [],
       });
       return NextResponse.json(result);
@@ -206,9 +208,9 @@ export async function PATCH(
     const { QuestionPaperResponse: QuestionPaperResponseModel } = models;
 
     const [paperResult, attemptResult] = await Promise.all([
-      loadOnlinePaperRuntimeById(models, schoolKey, params.paperId),
+      loadOnlinePaperRuntimeById(models, schoolKey, paperId),
       QuestionPaperResponseModel.findOne({
-        paper: params.paperId,
+        paper: paperId,
         student: studentId,
       })
         .select(ATTEMPT_RUNTIME_PROJECTION)

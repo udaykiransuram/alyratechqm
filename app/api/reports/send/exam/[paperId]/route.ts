@@ -43,13 +43,14 @@ function hasExplicitSectionAccess(user: any, sectionId: string) {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { paperId: string } },
+  { params }: { params: Promise<{ paperId: string }> },
 ) {
   await connectDB();
   const auth = await requireTenantSession(req, {
     allowRoles: ["admin", "teacher"],
   });
   if (!auth.ok) return auth.response;
+  const { paperId } = await params;
   const { schoolKey } = auth;
   const requestCookies = req.headers.get("cookie") || "";
 
@@ -100,7 +101,7 @@ export async function POST(
     "Class",
   ]);
 
-  const paper = await QuestionPaperModel.findById(params.paperId)
+  const paper = await QuestionPaperModel.findById(paperId)
     .select("title class subject assignedAcademicSections")
     .populate({ path: "class", model: ClassModel, select: "name" })
     .lean();
@@ -124,7 +125,7 @@ export async function POST(
     );
   }
 
-  await syncExamRuntimeMongoProjectionsForPaper(schoolKey, params.paperId).catch(
+  await syncExamRuntimeMongoProjectionsForPaper(schoolKey, paperId).catch(
     (error) => {
       console.error(
         "Failed to sync exam runtime attempts into Mongo projections before report dispatch:",
@@ -140,7 +141,7 @@ export async function POST(
       ? new mongoose.Types.ObjectId(paperSubjectId)
       : null;
 
-  const responseQuery: Record<string, any> = { paper: params.paperId };
+  const responseQuery: Record<string, any> = { paper: paperId };
   let academicSectionName = "";
   let selectedAcademicSectionDoc: any = null;
 

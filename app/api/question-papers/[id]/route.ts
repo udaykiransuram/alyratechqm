@@ -135,13 +135,14 @@ async function validateAssignedAcademicSections(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["admin", "teacher"],
   });
   if (!auth.ok) return auth.response;
   const schoolKey = auth.schoolKey as string;
+  const { id } = await params;
 
   try {
     await connectDB();
@@ -164,7 +165,7 @@ export async function GET(
     ]);
 
     const paper = await QPModel.findOne({
-      _id: params.id,
+      _id: id,
       ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)),
     })
       .populate({ path: "class", model: ClassModel })
@@ -203,7 +204,7 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const auth = await requireTenantSession(req, {
@@ -211,6 +212,7 @@ export async function PUT(
   });
   if (!auth.ok) return auth.response;
   const schoolKey = auth.schoolKey as string;
+  const { id } = await params;
 
   try {
     const {
@@ -340,7 +342,7 @@ export async function PUT(
     }
 
     const updated = await QPModel.findOneAndUpdate(
-      { _id: params.id, ...buildArchiveFilter(false) },
+      { _id: id, ...buildArchiveFilter(false) },
       {
         ...data,
         onlineEnabled,
@@ -394,12 +396,13 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
   const auth = await requireTenantSession(req, { allowRoles: ["admin"] });
   if (!auth.ok) return auth.response;
   const schoolKey = auth.schoolKey as string;
+  const { id } = await params;
 
   const { QuestionPaper: QPModel } = await getTenantModels(schoolKey, [
     "QuestionPaper",
@@ -407,7 +410,7 @@ export async function DELETE(
 
   try {
     const archived = await QPModel.findOneAndUpdate(
-      { _id: params.id, ...buildArchiveFilter(false) },
+      { _id: id, ...buildArchiveFilter(false) },
       buildArchivedUpdate(),
       { new: true, runValidators: true },
     );

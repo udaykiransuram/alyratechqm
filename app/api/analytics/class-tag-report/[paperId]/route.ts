@@ -84,8 +84,9 @@ function toIdString(value: any) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { paperId: string } },
+  { params }: { params: Promise<{ paperId: string }> },
 ) {
+  const { paperId } = await params;
   const url = new URL(req.url);
   const schoolFromHeader =
     req.headers.get("x-school-key") || req.headers.get("X-School-Key");
@@ -139,7 +140,7 @@ export async function GET(
     academicSectionId: objectIdSchema.optional(),
   });
   const qRes = parseOr400(querySchema, {
-    paperId: params.paperId,
+    paperId,
     groupBy: groupByParts,
     json: req.nextUrl.searchParams.get("json"),
     groupFields: req.nextUrl.searchParams.get("groupFields"),
@@ -172,7 +173,7 @@ export async function GET(
     const groupFieldsOnly = req.nextUrl.searchParams.get("groupFields") === "1";
 
     if (groupFieldsOnly) {
-      const paper = await QPModel.findById(params.paperId)
+      const paper = await QPModel.findById(paperId)
         .select("title class sections assignedAcademicSections")
         .populate({
           path: "sections.questions.question",
@@ -260,7 +261,7 @@ export async function GET(
     let paperSections: any[] = [];
 
     // --- Fetch paper and responses ---
-    const paper = await QPModel.findById(params.paperId)
+    const paper = await QPModel.findById(paperId)
       .populate({
         path: "sections.questions.question",
         select: "tags content answerIndexes options type matrixOptions matrixAnswers",
@@ -289,7 +290,7 @@ export async function GET(
     paperSections = paperObj.sections || [];
     const questionLookup = buildPaperQuestionLookup({ sections: paperSections });
 
-    await syncExamRuntimeMongoProjectionsForPaper(tenantKey, params.paperId).catch(
+    await syncExamRuntimeMongoProjectionsForPaper(tenantKey, paperId).catch(
       (error) => {
         console.error(
           "Failed to sync exam runtime attempts into Mongo projections for class analytics:",
@@ -299,7 +300,7 @@ export async function GET(
       },
     );
 
-    responses = await QPRModel.find({ paper: params.paperId })
+    responses = await QPRModel.find({ paper: paperId })
       .populate({
         path: "sectionAnswers.answers.question",
         select: "answerIndexes tags content options type matrixOptions matrixAnswers",

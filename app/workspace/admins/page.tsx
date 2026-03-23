@@ -26,15 +26,16 @@ const ADMINS_BASE_PATH = "/workspace/admins";
 export const dynamic = "force-dynamic";
 
 type AdminsPageProps = {
-  searchParams?: {
+  searchParams: Promise<{
     page?: string | string[];
-  };
+  }>;
 };
 
 export default async function AdminsPage({
   searchParams,
 }: AdminsPageProps) {
-  const requestedPage = resolveWorkspaceListPage(searchParams?.page);
+  const resolvedSearchParams = await searchParams;
+  const requestedPage = resolveWorkspaceListPage(resolvedSearchParams?.page);
   const { schoolKey } = await requireWorkspaceStaffSession();
 
   let admins: Awaited<

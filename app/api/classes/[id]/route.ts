@@ -16,14 +16,14 @@ function resolveSchoolKey(req: NextRequest) {
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   await connectDB();
+  const { id: classId } = await params;
   const schoolKey = resolveSchoolKey(req);
   if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
 
   try {
-    const classId = params.id;
     if (!mongoose.Types.ObjectId.isValid(classId)) {
       return NextResponse.json({ success: false, message: 'Invalid class ID' }, { status: 400 });
     }
