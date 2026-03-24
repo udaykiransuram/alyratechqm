@@ -229,6 +229,19 @@ export function serializeStudentAttempt(attempt: any) {
   };
 }
 
+export function buildSectionAnswersSignature(sectionAnswers: any, paper?: any) {
+  const normalizedInput = Array.isArray(sectionAnswers) ? sectionAnswers : [];
+
+  if (!paper) {
+    return JSON.stringify(normalizedInput);
+  }
+
+  const normalized = validateStudentSectionAnswers(normalizedInput, paper, {
+    allowEmpty: true,
+  });
+  return JSON.stringify(normalized.ok ? normalized.sectionAnswers : []);
+}
+
 export async function findOrCreateStudentAttempt({
   QuestionPaperResponseModel,
   paperId,
@@ -328,11 +341,24 @@ export async function finalizeAttemptAsSubmitted({
   });
 
   if (QuestionPaperResponseModel && attempt?._id && typeof attempt?.save !== "function") {
-    return QuestionPaperResponseModel.findOneAndUpdate(
-      { _id: attempt._id },
+    const updatedAttempt = await QuestionPaperResponseModel.findOneAndUpdate(
+      {
+        _id: attempt._id,
+        status: { $nin: ["submitted", "auto_submitted"] },
+      },
       { $set: update },
       { new: true },
     ).lean();
+
+    if (updatedAttempt) {
+      return updatedAttempt;
+    }
+
+    return QuestionPaperResponseModel.findById(attempt._id).lean();
+  }
+
+  if (attempt?.status === "submitted" || attempt?.status === "auto_submitted") {
+    return attempt;
   }
 
   attempt.sectionAnswers = update.sectionAnswers;

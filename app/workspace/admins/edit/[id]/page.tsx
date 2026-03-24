@@ -313,7 +313,7 @@ export default function EditAdminPage() {
                   : 'Ready',
             meta: loadError && hasUserRecord
               ? 'Cached admin data is available, but the latest scope data could not be refreshed.'
-              : 'Updates are applied only inside the current school tenant.',
+              : 'Updates are applied only inside the current school.',
           },
         ]}
       />

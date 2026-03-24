@@ -14,6 +14,7 @@ import {
   parseBenchmarkTagFilters,
 } from "@/lib/analytics/benchmarkReport";
 import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
+import { requireTenantSession } from "@/lib/api-auth";
 import {
   objectIdSchema,
   parseOr400,
@@ -29,22 +30,18 @@ import "@/models/QuestionPaperResponse";
 import "@/models/Tag";
 import "@/models/TagType";
 
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
-    .toString()
-    .trim();
-}
-
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ paperId: string }> },
 ) {
-  const schoolKey = resolveSchoolKey(req);
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const schoolKey = auth.schoolKey;
+
   const { paperId } = await params;
   const parsedSchool = parseOr400(z.object({ schoolKey: schoolKeySchema }), {
     schoolKey,

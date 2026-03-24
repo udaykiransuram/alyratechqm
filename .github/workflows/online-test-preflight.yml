@@ -1,0 +1,76 @@
+name: Online Test Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "release/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: online-test-preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: Staging Online Test Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment: staging
+    env:
+      CI: true
+      BASE_URL: http://127.0.0.1:3000
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      MONGODB_URI: ${{ secrets.STAGING_MONGODB_URI }}
+      NEXTAUTH_SECRET: ${{ secrets.STAGING_NEXTAUTH_SECRET }}
+      EXAM_RUNTIME_DATABASE_URL: ${{ secrets.STAGING_EXAM_RUNTIME_DATABASE_URL }}
+      ONLINE_TEST_GATE_AUTO_SEED: "true"
+      ONLINE_TEST_GATE_SCHOOL: online_test_gate_ci
+      ONLINE_TEST_GATE_SEED_STUDENTS: "100"
+      ONLINE_TEST_GATE_CONCURRENCY: "100"
+      ONLINE_TEST_GATE_ROUNDS: "3"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Validate required staging secrets
+        run: |
+          if [ -z "${MONGODB_URI}" ]; then
+            echo "Missing required secret: STAGING_MONGODB_URI"
+            exit 1
+          fi
+          if [ -z "${NEXTAUTH_SECRET}" ]; then
+            echo "Missing required secret: STAGING_NEXTAUTH_SECRET"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run online-test preflight gate
+        run: npm run preflight:online-test
+
+      - name: Upload preflight artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: online-test-preflight-${{ github.run_id }}
+          path: |
+            playwright-report
+            /tmp/online-test-preflight-seed-*.json
+            /tmp/online-test-preflight-stress-*.json
+            /tmp/online-test-preflight-stress-*.json.gate.json
+          if-no-files-found: warn

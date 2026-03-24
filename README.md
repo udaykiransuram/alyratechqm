@@ -56,6 +56,10 @@ npm run dev
 - `npm start` starts the production server
 - `npm run lint` runs ESLint
 - `npm run test:e2e` runs Playwright end-to-end tests
+- `npm run test:e2e:online-integration` runs real backend student online-test integration e2e
+- `npm run gate:student-tests:seed -- --students=100` seeds disposable load-gate data
+- `npm run gate:student-tests:load -- --school=<key> --paper=<paperId> --students=<jsonFile>` runs load gate with latency/failure/audit thresholds
+- `npm run preflight:online-test` runs typecheck, targeted lint, integration e2e, and load gate in one command
 
 ## Project Structure
 

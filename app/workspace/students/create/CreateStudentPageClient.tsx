@@ -256,7 +256,7 @@ export default function CreateStudentPageClient({
           {
             label: "Classes loaded",
             value: String(initialClasses.length),
-            meta: "Available class placements in the current school workspace.",
+            meta: "Available class placements in the current school.",
           },
           {
             label: "Sections loaded",

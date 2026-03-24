@@ -95,7 +95,7 @@ export default async function AdminsPage({
           {
             label: "Admin accounts",
             value: String(totalAdmins),
-            meta: "Admins available across all pages for the active school workspace.",
+            meta: "Admins available across all pages for the active school.",
           },
           {
             label: "Access model",

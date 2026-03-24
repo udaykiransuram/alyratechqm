@@ -23,6 +23,42 @@ export type FetchApiJsonOptions = FetchApiOptions & {
   fallbackMessage?: string;
 };
 
+type ApiErrorData = {
+  code?: string;
+  retryable?: boolean;
+  httpStatus?: number;
+  message?: string;
+  [key: string]: unknown;
+};
+
+export class ApiRequestError extends Error {
+  code: string | null;
+  retryable: boolean;
+  httpStatus: number;
+  payload: unknown;
+
+  constructor(params: {
+    message: string;
+    code?: string | null;
+    retryable?: boolean;
+    httpStatus?: number;
+    payload?: unknown;
+    cause?: unknown;
+  }) {
+    super(String(params.message || 'Request failed.'));
+    this.name = 'ApiRequestError';
+    this.code = params.code ? String(params.code) : null;
+    this.retryable = Boolean(params.retryable);
+    this.httpStatus = Number.isFinite(params.httpStatus)
+      ? Number(params.httpStatus)
+      : 0;
+    this.payload = params.payload;
+    if (typeof params.cause !== 'undefined') {
+      (this as Error & { cause?: unknown }).cause = params.cause;
+    }
+  }
+}
+
 type ClientApiCacheEntry = {
   payload: ApiPayload<any>;
   expiresAt: number;
@@ -36,6 +72,146 @@ const STUDENT_SESSION_EXPIRED_MESSAGE =
   'This student session is no longer active. Please sign in again.';
 
 let studentSessionRedirectPromise: Promise<never> | null = null;
+
+function stripTerminalPunctuation(message: string) {
+  return String(message || '').trim().replace(/[.!?]+$/, '');
+}
+
+function ensureTerminalPunctuation(message: string) {
+  const trimmed = String(message || '').trim();
+  if (!trimmed) {
+    return '';
+  }
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function normalizeLeadingErrorPhrase(message: string) {
+  const trimmed = String(message || '').trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const gerundReplacements: Array<[RegExp, string]> = [
+    [/^error\s+creating\b/i, "We couldn't create"],
+    [/^error\s+loading\b/i, "We couldn't load"],
+    [/^error\s+saving\b/i, "We couldn't save"],
+    [/^error\s+updating\b/i, "We couldn't update"],
+    [/^error\s+deleting\b/i, "We couldn't delete"],
+    [/^error\s+archiving\b/i, "We couldn't archive"],
+    [/^error\s+uploading\b/i, "We couldn't upload"],
+    [/^error\s+submitting\b/i, "We couldn't submit"],
+    [/^error\s+starting\b/i, "We couldn't start"],
+    [/^error\s+fetching\b/i, "We couldn't fetch"],
+    [/^error\s+reading\b/i, "We couldn't read"],
+    [/^error\s+generating\b/i, "We couldn't generate"],
+    [/^error\s+processing\b/i, "We couldn't process"],
+    [/^error\s+sending\b/i, "We couldn't send"],
+  ];
+
+  for (const [pattern, replacement] of gerundReplacements) {
+    if (pattern.test(trimmed)) {
+      return trimmed.replace(pattern, replacement);
+    }
+  }
+
+  return trimmed
+    .replace(/^failed to\s+/i, "We couldn't ")
+    .replace(/^unable to\s+/i, "We couldn't ")
+    .replace(/^error while\s+/i, "We couldn't ")
+    .replace(/^an error occurred while\s+/i, "We couldn't ");
+}
+
+export function normalizeUserFacingErrorMessage(
+  message: unknown,
+  fallbackMessage = "We couldn't complete that request.",
+) {
+  const fallback =
+    ensureTerminalPunctuation(String(fallbackMessage || '').trim()) ||
+    "We couldn't complete that request.";
+  const raw = typeof message === 'string' ? String(message || '').trim() : '';
+  const candidate = raw || fallback;
+
+  const normalized = normalizeLeadingErrorPhrase(candidate);
+  if (!normalized) {
+    return fallback;
+  }
+
+  const sentence = ensureTerminalPunctuation(normalized);
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
+export function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === 'AbortError'
+    : typeof error === 'object' &&
+        error !== null &&
+        'name' in error &&
+        (error as { name?: string }).name === 'AbortError';
+}
+
+function isNavigatorOffline() {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+function isLikelyTimeoutMessage(message: string) {
+  return /timed out|timeout/i.test(message);
+}
+
+function isLikelyNetworkMessage(message: string) {
+  return /failed to fetch|fetch failed|load failed|networkerror|network request failed|network error|failed to execute 'fetch'/i.test(
+    message,
+  );
+}
+
+function getClientRequestErrorCode(error: unknown) {
+  const rawMessage = error instanceof Error ? String(error.message || '').trim() : '';
+  if (isNavigatorOffline()) {
+    return 'CLIENT_OFFLINE';
+  }
+  if (rawMessage && isLikelyTimeoutMessage(rawMessage)) {
+    return 'CLIENT_TIMEOUT';
+  }
+  if (rawMessage && isLikelyNetworkMessage(rawMessage)) {
+    return 'CLIENT_NETWORK_ERROR';
+  }
+  return 'CLIENT_REQUEST_FAILED';
+}
+
+export function getClientRequestErrorMessage(
+  error: unknown,
+  fallbackMessage = "We couldn't complete that request.",
+) {
+  const fallback = normalizeUserFacingErrorMessage(fallbackMessage);
+  const fallbackLead = stripTerminalPunctuation(fallback);
+  const rawMessage = error instanceof Error ? String(error.message || '').trim() : '';
+
+  if (isNavigatorOffline()) {
+    return normalizeUserFacingErrorMessage(
+      `${fallbackLead}. You appear to be offline. Reconnect to the internet and try again.`,
+      fallback,
+    );
+  }
+
+  if (rawMessage && isLikelyTimeoutMessage(rawMessage)) {
+    return normalizeUserFacingErrorMessage(
+      `${fallbackLead}. The connection is too weak or the server took too long to respond. Please try again when your internet is stable.`,
+      fallback,
+    );
+  }
+
+  if (rawMessage && isLikelyNetworkMessage(rawMessage)) {
+    return normalizeUserFacingErrorMessage(
+      `${fallbackLead}. We could not reach the server. Check your internet connection and try again.`,
+      fallback,
+    );
+  }
+
+  return normalizeUserFacingErrorMessage(rawMessage || fallback, fallback);
+}
+
+function resolveRetryableByStatus(status: number) {
+  return status >= 500 || status === 408 || status === 409 || status === 425 || status === 429;
+}
 
 function resolveRequestMethod(init?: RequestInit) {
   return String(init?.method || 'GET').trim().toUpperCase() || 'GET';
@@ -140,25 +316,33 @@ export function getApiErrorMessage(
   payload: Pick<ApiPayload<any>, 'ok' | 'status' | 'data' | 'rawText'>,
   fallback: string,
 ) {
+  const fallbackMessage = normalizeUserFacingErrorMessage(fallback);
+  const fallbackLead = stripTerminalPunctuation(fallbackMessage);
   const apiMessage =
     payload.data && typeof (payload.data as any)?.message === 'string'
       ? String((payload.data as any).message).trim()
       : '';
 
   if (apiMessage) {
-    return apiMessage;
+    return normalizeUserFacingErrorMessage(apiMessage, fallbackMessage);
   }
 
   const trimmed = String(payload.rawText || '').trim();
   if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
-    return `${fallback} The server returned an HTML error page instead of JSON.`;
+    return normalizeUserFacingErrorMessage(
+      `${fallbackLead}. The server returned an HTML error page instead of JSON.`,
+      fallbackMessage,
+    );
   }
 
   if (!payload.ok) {
-    return `${fallback} (HTTP ${payload.status})`;
+    return normalizeUserFacingErrorMessage(
+      `${fallbackLead}. (HTTP ${payload.status})`,
+      fallbackMessage,
+    );
   }
 
-  return fallback;
+  return fallbackMessage;
 }
 
 function getApiMessage(payload: Pick<ApiPayload<any>, 'data'>) {
@@ -171,6 +355,69 @@ function getApiCode(payload: Pick<ApiPayload<any>, 'data'>) {
   return payload.data && typeof (payload.data as any)?.code === 'string'
     ? String((payload.data as any).code).trim()
     : '';
+}
+
+function getApiRetryable(payload: Pick<ApiPayload<any>, 'status' | 'data'>) {
+  if (
+    payload.data &&
+    typeof payload.data === 'object' &&
+    'retryable' in payload.data &&
+    typeof (payload.data as ApiErrorData).retryable === 'boolean'
+  ) {
+    return Boolean((payload.data as ApiErrorData).retryable);
+  }
+
+  return resolveRetryableByStatus(Number(payload.status || 0));
+}
+
+function getApiHttpStatus(payload: Pick<ApiPayload<any>, 'status' | 'data'>) {
+  if (
+    payload.data &&
+    typeof payload.data === 'object' &&
+    'httpStatus' in payload.data &&
+    Number.isFinite(Number((payload.data as ApiErrorData).httpStatus))
+  ) {
+    return Number((payload.data as ApiErrorData).httpStatus);
+  }
+
+  return Number(payload.status || 0);
+}
+
+export function isApiRequestError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError;
+}
+
+export function getApiRequestErrorCode(error: unknown) {
+  if (error instanceof ApiRequestError) {
+    return error.code;
+  }
+
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+  ) {
+    return String((error as { code: string }).code);
+  }
+
+  return null;
+}
+
+export function isRetryableApiError(error: unknown) {
+  if (error instanceof ApiRequestError) {
+    return error.retryable;
+  }
+  return false;
+}
+
+export function getApiRequestErrorPayload<T = unknown>(
+  error: unknown,
+): T | null {
+  if (error instanceof ApiRequestError) {
+    return (error.payload as T) ?? null;
+  }
+  return null;
 }
 
 function isExpiredStudentSessionPayload(
@@ -302,8 +549,27 @@ export async function fetchApiJson<T = any>(
   url: string,
   options: FetchApiJsonOptions = {},
 ): Promise<T> {
-  const { fallbackMessage = 'Request failed.', ...rest } = options;
-  const payload = await fetchApiPayload<T>(url, rest);
+  const {
+    fallbackMessage = "We couldn't complete that request.",
+    ...rest
+  } = options;
+  let payload: ApiPayload<T>;
+
+  try {
+    payload = await fetchApiPayload<T>(url, rest);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
+    throw new ApiRequestError({
+      message: getClientRequestErrorMessage(error, fallbackMessage),
+      code: getClientRequestErrorCode(error),
+      retryable: true,
+      httpStatus: 0,
+      cause: error,
+    });
+  }
 
   if (
     !payload.ok ||
@@ -316,7 +582,13 @@ export async function fetchApiJson<T = any>(
       return await redirectToExpiredStudentSessionSignIn();
     }
 
-    throw new Error(getApiErrorMessage(payload, fallbackMessage));
+    throw new ApiRequestError({
+      message: getApiErrorMessage(payload, fallbackMessage),
+      code: getApiCode(payload) || null,
+      retryable: getApiRetryable(payload),
+      httpStatus: getApiHttpStatus(payload),
+      payload: payload.data,
+    });
   }
 
   return payload.data as T;

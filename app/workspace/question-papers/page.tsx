@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import PageHero from "@/components/layout/PageHero";
+import FeedbackNotice from "@/components/ui/feedback-notice";
 import ListPagination from "@/components/ui/list-pagination";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { MessageCircle } from "lucide-react";
@@ -31,7 +32,7 @@ import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
 import { buildPartialLoadMessage, fetchApiJson } from "@/lib/client/api";
 import { getSchoolKeyFromCookie } from "@/lib/client/school";
 
-const NO_SCHOOL_PAPERS_MESSAGE = "Select a school workspace to load question papers.";
+const NO_SCHOOL_PAPERS_MESSAGE = "Select a school to load question papers.";
 const PAPERS_INITIAL_PAGE_SIZE = 20;
 const PAPERS_PAGE_SIZE = PAPERS_INITIAL_PAGE_SIZE;
 const PAPERS_BACKGROUND_BATCH_SIZE = 3;
@@ -111,6 +112,10 @@ export default function QuestionPapersListPage() {
   const [supportDataNotice, setSupportDataNotice] = useState<string | null>(null);
   const [backgroundLoadNotice, setBackgroundLoadNotice] = useState<string | null>(null);
   const [totalPaperCount, setTotalPaperCount] = useState(0);
+  const [pageNotice, setPageNotice] = useState<{
+    variant: "success" | "error" | "info" | "warning";
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -124,6 +129,7 @@ export default function QuestionPapersListPage() {
       setError(null);
       setSupportDataNotice(null);
       setBackgroundLoadNotice(null);
+      setPageNotice(null);
 
       if (!cookieSchoolKey) {
         setLoading(false);
@@ -135,13 +141,13 @@ export default function QuestionPapersListPage() {
         fetchApiJson<any>("/api/sections", {
           cache: "no-store",
           schoolKey: cookieSchoolKey,
-          fallbackMessage: "Failed to fetch sections.",
+          fallbackMessage: "We couldn't load section filters.",
           signal: abortController.signal,
         }),
         fetchApiJson<any>("/api/classes", {
           cache: "no-store",
           schoolKey: cookieSchoolKey,
-          fallbackMessage: "Failed to fetch classes.",
+          fallbackMessage: "We couldn't load class filters.",
           signal: abortController.signal,
         }),
       ]).then(([sectionResult, classResult]) => {
@@ -180,7 +186,7 @@ export default function QuestionPapersListPage() {
           {
             cache: "no-store",
             schoolKey: cookieSchoolKey,
-            fallbackMessage: "Failed to fetch question papers.",
+            fallbackMessage: "We couldn't load question papers.",
             signal: abortController.signal,
           },
         );
@@ -225,7 +231,7 @@ export default function QuestionPapersListPage() {
                     {
                       cache: "no-store",
                       schoolKey: cookieSchoolKey,
-                      fallbackMessage: "Failed to fetch question papers.",
+                      fallbackMessage: "We couldn't load question papers.",
                       signal: abortController.signal,
                     },
                   );
@@ -246,7 +252,9 @@ export default function QuestionPapersListPage() {
             }
           } catch (backgroundError) {
             if (!isAbortError(backgroundError) && active) {
-              setBackgroundLoadNotice("Some papers are still loading. Refresh to retry.");
+              setBackgroundLoadNotice(
+                "Some papers are still loading in the background. Refresh to retry.",
+              );
             }
           } finally {
             if (active && !abortController.signal.aborted) {
@@ -261,7 +269,7 @@ export default function QuestionPapersListPage() {
         setPapers([]);
         setTotalPaperCount(0);
         setLoading(false);
-        setError(paperError?.message || "Failed to fetch question papers.");
+        setError(paperError?.message || "We couldn't load question papers.");
       }
     };
 
@@ -375,27 +383,41 @@ export default function QuestionPapersListPage() {
   const handleArchive = async (id: string) => {
     if (!window.confirm("Are you sure you want to archive this question paper?"))
       return;
+    setPageNotice(null);
     setDeletingId(id);
     try {
       await fetchApiJson(`/api/question-papers/${id}`, {
         method: "DELETE",
         schoolKey,
-        fallbackMessage: "Failed to archive question paper.",
+        fallbackMessage: "We couldn't archive this question paper.",
       });
       setPapers((currentPapers) => currentPapers.filter((p) => p._id !== id));
       setTotalPaperCount((currentTotal) => Math.max(0, currentTotal - 1));
+      setPageNotice({
+        variant: "success",
+        message: "Question paper archived.",
+      });
     } catch (deleteError: any) {
-      alert(deleteError?.message || "Failed to archive question paper");
+      setPageNotice({
+        variant: "error",
+        message:
+          deleteError?.message ||
+          "We couldn't archive that question paper. Please try again.",
+      });
     } finally {
       setDeletingId(null);
     }
   };
 
   const handleDownloadExcel = async (paperId: string) => {
+    setPageNotice(null);
     setExcelLoadingId(paperId);
     const paper = papers.find((p) => p._id === paperId);
     if (!paper) {
-      alert("Could not find paper details.");
+      setPageNotice({
+        variant: "error",
+        message: "We couldn't find that paper's details.",
+      });
       setExcelLoadingId(null);
       return;
     }
@@ -436,11 +458,23 @@ export default function QuestionPapersListPage() {
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
+          setPageNotice({
+            variant: "success",
+            message: `Excel download started for "${paper.title || "the selected paper"}".`,
+          });
         } else {
-          alert("Failed to generate Excel file.");
+          setPageNotice({
+            variant: "error",
+            message: "We couldn't generate the Excel file. Please try again.",
+          });
         }
       } catch (error: any) {
-        alert(error?.message || "Failed to generate Excel file.");
+        setPageNotice({
+          variant: "error",
+          message:
+            error?.message ||
+            "We couldn't generate the Excel file. Please try again.",
+        });
       }
     }
     setExcelLoadingId(null);
@@ -448,7 +482,10 @@ export default function QuestionPapersListPage() {
 
   const handleDownloadAllZip = async () => {
     if (selectedPaperIds.length === 0) {
-      alert("Please select at least one question paper to download.");
+      setPageNotice({
+        variant: "error",
+        message: "Select at least one question paper before downloading a ZIP.",
+      });
       return;
     }
 
@@ -464,63 +501,104 @@ export default function QuestionPapersListPage() {
       finalZipName += ".zip";
     }
 
+    setPageNotice(null);
     setZipLoading(true);
-    const { default: JSZip } = await import("jszip");
-    const zip = new JSZip();
-    for (const paperId of selectedPaperIds) {
-      const paper = papers.find((p) => p._id === paperId);
-      const selectedAcademicSectionId = paper
-        ? getSelectedAcademicSectionId(paper)
-        : "all";
-      const selectedAcademicSectionName = paper
-        ? getSelectedAcademicSectionName(paper)
-        : "";
-      const safeTitle =
-        paper?.title?.replace(/[^a-zA-Z0-9_\-]/g, "_") || `paper_${paperId}`;
-      const safeSectionName = selectedAcademicSectionName.replace(
-        /[^a-zA-Z0-9_\-]/g,
-        "_",
-      );
-      try {
-        const excelBlob = await downloadDefaultClassAnalyticsExcel(
-          paperId,
-          numTags,
-          true,
-          {
-            academicSectionId:
-              selectedAcademicSectionId !== "all"
-                ? selectedAcademicSectionId
-                : undefined,
-          },
-        );
-        if (excelBlob) {
-          zip.file(
-            `${safeTitle}${safeSectionName ? `_${safeSectionName}` : ""}.xlsx`,
-            excelBlob,
-          );
-        } else {
-          console.warn(`Failed to generate Excel for paper: ${safeTitle}`);
-        }
-      } catch (error: any) {
-        console.warn(
-          `Failed to generate Excel for paper: ${safeTitle}`,
-          error?.message || error,
-        );
-      }
-    }
 
-    const zipBlob = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(zipBlob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = finalZipName;
-    a.click();
-    URL.revokeObjectURL(url);
-    setZipLoading(false);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const failedDownloads: string[] = [];
+
+      for (const paperId of selectedPaperIds) {
+        const paper = papers.find((p) => p._id === paperId);
+        const selectedAcademicSectionId = paper
+          ? getSelectedAcademicSectionId(paper)
+          : "all";
+        const selectedAcademicSectionName = paper
+          ? getSelectedAcademicSectionName(paper)
+          : "";
+        const safeTitle =
+          paper?.title?.replace(/[^a-zA-Z0-9_\-]/g, "_") || `paper_${paperId}`;
+        const safeSectionName = selectedAcademicSectionName.replace(
+          /[^a-zA-Z0-9_\-]/g,
+          "_",
+        );
+        try {
+          const excelBlob = await downloadDefaultClassAnalyticsExcel(
+            paperId,
+            numTags,
+            true,
+            {
+              academicSectionId:
+                selectedAcademicSectionId !== "all"
+                  ? selectedAcademicSectionId
+                  : undefined,
+            },
+          );
+          if (excelBlob) {
+            zip.file(
+              `${safeTitle}${safeSectionName ? `_${safeSectionName}` : ""}.xlsx`,
+              excelBlob,
+            );
+          } else {
+            failedDownloads.push(safeTitle);
+            console.warn(`Failed to generate Excel for paper: ${safeTitle}`);
+          }
+        } catch (error: any) {
+          failedDownloads.push(safeTitle);
+          console.warn(
+            `Failed to generate Excel for paper: ${safeTitle}`,
+            error?.message || error,
+          );
+        }
+      }
+
+      if (Object.keys(zip.files).length === 0) {
+        setPageNotice({
+          variant: "error",
+          message:
+            "We couldn't generate any Excel files for the selected papers.",
+        });
+        return;
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = finalZipName;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      setPageNotice(
+        failedDownloads.length > 0
+          ? {
+              variant: "warning",
+              message: `ZIP download started, but ${failedDownloads.length} paper${
+                failedDownloads.length === 1 ? "" : "s"
+              } could not be generated. Retry those individually if needed.`,
+            }
+          : {
+              variant: "success",
+              message: `ZIP download started for ${selectedPaperIds.length} question paper${
+                selectedPaperIds.length === 1 ? "" : "s"
+              }.`,
+            },
+      );
+    } catch (error: any) {
+      setPageNotice({
+        variant: "error",
+        message:
+          error?.message || "We couldn't prepare the ZIP download right now.",
+      });
+    } finally {
+      setZipLoading(false);
+    }
   };
 
   const handleSendExamReports = async (paperId: string) => {
     try {
+      setPageNotice(null);
       setSendingReportsPaperId(paperId);
       const paper = papers.find((item) => item._id === paperId);
       const selectedAcademicSectionId = paper
@@ -543,7 +621,7 @@ export default function QuestionPapersListPage() {
           method: "POST",
           schoolKey,
           includeSchoolQuery: false,
-          fallbackMessage: "Failed to queue exam reports.",
+          fallbackMessage: "We couldn't queue exam reports.",
         },
       );
       const summaryLines = [
@@ -557,11 +635,18 @@ export default function QuestionPapersListPage() {
       if (data.failedCount) {
         summaryLines.push(`Failed: ${data.failedCount}`);
       }
-      alert(
-        `Queued ${data.queued} report(s)${selectedAcademicSectionName ? ` for ${selectedAcademicSectionName}` : ""}.\n${summaryLines.join("\n")}`,
-      );
-    } catch {
-      alert("Failed to queue exam reports");
+      setPageNotice({
+        variant: "success",
+        message: `Queued ${data.queued} report(s)${
+          selectedAcademicSectionName ? ` for ${selectedAcademicSectionName}` : ""
+        }. ${summaryLines.join(" • ")}`,
+      });
+    } catch (error: any) {
+      setPageNotice({
+        variant: "error",
+        message:
+          error?.message || "We couldn't queue the exam reports. Please try again.",
+      });
     } finally {
       setSendingReportsPaperId(null);
     }
@@ -812,15 +897,11 @@ export default function QuestionPapersListPage() {
   if (error) {
     return (
       <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-        <div
-          className={
-            error === NO_SCHOOL_PAPERS_MESSAGE
-              ? "app-feedback app-feedback-info"
-              : "app-feedback app-feedback-error"
-          }
+        <FeedbackNotice
+          variant={error === NO_SCHOOL_PAPERS_MESSAGE ? "info" : "error"}
         >
           {error}
-        </div>
+        </FeedbackNotice>
       </div>
     );
   }
@@ -855,8 +936,17 @@ export default function QuestionPapersListPage() {
         }
       />
 
-      {supportDataNotice ? <div className="app-feedback app-feedback-info">{supportDataNotice}</div> : null}
-      {backgroundLoadNotice ? <div className="app-feedback app-feedback-info">{backgroundLoadNotice}</div> : null}
+      {pageNotice ? (
+        <FeedbackNotice variant={pageNotice.variant}>
+          {pageNotice.message}
+        </FeedbackNotice>
+      ) : null}
+      {supportDataNotice ? (
+        <FeedbackNotice variant="warning">{supportDataNotice}</FeedbackNotice>
+      ) : null}
+      {backgroundLoadNotice ? (
+        <FeedbackNotice variant="warning">{backgroundLoadNotice}</FeedbackNotice>
+      ) : null}
 
       <div className="app-toolbar space-y-4">
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_180px_180px_7.5rem] xl:items-end">

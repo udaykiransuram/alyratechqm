@@ -4,19 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { buildRestoreUpdate } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
+import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
-    .toString()
-    .trim();
-}
 
 function normalizeRecord(record: Record<string, unknown>) {
   const normalized: Record<string, unknown> = {};
@@ -27,14 +17,15 @@ function normalizeRecord(record: Record<string, unknown>) {
 }
 
 export async function POST(req: NextRequest) {
-  await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) {
+    return auth.response;
   }
+  const schoolKey = auth.schoolKey;
+
+  await connectDB();
 
   const { Class: ClassModel } = await getTenantModels(schoolKey, ["Class"]);
 

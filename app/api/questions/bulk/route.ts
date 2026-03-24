@@ -8,6 +8,7 @@ import TagType from "@/models/TagType";
 import Subject from "@/models/Subject";
 import { Model } from "mongoose";
 import Class from "@/models/Class";
+import { requireTenantSession } from "@/lib/api-auth";
 
 interface ClassDoc {
   _id: string;
@@ -62,28 +63,15 @@ function zipPairs(tagTypes: any[], tags: any[]): Pair[] {
 
 /* ---------------- route ---------------- */
 export async function POST(req: NextRequest) {
-  await connectDB();
-
-  // Tenant resolution
-  const urlTenant = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = urlTenant.searchParams.get("school");
-  const schoolFromCookie = (req as any).cookies?.get?.("schoolKey")?.value;
-  const schoolKey = (
-    schoolFromHeader ||
-    schoolFromQuery ||
-    schoolFromCookie ||
-    ""
-  )
-    .toString()
-    .trim();
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) {
+    return auth.response;
   }
+  const schoolKey = auth.schoolKey;
+
+  await connectDB();
 
   // Bind tenant models (shadow globals below)
   const {

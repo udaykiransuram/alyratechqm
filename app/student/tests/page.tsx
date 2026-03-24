@@ -29,8 +29,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import FeedbackNotice from "@/components/ui/feedback-notice";
 import { fetchApiJson } from "@/lib/client/api";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
+import { listStudentTestDraftMeta } from "@/lib/student-test-draft";
 
 type StudentTest = {
   _id: string;
@@ -192,6 +194,9 @@ function StudentTestsPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [testFilter, setTestFilter] = useState(ALL_TESTS_VALUE);
   const [subjectFilter, setSubjectFilter] = useState(ALL_SUBJECTS_VALUE);
+  const [draftUpdatedAtByPaperId, setDraftUpdatedAtByPaperId] = useState<
+    Record<string, number>
+  >({});
 
   useEffect(() => {
     let mounted = true;
@@ -219,6 +224,35 @@ function StudentTestsPageContent() {
 
     return () => {
       mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const refreshDraftMeta = () => {
+      const map: Record<string, number> = {};
+      listStudentTestDraftMeta().forEach((draft) => {
+        if (!draft.paperId) return;
+        const updatedAt = Number(draft.updatedAt || 0);
+        map[draft.paperId] =
+          Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : Date.now();
+      });
+      setDraftUpdatedAtByPaperId(map);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshDraftMeta();
+      }
+    };
+
+    refreshDraftMeta();
+    window.addEventListener("focus", refreshDraftMeta);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", refreshDraftMeta);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -298,10 +332,14 @@ function StudentTestsPageContent() {
       String(recentAssignedTest.subject?.name || "").trim(),
       String(recentAssignedTest.class?.name || "").trim(),
       getTimingChip(recentAssignedTest),
+      recentAssignedTest.status === "in_progress" &&
+      draftUpdatedAtByPaperId[recentAssignedTest._id]
+        ? `Local draft ${formatDateTime(new Date(draftUpdatedAtByPaperId[recentAssignedTest._id]).toISOString())}`
+        : "",
     ].filter(Boolean);
 
     return parts.join(" • ");
-  }, [recentAssignedTest]);
+  }, [draftUpdatedAtByPaperId, recentAssignedTest]);
 
   const recentAssignedTestAction = useMemo(() => {
     return recentAssignedTest ? getTestActionDetails(recentAssignedTest) : null;
@@ -326,7 +364,7 @@ function StudentTestsPageContent() {
         <PageHero eyebrow="Student Portal" title="Tests">
           <StudentPortalNav />
         </PageHero>
-        <div className="app-feedback app-feedback-error">{error}</div>
+        <FeedbackNotice variant="error">{error}</FeedbackNotice>
       </div>
     );
   }
@@ -338,9 +376,9 @@ function StudentTestsPageContent() {
       </PageHero>
 
       {submissionNotice ? (
-        <div className="app-feedback app-feedback-success">
+        <FeedbackNotice variant="success">
           {submissionNotice}
-        </div>
+        </FeedbackNotice>
       ) : null}
 
       {recentAssignedTest ? (
@@ -502,6 +540,9 @@ function StudentTestsPageContent() {
                     const actionDetails = getTestActionDetails(test);
                     const subjectLabel = String(test.subject?.name || "").trim();
                     const classLabel = String(test.class?.name || "").trim();
+                    const hasLocalDraft =
+                      test.status === "in_progress" &&
+                      Boolean(draftUpdatedAtByPaperId[test._id]);
                     const scoreVisible =
                       (test.status === "submitted" ||
                         test.status === "auto_submitted") &&
@@ -545,6 +586,11 @@ function StudentTestsPageContent() {
                             <div className="text-xs leading-5 text-muted-foreground">
                               {getTimingChip(test)}
                             </div>
+                            {hasLocalDraft ? (
+                              <div className="text-xs leading-5 text-amber-700 dark:text-amber-300">
+                                Local draft saved on this device
+                              </div>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell>

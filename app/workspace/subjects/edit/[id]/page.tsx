@@ -76,7 +76,7 @@ export default function EditSubjectPage() {
 
       const schoolKey = resolveClientSchoolKey();
       if (!schoolKey) {
-        throw new Error('Select a school workspace to edit subjects.');
+        throw new Error('Select a school to edit subjects.');
       }
 
       const [subjectResult, tagsResult] = await Promise.allSettled([

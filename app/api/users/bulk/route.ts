@@ -125,7 +125,10 @@ export async function POST(request: NextRequest) {
       AcademicSection: AcademicSectionModel,
     } = await getTenantModels(schoolKey, ["User", "AcademicSection"]);
 
-    const { students } = await request.json();
+    const payload = await request.json();
+    const students = Array.isArray(payload?.users)
+      ? payload.users
+      : payload?.students;
     if (!Array.isArray(students) || students.length === 0) {
       return NextResponse.json(
         { success: false, message: "No students provided." },

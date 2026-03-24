@@ -196,7 +196,7 @@ export default function EditStudentPage() {
       <PageHero
         eyebrow="People"
         title="Edit Student"
-        description="Update student identity, placement, and credentials from the same standardized school workspace used across all people management."
+        description="Update student identity, placement, and credentials from the same standardized school setup used across people management."
         actions={
           <Button type="button" variant="outline" className="gap-2" onClick={navigateBack}>
             <ArrowLeft className="h-4 w-4" />
@@ -234,7 +234,7 @@ export default function EditStudentPage() {
                   : "Ready",
             meta: loadError && hasUserRecord
               ? "Cached data is available, but the latest school placement data could not be refreshed."
-              : "Changes are applied to the current school tenant only.",
+              : "Changes are applied to the current school only.",
           },
           {
             label: "Password control",

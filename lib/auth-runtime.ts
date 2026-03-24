@@ -55,16 +55,22 @@ export function getAuthErrorMessage(
 
   if (normalizedError === "CredentialsSignin") {
     return context === "company"
-      ? "Company admin sign in failed. Please check your email and password."
-      : "Sign in failed. Please check your selected school, username, and password.";
+      ? "We couldn't sign you in to the company admin workspace. Check your email and password and try again."
+      : "We couldn't sign you in. Check your selected school, username, and password and try again.";
+  }
+
+  if (normalizedError === "Callback" || normalizedError === "AccessDenied") {
+    return context === "company"
+      ? "Company admin sign in could not be completed. Please try again."
+      : "Sign in could not be completed. Please try again.";
   }
 
   if (normalizedError === "SchoolNotFound") {
-    return "The selected school could not be found. Please choose your school again.";
+    return "The selected school is no longer available. Choose your school again and try signing in once more.";
   }
 
   if (normalizedError === "StudentRollNumberNotFound") {
-    return "No active student account matched that roll number in the selected school.";
+    return "No active student account was found for that roll number in the selected school.";
   }
 
   if (normalizedError === "StudentDuplicateRollNumber") {
@@ -72,15 +78,15 @@ export function getAuthErrorMessage(
   }
 
   if (normalizedError === "StudentSignInFailed") {
-    return "Student sign in failed. Use the roll number as the username. The default password matches the roll number until it is changed.";
+    return "We couldn't sign in with that roll number and password. If this is your first login, try using the roll number as the password.";
   }
 
   if (normalizedError === "StudentPasswordNotProvisioned") {
-    return "This student account does not have a stored password yet. Reset student passwords to their roll numbers, then try signing in again.";
+    return "This student account does not have a password yet. Ask your school admin to reset it to the roll number, then try again.";
   }
 
   if (normalizedError === "StudentAlreadySignedIn") {
-    return "This student is already signed in on another device. Sign out there first or wait a few minutes for the previous session to expire.";
+    return "This student account is already active on another device or browser. Sign out there first, or wait a few minutes and try again.";
   }
 
   if (normalizedError === "StudentSessionExpired") {
@@ -91,5 +97,7 @@ export function getAuthErrorMessage(
     return "Too many student login attempts were made. Please wait a few minutes and try again.";
   }
 
-  return normalizedError;
+  return context === "company"
+    ? "Company admin sign in could not be completed. Please try again."
+    : "Sign in could not be completed. Please try again.";
 }

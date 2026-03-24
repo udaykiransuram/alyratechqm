@@ -297,7 +297,7 @@ export default function EditTeacherPage() {
                   : "Ready",
             meta: loadError && hasUserRecord
               ? "Cached teacher data is available, but the latest assignment data could not be refreshed."
-              : "Updates are applied inside the current school tenant only.",
+              : "Updates are applied inside the current school only.",
           },
         ]}
       />

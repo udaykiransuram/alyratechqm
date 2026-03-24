@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
 import {
+  buildExamRuntimeErrorPayload,
   isExamRuntimeEnabled,
   listStudentExamRuntimeTests,
-  resolveExamRuntimeErrorStatus,
 } from "@/lib/exam-runtime";
 import { getStudentTestModels, loadOnlinePapersForClass, loadStudentUser } from "@/lib/student-test-server";
 import {
@@ -27,6 +27,24 @@ const STATUS_ORDER: Record<string, number> = {
   submitted: 4,
   expired: 5,
 };
+
+function testErrorResponse(params: {
+  message: string;
+  status: number;
+  code: string;
+  retryable?: boolean;
+}) {
+  return NextResponse.json(
+    {
+      success: false,
+      message: params.message,
+      code: params.code,
+      retryable: Boolean(params.retryable),
+      httpStatus: params.status,
+    },
+    { status: params.status },
+  );
+}
 
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, {
@@ -58,10 +76,11 @@ export async function GET(req: NextRequest) {
       useCache: true,
     });
     if (!student) {
-      return NextResponse.json(
-        { success: false, message: "Student profile not found." },
-        { status: 404 },
-      );
+      return testErrorResponse({
+        message: "Student profile not found.",
+        status: 404,
+        code: "STUDENT_NOT_FOUND",
+      });
     }
 
     const studentClassId = String(student.class?._id || student.class || "").trim();
@@ -166,15 +185,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, tests });
   } catch (error: any) {
     if (await isExamRuntimeEnabled()) {
-      const message = error?.message || "Failed to load student tests.";
-      return NextResponse.json(
-        { success: false, message },
-        { status: resolveExamRuntimeErrorStatus(message) },
+      const payload = buildExamRuntimeErrorPayload(
+        error,
+        "Failed to load student tests.",
       );
+      return NextResponse.json(payload, { status: payload.httpStatus });
     }
 
     return NextResponse.json(
-      { success: false, message: error?.message || "Failed to load student tests." },
+      {
+        success: false,
+        message: error?.message || "Failed to load student tests.",
+        code: "STUDENT_TESTS_LOAD_FAILED",
+        retryable: true,
+        httpStatus: 500,
+      },
       { status: 500 },
     );
   }

@@ -33,7 +33,7 @@ export default function AuditLogsPage() {
 
   const loadLogs = useCallback(async () => {
     if (!schoolKey) {
-      setError("Select a school workspace to load audit logs.");
+      setError("Select a school to load audit logs.");
       setLogs([]);
       return;
     }
@@ -70,9 +70,9 @@ export default function AuditLogsPage() {
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
       <PageHero
-        eyebrow="Operations"
+        eyebrow="School Activity"
         title="Audit Logs"
-        description="Review archived items and upload batch activity for the selected school from one consistent operations view."
+        description="Review archived items and upload batch activity for the selected school from one consistent activity view."
         actions={
           <Button type="button" variant="outline" onClick={() => void loadLogs()} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
@@ -93,7 +93,7 @@ export default function AuditLogsPage() {
           {
             label: "Entity filters",
             value: String(entityTypes.length),
-            meta: "Distinct entity types available for filtering in this school workspace.",
+            meta: "Distinct entity types available for filtering in this school.",
           },
           {
             label: "Action filters",
@@ -105,7 +105,7 @@ export default function AuditLogsPage() {
 
       {!schoolKey ? (
         <div className="app-feedback app-feedback-info">
-          Select a school workspace to load audit logs.
+          Select a school to load audit logs.
         </div>
       ) : null}
 
@@ -115,7 +115,7 @@ export default function AuditLogsPage() {
             <div className="app-filter-panel-copy">
               <h2 className="app-filter-panel-title">Audit Filters</h2>
               <p className="app-filter-panel-note">
-                Narrow the school audit trail by entity type and action without leaving the operations view.
+                Narrow the school audit trail by entity type and action without leaving this page.
               </p>
             </div>
             <div className="app-filter-panel-chips">
@@ -165,7 +165,7 @@ export default function AuditLogsPage() {
               <div className="app-filter-summary-copy">
                 <p className="app-filter-summary-title">Current scope</p>
                 <p className="app-filter-summary-note">
-                  {logs.length} log entr{logs.length === 1 ? "y" : "ies"} loaded for the current school workspace.
+                  {logs.length} log entr{logs.length === 1 ? "y" : "ies"} loaded for the current school.
                 </p>
               </div>
               <div className="app-filter-summary-actions">

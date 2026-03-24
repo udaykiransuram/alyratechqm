@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
+import FeedbackNotice from '@/components/ui/feedback-notice';
 
 export default function AppError({
   error,
@@ -27,9 +28,9 @@ export default function AppError({
         <Button onClick={reset}>Try again</Button>
       </div>
 
-      <div className="app-feedback app-feedback-error">
-        {error?.message || 'Unexpected application error.'}
-      </div>
+      <FeedbackNotice variant="error">
+        {error?.message || "We couldn't complete that page because of an unexpected application error."}
+      </FeedbackNotice>
     </div>
   );
 }

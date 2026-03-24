@@ -66,7 +66,7 @@ export default function EditTagPage() {
     try {
       const schoolKey = resolveClientSchoolKey();
       if (!schoolKey) {
-        setPageError('Select a school workspace to edit tags.');
+        setPageError('Select a school to edit tags.');
         return;
       }
 

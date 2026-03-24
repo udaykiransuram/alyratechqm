@@ -1,0 +1,14 @@
+{
+  "students": [
+    {
+      "label": "Student 1",
+      "identifier": "1001",
+      "password": "1001"
+    },
+    {
+      "label": "Student 2",
+      "identifier": "1002",
+      "password": "1002"
+    }
+  ]
+}

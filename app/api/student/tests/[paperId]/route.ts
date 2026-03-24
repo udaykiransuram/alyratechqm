@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
 import {
+  buildExamRuntimeErrorPayload,
   getStudentExamRuntimeDetail,
   isExamRuntimeEnabled,
-  resolveExamRuntimeErrorStatus,
 } from "@/lib/exam-runtime";
 import {
   getStudentTestModels,
@@ -26,6 +26,24 @@ export const dynamic = "force-dynamic";
 
 const ATTEMPT_DETAIL_PROJECTION =
   "paper student startedAt submittedAt status lastSavedAt totalMarksAwarded sectionAnswers";
+
+function testErrorResponse(params: {
+  message: string;
+  status: number;
+  code: string;
+  retryable?: boolean;
+}) {
+  return NextResponse.json(
+    {
+      success: false,
+      message: params.message,
+      code: params.code,
+      retryable: Boolean(params.retryable),
+      httpStatus: params.status,
+    },
+    { status: params.status },
+  );
+}
 
 export async function GET(
   req: NextRequest,
@@ -66,21 +84,20 @@ export async function GET(
 
     const paper = paperResult;
     if (!paper) {
-      return NextResponse.json(
-        { success: false, message: "Online test not found." },
-        { status: 404 },
-      );
+      return testErrorResponse({
+        message: "Online test not found.",
+        status: 404,
+        code: "ONLINE_TEST_NOT_FOUND",
+      });
     }
 
     if (!paperSupportsOnlineDelivery(paper)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "This paper cannot be delivered online because it contains unsupported question types.",
-        },
-        { status: 400 },
-      );
+      return testErrorResponse({
+        message:
+          "This paper cannot be delivered online because it contains unsupported question types.",
+        status: 400,
+        code: "ONLINE_TEST_UNSUPPORTED",
+      });
     }
 
     let attempt = attemptResult;
@@ -100,17 +117,19 @@ export async function GET(
         useCache: true,
       });
       if (!student) {
-        return NextResponse.json(
-          { success: false, message: "Student profile not found." },
-          { status: 404 },
-        );
+        return testErrorResponse({
+          message: "Student profile not found.",
+          status: 404,
+          code: "STUDENT_NOT_FOUND",
+        });
       }
 
       if (!isStudentEligibleForPaper(paper, student)) {
-        return NextResponse.json(
-          { success: false, message: "You are not assigned to this online test." },
-          { status: 403 },
-        );
+        return testErrorResponse({
+          message: "You are not assigned to this online test.",
+          status: 403,
+          code: "ONLINE_TEST_NOT_ASSIGNED",
+        });
       }
     }
 
@@ -137,15 +156,21 @@ export async function GET(
     });
   } catch (error: any) {
     if (await isExamRuntimeEnabled()) {
-      const message = error?.message || "Failed to load online test.";
-      return NextResponse.json(
-        { success: false, message },
-        { status: resolveExamRuntimeErrorStatus(message) },
+      const payload = buildExamRuntimeErrorPayload(
+        error,
+        "Failed to load online test.",
       );
+      return NextResponse.json(payload, { status: payload.httpStatus });
     }
 
     return NextResponse.json(
-      { success: false, message: error?.message || "Failed to load online test." },
+      {
+        success: false,
+        message: error?.message || "Failed to load online test.",
+        code: "ONLINE_TEST_LOAD_FAILED",
+        retryable: true,
+        httpStatus: 500,
+      },
       { status: 500 },
     );
   }

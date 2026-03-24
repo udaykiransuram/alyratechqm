@@ -257,7 +257,7 @@ export default function TeacherDetailPage() {
       <PageHero
         eyebrow="People"
         title={user?.name || "Teacher Details"}
-        description="Review teacher profile information and the exact class, section, and subject scope granted inside this school workspace."
+        description="Review teacher profile information and the exact class, section, and subject scope granted inside this school."
         actions={
           user ? (
             <div className="flex flex-wrap items-center gap-2">

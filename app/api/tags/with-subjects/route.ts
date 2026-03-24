@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildArchiveFilter } from '@/lib/archive';
+import { requireTenantSession } from '@/lib/api-auth';
 import { connectDB } from '@/lib/db';
 import { getTenantModels } from '@/lib/db-tenant';
 
@@ -12,14 +13,17 @@ function resolveLimit(value: string | null) {
 }
 
 export async function GET(req: NextRequest) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const schoolKey = auth.schoolKey;
+
   await connectDB();
   const url = new URL(req.url);
-  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
-  const schoolFromQuery = url.searchParams.get('school');
   const limit = resolveLimit(url.searchParams.get('limit'));
-  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
-  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
-  if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   try {
     const { Tag, Subject } = await getTenantModels(schoolKey, ['Tag','Subject']);
     const tagFilter = buildArchiveFilter(false);

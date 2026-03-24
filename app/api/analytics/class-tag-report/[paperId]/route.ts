@@ -19,6 +19,7 @@ import {
   evaluateQuestionAnswer,
 } from "@/lib/question-paper/grading";
 import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
+import { requireTenantSession } from "@/lib/api-auth";
 import { z } from "zod";
 import { objectIdSchema, schoolKeySchema, parseOr400 } from "@/lib/validation";
 
@@ -86,21 +87,16 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ paperId: string }> },
 ) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const schoolKey = auth.schoolKey;
+
   const { paperId } = await params;
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  const schoolKey = (
-    schoolFromHeader ||
-    schoolFromQuery ||
-    schoolFromCookie ||
-    ""
-  )
-    .toString()
-    .trim();
-  // Require a valid schoolKey similar to Questions/Question Papers
+
   const parsedSk = parseOr400(z.object({ schoolKey: schoolKeySchema }), {
     schoolKey,
   });

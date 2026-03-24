@@ -5,16 +5,9 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { buildArchiveFilter, buildArchivedUpdate, resolveIncludeArchived } from '@/lib/archive';
 import { recordTenantAudit } from '@/lib/audit';
+import { requireTenantSession } from '@/lib/api-auth';
 import { connectDB } from '@/lib/db';
 import { getTenantModels } from '@/lib/db-tenant';
-
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
-  const schoolFromQuery = url.searchParams.get('school');
-  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
-}
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -23,11 +16,15 @@ function escapeRegex(value: string) {
 const isValidObjectId = (id: string): boolean => mongoose.Types.ObjectId.isValid(id);
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
   }
+  const schoolKey = auth.schoolKey;
+
+  await connectDB();
 
   const { id } = await params;
   if (!isValidObjectId(id)) {
@@ -65,11 +62,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
   }
+  const schoolKey = auth.schoolKey;
+
+  await connectDB();
 
   const { id } = await params;
   if (!isValidObjectId(id)) {
@@ -140,11 +141,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
   }
+  const schoolKey = auth.schoolKey;
+
+  await connectDB();
 
   const { id } = await params;
   if (!isValidObjectId(id)) {

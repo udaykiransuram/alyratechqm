@@ -127,7 +127,7 @@ export default function SubjectsPageClient({
           {
             label: "Total subjects",
             value: String(subjects.length),
-            meta: "Subject definitions available in the current school workspace.",
+            meta: "Subject definitions available in the current school.",
           },
           {
             label: "Tagged subjects",
