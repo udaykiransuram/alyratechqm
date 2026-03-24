@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { Button } from "@/components/ui/button";
-import PageHero from "@/components/layout/PageHero";
+import FeedbackNotice from "@/components/ui/feedback-notice";
+import PageState from "@/components/ui/page-state";
+import SectionState from "@/components/ui/section-state";
 import {
   Table,
   TableBody,
@@ -18,6 +22,7 @@ import {
 import { MessageCircle } from "lucide-react";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 import { useBackNavigation, useCurrentPathWithSearch } from "@/hooks/useReturnNavigation";
+import { useToast } from "@/components/ui/use-toast";
 import {
   fetchApiJson,
   peekCachedApiJson,
@@ -114,6 +119,12 @@ export default function StudentDetailPage() {
   const [sendingResponseId, setSendingResponseId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 10;
+  const [reloadToken, setReloadToken] = useState(0);
+  const { toast } = useToast();
+
+  const retryLoad = useCallback(() => {
+    setReloadToken((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -198,7 +209,7 @@ export default function StudentDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [cachedUserResponse?.user, id, schoolKey]);
+  }, [cachedUserResponse?.user, id, reloadToken, schoolKey]);
 
   const className = user?.class
     ? classes.find((classItem) => classItem._id === String(user.class))?.name || String(user.class)
@@ -213,6 +224,10 @@ export default function StudentDetailPage() {
     const start = (page - 1) * pageSize;
     return attempts.slice(start, start + pageSize);
   }, [attempts, page]);
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, maxPage));
+  }, [maxPage]);
 
   const changePage = (dir: 1 | -1) => {
     setPage((prev) => Math.min(maxPage, Math.max(1, prev + dir)));
@@ -258,27 +273,69 @@ export default function StudentDetailPage() {
       if (data.queued) {
         const queuedMsg = data.message || "Report queued for background processing.";
         const failureMsg = data?.lastFailure?.error
-          ? `\n\nLast delivery failure: ${data.lastFailure.error}`
+          ? ` Last delivery failure: ${data.lastFailure.error}`
           : "";
-        alert(`${queuedMsg}\nCurrent status: ${data.deliveryStatus || "queued"}.${failureMsg}`);
+        toast({
+          title: "Parent report queued",
+          description: `${queuedMsg} Current status: ${data.deliveryStatus || "queued"}.${failureMsg}`,
+        });
       } else {
-        alert(data.message || "Request accepted.");
+        toast({
+          title: "Parent report requested",
+          description: data.message || "Request accepted.",
+        });
       }
     } catch (error: any) {
-      alert(error?.message || "Failed to send report");
+      toast({
+        title: "Failed to send report",
+        description: error?.message || "Failed to send report.",
+        variant: "destructive",
+      });
     } finally {
       setSendingResponseId(null);
     }
   };
 
+  if (loading && !user) {
+    return (
+      <PageLoadingState
+        title="Loading student details"
+        description="Preparing the student profile, class section, and response summary."
+        width="wide"
+        dense
+      />
+    );
+  }
+
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+    <PageShell width="wide">
       <PageHero
         eyebrow="People"
         title={user?.name || "Student Details"}
         description="Review student profile information, class placement, credentials context, and all recorded paper attempts from one page."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          user ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="app-button-compact-secondary"
+                onClick={navigateBack}
+              >
+                Back to Students
+              </Button>
+              <AppPrefetchLink
+                href={editHref}
+                relatedApiPrefetches={[
+                  `/api/users/${id}`,
+                  '/api/classes',
+                  '/api/sections',
+                ]}
+              >
+                <Button size="sm" className="app-button-compact">Edit Student</Button>
+              </AppPrefetchLink>
+            </div>
+          ) : (
             <Button
               variant="outline"
               size="sm"
@@ -287,17 +344,7 @@ export default function StudentDetailPage() {
             >
               Back to Students
             </Button>
-            <AppPrefetchLink
-              href={editHref}
-              relatedApiPrefetches={[
-                `/api/users/${id}`,
-                '/api/classes',
-                '/api/sections',
-              ]}
-            >
-              <Button size="sm" className="app-button-compact">Edit Student</Button>
-            </AppPrefetchLink>
-          </div>
+          )
         }
         meta={
           <>
@@ -305,6 +352,7 @@ export default function StudentDetailPage() {
             <span className="app-meta-chip">
               {user?.rollNumber ? `Username: ${user.rollNumber}` : "Roll number pending"}
             </span>
+            {attemptsError ? <span className="app-meta-chip">Attempts need retry</span> : null}
             {refreshing ? <span className="app-meta-chip">Refreshing...</span> : null}
           </>
         }
@@ -326,29 +374,49 @@ export default function StudentDetailPage() {
           },
           {
             label: "Profile state",
-            value: loading ? "Loading" : error ? "Needs review" : "Ready",
-            meta: error ? "Student details could not be loaded cleanly." : "Student profile and attempts loaded successfully.",
+            value: loading ? "Loading" : error ? "Needs review" : attemptsError ? "Partial data" : "Ready",
+            meta: error
+              ? "Student details could not be loaded cleanly."
+              : attemptsError
+                ? "Profile loaded, but attempt history needs another try."
+                : "Student profile and attempts loaded successfully.",
           },
         ]}
       />
 
-      {error && user ? <div className="app-feedback app-feedback-info">{error}</div> : null}
+      {error && user ? (
+        <FeedbackNotice variant="info">{error}</FeedbackNotice>
+      ) : null}
 
-      {loading && !user ? (
-        <PageLoadingState
-          title="Loading student details"
-          description="Preparing the student profile, class section, and response summary."
-          className="px-0 py-0"
-          contentClassName="max-w-none"
-          dense
+      {error && !user ? (
+        <PageState
+          variant="error"
+          title="Could not load student details"
+          description={error}
+          action={
+            <>
+              <Button type="button" variant="outline" onClick={navigateBack}>
+                Back to Students
+              </Button>
+              <Button type="button" onClick={retryLoad}>
+                Try Again
+              </Button>
+            </>
+          }
         />
-      ) : error && !user ? (
-        <div className="app-feedback app-feedback-error">{error}</div>
       ) : !user ? (
-        <div className="app-empty-state">User not found.</div>
+        <PageState
+          title="Student not found"
+          description="We could not find a student record for this request."
+          action={
+            <Button type="button" variant="outline" onClick={navigateBack}>
+              Back to Students
+            </Button>
+          }
+        />
       ) : (
         <>
-                    <Card className="app-surface">
+          <Card className="app-surface">
             <CardHeader className="app-section-header">
               <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-xl font-semibold tracking-tight">
                 <span>{user.name}</span>
@@ -418,9 +486,16 @@ export default function StudentDetailPage() {
             </CardHeader>
             <CardContent className="app-section-body">
               {attemptsError ? (
-                <div className="app-feedback app-feedback-error">{attemptsError}</div>
+                <SectionState
+                  variant="error"
+                  title="Attempt history needs attention"
+                  description={attemptsError}
+                />
               ) : totalAttempts === 0 ? (
-                <div className="app-empty-state">No attempts found.</div>
+                <SectionState
+                  title="No attempts yet"
+                  description="This student has not submitted any paper attempts yet."
+                />
               ) : (
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3">
@@ -575,6 +650,6 @@ export default function StudentDetailPage() {
           </Card>
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

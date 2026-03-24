@@ -976,6 +976,76 @@
       );
   }
 
+  .app-state-panel {
+    @apply flex flex-col items-center gap-4 rounded-2xl border px-4 py-6 text-center sm:px-5;
+    border-color: hsl(var(--border) / 0.82);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.98) 0%,
+        hsl(var(--app-surface-soft) / 0.88) 100%
+      );
+  }
+
+  .app-state-panel-compact {
+    @apply px-4 py-8;
+  }
+
+  .app-state-panel-empty {
+    border-style: dashed;
+  }
+
+  .app-state-panel-error {
+    border-color: hsl(var(--destructive) / 0.28);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--destructive) / 0.08) 0%,
+        hsl(var(--background) / 0.98) 100%
+      );
+  }
+
+  .app-state-panel-info {
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-soft) / 0.96) 0%,
+        hsl(var(--background) / 0.96) 100%
+      );
+  }
+
+  .app-state-panel-icon {
+    @apply flex h-11 w-11 items-center justify-center rounded-2xl shadow-sm;
+    background-color: hsl(var(--background) / 0.92);
+    color: hsl(var(--muted-foreground));
+  }
+
+  .app-state-panel-error .app-state-panel-icon {
+    background-color: hsl(var(--destructive) / 0.12);
+    color: hsl(var(--destructive));
+  }
+
+  .app-state-panel-info .app-state-panel-icon {
+    background-color: hsl(var(--primary) / 0.12);
+    color: hsl(var(--primary));
+  }
+
+  .app-state-panel-copy {
+    @apply max-w-2xl space-y-1.5;
+  }
+
+  .app-state-panel-title {
+    @apply text-base font-semibold text-foreground;
+  }
+
+  .app-state-panel-description {
+    @apply text-sm leading-6 text-muted-foreground;
+  }
+
+  .app-state-panel-actions {
+    @apply flex flex-wrap items-center justify-center gap-2;
+  }
+
   .app-status-row {
     @apply flex items-center gap-2 text-sm text-muted-foreground;
   }

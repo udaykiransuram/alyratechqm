@@ -1,17 +1,24 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { useParams } from 'next/navigation';
 
 import PageHero from '@/components/layout/PageHero';
+import PageShell from '@/components/layout/PageShell';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
+import {
+  buildPartialLoadMessage,
+  fetchApiJson,
+  resolveClientSchoolKey,
+} from '@/lib/client/api';
 import { MultiSelectTags, TagItem } from '@/components/ui/multi-select-tags';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import PageLoadingState from '@/components/ui/page-loading-state';
+import PageState from '@/components/ui/page-state';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
@@ -24,8 +31,25 @@ interface Subject {
   tags: TagItem[];
 }
 
+function mergeTagsById(...groups: Array<TagItem[] | undefined>) {
+  const tagMap = new Map<string, TagItem>();
+
+  groups.flat().forEach((tag) => {
+    if (!tag) return;
+
+    const tagId = String(tag._id || '').trim();
+    if (!tagId) return;
+    if (!tagMap.has(tagId)) {
+      tagMap.set(tagId, tag);
+    }
+  });
+
+  return Array.from(tagMap.values());
+}
+
 export default function EditSubjectPage() {
-  const { id: subjectId } = useParams<{ id: string }>();
+  const routeParams = useParams<{ id: string }>();
+  const subjectId = String(routeParams.id || '').trim();
   const { toast } = useToast();
   const { navigateBack } = useBackNavigation('/workspace/subjects');
 
@@ -35,6 +59,7 @@ export default function EditSubjectPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [pageNotice, setPageNotice] = useState<string | null>(null);
 
   const [allAvailableTags, setAllAvailableTags] = useState<TagItem[]>([]);
   const [selectedTags, setSelectedTags] = useState<TagItem[]>([]);
@@ -42,40 +67,61 @@ export default function EditSubjectPage() {
   const fetchSubjectDetailsAndAllTags = useCallback(async () => {
     setPageLoading(true);
     setFetchError(null);
+    setPageNotice(null);
+
     try {
-      const subjectRes = await fetch(`/api/subjects/${subjectId}`);
-      const subjectData = await subjectRes.json();
-
-      const allTagsRes = await fetch('/api/tags');
-      const allTagsData = await allTagsRes.json();
-
-      if (subjectData.success && allTagsData.success) {
-        const subject = subjectData.subject as Subject;
-        const tags = allTagsData.tags as TagItem[];
-
-        setSubjectName(subject.name);
-        setSubjectCode(subject.code || '');
-        setSubjectDescription(subject.description || '');
-        setSelectedTags(subject.tags || []);
-        setAllAvailableTags(tags);
-      } else {
-        const errorMessage =
-          (!subjectData.success ? subjectData.message : '') +
-          (!allTagsData.success ? (subjectData.success ? '' : ' & ') + allTagsData.message : '');
-        console.error('Failed to fetch data:', errorMessage);
-        setFetchError(errorMessage || 'Failed to load subject details or available tags.');
-        toast({
-          title: 'Error',
-          description: errorMessage || 'Failed to load subject details or available tags.',
-          variant: 'destructive',
-        });
+      if (!subjectId) {
+        throw new Error('Subject ID is missing.');
       }
-    } catch (error) {
-      const errorMessage = 'Network error when fetching subject details. Please check your connection.';
-      console.error('Network error fetching subject/tags for edit:', error);
+
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error('Select a school workspace to edit subjects.');
+      }
+
+      const [subjectResult, tagsResult] = await Promise.allSettled([
+        fetchApiJson<{ subject: Subject }>(`/api/subjects/${subjectId}`, {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load subject details.',
+        }),
+        fetchApiJson<{ tags?: TagItem[] }>('/api/tags', {
+          cache: 'no-store',
+          schoolKey,
+          fallbackMessage: 'Failed to load available tags.',
+        }),
+      ]);
+
+      if (subjectResult.status !== 'fulfilled') {
+        throw subjectResult.reason;
+      }
+
+      const subject = subjectResult.value.subject as Subject;
+      const fetchedTags =
+        tagsResult.status === 'fulfilled' && Array.isArray(tagsResult.value.tags)
+          ? (tagsResult.value.tags as TagItem[])
+          : [];
+      const mergedTags = mergeTagsById(subject.tags || [], fetchedTags);
+
+      setSubjectName(subject.name || '');
+      setSubjectCode(subject.code || '');
+      setSubjectDescription(subject.description || '');
+      setSelectedTags(Array.isArray(subject.tags) ? subject.tags : []);
+      setAllAvailableTags(mergedTags);
+      setPageNotice(
+        buildPartialLoadMessage(
+          [
+            ...(tagsResult.status === 'rejected' ? ['Available tags'] : []),
+          ],
+          'You can keep editing this subject and retry later.',
+        ),
+      );
+    } catch (error: any) {
+      const errorMessage =
+        error?.message || 'Failed to load subject details or available tags.';
       setFetchError(errorMessage);
       toast({
-        title: 'Network Error',
+        title: 'Error',
         description: errorMessage,
         variant: 'destructive',
       });
@@ -87,38 +133,29 @@ export default function EditSubjectPage() {
   const handleCreateNewTag = useCallback(
     async (tagName: string, tagType: string): Promise<TagItem | null> => {
       try {
-        const res = await fetch('/api/tags', {
+        const schoolKey = resolveClientSchoolKey();
+        if (!schoolKey) {
+          throw new Error('Please select a school in the navbar first.');
+        }
+
+        const data = await fetchApiJson<any>('/api/tags', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: tagName, type: tagType }),
+          schoolKey,
+          fallbackMessage: `Could not create tag "${tagName}".`,
         });
-        const data = await res.json();
-        if (data.success) {
-          toast({
-            title: 'Tag Created',
-            description: `"${data.tag.name}" (${data.tag.type}) added.`,
-          });
-          setAllAvailableTags((prev) => {
-            if (!prev.some((tag) => tag._id === data.tag._id)) {
-              return [...prev, data.tag];
-            }
-            return prev;
-          });
-          return data.tag;
-        }
 
-        console.error('Failed to create new tag:', data.message);
+        toast({
+          title: 'Tag Created',
+          description: `"${data.tag.name}" added.`,
+        });
+        setAllAvailableTags((prev) => mergeTagsById(prev, [data.tag]));
+        return data.tag;
+      } catch (error: any) {
         toast({
           title: 'Creation Failed',
-          description: data.message || `Could not create tag "${tagName}".`,
-          variant: 'destructive',
-        });
-        return null;
-      } catch (error) {
-        console.error('Network error creating tag:', error);
-        toast({
-          title: 'Network Error',
-          description: `Failed to create tag "${tagName}" due to a network issue.`,
+          description: error?.message || `Could not create tag "${tagName}".`,
           variant: 'destructive',
         });
         return null;
@@ -128,7 +165,7 @@ export default function EditSubjectPage() {
   );
 
   useEffect(() => {
-    fetchSubjectDetailsAndAllTags();
+    void fetchSubjectDetailsAndAllTags();
   }, [fetchSubjectDetailsAndAllTags]);
 
   const handleUpdateSubject = async () => {
@@ -150,40 +187,35 @@ export default function EditSubjectPage() {
       tags?: string[];
     } = {
       name: subjectName.trim(),
+      code: subjectCode.trim() !== '' ? subjectCode.trim() : null,
+      description:
+        subjectDescription.trim() !== '' ? subjectDescription.trim() : null,
+      tags: selectedTags.map((tag) => tag._id),
     };
 
-    payload.code = subjectCode.trim() !== '' ? subjectCode.trim() : null;
-    payload.description = subjectDescription.trim() !== '' ? subjectDescription.trim() : null;
-    payload.tags = selectedTags.map((tag) => tag._id);
-
     try {
-      const res = await fetch(`/api/subjects/${subjectId}`, {
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error('Please select a school in the navbar first.');
+      }
+
+      const data = await fetchApiJson<any>(`/api/subjects/${subjectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        schoolKey,
+        fallbackMessage: `Failed to update "${subjectName}".`,
       });
 
-      const data = await res.json();
-
-      if (data.success) {
-        toast({
-          title: 'Success',
-          description: `"${data.subject.name}" updated.`,
-        });
-        navigateBack();
-      } else {
-        console.error('Failed to update subject:', data.message);
-        toast({
-          title: 'Update Failed',
-          description: data.message || `Failed to update "${subjectName}".`,
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
-      console.error('Network error updating subject:', error);
       toast({
-        title: 'Network Error',
-        description: `Failed to update "${subjectName}" due to a network issue.`,
+        title: 'Success',
+        description: `"${data.subject.name}" updated.`,
+      });
+      navigateBack();
+    } catch (error: any) {
+      toast({
+        title: 'Update Failed',
+        description: error?.message || `Failed to update "${subjectName}".`,
         variant: 'destructive',
       });
     } finally {
@@ -193,57 +225,56 @@ export default function EditSubjectPage() {
 
   if (pageLoading) {
     return (
-      <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
-        <PageLoadingState
-          title="Loading subject details"
-          description="Preparing the subject form, linked tags, and school data."
-          className="px-0 py-0"
-          contentClassName="max-w-none"
-          dense
-        />
-      </div>
+      <PageLoadingState
+        title="Loading subject details"
+        description="Preparing the subject form, linked tags, and school data."
+        width="narrow"
+        dense
+      />
     );
   }
 
   if (fetchError) {
     return (
-      <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+      <PageShell width="narrow">
         <PageHero
           eyebrow="Curriculum"
           title="Edit Subject"
           description="We couldn’t load the subject details for editing."
           actions={
-            <Button type="button" variant="outline" className="gap-2" onClick={navigateBack}>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={navigateBack}
+            >
               <ChevronLeft className="h-4 w-4" />
               Back to Subjects
             </Button>
           }
         />
 
-        <Card className="app-surface overflow-hidden">
-          <CardContent className="app-surface-body">
-            <div className="app-feedback app-feedback-error space-y-4">
-              <div>
-                <p className="font-medium">Loading Error</p>
-                <p className="mt-1">{fetchError}</p>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <Button type="button" variant="outline" onClick={navigateBack}>
-                  Go Back to Subjects
-                </Button>
-                <Button type="button" onClick={fetchSubjectDetailsAndAllTags}>
-                  Try Again
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        <PageState
+          variant="error"
+          title="Could not load subject details"
+          description={fetchError}
+          action={
+            <>
+              <Button type="button" variant="outline" onClick={navigateBack}>
+                Go Back to Subjects
+              </Button>
+              <Button type="button" onClick={fetchSubjectDetailsAndAllTags}>
+                Try Again
+              </Button>
+            </>
+          }
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+    <PageShell width="narrow">
       <PageHero
         eyebrow="Curriculum"
         title="Edit Subject"
@@ -279,6 +310,10 @@ export default function EditSubjectPage() {
           },
         ]}
       />
+
+      {pageNotice ? (
+        <div className="app-feedback app-feedback-info">{pageNotice}</div>
+      ) : null}
 
       <div className="app-editor-grid">
         <div className="app-editor-main">
@@ -340,7 +375,8 @@ export default function EditSubjectPage() {
                     Associated Tags
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Adjust related tags here, or create a new tag without leaving the page.
+                    Adjust related tags here, or create a new tag without leaving
+                    the page.
                   </p>
                 </div>
 
@@ -375,8 +411,7 @@ export default function EditSubjectPage() {
             </CardContent>
           </Card>
         </div>
-
-              </div>
-    </div>
+      </div>
+    </PageShell>
   );
 }

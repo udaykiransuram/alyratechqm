@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { SubjectItem, type Subject } from "@/components/subject-item";
 import {
   AlertDialog,
@@ -18,8 +19,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import SectionState from "@/components/ui/section-state";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
+import { fetchApiJson } from "@/lib/client/api";
 
 type SubjectsPageClientProps = {
   initialSubjects: Subject[];
@@ -43,13 +46,9 @@ export default function SubjectsPageClient({
     setFetchError(null);
 
     try {
-      const response = await fetch("/api/subjects");
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "Failed to load subjects.");
-      }
-
+      const data = await fetchApiJson<{ subjects?: Subject[] }>("/api/subjects", {
+        fallbackMessage: "Failed to load subjects.",
+      });
       setSubjects(Array.isArray(data.subjects) ? data.subjects : []);
     } catch (error: any) {
       const errorMessage =
@@ -75,13 +74,10 @@ export default function SubjectsPageClient({
 
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/subjects/${subjectToDeleteId}`, {
+      await fetchApiJson(`/api/subjects/${subjectToDeleteId}`, {
         method: "DELETE",
+        fallbackMessage: "Failed to archive subject.",
       });
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.message || "Failed to archive subject.");
-      }
 
       setSubjects((currentSubjects) =>
         currentSubjects.filter((subject) => subject._id !== subjectToDeleteId),
@@ -104,7 +100,7 @@ export default function SubjectsPageClient({
   }, [subjectToDeleteId, toast]);
 
   return (
-    <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
+    <PageShell width="content">
       <PageHero
         eyebrow="Curriculum"
         title="Subjects"
@@ -154,23 +150,26 @@ export default function SubjectsPageClient({
         </CardHeader>
         <CardContent className="app-section-body">
           {fetchError ? (
-            <div className="app-feedback app-feedback-error text-center">
-              <p>{fetchError}</p>
-              <div className="mt-4 flex justify-center">
+            <SectionState
+              variant="error"
+              title="Could not load subjects"
+              description={fetchError}
+              action={
                 <Button onClick={fetchSubjects} variant="outline">
-                  Try Again
+                  {pageLoading ? <Spinner /> : "Try Again"}
                 </Button>
-              </div>
-            </div>
+              }
+            />
           ) : subjects.length === 0 ? (
-            <div className="app-empty-state">
-              <p>No subjects found yet.</p>
-              <div className="mt-4 flex justify-center">
+            <SectionState
+              title="No subjects yet"
+              description="Create your first subject to start organizing curriculum data and tag-linked authoring flows."
+              action={
                 <AppPrefetchLink href="/workspace/subjects/create">
                   <Button variant="outline">Create your first subject</Button>
                 </AppPrefetchLink>
-              </div>
-            </div>
+              }
+            />
           ) : (
             <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {subjects.map((subject) => (
@@ -206,6 +205,6 @@ export default function SubjectsPageClient({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

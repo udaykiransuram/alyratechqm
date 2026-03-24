@@ -1,14 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
+import PageHero from '@/components/layout/PageHero';
+import PageShell from '@/components/layout/PageShell';
 import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import PageHero from '@/components/layout/PageHero';
+import FeedbackNotice from '@/components/ui/feedback-notice';
 import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
 import { useBackNavigation, useCurrentPathWithSearch } from '@/hooks/useReturnNavigation';
 import PageLoadingState from '@/components/ui/page-loading-state';
+import PageState from '@/components/ui/page-state';
 import {
   fetchApiJson,
   peekCachedApiJson,
@@ -99,6 +102,11 @@ export default function AdminDetailPage() {
   const [subjects, setSubjects] = useState<SubjectItem[]>(
     () => cachedSubjectsResponse?.subjects || [],
   );
+  const [reloadToken, setReloadToken] = useState(0);
+
+  const retryLoad = useCallback(() => {
+    setReloadToken((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -162,7 +170,7 @@ export default function AdminDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [cachedUserResponse?.user, id, schoolKey]);
+  }, [cachedUserResponse?.user, id, reloadToken, schoolKey]);
 
   const classNames = useMemo(() => {
     if (user?.hasAllClasses) return ['All Classes'];
@@ -191,27 +199,46 @@ export default function AdminDetailPage() {
     );
   }, [subjects, user?.hasAllSubjects, user?.subjectIds]);
 
+  if (loading && !user) {
+    return (
+      <PageLoadingState
+        title="Loading admin details"
+        description="Preparing admin profile and access assignments."
+        width="narrow"
+        dense
+      />
+    );
+  }
+
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+    <PageShell width="narrow">
       <PageHero
         eyebrow="People"
         title={user?.name || "Admin Details"}
         description="Inspect school-admin profile information and the exact access envelope configured across classes, sections, and subjects."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={navigateBack}>Back to Admins</Button>
-            <AppPrefetchLink
-              href={editHref}
-              relatedApiPrefetches={[
-                `/api/users/${id}`,
-                '/api/classes',
-                '/api/sections',
-                '/api/subjects',
-              ]}
-            >
-              <Button>Edit Admin</Button>
-            </AppPrefetchLink>
-          </div>
+          user ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={navigateBack}>
+                Back to Admins
+              </Button>
+              <AppPrefetchLink
+                href={editHref}
+                relatedApiPrefetches={[
+                  `/api/users/${id}`,
+                  '/api/classes',
+                  '/api/sections',
+                  '/api/subjects',
+                ]}
+              >
+                <Button>Edit Admin</Button>
+              </AppPrefetchLink>
+            </div>
+          ) : (
+            <Button variant="outline" onClick={navigateBack}>
+              Back to Admins
+            </Button>
+          )
         }
         meta={
           <>
@@ -248,20 +275,36 @@ export default function AdminDetailPage() {
         ]}
       />
 
-      {error && user ? <div className="app-feedback app-feedback-info">{error}</div> : null}
+      {error && user ? (
+        <FeedbackNotice variant="info">{error}</FeedbackNotice>
+      ) : null}
 
-      {loading && !user ? (
-        <PageLoadingState
-          title="Loading admin details"
-          description="Preparing admin profile and access assignments."
-          className="px-0 py-0"
-          contentClassName="max-w-none"
-          dense
+      {error && !user ? (
+        <PageState
+          variant="error"
+          title="Could not load admin details"
+          description={error}
+          action={
+            <>
+              <Button type="button" variant="outline" onClick={navigateBack}>
+                Back to Admins
+              </Button>
+              <Button type="button" onClick={retryLoad}>
+                Try Again
+              </Button>
+            </>
+          }
         />
-      ) : error && !user ? (
-        <div className="app-feedback app-feedback-error">{error}</div>
       ) : !user ? (
-        <div className="app-empty-state">User not found.</div>
+        <PageState
+          title="Admin not found"
+          description="We could not find an admin record for this request."
+          action={
+            <Button type="button" variant="outline" onClick={navigateBack}>
+              Back to Admins
+            </Button>
+          }
+        />
       ) : (
         <Card className="app-surface">
           <CardHeader className="app-section-header">
@@ -286,6 +329,6 @@ export default function AdminDetailPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

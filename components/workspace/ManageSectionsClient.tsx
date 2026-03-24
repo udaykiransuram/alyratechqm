@@ -4,10 +4,28 @@ import { useMemo, useState, type FormEvent } from "react";
 import { Trash2 } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
+import { fetchApiJson } from "@/lib/client/api";
+import type {
+  WorkspaceAcademicSectionItem,
+  WorkspaceClassItem,
+} from "@/lib/workspace/support-types";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import SectionState from "@/components/ui/section-state";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -25,21 +43,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import type {
-  WorkspaceAcademicSectionItem,
-  WorkspaceClassItem,
-} from "@/lib/workspace/support-types";
 
 type ManageSectionsClientProps = {
   initialClasses: WorkspaceClassItem[];
@@ -71,6 +74,7 @@ export default function ManageSectionsClient({
   const [selectedClassId, setSelectedClassId] = useState("");
   const [sectionFilterClassId, setSectionFilterClassId] = useState("all");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [archivingSectionId, setArchivingSectionId] = useState<string | null>(null);
   const [error] = useState<string | null>(initialError);
 
   const selectedClass = useMemo(
@@ -116,15 +120,12 @@ export default function ManageSectionsClient({
 
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/sections", {
+      const data = await fetchApiJson<any>("/api/sections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newSectionName, classId: selectedClassId }),
+        fallbackMessage: "Failed to create section.",
       });
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.message || "Failed to create section.");
-      }
 
       const nextSection: WorkspaceAcademicSectionItem = {
         _id: String(data.section?._id || ""),
@@ -173,14 +174,12 @@ export default function ManageSectionsClient({
   };
 
   const handleArchiveSection = async (sectionId: string) => {
+    setArchivingSectionId(sectionId);
     try {
-      const response = await fetch(`/api/sections/${sectionId}`, {
+      await fetchApiJson(`/api/sections/${sectionId}`, {
         method: "DELETE",
+        fallbackMessage: "Failed to archive section.",
       });
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.message || "Failed to archive section.");
-      }
 
       setSections((currentSections) =>
         currentSections.filter((section) => section._id !== sectionId),
@@ -195,11 +194,15 @@ export default function ManageSectionsClient({
         description: err?.message || "Failed to archive section.",
         variant: "destructive",
       });
+    } finally {
+      setArchivingSectionId((currentId) =>
+        currentId === sectionId ? null : currentId,
+      );
     }
   };
 
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
+    <PageShell width="wide" padding="relaxed">
       <PageHero
         eyebrow="Academic Setup"
         title="Manage Sections"
@@ -232,8 +235,16 @@ export default function ManageSectionsClient({
           },
           {
             label: "Create status",
-            value: isSubmitting ? "Saving" : "Ready",
-            meta: "Add a new section directly from this page.",
+            value: error
+              ? "Needs review"
+              : isSubmitting
+                ? "Saving"
+                : archivingSectionId
+                  ? "Archiving"
+                  : "Ready",
+            meta: error
+              ? "Review the initial section load before making more changes."
+              : "Add and archive sections directly from this page.",
           },
         ]}
       />
@@ -244,71 +255,86 @@ export default function ManageSectionsClient({
             <CardTitle>Create New Section</CardTitle>
           </CardHeader>
           <CardContent className="app-section-body">
-            <form
-              onSubmit={handleCreateSection}
-              className="grid gap-3 md:grid-cols-[220px_1fr_auto]"
-            >
-              <Select
-                value={selectedClassId}
-                onValueChange={(value) => {
-                  setSelectedClassId(value);
-                  setSectionFilterClassId(value || "all");
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select class" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map((classItem) => (
-                    <SelectItem key={classItem._id} value={classItem._id}>
-                      {classItem.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                placeholder="e.g., A"
-                value={newSectionName}
-                onChange={(event) => setNewSectionName(event.target.value)}
-                disabled={isSubmitting}
+            {classes.length === 0 ? (
+              <SectionState
+                variant="info"
+                title="Create a class first"
+                description="Sections belong to classes. Add at least one class before creating section records."
               />
-              <Button type="submit" disabled={isSubmitting} className="w-[160px]">
-                {isSubmitting ? <Spinner /> : "Create Section"}
-              </Button>
-            </form>
+            ) : (
+              <>
+                <form
+                  onSubmit={handleCreateSection}
+                  className="grid gap-3 md:grid-cols-[220px_1fr_auto]"
+                >
+                  <Select
+                    value={selectedClassId}
+                    onValueChange={(value) => {
+                      setSelectedClassId(value);
+                      setSectionFilterClassId(value || "all");
+                    }}
+                    disabled={isSubmitting || Boolean(archivingSectionId)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select class" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {classes.map((classItem) => (
+                        <SelectItem key={classItem._id} value={classItem._id}>
+                          {classItem.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder="e.g., A"
+                    value={newSectionName}
+                    onChange={(event) => setNewSectionName(event.target.value)}
+                    disabled={isSubmitting || Boolean(archivingSectionId)}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting || Boolean(archivingSectionId)}
+                    className="w-[160px]"
+                  >
+                    {isSubmitting ? <Spinner /> : "Create Section"}
+                  </Button>
+                </form>
 
-            {selectedClassId ? (
-              <div className="mt-4 rounded-xl border border-border/60 bg-muted/10 p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Existing sections in {selectedClass?.name || "selected class"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Review current sections here before creating a new one.
-                    </p>
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    {selectedClassSections.length} section
-                    {selectedClassSections.length === 1 ? "" : "s"}
-                  </span>
-                </div>
+                {selectedClassId ? (
+                  <div className="mt-4 rounded-xl border border-border/60 bg-muted/10 p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          Existing sections in {selectedClass?.name || "selected class"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Review current sections here before creating a new one.
+                        </p>
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {selectedClassSections.length} section
+                        {selectedClassSections.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
 
-                {selectedClassSections.length ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {selectedClassSections.map((section) => (
-                      <Badge key={section._id} variant="secondary">
-                        {section.name}
-                      </Badge>
-                    ))}
+                    {selectedClassSections.length ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {selectedClassSections.map((section) => (
+                          <Badge key={section._id} variant="secondary">
+                            {section.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        No sections exist for this class yet.
+                      </p>
+                    )}
                   </div>
-                ) : (
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    No sections exist for this class yet.
-                  </p>
-                )}
-              </div>
-            ) : null}
+                ) : null}
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -318,7 +344,11 @@ export default function ManageSectionsClient({
           </CardHeader>
           <CardContent className="app-section-body">
             {error ? (
-              <div className="app-feedback app-feedback-error">{error}</div>
+              <SectionState
+                variant="error"
+                title="Section data needs attention"
+                description={error}
+              />
             ) : (
               <>
                 <div className="app-filter-summary mb-4">
@@ -335,6 +365,7 @@ export default function ManageSectionsClient({
                       <Select
                         value={sectionFilterClassId}
                         onValueChange={setSectionFilterClassId}
+                        disabled={isSubmitting || Boolean(archivingSectionId)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Filter by class" />
@@ -352,30 +383,44 @@ export default function ManageSectionsClient({
                   </div>
                 </div>
 
-                <div className="app-table-wrap">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Section</TableHead>
-                        <TableHead>Class</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredSections.length === 0 ? (
+                {filteredSections.length === 0 ? (
+                  <SectionState
+                    title={
+                      sectionFilterClassId === "all"
+                        ? "No sections yet"
+                        : "No sections for this class"
+                    }
+                    description={
+                      sectionFilterClassId === "all"
+                        ? "Create your first section above to organize students, targeting, and reports."
+                        : "Switch the filter or create the first section for the selected class."
+                    }
+                    action={
+                      sectionFilterClassId !== "all" ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setSectionFilterClassId("all")}
+                          disabled={isSubmitting || Boolean(archivingSectionId)}
+                        >
+                          Show All Classes
+                        </Button>
+                      ) : null
+                    }
+                  />
+                ) : (
+                  <div className="app-table-wrap">
+                    <Table>
+                      <TableHeader>
                         <TableRow>
-                          <TableCell
-                            colSpan={4}
-                            className="py-6 text-center text-muted-foreground"
-                          >
-                            {sectionFilterClassId === "all"
-                              ? "No sections created yet."
-                              : "No sections created for the selected class yet."}
-                          </TableCell>
+                          <TableHead>Section</TableHead>
+                          <TableHead>Class</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
-                      ) : (
-                        filteredSections.map((section) => (
+                      </TableHeader>
+                      <TableBody>
+                        {filteredSections.map((section) => (
                           <TableRow key={section._id}>
                             <TableCell className="font-medium">{section.name}</TableCell>
                             <TableCell>{getSectionClass(section)?.name || "-"}</TableCell>
@@ -385,7 +430,11 @@ export default function ManageSectionsClient({
                             <TableCell className="text-right">
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    disabled={isSubmitting || Boolean(archivingSectionId)}
+                                  >
                                     <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                                   </Button>
                                 </AlertDialogTrigger>
@@ -401,27 +450,34 @@ export default function ManageSectionsClient({
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogCancel disabled={Boolean(archivingSectionId)}>
+                                      Cancel
+                                    </AlertDialogCancel>
                                     <AlertDialogAction
                                       onClick={() => handleArchiveSection(section._id)}
+                                      disabled={Boolean(archivingSectionId)}
                                     >
-                                      Archive
+                                      {archivingSectionId === section._id ? (
+                                        <Spinner />
+                                      ) : (
+                                        "Archive"
+                                      )}
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
                             </TableCell>
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </>
             )}
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -1,14 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
+import PageHero from '@/components/layout/PageHero';
+import PageShell from '@/components/layout/PageShell';
 import AppPrefetchLink from '@/components/navigation/AppPrefetchLink';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import PageHero from '@/components/layout/PageHero';
+import FeedbackNotice from '@/components/ui/feedback-notice';
 import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
 import { useBackNavigation, useCurrentPathWithSearch } from '@/hooks/useReturnNavigation';
 import PageLoadingState from '@/components/ui/page-loading-state';
+import PageState from '@/components/ui/page-state';
+import SectionState from '@/components/ui/section-state';
 import {
   fetchApiJson,
   peekCachedApiJson,
@@ -61,11 +65,13 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 function AccessList({
   title,
   items,
-  emptyLabel,
+  emptyTitle,
+  emptyDescription,
 }: {
   title: string;
   items: string[];
-  emptyLabel: string;
+  emptyTitle: string;
+  emptyDescription: string;
 }) {
   return (
     <div className="app-section">
@@ -74,7 +80,7 @@ function AccessList({
         <p className="text-sm text-muted-foreground">
           {items.length > 0
             ? `${items.length} assigned item${items.length === 1 ? "" : "s"}`
-            : emptyLabel}
+            : emptyDescription}
         </p>
       </div>
       {items.length > 0 ? (
@@ -86,7 +92,10 @@ function AccessList({
           ))}
         </div>
       ) : (
-        <div className="app-empty-state py-6">{emptyLabel}</div>
+        <SectionState
+          title={emptyTitle}
+          description={emptyDescription}
+        />
       )}
     </div>
   );
@@ -131,6 +140,11 @@ export default function TeacherDetailPage() {
   const [sections, setSections] = useState<AcademicSectionItem[]>(
     () => cachedSectionsResponse?.sections || [],
   );
+  const [reloadToken, setReloadToken] = useState(0);
+
+  const retryLoad = useCallback(() => {
+    setReloadToken((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -196,7 +210,7 @@ export default function TeacherDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [cachedUserResponse?.user, id, schoolKey]);
+  }, [cachedUserResponse?.user, id, reloadToken, schoolKey]);
 
   const classNames = useMemo(
     () =>
@@ -227,27 +241,46 @@ export default function TeacherDetailPage() {
     });
   }, [classes, sections, user?.academicSectionIds, user?.hasAllSections]);
 
+  if (loading && !user) {
+    return (
+      <PageLoadingState
+        title="Loading teacher details"
+        description="Preparing teacher profile and academic access assignments."
+        width="narrow"
+        dense
+      />
+    );
+  }
+
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+    <PageShell width="narrow">
       <PageHero
         eyebrow="People"
         title={user?.name || "Teacher Details"}
         description="Review teacher profile information and the exact class, section, and subject scope granted inside this school workspace."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={navigateBack}>Back to Teachers</Button>
-            <AppPrefetchLink
-              href={editHref}
-              relatedApiPrefetches={[
-                `/api/users/${id}`,
-                '/api/classes',
-                '/api/sections',
-                '/api/subjects',
-              ]}
-            >
-              <Button>Edit Teacher</Button>
-            </AppPrefetchLink>
-          </div>
+          user ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={navigateBack}>
+                Back to Teachers
+              </Button>
+              <AppPrefetchLink
+                href={editHref}
+                relatedApiPrefetches={[
+                  `/api/users/${id}`,
+                  '/api/classes',
+                  '/api/sections',
+                  '/api/subjects',
+                ]}
+              >
+                <Button>Edit Teacher</Button>
+              </AppPrefetchLink>
+            </div>
+          ) : (
+            <Button variant="outline" onClick={navigateBack}>
+              Back to Teachers
+            </Button>
+          )
         }
         meta={
           <>
@@ -282,23 +315,39 @@ export default function TeacherDetailPage() {
         ]}
       />
 
-      {error && user ? <div className="app-feedback app-feedback-info">{error}</div> : null}
+      {error && user ? (
+        <FeedbackNotice variant="info">{error}</FeedbackNotice>
+      ) : null}
 
-      {loading && !user ? (
-        <PageLoadingState
-          title="Loading teacher details"
-          description="Preparing teacher profile and academic access assignments."
-          className="px-0 py-0"
-          contentClassName="max-w-none"
-          dense
+      {error && !user ? (
+        <PageState
+          variant="error"
+          title="Could not load teacher details"
+          description={error}
+          action={
+            <>
+              <Button type="button" variant="outline" onClick={navigateBack}>
+                Back to Teachers
+              </Button>
+              <Button type="button" onClick={retryLoad}>
+                Try Again
+              </Button>
+            </>
+          }
         />
-      ) : error && !user ? (
-        <div className="app-feedback app-feedback-error">{error}</div>
       ) : !user ? (
-        <div className="app-empty-state">User not found.</div>
+        <PageState
+          title="Teacher not found"
+          description="We could not find a teacher record for this request."
+          action={
+            <Button type="button" variant="outline" onClick={navigateBack}>
+              Back to Teachers
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-5">
-                    <Card className="app-surface overflow-hidden">
+          <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Profile Details</CardTitle>
             </CardHeader>
@@ -326,22 +375,29 @@ export default function TeacherDetailPage() {
               <AccessList
                 title="Classes"
                 items={classNames}
-                emptyLabel="No classes are assigned to this teacher yet."
+                emptyTitle="No classes assigned"
+                emptyDescription="Assign one or more classes to define this teacher's working scope."
               />
               <AccessList
                 title="Sections"
                 items={academicSectionNames}
-                emptyLabel="No sections are assigned to this teacher yet."
+                emptyTitle="No sections assigned"
+                emptyDescription={
+                  user?.hasAllSections
+                    ? "Section access will open once classes are assigned."
+                    : "Assign sections or enable all sections in the selected classes."
+                }
               />
               <AccessList
                 title="Subjects"
                 items={subjectNames}
-                emptyLabel="No subjects are assigned to this teacher yet."
+                emptyTitle="No subjects assigned"
+                emptyDescription="Assign at least one subject to give this teacher paper and reporting scope."
               />
             </CardContent>
           </Card>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

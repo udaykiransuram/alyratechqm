@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import MultiSelectChecklist from "@/components/multi-select-checklist";
 import { Checkbox } from "@/components/ui/checkbox";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { Button } from "@/components/ui/button";
-import PageHero from "@/components/layout/PageHero";
+import FeedbackNotice from "@/components/ui/feedback-notice";
+import PageState from "@/components/ui/page-state";
+import { Spinner } from "@/components/ui/spinner";
 import { fetchApiJson, peekCachedApiJson } from "@/lib/client/api";
 import {
   Card,
@@ -75,6 +79,7 @@ export default function EditTeacherPage() {
     clientCacheTtlMs: EDIT_PAGE_CACHE_TTL_MS,
   });
   const hasCachedUser = Boolean(cachedUserResponse?.user);
+  const [hasUserRecord, setHasUserRecord] = useState(hasCachedUser);
 
   const [classes, setClasses] = useState<ClassItem[]>(
     () => cachedClassesResponse?.classes || [],
@@ -88,15 +93,22 @@ export default function EditTeacherPage() {
   const [loading, setLoading] = useState(() => !hasCachedUser);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const [form, setForm] = useState(() => buildTeacherForm(cachedUserResponse?.user || {}));
+
+  const retryLoad = useCallback(() => {
+    setReloadToken((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
     async function load() {
       try {
         setLoading(!hasCachedUser);
+        setLoadError(null);
         const [uJson, cJson, secJson, sJson] = await Promise.all([
           fetchApiJson<{ user?: any }>(`/api/users/${id}`, {
             cache: "no-store",
@@ -124,14 +136,14 @@ export default function EditTeacherPage() {
           }),
         ]);
         if (!mounted) return;
-        setForm(buildTeacherForm(uJson.user || {}));
+        const nextUser = uJson.user || null;
+        setHasUserRecord(Boolean(nextUser));
+        setForm(buildTeacherForm(nextUser || {}));
         setClasses(cJson.classes || []);
         setSections(secJson.sections || []);
         setSubjects(sJson.subjects || []);
       } catch (e: any) {
-        if (!hasCachedUser) {
-          setError(e.message || "Failed to load");
-        }
+        setLoadError(e.message || "Failed to load");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -140,7 +152,7 @@ export default function EditTeacherPage() {
     return () => {
       mounted = false;
     };
-  }, [hasCachedUser, id]);
+  }, [hasCachedUser, id, reloadToken]);
 
   const availableSections = useMemo(() => {
     const selectedClassIds = new Set(form.classIds);
@@ -196,9 +208,9 @@ export default function EditTeacherPage() {
     e.preventDefault();
     setSaving(true);
     setMessage(null);
-    setError(null);
+    setSubmitError(null);
     try {
-      const res = await fetch("/api/users/" + id, {
+      await fetchApiJson("/api/users/" + id, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -216,44 +228,36 @@ export default function EditTeacherPage() {
               ),
           subjectIds: form.subjectIds,
         }),
+        fallbackMessage: "Failed to update teacher.",
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message || "Failed to update teacher");
       setMessage("Teacher updated successfully.");
       navigateBack();
     } catch (e: any) {
-      setError(e.message || "Update failed");
+      setSubmitError(e.message || "Update failed");
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
+  if (loading && !hasUserRecord) {
     return (
       <PageLoadingState
         title="Loading teacher details"
         description="Preparing the teacher edit form and assignment controls."
+        width="wide"
       />
     );
   }
 
-  if (error) {
-    return (
-      <div className="app-page-shell max-w-2xl px-4 py-5 sm:px-0">
-        <div className="app-feedback app-feedback-error">{error}</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+    <PageShell width="wide">
       <PageHero
         eyebrow="People"
         title="Edit Teacher"
         description="Update teacher identity and refine class, section, and subject assignments without leaving the standardized people-management flow."
         actions={
-          <Button type="button" variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <Button type="button" variant="outline" className="gap-2" onClick={navigateBack}>
+            <ArrowLeft className="h-4 w-4" />
             Back to Details
           </Button>
         }
@@ -263,6 +267,7 @@ export default function EditTeacherPage() {
             <span className="app-meta-chip">
               {form.hasAllSections ? "All sections in selected classes" : "Restricted sections"}
             </span>
+            {loadError && hasUserRecord ? <span className="app-meta-chip">Refresh issue</span> : null}
           </>
         }
         stats={[
@@ -283,128 +288,168 @@ export default function EditTeacherPage() {
           },
           {
             label: "Form state",
-            value: saving ? "Saving" : "Ready",
-            meta: "Updates are applied inside the current school tenant only.",
+            value: loadError && hasUserRecord
+              ? "Review data"
+              : submitError
+                ? "Needs attention"
+                : saving
+                  ? "Saving"
+                  : "Ready",
+            meta: loadError && hasUserRecord
+              ? "Cached teacher data is available, but the latest assignment data could not be refreshed."
+              : "Updates are applied inside the current school tenant only.",
           },
         ]}
       />
 
-      {message ? <div className="app-feedback app-feedback-success">{message}</div> : null}
-      {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+      {message ? <FeedbackNotice variant="success">{message}</FeedbackNotice> : null}
+      {loadError && hasUserRecord ? (
+        <FeedbackNotice variant="info">{loadError}</FeedbackNotice>
+      ) : null}
+      {submitError ? <FeedbackNotice variant="error">{submitError}</FeedbackNotice> : null}
 
-            <div className="app-editor-grid">
-        <div className="app-editor-main">
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <CardTitle>Teacher Profile</CardTitle>
-            </CardHeader>
-            <CardContent className="app-section-body">
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="app-section">
-                  <div className="app-form-section-heading">
-                    <p className="app-form-section-title">Identity and contact</p>
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="name">Name</label>
-                    <input id="name" name="name" value={form.name} onChange={handleChange} required className="app-form-input" placeholder="Name" />
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="app-field-group">
-                      <label className="app-field-label" htmlFor="email">Email</label>
-                      <input id="email" name="email" value={form.email} onChange={handleChange} type="email" className="app-form-input" placeholder="Email" />
+      {loadError && !hasUserRecord ? (
+        <PageState
+          variant="error"
+          title="Could not load teacher details"
+          description={loadError}
+          action={
+            <>
+              <Button type="button" variant="outline" onClick={navigateBack}>
+                Back to Details
+              </Button>
+              <Button type="button" onClick={retryLoad}>
+                Try Again
+              </Button>
+            </>
+          }
+        />
+      ) : !hasUserRecord ? (
+        <PageState
+          title="Teacher not found"
+          description="We could not find a teacher record for this request."
+          action={
+            <Button type="button" variant="outline" onClick={navigateBack}>
+              Back to Details
+            </Button>
+          }
+        />
+      ) : (
+        <div className="app-editor-grid">
+          <div className="app-editor-main">
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Teacher Profile</CardTitle>
+              </CardHeader>
+              <CardContent className="app-section-body">
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="app-section">
+                    <div className="app-form-section-heading">
+                      <p className="app-form-section-title">Identity and contact</p>
                     </div>
                     <div className="app-field-group">
-                      <label className="app-field-label" htmlFor="mobileNumber">Phone Number</label>
-                      <input id="mobileNumber" name="mobileNumber" value={form.mobileNumber} onChange={handleChange} required className="app-form-input" placeholder="Phone Number" />
+                      <label className="app-field-label" htmlFor="name">Name</label>
+                      <input id="name" name="name" value={form.name} onChange={handleChange} required className="app-form-input" placeholder="Name" />
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="app-field-group">
+                        <label className="app-field-label" htmlFor="email">Email</label>
+                        <input id="email" name="email" value={form.email} onChange={handleChange} type="email" className="app-form-input" placeholder="Email" />
+                      </div>
+                      <div className="app-field-group">
+                        <label className="app-field-label" htmlFor="mobileNumber">Phone Number</label>
+                        <input id="mobileNumber" name="mobileNumber" value={form.mobileNumber} onChange={handleChange} required className="app-form-input" placeholder="Phone Number" />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="app-section">
-                  <div className="app-form-section-heading">
-                    <p className="app-form-section-title">Credentials</p>
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="password">New Password</label>
-                    <input id="password" name="password" value={form.password} onChange={handleChange} type="password" className="app-form-input" placeholder="Leave blank to keep the current password" />
-                  </div>
-                </div>
-
-                <div className="app-section">
-                  <div className="app-form-section-heading">
-                    <p className="app-form-section-title">Academic access</p>
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label">Classes</label>
-                    <MultiSelectChecklist
-                      items={classes.map((classItem) => ({
-                        id: classItem._id,
-                        label: classItem.name,
-                      }))}
-                      selectedIds={form.classIds}
-                      onChange={(ids) => updateSelection("classIds", ids)}
-                    />
-                  </div>
-
-                  <label
-                    className={`app-toggle-card ${form.hasAllSections ? "app-toggle-card-active" : ""}`}
-                  >
-                    <Checkbox
-                      checked={form.hasAllSections}
-                      onCheckedChange={(checked) => updateToggle("hasAllSections", checked === true)}
-                      className="mt-0.5"
-                    />
-                    <span className="app-toggle-card-copy">
-                      <span className="app-toggle-card-title">
-                        Access to all sections in selected classes
-                      </span>
-                    </span>
-                  </label>
-
-                  {!form.hasAllSections && (
+                  <div className="app-section">
+                    <div className="app-form-section-heading">
+                      <p className="app-form-section-title">Credentials</p>
+                    </div>
                     <div className="app-field-group">
-                      <label className="app-field-label">Sections</label>
+                      <label className="app-field-label" htmlFor="password">New Password</label>
+                      <input id="password" name="password" value={form.password} onChange={handleChange} type="password" className="app-form-input" placeholder="Leave blank to keep the current password" />
+                    </div>
+                  </div>
+
+                  <div className="app-section">
+                    <div className="app-form-section-heading">
+                      <p className="app-form-section-title">Academic access</p>
+                    </div>
+                    <div className="app-field-group">
+                      <label className="app-field-label">Classes</label>
                       <MultiSelectChecklist
-                        items={availableSections.map((section) => ({
-                          id: section._id,
-                          label: (
-                            <span>
-                              {section.name}
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                ({classes.find((classItem) => classItem._id === getSectionClassId(section))?.name || "Class"})
-                              </span>
-                            </span>
-                          ),
+                        items={classes.map((classItem) => ({
+                          id: classItem._id,
+                          label: classItem.name,
                         }))}
-                        selectedIds={form.academicSectionIds}
-                        onChange={(ids) => updateSelection("academicSectionIds", ids)}
-                        emptyContent="Select one or more classes to choose sections."
+                        selectedIds={form.classIds}
+                        onChange={(ids) => updateSelection("classIds", ids)}
                       />
                     </div>
-                  )}
 
-                  <div className="app-field-group">
-                    <label className="app-field-label">Subjects</label>
-                    <MultiSelectChecklist
-                      items={subjects.map((subject) => ({
-                        id: subject._id,
-                        label: subject.name,
-                      }))}
-                      selectedIds={form.subjectIds}
-                      onChange={(ids) => updateSelection("subjectIds", ids)}
-                    />
+                    <label
+                      className={`app-toggle-card ${form.hasAllSections ? "app-toggle-card-active" : ""}`}
+                    >
+                      <Checkbox
+                        checked={form.hasAllSections}
+                        onCheckedChange={(checked) => updateToggle("hasAllSections", checked === true)}
+                        className="mt-0.5"
+                      />
+                      <span className="app-toggle-card-copy">
+                        <span className="app-toggle-card-title">
+                          Access to all sections in selected classes
+                        </span>
+                      </span>
+                    </label>
+
+                    {!form.hasAllSections && (
+                      <div className="app-field-group">
+                        <label className="app-field-label">Sections</label>
+                        <MultiSelectChecklist
+                          items={availableSections.map((section) => ({
+                            id: section._id,
+                            label: (
+                              <span>
+                                {section.name}
+                                <span className="ml-2 text-xs text-muted-foreground">
+                                  ({classes.find((classItem) => classItem._id === getSectionClassId(section))?.name || "Class"})
+                                </span>
+                              </span>
+                            ),
+                          }))}
+                          selectedIds={form.academicSectionIds}
+                          onChange={(ids) => updateSelection("academicSectionIds", ids)}
+                          emptyContent="Select one or more classes to choose sections."
+                        />
+                      </div>
+                    )}
+
+                    <div className="app-field-group">
+                      <label className="app-field-label">Subjects</label>
+                      <MultiSelectChecklist
+                        items={subjects.map((subject) => ({
+                          id: subject._id,
+                          label: subject.name,
+                        }))}
+                        selectedIds={form.subjectIds}
+                        onChange={(ids) => updateSelection("subjectIds", ids)}
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <button type="submit" disabled={saving} className="app-button-primary w-full">
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
-              </form>
-            </CardContent>
-          </Card>
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={saving} className="sm:min-w-[160px]">
+                      {saving ? <Spinner /> : "Save Changes"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-
-              </div>
-    </div>
+      )}
+    </PageShell>
   );
 }
