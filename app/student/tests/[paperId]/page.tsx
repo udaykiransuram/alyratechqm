@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Expand, Minimize2 } from "lucide-react";
 
 import { ContentRenderer } from "@/components/ContentRenderer";
 import PageHero from "@/components/layout/PageHero";
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import FeedbackNotice from "@/components/ui/feedback-notice";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
@@ -290,6 +292,8 @@ export default function StudentTestPage() {
   const submitTriggeredRef = useRef(false);
   const saveAttemptRef = useRef<(force?: boolean) => Promise<void>>(async () => {});
   const submitAttemptRef = useRef<(auto?: boolean) => Promise<void>>(async () => {});
+  const examContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const questionList = useMemo(() => {
     return (paper?.sections || []).flatMap((section) =>
@@ -548,6 +552,21 @@ export default function StudentTestPage() {
     };
   }, [attemptLocked, attemptStarted, paper]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === examContainerRef.current);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
   function updateSingleChoice(questionId: string, optionIndex: number) {
     setAnswers((current) => ({
       ...current,
@@ -642,6 +661,25 @@ export default function StudentTestPage() {
 
     setCurrentIndex(index);
     void saveAttempt();
+  }
+
+  async function toggleFullscreen() {
+    if (typeof document === "undefined" || !examContainerRef.current) {
+      return;
+    }
+
+    try {
+      if (document.fullscreenElement === examContainerRef.current) {
+        await document.exitFullscreen();
+        return;
+      }
+
+      await examContainerRef.current.requestFullscreen();
+    } catch {
+      setActionError(
+        "Fullscreen mode is not available right now. You can still continue the test normally.",
+      );
+    }
   }
 
   if (loading) {
@@ -886,159 +924,123 @@ export default function StudentTestPage() {
   }
 
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <PageHero
-        eyebrow="Student Portal"
-        title={paper.title}
-        actions={
-          <Button asChild variant="outline">
-            <AppPrefetchLink href={testsHref} prefetchOnMount>
-              Back to Tests
-            </AppPrefetchLink>
-          </Button>
-        }
-      >
-        <div className="space-y-4">
-          <div className="app-page-meta">
-            {paperSubjectLabel ? (
-              <span className="app-meta-chip">{paperSubjectLabel}</span>
-            ) : null}
-            {paperClassLabel ? (
-              <span className="app-meta-chip">{paperClassLabel}</span>
-            ) : null}
-            <span className="app-meta-chip">{paper.duration} min</span>
-          </div>
-          <StudentPortalNav />
+    <div
+      ref={examContainerRef}
+      className={cn(
+        "app-page-shell app-exam-focus-shell max-w-[96rem] px-3 py-3 sm:px-4 sm:py-4",
+        isFullscreen && "app-exam-focus-shell-fullscreen",
+      )}
+    >
+      <div className="app-exam-focus-topbar">
+        <div className="app-exam-focus-topbar-copy">
+          <p className="app-spotlight-label">Active test</p>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+            {paper.title}
+          </h1>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {[paperSubjectLabel, paperClassLabel].filter(Boolean).join(" • ") ||
+              `${questionList.length} questions`}
+          </p>
         </div>
-      </PageHero>
+        <div className="app-exam-focus-topbar-meta">
+          <span className="app-meta-chip">
+            {formatRemainingTime(remainingTimeMs)}
+          </span>
+          <span className="app-meta-chip">
+            {answeredCount}/{questionList.length} answered
+          </span>
+          <span className="app-meta-chip">
+            Q{Math.min(currentIndex + 1, questionList.length)}/{questionList.length}
+          </span>
+          <span className="app-meta-chip">
+            {isSaving ? "Saving..." : "Autosave on"}
+          </span>
+        </div>
+        <div className="app-exam-focus-topbar-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void saveAttempt(true)}
+            disabled={isSaving || isSubmitting}
+          >
+            {isSaving ? <Spinner /> : "Save"}
+          </Button>
 
-      {actionError ? (
-        <div className="app-feedback app-feedback-error">{actionError}</div>
-      ) : null}
+          <Button type="button" variant="outline" onClick={() => void toggleFullscreen()}>
+            {isFullscreen ? (
+              <Minimize2 className="mr-2 h-4 w-4" />
+            ) : (
+              <Expand className="mr-2 h-4 w-4" />
+            )}
+            {isFullscreen ? "Exit Full Screen" : "Full Screen"}
+          </Button>
 
-      <div className="app-toolbar">
-        <div className="app-toolbar-row">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="app-meta-chip">
-              {formatRemainingTime(remainingTimeMs)}
-            </span>
-            <span className="app-meta-chip">
-              {answeredCount}/{questionList.length} answered
-            </span>
-            <span className="app-meta-chip">
-              Question {Math.min(currentIndex + 1, questionList.length)} of {questionList.length}
-            </span>
-            <span className="app-meta-chip">
-              {isSaving ? "Saving..." : "Autosave on"}
-            </span>
-          </div>
+          <AlertDialog
+            open={submitDialogOpen}
+            onOpenChange={setSubmitDialogOpen}
+          >
+            <AlertDialogTrigger asChild>
+              <Button disabled={isSubmitting}>
+                {isSubmitting ? <Spinner /> : "Submit Test"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Submit this test?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  You have answered {answeredCount} of {questionList.length} questions.
+                  {unansweredCount > 0
+                    ? ` ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} will be left unanswered.`
+                    : " All questions have a saved answer."}
+                  {hasManualReviewQuestions
+                    ? " Descriptive responses may remain pending review after submission."
+                    : ""}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isSubmitting}>
+                  Continue Reviewing
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => void submitAttempt(false)}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? <Spinner /> : "Confirm Submit"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 
-      <div className="app-exam-shell">
-        <aside className="app-exam-sidebar">
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <CardTitle>Session Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="app-section-body space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="app-detail-item">
-                  <p className="app-detail-label">Time Left</p>
-                  <div className="app-detail-value">
-                    {formatRemainingTime(remainingTimeMs)}
-                  </div>
-                </div>
-                <div className="app-detail-item">
-                  <p className="app-detail-label">Questions</p>
-                  <div className="app-detail-value">{questionList.length}</div>
-                </div>
-                <div className="app-detail-item">
-                  <p className="app-detail-label">Answered</p>
-                  <div className="app-detail-value">{answeredCount}</div>
-                </div>
-                <div className="app-detail-item">
-                  <p className="app-detail-label">Remaining</p>
-                  <div className="app-detail-value">{unansweredCount}</div>
-                </div>
-                <div className="app-detail-item">
-                  <p className="app-detail-label">Total Marks</p>
-                  <div className="app-detail-value">{paper.totalMarks}</div>
-                </div>
-                <div className="app-detail-item">
-                  <p className="app-detail-label">Passing Marks</p>
-                  <div className="app-detail-value">{paper.passingMarks}</div>
-                </div>
-              </div>
+      {actionError ? (
+        <FeedbackNotice variant="error">{actionError}</FeedbackNotice>
+      ) : null}
 
-              {hasManualReviewQuestions ? (
-                <div className="app-feedback app-feedback-info">
-                  Descriptive answers need manual review after submission.
-                </div>
-              ) : null}
-
-              <div className="space-y-2 border-t border-border/60 pt-4">
-                <AlertDialog
-                  open={submitDialogOpen}
-                  onOpenChange={setSubmitDialogOpen}
-                >
-                  <AlertDialogTrigger asChild>
-                    <Button className="w-full" disabled={isSubmitting}>
-                      {isSubmitting ? <Spinner /> : "Submit Test"}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Submit this test?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        You have answered {answeredCount} of {questionList.length} questions.
-                        {unansweredCount > 0
-                          ? ` ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} will be left unanswered.`
-                          : " All questions have a saved answer."}
-                        {hasManualReviewQuestions
-                          ? " Descriptive responses may remain pending review after submission."
-                          : ""}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel disabled={isSubmitting}>
-                        Continue Reviewing
-                      </AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => void submitAttempt(false)}
-                        disabled={isSubmitting}
-                      >
-                        {isSubmitting ? <Spinner /> : "Confirm Submit"}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => void saveAttempt(true)}
-                  disabled={isSaving || isSubmitting}
-                >
-                  {isSaving ? <Spinner /> : "Save Progress"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
+      <div className="app-exam-shell app-exam-shell-focus">
+        <aside className="app-exam-sidebar app-exam-sidebar-focus">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle>Question Palette</CardTitle>
+                <CardTitle>Question Navigation</CardTitle>
                 <span className="app-meta-chip">
                   {answeredCount}/{questionList.length} answered
                 </span>
               </div>
             </CardHeader>
             <CardContent className="app-section-body space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Jump to any question at any time.
-              </p>
+              <div className="app-exam-summary-grid">
+                <div className="app-exam-stat-card">
+                  <p className="app-exam-stat-label">Time Left</p>
+                  <div className="app-exam-stat-value">
+                    {formatRemainingTime(remainingTimeMs)}
+                  </div>
+                </div>
+                <div className="app-exam-stat-card">
+                  <p className="app-exam-stat-label">Remaining</p>
+                  <div className="app-exam-stat-value">{unansweredCount}</div>
+                </div>
+              </div>
               <div className="app-exam-palette">
                 {questionList.map((item, index) => {
                   const selected = hasAnswerForQuestion(
@@ -1065,24 +1067,45 @@ export default function StudentTestPage() {
                   );
                 })}
               </div>
+
+              <div className="app-exam-palette-legend">
+                <div className="app-exam-palette-legend-item">
+                  <span className="app-exam-palette-swatch bg-primary" />
+                  Current
+                </div>
+                <div className="app-exam-palette-legend-item">
+                  <span className="app-exam-palette-swatch bg-emerald-400" />
+                  Answered
+                </div>
+                <div className="app-exam-palette-legend-item">
+                  <span className="app-exam-palette-swatch bg-muted" />
+                  Unanswered
+                </div>
+              </div>
+
+              {hasManualReviewQuestions ? (
+                <FeedbackNotice variant="info">
+                  Descriptive answers will still need manual review after submission.
+                </FeedbackNotice>
+              ) : null}
+
+              {paper.instructions ? (
+                <details className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3">
+                  <summary className="cursor-pointer text-sm font-medium text-foreground">
+                    View instructions
+                  </summary>
+                  <div className="prose prose-sm mt-3 max-w-none text-foreground dark:prose-invert">
+                    <p>{paper.instructions}</p>
+                  </div>
+                </details>
+              ) : null}
             </CardContent>
           </Card>
         </aside>
 
-        <main className="space-y-4">
-          {paper.instructions ? (
-            <Card className="app-surface overflow-hidden">
-              <CardHeader className="app-section-header">
-                <CardTitle>Instructions</CardTitle>
-              </CardHeader>
-              <CardContent className="app-section-body prose prose-sm max-w-none dark:prose-invert">
-                <p>{paper.instructions}</p>
-              </CardContent>
-            </Card>
-          ) : null}
-
+        <main className="app-exam-main-focus">
           {currentQuestion && currentAnswer ? (
-            <Card className="app-surface overflow-hidden">
+            <Card className="app-surface app-exam-question-card overflow-hidden">
               <CardHeader className="app-section-header">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="space-y-1.5">
@@ -1111,7 +1134,7 @@ export default function StudentTestPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="app-section-body app-exam-question-shell">
+              <CardContent className="app-section-body app-exam-question-body app-exam-question-shell">
                 <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
                   <ContentRenderer htmlContent={currentQuestion.question.content} />
                 </div>
