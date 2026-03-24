@@ -1,5 +1,10 @@
 import type { ReactNode } from "react";
 
+import PageHero from "@/components/layout/PageHero";
+import PageShell, {
+  type PageShellPadding,
+  type PageShellWidth,
+} from "@/components/layout/PageShell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +12,8 @@ type PageLoadingStateProps = {
   title?: string;
   description?: string;
   actions?: ReactNode;
+  width?: PageShellWidth;
+  padding?: PageShellPadding;
   className?: string;
   contentClassName?: string;
   dense?: boolean;
@@ -16,20 +23,16 @@ export default function PageLoadingState({
   title = "Loading workspace",
   description = "Preparing the latest data and layout.",
   actions,
+  width,
+  padding = "relaxed",
   className,
   contentClassName,
   dense = false,
 }: PageLoadingStateProps) {
   return (
-    <div className={cn("app-page-shell px-4 py-6 sm:px-0", className)}>
+    <PageShell width={width} padding={padding} className={className}>
       <div className={cn("space-y-6", contentClassName)}>
-        <div className="app-page-header-row">
-          <div className="space-y-2">
-            <h1 className="app-page-title">{title}</h1>
-            <p className="app-page-subtitle">{description}</p>
-          </div>
-          {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-        </div>
+        <PageHero title={title} description={description} actions={actions} />
 
         <div className="app-surface overflow-hidden border border-border/60 bg-card/90 shadow-sm">
           <div className="app-section-header border-b border-border/60 bg-muted/20">
@@ -82,6 +85,6 @@ export default function PageLoadingState({
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

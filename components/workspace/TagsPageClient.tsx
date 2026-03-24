@@ -1,21 +1,41 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { LoaderCircle, Plus } from "lucide-react";
 
-import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
+import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
+import { fetchApiJson } from "@/lib/client/api";
+import type { WorkspaceTagItem } from "@/lib/workspace/support-types";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import FeedbackNotice from "@/components/ui/feedback-notice";
 import ListPagination from "@/components/ui/list-pagination";
+import SectionState from "@/components/ui/section-state";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
-import type { WorkspaceTagItem } from "@/lib/workspace/support-types";
 
 const INITIAL_TAG_BATCH_SIZE = 24;
 const TAGS_PAGE_SIZE = INITIAL_TAG_BATCH_SIZE;
+
+type TagsWithSubjectsResponse = {
+  tags?: WorkspaceTagItem[];
+  total?: number;
+  partial?: boolean;
+};
 
 type FetchTagsOptions = {
   limit?: number;
@@ -48,9 +68,16 @@ export default function TagsPageClient({
   const [totalTags, setTotalTags] = useState<number | null>(initialTotal);
   const [fetchError, setFetchError] = useState<string | null>(initialError);
   const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [tagToArchiveId, setTagToArchiveId] = useState<string | null>(null);
   const [tagPage, setTagPage] = useState(1);
   const archivedTagIdsRef = useRef<Set<string>>(new Set());
   const { toast } = useToast();
+
+  const tagToArchive = useMemo(
+    () => tags.find((tag) => tag._id === tagToArchiveId) ?? null,
+    [tagToArchiveId, tags],
+  );
 
   const fetchTagsWithSubjects = useCallback(
     async ({
@@ -78,12 +105,10 @@ export default function TagsPageClient({
             ? `/api/tags/with-subjects?${params.toString()}`
             : "/api/tags/with-subjects";
 
-        const response = await fetch(endpoint, { signal });
-        const data = await response.json();
-
-        if (!data.success) {
-          throw new Error(data.message || "Failed to load tags.");
-        }
+        const data = await fetchApiJson<TagsWithSubjectsResponse>(endpoint, {
+          signal,
+          fallbackMessage: "Failed to load tags.",
+        });
 
         const visibleTags = (Array.isArray(data.tags) ? data.tags : []).filter(
           (tag: WorkspaceTagItem) => !archivedTagIdsRef.current.has(tag._id),
@@ -175,15 +200,19 @@ export default function TagsPageClient({
   const visibleRangeStart = tags.length === 0 ? 0 : (tagPage - 1) * TAGS_PAGE_SIZE + 1;
   const visibleRangeEnd = Math.min(tags.length, tagPage * TAGS_PAGE_SIZE);
 
-  const archiveTag = async (id: string) => {
-    const isConfirmed = confirm(
-      "Are you sure you want to archive this tag? This action cannot be undone.",
-    );
-    if (!isConfirmed) return;
+  const openArchiveDialog = useCallback((id: string) => {
+    setTagToArchiveId(id);
+    setShowArchiveDialog(true);
+  }, []);
 
+  const confirmArchiveTag = useCallback(async () => {
+    if (!tagToArchiveId) return;
+
+    const id = tagToArchiveId;
     const originalTags = [...tags];
     archivedTagIdsRef.current.add(id);
     setDeletingTagId(id);
+    setShowArchiveDialog(false);
     setTags((currentTags) => currentTags.filter((tag) => tag._id !== id));
     setTotalTags((currentTotal) =>
       currentTotal === null ? currentTotal : Math.max(0, currentTotal - 1),
@@ -194,12 +223,10 @@ export default function TagsPageClient({
     });
 
     try {
-      const response = await fetch(`/api/tags/${id}`, { method: "DELETE" });
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "Failed to archive tag.");
-      }
+      await fetchApiJson(`/api/tags/${id}`, {
+        method: "DELETE",
+        fallbackMessage: "Failed to archive tag.",
+      });
 
       toast({
         title: "Tag Archived",
@@ -218,11 +245,12 @@ export default function TagsPageClient({
       });
     } finally {
       setDeletingTagId((currentId) => (currentId === id ? null : currentId));
+      setTagToArchiveId(null);
     }
-  };
+  }, [tagToArchiveId, tags, toast]);
 
   return (
-    <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
+    <PageShell width="content">
       <PageHero
         eyebrow="Curriculum"
         title="Tags"
@@ -296,41 +324,44 @@ export default function TagsPageClient({
         </CardHeader>
         <CardContent className="app-section-body">
           {fetchError ? (
-            <div className="app-feedback app-feedback-error text-center">
-              <p>{fetchError}</p>
-              <div className="mt-4 flex justify-center">
+            <SectionState
+              variant="error"
+              title="Could not load tags"
+              description={fetchError}
+              action={
                 <Button onClick={() => void loadTagsProgressively()} variant="outline">
                   Try Again
                 </Button>
-              </div>
-            </div>
+              }
+            />
           ) : tagsLoading ? (
-            <div className="app-empty-state">
-              <div className="flex items-center justify-center text-muted-foreground">
-                <Spinner />
-                <span>Loading tags...</span>
-              </div>
-            </div>
+            <SectionState
+              variant="info"
+              icon={<LoaderCircle className="h-5 w-5 animate-spin" />}
+              title="Loading tags"
+              description="Preparing the first batch of tags and subject links."
+            />
           ) : tags.length === 0 ? (
-            <div className="app-empty-state">
-              <p>No tags found yet.</p>
-              <div className="mt-4 flex justify-center">
+            <SectionState
+              title="No tags yet"
+              description="Create your first tag to organize curriculum data and keep analytics labels consistent."
+              action={
                 <AppPrefetchLink href="/workspace/tags/create">
-                  <Button variant="outline">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Your First Tag
+                  <Button variant="outline" className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Create your first tag
                   </Button>
                 </AppPrefetchLink>
-              </div>
-            </div>
+              }
+            />
           ) : (
             <div className="space-y-3">
               {backgroundLoading ? (
-                <div className="app-feedback app-feedback-info">
+                <FeedbackNotice variant="info">
                   Loaded {tags.length} tag{tags.length === 1 ? "" : "s"} so far. The remaining
                   {totalTags !== null && totalTags > tags.length ? ` ${totalTags - tags.length}` : ""} tag
                   {totalTags !== null && totalTags - tags.length === 1 ? "" : "s"} are still loading in the background.
-                </div>
+                </FeedbackNotice>
               ) : null}
 
               <ListPagination
@@ -403,7 +434,7 @@ export default function TagsPageClient({
                           </Button>
                         </AppPrefetchLink>
                         <Button
-                          onClick={() => void archiveTag(tag._id)}
+                          onClick={() => openArchiveDialog(tag._id)}
                           disabled={deletingTagId === tag._id}
                           variant="destructive"
                           size="sm"
@@ -420,6 +451,33 @@ export default function TagsPageClient({
           )}
         </CardContent>
       </Card>
-    </div>
+
+      <AlertDialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive tag?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will archive
+              <strong className="mx-1">
+                &ldquo;{tagToArchive?.name || "this tag"}&rdquo;
+              </strong>
+              and remove it from the active library.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(deletingTagId)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void confirmArchiveTag()}
+              disabled={!tagToArchiveId || Boolean(deletingTagId)}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deletingTagId === tagToArchiveId ? <Spinner /> : "Archive Tag"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </PageShell>
   );
 }

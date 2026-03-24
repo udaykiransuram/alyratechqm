@@ -32,6 +32,7 @@ export default async function CreateSubjectPage() {
             ? error.message
             : "Failed to load subject setup data."
         }
+        initialMessageVariant="error"
       />
     );
   }

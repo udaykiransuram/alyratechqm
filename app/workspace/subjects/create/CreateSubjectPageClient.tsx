@@ -5,26 +5,33 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { MultiSelectTags, type TagItem, type TagType } from "@/components/ui/multi-select-tags";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import FeedbackNotice, {
+  type FeedbackNoticeVariant,
+} from "@/components/ui/feedback-notice";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { fetchApiJson } from "@/lib/client/api";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 
 type CreateSubjectPageClientProps = {
   initialAvailableTags: TagItem[];
   initialTagTypes: TagType[];
   initialMessage?: string | null;
+  initialMessageVariant?: FeedbackNoticeVariant;
 };
 
 export default function CreateSubjectPageClient({
   initialAvailableTags,
   initialTagTypes,
   initialMessage = null,
+  initialMessageVariant = "info",
 }: CreateSubjectPageClientProps) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -33,43 +40,42 @@ export default function CreateSubjectPageClient({
   const [allAvailableTags, setAllAvailableTags] = useState<TagItem[]>(initialAvailableTags);
   const [selectedTags, setSelectedTags] = useState<TagItem[]>([]);
   const [message, setMessage] = useState<string | null>(initialMessage);
+  const [messageVariant, setMessageVariant] =
+    useState<FeedbackNoticeVariant>(initialMessageVariant);
 
   const { toast } = useToast();
   const router = useRouter();
 
+  const handleBackNavigation = useCallback(() => {
+    announceNavigationStart("/workspace/subjects");
+    router.push("/workspace/subjects");
+  }, [router]);
+
   const handleCreateNewTag = useCallback(
     async (tagName: string, tagType: string): Promise<TagItem | null> => {
       try {
-        const response = await fetch("/api/tags", {
+        const data = await fetchApiJson<{ tag: TagItem }>("/api/tags", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: tagName, type: tagType }),
+          fallbackMessage: `Could not create tag "${tagName}".`,
         });
-        const data = await response.json();
-        if (data.success) {
-          toast({
-            title: "Tag Created",
-            description: `"${data.tag.name}" (${data.tag.type.name}) added.`,
-          });
-          setAllAvailableTags((currentTags) => {
-            if (!currentTags.some((tag) => tag._id === data.tag._id)) {
-              return [...currentTags, data.tag];
-            }
-            return currentTags;
-          });
-          return data.tag;
-        }
 
         toast({
-          title: "Creation Failed",
-          description: data.message || `Could not create tag "${tagName}".`,
-          variant: "destructive",
+          title: "Tag Created",
+          description: `"${data.tag.name}" (${data.tag.type.name}) added.`,
         });
-        return null;
-      } catch {
+        setAllAvailableTags((currentTags) => {
+          if (!currentTags.some((tag) => tag._id === data.tag._id)) {
+            return [...currentTags, data.tag];
+          }
+          return currentTags;
+        });
+        return data.tag;
+      } catch (error: any) {
         toast({
-          title: "Network Error",
-          description: `Failed to create tag "${tagName}" due to a network issue.`,
+          title: "Creation Failed",
+          description: error?.message || `Could not create tag "${tagName}".`,
           variant: "destructive",
         });
         return null;
@@ -99,21 +105,19 @@ export default function CreateSubjectPageClient({
     };
 
     try {
-      const response = await fetch("/api/subjects", {
+      await fetchApiJson("/api/subjects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        fallbackMessage: "Failed to create subject.",
       });
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.message || "Failed to create subject.");
-      }
 
       setName("");
       setCode("");
       setDescription("");
       setSelectedTags([]);
-      setMessage("Subject created successfully.");
+      setMessage("Subject created successfully. Redirecting to the subject library.");
+      setMessageVariant("success");
       toast({
         title: "Success",
         description: "Subject created successfully. Redirecting…",
@@ -122,6 +126,7 @@ export default function CreateSubjectPageClient({
       router.push("/workspace/subjects");
     } catch (error: any) {
       setMessage(error?.message || "Failed to create subject.");
+      setMessageVariant("error");
       toast({
         title: "Error",
         description: error?.message || "Network error when creating subject.",
@@ -132,13 +137,8 @@ export default function CreateSubjectPageClient({
     }
   };
 
-  const messageClassName =
-    message?.toLowerCase().includes("error") || message?.toLowerCase().includes("failed")
-      ? "app-feedback app-feedback-error"
-      : "app-feedback app-feedback-success";
-
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+    <PageShell width="narrow">
       <PageHero
         eyebrow="Curriculum"
         title="Create Subject"
@@ -148,10 +148,7 @@ export default function CreateSubjectPageClient({
             type="button"
             variant="outline"
             className="gap-2"
-            onClick={() => {
-              announceNavigationStart("/workspace/subjects");
-              router.push("/workspace/subjects");
-            }}
+            onClick={handleBackNavigation}
             disabled={isCreatingSubject}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -162,6 +159,7 @@ export default function CreateSubjectPageClient({
           <>
             <span className="app-meta-chip">Tag-ready</span>
             <span className="app-meta-chip">Subject-first setup</span>
+            <span className="app-meta-chip">Inline tag creation</span>
           </>
         }
         stats={[
@@ -175,10 +173,17 @@ export default function CreateSubjectPageClient({
             value: String(selectedTags.length),
             meta: "Linked tags help question filtering and downstream paper assembly.",
           },
+          {
+            label: "Create status",
+            value: isCreatingSubject ? "Saving" : "Ready",
+            meta: "Create a subject and connect it to tags without leaving this screen.",
+          },
         ]}
       />
 
-      {message ? <div className={messageClassName}>{message}</div> : null}
+      {message ? (
+        <FeedbackNotice variant={messageVariant}>{message}</FeedbackNotice>
+      ) : null}
 
       <div className="app-editor-grid">
         <div className="app-editor-main">
@@ -251,6 +256,7 @@ export default function CreateSubjectPageClient({
                   onCreateNewTag={handleCreateNewTag}
                   availableTagTypes={initialTagTypes}
                   isLoading={isCreatingSubject}
+                  disabled={isCreatingSubject}
                 />
               </div>
 
@@ -259,10 +265,7 @@ export default function CreateSubjectPageClient({
                   type="button"
                   variant="outline"
                   className="sm:min-w-[140px]"
-                  onClick={() => {
-                    announceNavigationStart("/workspace/subjects");
-                    router.push("/workspace/subjects");
-                  }}
+                  onClick={handleBackNavigation}
                   disabled={isCreatingSubject}
                 >
                   Cancel
@@ -280,6 +283,6 @@ export default function CreateSubjectPageClient({
           </Card>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }
