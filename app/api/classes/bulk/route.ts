@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { buildArchiveFilter, buildRestoreUpdate } from "@/lib/archive";
+import { buildRestoreUpdate } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
