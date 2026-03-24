@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { appendBenchmarkSheetsToWorkbook } from "@/lib/analytics/benchmarkExport";
+import { requireTenantSession } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -28,17 +29,6 @@ const RESERVED_KEYS = new Set([
   "answerIndexes",
   "options",
 ]);
-
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
-    .toString()
-    .trim();
-}
 
 function sanitizeFilePart(value: string) {
   return String(value || "")
@@ -99,13 +89,13 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ paperId: string }> },
 ) {
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) {
+    return auth.response;
   }
+  const schoolKey = auth.schoolKey;
   const { paperId } = await params;
 
   try {
@@ -144,7 +134,17 @@ export async function GET(
       rawBenchmarkDistractorSortBy === "sections_affected"
         ? rawBenchmarkDistractorSortBy
         : "peak_selected";
-    const sharedHeaders = { "x-school-key": schoolKey };
+    const sharedHeaders: Record<string, string> = {
+      "x-school-key": schoolKey,
+    };
+    const requestCookie = req.headers.get("cookie");
+    if (requestCookie) {
+      sharedHeaders.cookie = requestCookie;
+    }
+    const requestAuthorization = req.headers.get("authorization");
+    if (requestAuthorization) {
+      sharedHeaders.authorization = requestAuthorization;
+    }
 
     const groupFieldsUrl = new URL(
       `/api/analytics/class-tag-report/${encodeURIComponent(paperId)}`,

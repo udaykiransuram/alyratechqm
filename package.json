@@ -18,8 +18,13 @@
     "predev": "node scripts/build-tenant-indexes.cjs || echo \"[predev] Skipping index build (DB unreachable)\"",
     "test:e2e": "playwright test -c local-tests/playwright.config.ts",
     "test:e2e:smoke": "playwright test -c local-tests/playwright.config.ts local-tests/tests/e2e/auth-smoke.spec.ts --project=chromium-desktop",
+    "test:e2e:online-integration": "playwright test -c playwright.online-integration.config.ts tests/e2e/student-tests-integration.spec.ts --project=chromium-desktop --workers=1",
     "test:e2e:headed": "playwright test -c local-tests/playwright.config.ts --headed",
     "test:e2e:ui": "playwright test -c local-tests/playwright.config.ts --ui",
+    "stress:student-tests": "node scripts/stress-student-exam.mjs",
+    "gate:student-tests:seed": "TS_NODE_TRANSPILE_ONLY=1 node --env-file-if-exists=.env --env-file-if-exists=.env.local --loader ts-node/esm --loader ./scripts/alias-loader.mjs scripts/seed-student-exam-readiness.ts",
+    "gate:student-tests:load": "TS_NODE_TRANSPILE_ONLY=1 node --env-file-if-exists=.env --env-file-if-exists=.env.local --loader ts-node/esm --loader ./scripts/alias-loader.mjs scripts/run-student-exam-load-gate.ts",
+    "preflight:online-test": "TS_NODE_TRANSPILE_ONLY=1 node --env-file-if-exists=.env --env-file-if-exists=.env.local --loader ts-node/esm --loader ./scripts/alias-loader.mjs scripts/run-online-test-preflight.ts",
     "test:seed": "ts-node scripts/seed-test-data.ts",
     "migrate:class-sections": "ts-node --esm scripts/migrate-class-sections.ts",
     "smoke:upload-benchmark": "node scripts/smoke-upload-benchmark.mjs"

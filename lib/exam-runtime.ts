@@ -32,6 +32,62 @@ import {
 type ExamSnapshotStatus = "active" | "superseded" | "disabled";
 type ExamAttemptStatus = "in_progress" | "submitted" | "auto_submitted";
 
+export type ExamRuntimeErrorCode =
+  | "EXAM_RUNTIME_UNAVAILABLE"
+  | "EXAM_RUNTIME_INTERNAL_ERROR"
+  | "STUDENT_NOT_FOUND"
+  | "ONLINE_TEST_NOT_FOUND"
+  | "ONLINE_TEST_SNAPSHOT_NOT_FOUND"
+  | "ONLINE_TEST_UNSUPPORTED"
+  | "ONLINE_TEST_NOT_ASSIGNED"
+  | "ONLINE_TEST_NOT_OPEN_YET"
+  | "ONLINE_TEST_CLOSED"
+  | "ONLINE_TEST_SNAPSHOT_NOT_READY"
+  | "ATTEMPT_NOT_STARTED"
+  | "ATTEMPT_ALREADY_SUBMITTED"
+  | "ATTEMPT_LOCKED"
+  | "ATTEMPT_SUBMIT_FAILED"
+  | "ATTEMPT_STATE_CONFLICT"
+  | "ATTEMPT_SAVE_RATE_LIMITED"
+  | "INVALID_ANSWERS_PAYLOAD";
+
+type ExamRuntimeErrorShape = {
+  success: false;
+  message: string;
+  code: string;
+  retryable: boolean;
+  httpStatus: number;
+  details?: unknown;
+};
+
+export class ExamRuntimeError extends Error {
+  code: string;
+  httpStatus: number;
+  retryable: boolean;
+  details?: unknown;
+
+  constructor(params: {
+    message: string;
+    code: ExamRuntimeErrorCode | string;
+    httpStatus: number;
+    retryable?: boolean;
+    details?: unknown;
+    cause?: unknown;
+  }) {
+    super(String(params.message || "Exam runtime request failed."));
+    this.name = "ExamRuntimeError";
+    this.code = String(params.code || "EXAM_RUNTIME_INTERNAL_ERROR");
+    this.httpStatus = Number.isInteger(params.httpStatus)
+      ? Number(params.httpStatus)
+      : 500;
+    this.retryable = Boolean(params.retryable);
+    this.details = params.details;
+    if (typeof params.cause !== "undefined") {
+      (this as Error & { cause?: unknown }).cause = params.cause;
+    }
+  }
+}
+
 type ExamPaperSnapshot = {
   id: string;
   schoolKey: string;
@@ -153,20 +209,89 @@ const ATTEMPT_STATUS_ORDER: Record<string, number> = {
   expired: 5,
 };
 
-const EXAM_RUNTIME_ERROR_STATUS_MAP: Record<string, number> = {
-  "Student profile not found.": 404,
-  "Online test not found.": 404,
-  "Online test snapshot not found.": 404,
-  "This paper cannot be delivered online because it contains unsupported question types.": 400,
-  "You are not assigned to this online test.": 403,
-  "This online test is not open yet.": 403,
-  "This online test is closed.": 403,
-  "Online test snapshot is not ready yet.": 409,
-  "Start the test before saving answers.": 409,
-  "Start the test before submitting it.": 409,
-  "This attempt has already been submitted.": 409,
-  "Another test update is already in progress. Please retry.": 409,
-  "Too many save requests were sent at once. Please wait a few seconds and try again.": 429,
+const EXAM_RUNTIME_ERROR_META_BY_MESSAGE: Record<
+  string,
+  {
+    code: ExamRuntimeErrorCode;
+    httpStatus: number;
+    retryable: boolean;
+  }
+> = {
+  "Student profile not found.": {
+    code: "STUDENT_NOT_FOUND",
+    httpStatus: 404,
+    retryable: false,
+  },
+  "Online test not found.": {
+    code: "ONLINE_TEST_NOT_FOUND",
+    httpStatus: 404,
+    retryable: false,
+  },
+  "Online test snapshot not found.": {
+    code: "ONLINE_TEST_SNAPSHOT_NOT_FOUND",
+    httpStatus: 404,
+    retryable: false,
+  },
+  "This paper cannot be delivered online because it contains unsupported question types.": {
+    code: "ONLINE_TEST_UNSUPPORTED",
+    httpStatus: 400,
+    retryable: false,
+  },
+  "You are not assigned to this online test.": {
+    code: "ONLINE_TEST_NOT_ASSIGNED",
+    httpStatus: 403,
+    retryable: false,
+  },
+  "This online test is not open yet.": {
+    code: "ONLINE_TEST_NOT_OPEN_YET",
+    httpStatus: 403,
+    retryable: false,
+  },
+  "This online test is closed.": {
+    code: "ONLINE_TEST_CLOSED",
+    httpStatus: 403,
+    retryable: false,
+  },
+  "Online test snapshot is not ready yet.": {
+    code: "ONLINE_TEST_SNAPSHOT_NOT_READY",
+    httpStatus: 409,
+    retryable: true,
+  },
+  "Start the test before saving answers.": {
+    code: "ATTEMPT_NOT_STARTED",
+    httpStatus: 409,
+    retryable: false,
+  },
+  "Start the test before submitting it.": {
+    code: "ATTEMPT_NOT_STARTED",
+    httpStatus: 409,
+    retryable: false,
+  },
+  "This attempt has already been submitted.": {
+    code: "ATTEMPT_ALREADY_SUBMITTED",
+    httpStatus: 409,
+    retryable: false,
+  },
+  "Another test update is already in progress. Please retry.": {
+    code: "ATTEMPT_LOCKED",
+    httpStatus: 409,
+    retryable: true,
+  },
+  "Too many save requests were sent at once. Please wait a few seconds and try again.": {
+    code: "ATTEMPT_SAVE_RATE_LIMITED",
+    httpStatus: 429,
+    retryable: true,
+  },
+  "This attempt could not be submitted.": {
+    code: "ATTEMPT_SUBMIT_FAILED",
+    httpStatus: 409,
+    retryable: false,
+  },
+  "Exam runtime database is not configured.": {
+    code: "EXAM_RUNTIME_UNAVAILABLE",
+    httpStatus: 503,
+    retryable: true,
+  },
 };
 
 const UUID_PATTERN =
@@ -262,6 +387,75 @@ const EXAM_RUNTIME_DATABASE_URL = String(
 let examRuntimePoolPromise: Promise<ExamRuntimePool | null> | null = null;
 let examRuntimeSchemaPromise: Promise<boolean> | null = null;
 let examRuntimeDriverErrorLogged = false;
+
+function toExamRuntimeError(
+  error: unknown,
+  fallbackMessage = "Exam runtime request failed.",
+): ExamRuntimeError {
+  if (error instanceof ExamRuntimeError) {
+    return error;
+  }
+
+  const message = String(
+    (error as { message?: unknown } | null)?.message || fallbackMessage,
+  ).trim() || fallbackMessage;
+
+  if (message in EXAM_RUNTIME_ERROR_META_BY_MESSAGE) {
+    const meta = EXAM_RUNTIME_ERROR_META_BY_MESSAGE[message];
+    return new ExamRuntimeError({
+      message,
+      code: meta.code,
+      httpStatus: meta.httpStatus,
+      retryable: meta.retryable,
+      cause: error,
+    });
+  }
+
+  if (message.startsWith("Section ") || message.startsWith("Invalid ")) {
+    return new ExamRuntimeError({
+      message,
+      code: "INVALID_ANSWERS_PAYLOAD",
+      httpStatus: 400,
+      retryable: false,
+      cause: error,
+    });
+  }
+
+  return new ExamRuntimeError({
+    message,
+    code: "EXAM_RUNTIME_INTERNAL_ERROR",
+    httpStatus: 500,
+    retryable: true,
+    cause: error,
+  });
+}
+
+function throwExamRuntimeError(params: {
+  message: string;
+  code: ExamRuntimeErrorCode | string;
+  httpStatus: number;
+  retryable?: boolean;
+  details?: unknown;
+}): never {
+  throw new ExamRuntimeError(params);
+}
+
+export function buildExamRuntimeErrorPayload(
+  error: unknown,
+  fallbackMessage = "Exam runtime request failed.",
+): ExamRuntimeErrorShape {
+  const runtimeError = toExamRuntimeError(error, fallbackMessage);
+  return {
+    success: false,
+    message: runtimeError.message,
+    code: runtimeError.code,
+    retryable: runtimeError.retryable,
+    httpStatus: runtimeError.httpStatus,
+    ...(typeof runtimeError.details !== "undefined"
+      ? { details: runtimeError.details }
+      : {}),
+  };
+}
 
 function toSerializableValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -370,7 +564,12 @@ async function queryExamRuntime<Row = Record<string, unknown>>(
   const ready = await ensureExamRuntimeSchema();
   const pool = await loadExamRuntimePool();
   if (!ready || !pool) {
-    throw new Error("Exam runtime database is not configured.");
+    throwExamRuntimeError({
+      message: "Exam runtime database is not configured.",
+      code: "EXAM_RUNTIME_UNAVAILABLE",
+      httpStatus: 503,
+      retryable: true,
+    });
   }
 
   return pool.query<Row>(text, params);
@@ -382,7 +581,12 @@ async function withExamRuntimeTransaction<T>(
   const ready = await ensureExamRuntimeSchema();
   const pool = await loadExamRuntimePool();
   if (!ready || !pool) {
-    throw new Error("Exam runtime database is not configured.");
+    throwExamRuntimeError({
+      message: "Exam runtime database is not configured.",
+      code: "EXAM_RUNTIME_UNAVAILABLE",
+      httpStatus: 503,
+      retryable: true,
+    });
   }
 
   const client = await pool.connect();
@@ -939,6 +1143,28 @@ function getAttemptRemainingTimeMs(attempt: ExamAttempt | null, now = new Date()
   }
 
   return Math.max(0, deadlineMs - now.getTime());
+}
+
+function parseTimestampMs(value: unknown) {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = new Date(String(value)).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function buildRuntimeSectionAnswersSignature(
+  sectionAnswers: unknown,
+  gradingPaper: any,
+) {
+  const normalized = validateStudentSectionAnswers(
+    sectionAnswers ?? [],
+    gradingPaper,
+    { allowEmpty: true },
+  );
+
+  return JSON.stringify(normalized.ok ? normalized.sectionAnswers : []);
 }
 
 async function replaceAttemptAnswerRows(
@@ -1545,7 +1771,12 @@ async function finalizeAttemptFromRows(params: {
     ));
 
   if (!resolvedAttempt) {
-    throw new Error("This attempt could not be submitted.");
+    throwExamRuntimeError({
+      message: "This attempt could not be submitted.",
+      code: "ATTEMPT_SUBMIT_FAILED",
+      httpStatus: 409,
+      retryable: false,
+    });
   }
 
   const resolvedRows = await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]);
@@ -1620,7 +1851,12 @@ async function withAttemptLock<T>(
   );
 
   if (claimed === false) {
-    throw new Error("Another test update is already in progress. Please retry.");
+    throwExamRuntimeError({
+      message: "Another test update is already in progress. Please retry.",
+      code: "ATTEMPT_LOCKED",
+      httpStatus: 409,
+      retryable: true,
+    });
   }
 
   try {
@@ -1682,7 +1918,12 @@ export async function listStudentExamRuntimeTests(
     useCache: true,
   });
   if (!student) {
-    throw new Error("Student profile not found.");
+    throwExamRuntimeError({
+      message: "Student profile not found.",
+      code: "STUDENT_NOT_FOUND",
+      httpStatus: 404,
+      retryable: false,
+    });
   }
 
   const studentClassId = String(student.class?._id || student.class || "").trim();
@@ -1864,7 +2105,12 @@ export async function getStudentExamRuntimeDetail(
   if (attempt) {
     const snapshot = await getExamSnapshotById(attempt.snapshotId);
     if (!snapshot) {
-      throw new Error("Online test snapshot not found.");
+      throwExamRuntimeError({
+        message: "Online test snapshot not found.",
+        code: "ONLINE_TEST_SNAPSHOT_NOT_FOUND",
+        httpStatus: 404,
+        retryable: false,
+      });
     }
 
     const current = await autoSubmitExpiredAttemptIfNeeded({
@@ -1891,13 +2137,22 @@ export async function getStudentExamRuntimeDetail(
 
   const paper = await loadOnlinePaperById(models, schoolKey, paperId);
   if (!paper) {
-    throw new Error("Online test not found.");
+    throwExamRuntimeError({
+      message: "Online test not found.",
+      code: "ONLINE_TEST_NOT_FOUND",
+      httpStatus: 404,
+      retryable: false,
+    });
   }
 
   if (!paperSupportsOnlineDelivery(paper)) {
-    throw new Error(
-      "This paper cannot be delivered online because it contains unsupported question types.",
-    );
+    throwExamRuntimeError({
+      message:
+        "This paper cannot be delivered online because it contains unsupported question types.",
+      code: "ONLINE_TEST_UNSUPPORTED",
+      httpStatus: 400,
+      retryable: false,
+    });
   }
 
   const student = await loadStudentUser(UserModel, studentId, {
@@ -1905,11 +2160,21 @@ export async function getStudentExamRuntimeDetail(
     useCache: true,
   });
   if (!student) {
-    throw new Error("Student profile not found.");
+    throwExamRuntimeError({
+      message: "Student profile not found.",
+      code: "STUDENT_NOT_FOUND",
+      httpStatus: 404,
+      retryable: false,
+    });
   }
 
   if (!isStudentEligibleForPaper(paper, student)) {
-    throw new Error("You are not assigned to this online test.");
+    throwExamRuntimeError({
+      message: "You are not assigned to this online test.",
+      code: "ONLINE_TEST_NOT_ASSIGNED",
+      httpStatus: 403,
+      retryable: false,
+    });
   }
 
   const snapshot =
@@ -1941,7 +2206,12 @@ export async function startStudentExamRuntimeAttempt(
     if (attempt) {
       const snapshot = await getExamSnapshotById(attempt.snapshotId);
       if (!snapshot) {
-        throw new Error("Online test snapshot not found.");
+        throwExamRuntimeError({
+          message: "Online test snapshot not found.",
+          code: "ONLINE_TEST_SNAPSHOT_NOT_FOUND",
+          httpStatus: 404,
+          retryable: false,
+        });
       }
 
       const current = await autoSubmitExpiredAttemptIfNeeded({
@@ -1969,13 +2239,22 @@ export async function startStudentExamRuntimeAttempt(
     const { User: UserModel } = models;
     const paper = await loadOnlinePaperById(models, schoolKey, paperId);
     if (!paper) {
-      throw new Error("Online test not found.");
+      throwExamRuntimeError({
+        message: "Online test not found.",
+        code: "ONLINE_TEST_NOT_FOUND",
+        httpStatus: 404,
+        retryable: false,
+      });
     }
 
     if (!paperSupportsOnlineDelivery(paper)) {
-      throw new Error(
-        "This paper cannot be delivered online because it contains unsupported question types.",
-      );
+      throwExamRuntimeError({
+        message:
+          "This paper cannot be delivered online because it contains unsupported question types.",
+        code: "ONLINE_TEST_UNSUPPORTED",
+        httpStatus: 400,
+        retryable: false,
+      });
     }
 
     const student = await loadStudentUser(UserModel, studentId, {
@@ -1983,27 +2262,52 @@ export async function startStudentExamRuntimeAttempt(
       useCache: true,
     });
     if (!student) {
-      throw new Error("Student profile not found.");
+      throwExamRuntimeError({
+        message: "Student profile not found.",
+        code: "STUDENT_NOT_FOUND",
+        httpStatus: 404,
+        retryable: false,
+      });
     }
 
     if (!isStudentEligibleForPaper(paper, student)) {
-      throw new Error("You are not assigned to this online test.");
+      throwExamRuntimeError({
+        message: "You are not assigned to this online test.",
+        code: "ONLINE_TEST_NOT_ASSIGNED",
+        httpStatus: 403,
+        retryable: false,
+      });
     }
 
     const windowStart = getPaperWindowStart(paper);
     const windowEnd = getPaperWindowEnd(paper);
 
     if (windowStart && now.getTime() < windowStart.getTime()) {
-      throw new Error("This online test is not open yet.");
+      throwExamRuntimeError({
+        message: "This online test is not open yet.",
+        code: "ONLINE_TEST_NOT_OPEN_YET",
+        httpStatus: 403,
+        retryable: false,
+      });
     }
 
     if (windowEnd && now.getTime() > windowEnd.getTime()) {
-      throw new Error("This online test is closed.");
+      throwExamRuntimeError({
+        message: "This online test is closed.",
+        code: "ONLINE_TEST_CLOSED",
+        httpStatus: 403,
+        retryable: false,
+      });
     }
 
     const snapshot = await ensureActiveExamSnapshotForPaperId(schoolKey, paperId);
     if (!snapshot) {
-      throw new Error("Online test snapshot is not ready yet.");
+      throwExamRuntimeError({
+        message: "Online test snapshot is not ready yet.",
+        code: "ONLINE_TEST_SNAPSHOT_NOT_READY",
+        httpStatus: 409,
+        retryable: true,
+      });
     }
 
     const deadlineMs = getPaperWindowEnd(snapshot.paperJson)
@@ -2103,6 +2407,7 @@ export async function saveStudentExamRuntimeAttempt(params: {
   studentId: string;
   paperId: string;
   sectionAnswers: unknown;
+  baseLastSavedAt?: string | null;
 }) {
   return withAttemptLock(
     params.schoolKey,
@@ -2116,9 +2421,13 @@ export async function saveStudentExamRuntimeAttempt(params: {
         params.paperId,
       );
       if (rateLimit?.limited) {
-        throw new Error(
-          "Too many save requests were sent at once. Please wait a few seconds and try again.",
-        );
+        throwExamRuntimeError({
+          message:
+            "Too many save requests were sent at once. Please wait a few seconds and try again.",
+          code: "ATTEMPT_SAVE_RATE_LIMITED",
+          httpStatus: 429,
+          retryable: true,
+        });
       }
 
       let attempt = await getExamAttemptByPaperId(
@@ -2128,12 +2437,22 @@ export async function saveStudentExamRuntimeAttempt(params: {
       );
 
       if (!attempt) {
-        throw new Error("Start the test before saving answers.");
+        throwExamRuntimeError({
+          message: "Start the test before saving answers.",
+          code: "ATTEMPT_NOT_STARTED",
+          httpStatus: 409,
+          retryable: false,
+        });
       }
 
       const snapshot = await getExamSnapshotById(attempt.snapshotId);
       if (!snapshot) {
-        throw new Error("Online test snapshot not found.");
+        throwExamRuntimeError({
+          message: "Online test snapshot not found.",
+          code: "ONLINE_TEST_SNAPSHOT_NOT_FOUND",
+          httpStatus: 404,
+          retryable: false,
+        });
       }
 
       const current = await autoSubmitExpiredAttemptIfNeeded({
@@ -2145,7 +2464,20 @@ export async function saveStudentExamRuntimeAttempt(params: {
       attempt = current.attempt;
 
       if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
-        throw new Error("This attempt has already been submitted.");
+        throwExamRuntimeError({
+          message: "This attempt has already been submitted.",
+          code: "ATTEMPT_ALREADY_SUBMITTED",
+          httpStatus: 409,
+          retryable: false,
+          details: {
+            attempt: serializeRuntimeAttempt(
+              attempt,
+              snapshot.paperJson,
+              current.answerRows,
+            ),
+            serverLastSavedAt: attempt.lastSavedAt,
+          },
+        });
       }
 
       const normalized = validateStudentSectionAnswers(
@@ -2155,7 +2487,57 @@ export async function saveStudentExamRuntimeAttempt(params: {
       );
 
       if (!normalized.ok) {
-        throw new Error(normalized.issues[0] || "Invalid answers payload.");
+        throwExamRuntimeError({
+          message: normalized.issues[0] || "Invalid answers payload.",
+          code: "INVALID_ANSWERS_PAYLOAD",
+          httpStatus: 400,
+          retryable: false,
+          details: { issues: normalized.issues },
+        });
+      }
+
+      const baseLastSavedAtMs = parseTimestampMs(params.baseLastSavedAt);
+      const serverLastSavedAtMs = parseTimestampMs(attempt.lastSavedAt);
+      if (
+        baseLastSavedAtMs !== null &&
+        serverLastSavedAtMs !== null &&
+        baseLastSavedAtMs + 1000 < serverLastSavedAtMs
+      ) {
+        const storedAnswerRows =
+          current.answerRows.length > 0
+            ? current.answerRows
+            : await listExamAnswerRowsByAttemptIds([attempt.id]);
+        const serverSectionAnswers = buildStoredSectionAnswers(
+          snapshot.paperJson,
+          storedAnswerRows,
+        );
+        const incomingSignature = buildRuntimeSectionAnswersSignature(
+          normalized.sectionAnswers,
+          snapshot.gradingJson,
+        );
+        const serverSignature = buildRuntimeSectionAnswersSignature(
+          serverSectionAnswers,
+          snapshot.gradingJson,
+        );
+
+        if (incomingSignature !== serverSignature) {
+          throwExamRuntimeError({
+            message:
+              "This test was updated from another session. Reload to continue with the latest saved answers.",
+            code: "ATTEMPT_STATE_CONFLICT",
+            httpStatus: 409,
+            retryable: false,
+            details: {
+              attempt: serializeRuntimeAttempt(
+                attempt,
+                snapshot.paperJson,
+                storedAnswerRows,
+                { sectionAnswers: serverSectionAnswers as any },
+              ),
+              serverLastSavedAt: attempt.lastSavedAt,
+            },
+          });
+        }
       }
 
       const storedRows = flattenSectionAnswersForStorage(
@@ -2183,7 +2565,31 @@ export async function saveStudentExamRuntimeAttempt(params: {
       });
 
       if (!nextAttempt) {
-        throw new Error("This attempt has already been submitted.");
+        const resolvedAttempt = await getExamAttemptByPaperId(
+          params.schoolKey,
+          params.studentId,
+          params.paperId,
+        );
+        const details =
+          resolvedAttempt &&
+          (resolvedAttempt.status === "submitted" ||
+            resolvedAttempt.status === "auto_submitted")
+            ? {
+                attempt: serializeRuntimeAttempt(
+                  resolvedAttempt,
+                  snapshot.paperJson,
+                  await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]),
+                ),
+                serverLastSavedAt: resolvedAttempt.lastSavedAt,
+              }
+            : undefined;
+        throwExamRuntimeError({
+          message: "This attempt has already been submitted.",
+          code: "ATTEMPT_ALREADY_SUBMITTED",
+          httpStatus: 409,
+          retryable: false,
+          details,
+        });
       }
 
       return {
@@ -2208,6 +2614,7 @@ export async function submitStudentExamRuntimeAttempt(params: {
   studentId: string;
   paperId: string;
   sectionAnswers?: unknown;
+  baseLastSavedAt?: string | null;
 }) {
   return withAttemptLock(
     params.schoolKey,
@@ -2222,12 +2629,22 @@ export async function submitStudentExamRuntimeAttempt(params: {
       );
 
       if (!attempt) {
-        throw new Error("Start the test before submitting it.");
+        throwExamRuntimeError({
+          message: "Start the test before submitting it.",
+          code: "ATTEMPT_NOT_STARTED",
+          httpStatus: 409,
+          retryable: false,
+        });
       }
 
       const snapshot = await getExamSnapshotById(attempt.snapshotId);
       if (!snapshot) {
-        throw new Error("Online test snapshot not found.");
+        throwExamRuntimeError({
+          message: "Online test snapshot not found.",
+          code: "ONLINE_TEST_SNAPSHOT_NOT_FOUND",
+          httpStatus: 404,
+          retryable: false,
+        });
       }
 
       let existingAnswerRows: ExamAnswerRow[] | null = null;
@@ -2261,7 +2678,54 @@ export async function submitStudentExamRuntimeAttempt(params: {
       );
 
       if (!normalized.ok) {
-        throw new Error(normalized.issues[0] || "Invalid answers payload.");
+        throwExamRuntimeError({
+          message: normalized.issues[0] || "Invalid answers payload.",
+          code: "INVALID_ANSWERS_PAYLOAD",
+          httpStatus: 400,
+          retryable: false,
+          details: { issues: normalized.issues },
+        });
+      }
+
+      const baseLastSavedAtMs = parseTimestampMs(params.baseLastSavedAt);
+      const serverLastSavedAtMs = parseTimestampMs(attempt.lastSavedAt);
+      if (
+        baseLastSavedAtMs !== null &&
+        serverLastSavedAtMs !== null &&
+        baseLastSavedAtMs + 1000 < serverLastSavedAtMs
+      ) {
+        const storedAnswerRows = await loadExistingAnswerRows();
+        const serverSectionAnswers = buildStoredSectionAnswers(
+          snapshot.paperJson,
+          storedAnswerRows,
+        );
+        const incomingSignature = buildRuntimeSectionAnswersSignature(
+          normalized.sectionAnswers,
+          snapshot.gradingJson,
+        );
+        const serverSignature = buildRuntimeSectionAnswersSignature(
+          serverSectionAnswers,
+          snapshot.gradingJson,
+        );
+
+        if (incomingSignature !== serverSignature) {
+          throwExamRuntimeError({
+            message:
+              "This test was updated from another session. Reload to continue with the latest saved answers.",
+            code: "ATTEMPT_STATE_CONFLICT",
+            httpStatus: 409,
+            retryable: false,
+            details: {
+              attempt: serializeRuntimeAttempt(
+                attempt,
+                snapshot.paperJson,
+                storedAnswerRows,
+                { sectionAnswers: serverSectionAnswers as any },
+              ),
+              serverLastSavedAt: attempt.lastSavedAt,
+            },
+          });
+        }
       }
 
       const autoSubmitted =
@@ -2317,7 +2781,12 @@ export async function submitStudentExamRuntimeAttempt(params: {
         ));
 
       if (!resolvedAttempt) {
-        throw new Error("This attempt could not be submitted.");
+        throwExamRuntimeError({
+          message: "This attempt could not be submitted.",
+          code: "ATTEMPT_SUBMIT_FAILED",
+          httpStatus: 409,
+          retryable: false,
+        });
       }
 
       return {
@@ -2336,22 +2805,13 @@ export async function submitStudentExamRuntimeAttempt(params: {
   );
 }
 
-export function resolveExamRuntimeErrorStatus(message: string) {
-  const normalizedMessage = String(message || "").trim();
-  if (!normalizedMessage) {
-    return 500;
-  }
+export function resolveExamRuntimeErrorStatus(error: unknown) {
+  return toExamRuntimeError(error).httpStatus;
+}
 
-  if (normalizedMessage in EXAM_RUNTIME_ERROR_STATUS_MAP) {
-    return EXAM_RUNTIME_ERROR_STATUS_MAP[normalizedMessage];
-  }
-
-  if (
-    normalizedMessage.startsWith("Section ") ||
-    normalizedMessage.startsWith("Invalid ")
-  ) {
-    return 400;
-  }
-
-  return 500;
+export function resolveExamRuntimeError(
+  error: unknown,
+  fallbackMessage = "Exam runtime request failed.",
+) {
+  return toExamRuntimeError(error, fallbackMessage);
 }

@@ -897,7 +897,7 @@ export default function SiteHeader() {
       ? "/auth/signin"
       : "/auth/company-signin";
   const authSwitchLabel =
-    pathname === "/auth/company-signin" ? "School Sign In" : "Company Sign In";
+    pathname === "/auth/company-signin" ? "School Sign In" : "Administrator Sign In";
   const currentSchool = useCurrentSchoolInfo(schoolWorkspaceRoute);
   const activePath = pendingPath || pathname;
 
@@ -1128,7 +1128,7 @@ export default function SiteHeader() {
                     className="app-button-compact"
                   >
                     <AppPrefetchLink href="/auth/company-signin">
-                      Company Sign In
+                      Administrator Sign In
                     </AppPrefetchLink>
                   </Button>
                 </>

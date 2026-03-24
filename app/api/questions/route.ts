@@ -3,21 +3,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { getTenantModels } from '@/lib/db-tenant';
 import { buildArchiveFilter, resolveIncludeArchived } from '@/lib/archive';
+import { requireTenantSession } from '@/lib/api-auth';
 
 export async function GET(req: NextRequest) {
-    await connectDB();
-  const { searchParams } = new URL(req.url);
-  // Resolve tenant (school) key from header, query, or cookie
-  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
-  const schoolFromQuery = new URL(req.url).searchParams.get('school');
-  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
-  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
-  if (!schoolKey || !schoolKey.toString().trim()) {
-    return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
   }
+  const schoolKey = auth.schoolKey;
 
+  await connectDB();
+  const { searchParams } = new URL(req.url);
 
-  // Default to global Question model; switch to tenant model when schoolKey provided
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question','Tag','TagType','Class','Subject']);
 
 
@@ -91,18 +90,17 @@ export async function GET(req: NextRequest) {
 
 // POST a new question (multiple correct answers)
 export async function POST(req: NextRequest) {
-  await connectDB();
-  // Tenant resolution for POST
-  const url = new URL(req.url);
-  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
-  const schoolFromQuery = url.searchParams.get('school');
-  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
-  const schoolKeyPost = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
-  if (!schoolKeyPost || !schoolKeyPost.toString().trim()) {
-    return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
   }
+  const schoolKey = auth.schoolKey;
 
-  const { Question: QuestionModelPost } = await getTenantModels(schoolKeyPost, ['Question','Tag','TagType','Class','Subject']);
+  await connectDB();
+
+  const { Question: QuestionModelPost } = await getTenantModels(schoolKey, ['Question','Tag','TagType','Class','Subject']);
 
 
   try {

@@ -326,7 +326,7 @@ export default function StudentsByClassPage() {
       <PageHero
         eyebrow="People"
         title="Students"
-        description="Browse students by class and section, then update assignments from a consistent school workspace."
+        description="Browse students by class and section, then update assignments from a consistent school setup."
         actions={
           <AppPrefetchLink
             href="/workspace/students/create"

@@ -9,29 +9,20 @@ import {
   resolveIncludeArchived,
 } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
+import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
-    .toString()
-    .trim();
-}
-
 export async function GET(req: NextRequest) {
-  await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) {
+    return auth.response;
   }
+  const schoolKey = auth.schoolKey;
+
+  await connectDB();
 
   try {
     const url = new URL(req.url);
@@ -73,14 +64,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) {
-    return NextResponse.json(
-      { success: false, message: "schoolKey required" },
-      { status: 400 },
-    );
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) {
+    return auth.response;
   }
+  const schoolKey = auth.schoolKey;
+
+  await connectDB();
 
   try {
     const { name, classId, description, isActive } = await req.json();

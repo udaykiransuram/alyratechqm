@@ -232,7 +232,7 @@ export default function ViewQuestionsPage() {
       if (!schoolKey) {
         setClasses([]);
         setAllTags([]);
-        setSetupNotice('Select a school workspace to load filters and questions.');
+        setSetupNotice('Select a school to load filters and questions.');
         return;
       }
 
@@ -317,7 +317,7 @@ export default function ViewQuestionsPage() {
     try {
       const schoolKey = resolveClientSchoolKey();
       if (!schoolKey) {
-        throw new Error('Select a school workspace to browse questions.');
+        throw new Error('Select a school to browse questions.');
       }
 
       const normalizedFilters = normalizeFilters(filters);

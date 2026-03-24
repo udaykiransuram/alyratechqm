@@ -1,18 +1,21 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireTenantSession } from '@/lib/api-auth';
 import { connectDB } from '@/lib/db';
 import { getTenantModels } from '@/lib/db-tenant';
 import '@/models/TagType';
 
 // GET: Fetch all tag types
 export async function GET(req: NextRequest) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const schoolKey = auth.schoolKey;
+
   await connectDB();
-  const url = new URL(req.url);
-  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
-  const schoolFromQuery = url.searchParams.get('school');
-  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
-  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
-  if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
 
   try {
     const { TagType: TagTypeModel } = await getTenantModels(schoolKey, ['TagType']);
@@ -27,13 +30,15 @@ export async function GET(req: NextRequest) {
 
 // POST: Create a new tag type
 export async function POST(req: NextRequest) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const schoolKey = auth.schoolKey;
+
   await connectDB();
-  const url = new URL(req.url);
-  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
-  const schoolFromQuery = url.searchParams.get('school');
-  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
-  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
-  if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
 
   try {
     const { TagType: TagTypeModel } = await getTenantModels(schoolKey, ['TagType']);

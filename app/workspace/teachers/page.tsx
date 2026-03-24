@@ -98,7 +98,7 @@ export default async function TeachersPage({
           {
             label: "Teacher accounts",
             value: String(totalTeachers),
-            meta: "Teachers available across all pages for the current school workspace.",
+            meta: "Teachers available across all pages for the current school.",
           },
           {
             label: "Access model",
@@ -124,7 +124,7 @@ export default async function TeachersPage({
             <div className="space-y-1">
               <CardTitle>Teacher Directory</CardTitle>
               <p className="text-sm leading-6 text-muted-foreground">
-                Review teacher accounts for the active school workspace and open the dedicated detail page when you need the full scope breakdown.
+                Review teacher accounts for the active school and open the dedicated detail page when you need the full scope breakdown.
               </p>
             </div>
             <div className="app-chip-cloud">

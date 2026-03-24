@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
 import {
+  buildExamRuntimeErrorPayload,
   isExamRuntimeEnabled,
-  resolveExamRuntimeErrorStatus,
   submitStudentExamRuntimeAttempt,
 } from "@/lib/exam-runtime";
 import { validateStudentSectionAnswers } from "@/lib/question-paper/grading";
 import { getStudentTestModels, loadOnlinePaperRuntimeById } from "@/lib/student-test-server";
 import {
+  buildSectionAnswersSignature,
   finalizeAttemptAsSubmitted,
   getAttemptDeadlineMs,
   paperSupportsOnlineDelivery,
@@ -19,6 +20,26 @@ export const dynamic = "force-dynamic";
 
 const ATTEMPT_SUBMIT_PROJECTION =
   "paper student startedAt submittedAt status lastSavedAt totalMarksAwarded sectionAnswers";
+
+function testErrorResponse(params: {
+  message: string;
+  status: number;
+  code: string;
+  retryable?: boolean;
+  details?: Record<string, unknown>;
+}) {
+  return NextResponse.json(
+    {
+      success: false,
+      message: params.message,
+      code: params.code,
+      retryable: Boolean(params.retryable),
+      httpStatus: params.status,
+      ...(params.details ? { details: params.details } : {}),
+    },
+    { status: params.status },
+  );
+}
 
 export async function POST(
   req: NextRequest,
@@ -42,6 +63,8 @@ export async function POST(
         studentId,
         paperId,
         sectionAnswers: body?.sectionAnswers,
+        baseLastSavedAt:
+          typeof body?.baseLastSavedAt === "string" ? body.baseLastSavedAt : null,
       });
       return NextResponse.json(result);
     }
@@ -61,57 +84,88 @@ export async function POST(
 
     const paper = paperResult;
     if (!paper) {
-      return NextResponse.json(
-        { success: false, message: "Online test not found." },
-        { status: 404 },
-      );
+      return testErrorResponse({
+        message: "Online test not found.",
+        status: 404,
+        code: "ONLINE_TEST_NOT_FOUND",
+      });
     }
 
     if (!paperSupportsOnlineDelivery(paper)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "This paper cannot be delivered online because it contains unsupported question types.",
-        },
-        { status: 400 },
-      );
+      return testErrorResponse({
+        message:
+          "This paper cannot be delivered online because it contains unsupported question types.",
+        status: 400,
+        code: "ONLINE_TEST_UNSUPPORTED",
+      });
     }
 
     let attempt = attemptResult;
 
     if (!attempt) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Start the test before submitting it.",
-        },
-        { status: 409 },
-      );
+      return testErrorResponse({
+        message: "Start the test before submitting it.",
+        status: 409,
+        code: "ATTEMPT_NOT_STARTED",
+      });
     }
 
     if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
       return NextResponse.json({
         success: true,
         attempt: serializeStudentAttempt(attempt),
+        status: attempt.status,
       });
     }
 
     const body = await req.json().catch(() => ({}));
+    const baseLastSavedAt =
+      typeof body?.baseLastSavedAt === "string" ? body.baseLastSavedAt : null;
     const normalized = validateStudentSectionAnswers(
       body?.sectionAnswers ?? attempt.sectionAnswers ?? [],
       paper,
       { allowEmpty: true },
     );
     if (!normalized.ok) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: normalized.issues[0] || "Invalid answers payload.",
-          issues: normalized.issues,
+      return testErrorResponse({
+        message: normalized.issues[0] || "Invalid answers payload.",
+        status: 400,
+        code: "INVALID_ANSWERS_PAYLOAD",
+        details: { issues: normalized.issues },
+      });
+    }
+
+    const incomingSignature = buildSectionAnswersSignature(
+      normalized.sectionAnswers,
+      paper,
+    );
+    const existingSignature = buildSectionAnswersSignature(
+      attempt.sectionAnswers || [],
+      paper,
+    );
+    const baseLastSavedAtMs = baseLastSavedAt
+      ? new Date(baseLastSavedAt).getTime()
+      : NaN;
+    const serverLastSavedAtMs = attempt?.lastSavedAt
+      ? new Date(attempt.lastSavedAt).getTime()
+      : NaN;
+
+    if (
+      Number.isFinite(baseLastSavedAtMs) &&
+      Number.isFinite(serverLastSavedAtMs) &&
+      baseLastSavedAtMs + 1000 < serverLastSavedAtMs &&
+      incomingSignature !== existingSignature
+    ) {
+      return testErrorResponse({
+        message:
+          "This test was updated from another session. Reload to continue with the latest saved answers.",
+        status: 409,
+        code: "ATTEMPT_STATE_CONFLICT",
+        details: {
+          attempt: serializeStudentAttempt(attempt),
+          serverLastSavedAt: attempt?.lastSavedAt || null,
         },
-        { status: 400 },
-      );
+      });
     }
 
     const deadlineMs = getAttemptDeadlineMs(paper, attempt);
@@ -130,10 +184,11 @@ export async function POST(
     });
 
     if (!attempt) {
-      return NextResponse.json(
-        { success: false, message: "This attempt could not be submitted." },
-        { status: 409 },
-      );
+      return testErrorResponse({
+        message: "This attempt could not be submitted.",
+        status: 409,
+        code: "ATTEMPT_SUBMIT_FAILED",
+      });
     }
 
     return NextResponse.json({
@@ -143,15 +198,21 @@ export async function POST(
     });
   } catch (error: any) {
     if (await isExamRuntimeEnabled()) {
-      const message = error?.message || "Failed to submit test.";
-      return NextResponse.json(
-        { success: false, message },
-        { status: resolveExamRuntimeErrorStatus(message) },
+      const payload = buildExamRuntimeErrorPayload(
+        error,
+        "Failed to submit test.",
       );
+      return NextResponse.json(payload, { status: payload.httpStatus });
     }
 
     return NextResponse.json(
-      { success: false, message: error?.message || "Failed to submit test." },
+      {
+        success: false,
+        message: error?.message || "Failed to submit test.",
+        code: "ATTEMPT_SUBMIT_FAILED",
+        retryable: true,
+        httpStatus: 500,
+      },
       { status: 500 },
     );
   }

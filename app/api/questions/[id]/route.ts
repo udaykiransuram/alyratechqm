@@ -6,24 +6,22 @@ import { getTenantModels } from '@/lib/db-tenant';
 import mongoose from 'mongoose';
 import { buildArchiveFilter, buildArchivedUpdate, resolveIncludeArchived } from '@/lib/archive';
 import { recordTenantAudit } from '@/lib/audit';
-
-function resolveSchoolKey(req: NextRequest){
-  const url = new URL(req.url);
-  const schoolFromHeader = req.headers.get('x-school-key') || req.headers.get('X-School-Key');
-  const schoolFromQuery = url.searchParams.get('school');
-  const schoolFromCookie = req.cookies?.get?.('schoolKey')?.value;
-  const schoolKey = (schoolFromHeader || schoolFromQuery || schoolFromCookie || '').toString().trim();
-  return schoolKey;
-}
+import { requireTenantSession } from '@/lib/api-auth';
 
 // UPDATE a question by ID (supports all types)
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const schoolKey = auth.schoolKey;
+
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   const { id } = await params;
 
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question','Tag','TagType','Class','Subject']);
@@ -121,9 +119,15 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const schoolKey = auth.schoolKey;
+
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   const { id } = await params;
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question']);
 
@@ -160,9 +164,15 @@ export async function DELETE(
 
 // PATCH - Update a question (supports all types)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const schoolKey = auth.schoolKey;
+
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   const { id } = await params;
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question']);
 
@@ -252,9 +262,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ['admin', 'teacher'],
+  });
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const schoolKey = auth.schoolKey;
+
   await connectDB();
-  const schoolKey = resolveSchoolKey(req);
-  if (!schoolKey) return NextResponse.json({ success: false, message: 'schoolKey required' }, { status: 400 });
   const { id } = await params;
   const { Question: QuestionModel } = await getTenantModels(schoolKey, ['Question']);
   try {

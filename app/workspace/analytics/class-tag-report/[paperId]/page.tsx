@@ -217,7 +217,7 @@ export default function ClassTagReportPage({
         )?.label || "Filtered section"
       : "All class sections";
 
-  // Explicit tenant handling
+  // Explicit school handling
   const [schoolKey, setSchoolKey] = useState<string>("");
 
   useEffect(() => {

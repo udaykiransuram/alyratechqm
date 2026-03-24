@@ -13,8 +13,10 @@ import pLimit from "p-limit";
 import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import FeedbackNotice from "@/components/ui/feedback-notice";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
+import { getClientRequestErrorMessage } from "@/lib/client/api";
 import { withSchool, withSchoolHeaders } from "@/lib/client/school";
 
 type AssignedSection = {
@@ -461,6 +463,10 @@ function ExcelStudentResponseUploadPageContent() {
   const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [paperContextError, setPaperContextError] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<{
+    variant: "success" | "error" | "info" | "warning";
+    message: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const workbookValidation = useMemo(
@@ -503,7 +509,7 @@ function ExcelStudentResponseUploadPageContent() {
       );
       const data = await readJsonSafe(response);
       if (!data.success) {
-        throw new Error(data.message || "Failed to load upload history.");
+        throw new Error(data.message || "We couldn't load upload history.");
       }
       setUploadHistory(Array.isArray(data.histories) ? data.histories : []);
     } catch {
@@ -523,7 +529,7 @@ function ExcelStudentResponseUploadPageContent() {
         });
         const data = await readJsonSafe(response);
         if (!data.success || !data.paper) {
-          throw new Error(data.message || "Failed to load paper context.");
+          throw new Error(data.message || "We couldn't load paper details for this upload.");
         }
 
         const paper = data.paper;
@@ -597,7 +603,9 @@ function ExcelStudentResponseUploadPageContent() {
           return nextAssignedSections[0]?._id || "";
         });
       } catch (error: any) {
-        setPaperContextError(error?.message || "Failed to load paper context.");
+        setPaperContextError(
+          error?.message || "We couldn't load paper details for this upload.",
+        );
         setQuestionDefinitions({});
       }
     }
@@ -612,6 +620,7 @@ function ExcelStudentResponseUploadPageContent() {
   const handleFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    setUploadNotice(null);
     setFileName(file.name);
     setResults([]);
     setExcelRows([]);
@@ -632,6 +641,11 @@ function ExcelStudentResponseUploadPageContent() {
         } catch (error) {
           console.error("Failed to read upload workbook", error);
           setExcelRows([]);
+          setUploadNotice({
+            variant: "error",
+            message:
+              "We couldn't read that workbook. Upload a valid Excel file and try again.",
+          });
         }
       })();
     };
@@ -643,6 +657,7 @@ function ExcelStudentResponseUploadPageContent() {
     setExcelRows([]);
     setResults([]);
     setProgress(0);
+    setUploadNotice(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -712,15 +727,22 @@ function ExcelStudentResponseUploadPageContent() {
 
   const handleUpload = async () => {
     if (assignedAcademicSections.length > 0 && !selectedAcademicSectionId) {
-      alert("Select a class section before uploading.");
+      setUploadNotice({
+        variant: "error",
+        message: "Select a class section before uploading.",
+      });
       return;
     }
 
     if (workbookValidation.globalIssues.length > 0) {
-      alert(workbookValidation.globalIssues[0]);
+      setUploadNotice({
+        variant: "error",
+        message: workbookValidation.globalIssues[0],
+      });
       return;
     }
 
+    setUploadNotice(null);
     setLoading(true);
     setProgress(0);
 
@@ -764,7 +786,10 @@ function ExcelStudentResponseUploadPageContent() {
               candidateId: preparedRow.candidateId,
               candidateName: preparedRow.candidateName,
               status: "failed",
-              message: error?.message || "Failed to upload row.",
+              message: getClientRequestErrorMessage(
+                error,
+                "We couldn't upload this row.",
+              ),
               source: "server" as const,
             } satisfies UploadResult;
           }
@@ -784,9 +809,37 @@ function ExcelStudentResponseUploadPageContent() {
     const completedResults = [...validationResults, ...serverResults].sort(
       (left, right) => left.row - right.row,
     );
+    const createdCount = completedResults.filter((result) => result.status === "created").length;
+    const updatedCount = completedResults.filter((result) => result.status === "updated").length;
+    const skippedCount = completedResults.filter((result) => result.status === "skipped").length;
+    const failedCount = completedResults.filter((result) => result.status === "failed").length;
     setResults(completedResults);
     setLoading(false);
     setProgress(100);
+
+    if (completedResults.length === 0) {
+      setUploadNotice({
+        variant: "warning",
+        message: "No valid workbook rows were available to upload.",
+      });
+    } else if (createdCount === 0 && updatedCount === 0 && skippedCount === 0) {
+      setUploadNotice({
+        variant: "error",
+        message: "Upload finished, but no rows were accepted. Review the issues below and try again.",
+      });
+    } else if (failedCount > 0 || skippedCount > 0 || validationResults.length > 0) {
+      setUploadNotice({
+        variant: "warning",
+        message: `Upload finished. ${createdCount} created, ${updatedCount} updated, ${skippedCount} skipped, and ${failedCount} failed. Review the results below.`,
+      });
+    } else {
+      setUploadNotice({
+        variant: "success",
+        message: `Upload completed successfully. ${createdCount + updatedCount} row${
+          createdCount + updatedCount === 1 ? "" : "s"
+        } processed.`,
+      });
+    }
 
     const completedAt = new Date().toISOString();
     try {
@@ -857,11 +910,18 @@ function ExcelStudentResponseUploadPageContent() {
                 </div>
               </div>
               {paperContextError ? (
-                <div className="app-feedback app-feedback-danger mt-3">{paperContextError}</div>
+                <FeedbackNotice variant="error" className="mt-3">
+                  {paperContextError}
+                </FeedbackNotice>
               ) : null}
             </div>
           </div>
           <div className="analytics-card-body space-y-6">
+            {uploadNotice ? (
+              <FeedbackNotice variant={uploadNotice.variant}>
+                {uploadNotice.message}
+              </FeedbackNotice>
+            ) : null}
             <div className="analytics-info-grid">
               <div className="analytics-info-card">
                 <p className="analytics-info-label">Selected file</p>
@@ -959,7 +1019,10 @@ function ExcelStudentResponseUploadPageContent() {
                   <select
                     className="app-form-input"
                     value={selectedAcademicSectionId}
-                    onChange={(event) => setSelectedAcademicSectionId(event.target.value)}
+                    onChange={(event) => {
+                      setSelectedAcademicSectionId(event.target.value);
+                      setUploadNotice(null);
+                    }}
                     disabled={loading || assignedAcademicSections.length === 0}
                   >
                     {assignedAcademicSections.length === 0 ? (
@@ -1060,9 +1123,9 @@ function ExcelStudentResponseUploadPageContent() {
                 </div>
               </div>
               {workbookValidation.globalIssues.length > 0 ? (
-                <div className="app-feedback app-feedback-danger">
+                <FeedbackNotice variant="error">
                   {workbookValidation.globalIssues[0]}
-                </div>
+                </FeedbackNotice>
               ) : null}
               <div className="analytics-toolbar-actions flex-wrap">
                 <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
@@ -1076,14 +1139,14 @@ function ExcelStudentResponseUploadPageContent() {
                 </span>
               </div>
               {workbookValidation.missingHeaders.length > 0 ? (
-                <div className="app-feedback app-feedback-danger">
+                <FeedbackNotice variant="error">
                   Missing columns: {workbookValidation.missingHeaders.join(", ")}
-                </div>
+                </FeedbackNotice>
               ) : null}
               {workbookValidation.unknownQuestionHeaders.length > 0 ? (
-                <div className="app-feedback app-feedback-info">
+                <FeedbackNotice variant="warning">
                   Unmapped question columns: {workbookValidation.unknownQuestionHeaders.join(", ")}
-                </div>
+                </FeedbackNotice>
               ) : null}
               {sampleValidationIssues.length > 0 ? (
                 <div className="analytics-table-wrap">

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import FeedbackNotice from "@/components/ui/feedback-notice";
 import { Input } from "@/components/ui/input";
 import {
   SearchableCommandSelect,
@@ -20,10 +21,13 @@ import {
 import { getDefaultRouteForRole } from "@/lib/auth-types";
 import { getAuthErrorMessage } from "@/lib/auth-runtime";
 import {
+  fetchApiJson,
+  getClientRequestErrorMessage,
+} from "@/lib/client/api";
+import {
   getSchoolKeyFromCookie,
   setSchoolSelectionCookies,
 } from "@/lib/client/school";
-import { toast } from "@/components/ui/use-toast";
 import type { PublicSchoolOption } from "@/lib/server/public-school-data";
 
 type SchoolOption = PublicSchoolOption;
@@ -85,6 +89,7 @@ export default function SignInClient({
     normalizedInitialSchools.length === 0,
   );
   const [schoolsError, setSchoolsError] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const callbackUrl = requestedCallbackUrl || "/workspace";
@@ -150,14 +155,11 @@ export default function SignInClient({
         setSchoolsLoading(true);
         setSchoolsError("");
 
-        const response = await fetch("/api/public/schools", {
+        const data = await fetchApiJson<SchoolsResponse>("/api/public/schools", {
           cache: "no-store",
+          includeSchoolQuery: false,
+          fallbackMessage: "We couldn't load the school list.",
         });
-        const data: SchoolsResponse = await response.json();
-
-        if (!response.ok || !data?.success) {
-          throw new Error(data?.message || "Failed to load schools.");
-        }
 
         if (!mounted) return;
 
@@ -199,9 +201,10 @@ export default function SignInClient({
         if (!mounted) return;
         setSchools([]);
         setSchoolsError(
-          error instanceof Error
-            ? error.message
-            : "Failed to load schools. Please refresh and try again.",
+          getClientRequestErrorMessage(
+            error,
+            "We couldn't load the school list.",
+          ),
         );
       } finally {
         if (mounted) {
@@ -224,6 +227,7 @@ export default function SignInClient({
 
   const handleSchoolChange = (nextSchoolKey: string) => {
     const normalizedSchoolKey = nextSchoolKey.trim().toLowerCase();
+    setSubmitError("");
     setSchoolKey(normalizedSchoolKey);
     const selectedSchool = schools.find(
       (school) => school.key === normalizedSchoolKey,
@@ -241,62 +245,64 @@ export default function SignInClient({
 
     const trimmedSchoolKey = schoolKey.trim().toLowerCase();
     const submittedIdentifier = identifier.trim();
+    setSubmitError("");
+
     if (!trimmedSchoolKey) {
-      toast({
-        title: "Select your school",
-        description: "Choose your school from the list before signing in.",
-        variant: "destructive",
-      });
+      setSubmitError(
+        "Choose your school from the list before signing in.",
+      );
       return;
     }
 
     setIsLoading(true);
 
-    const result = await signIn("school-user", {
-      redirect: false,
-      identifier: submittedIdentifier,
-      password,
-      schoolKey: trimmedSchoolKey,
-      callbackUrl,
-    });
-
-    setIsLoading(false);
-
-    if (!result || !result.ok) {
-      const errorMessage =
-        getAuthErrorMessage(result?.error, "school") ||
-        (isStudentStyleIdentifier
-          ? "Student sign in failed. Use the roll number as the username. The default password matches the roll number until it is changed."
-          : "Login failed. Please check your credentials and try again.");
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const selectedSchool = schools.find((school) => school.key === trimmedSchoolKey);
-    setSchoolSelectionCookies(
-      trimmedSchoolKey,
-      selectedSchool?.displayName,
-    );
-
-    if (requestedCallbackUrl) {
-      window.location.assign(result.url || requestedCallbackUrl);
-      return;
-    }
-
     try {
-      const session = await getSession();
-      const role = session?.user?.role;
-      if (role) {
-        window.location.assign(getDefaultRouteForRole(role));
+      const result = await signIn("school-user", {
+        redirect: false,
+        identifier: submittedIdentifier,
+        password,
+        schoolKey: trimmedSchoolKey,
+        callbackUrl,
+      });
+
+      if (!result || !result.ok) {
+        const errorMessage =
+          getAuthErrorMessage(result?.error, "school") ||
+          (isStudentStyleIdentifier
+            ? "We couldn't sign in with that roll number and password. If this is your first login, try using the roll number as the password."
+            : "We couldn't sign you in. Check your credentials and try again.");
+        setSubmitError(errorMessage);
         return;
       }
-    } catch {}
 
-    window.location.assign(result.url || callbackUrl);
+      const selectedSchool = schools.find((school) => school.key === trimmedSchoolKey);
+      setSchoolSelectionCookies(
+        trimmedSchoolKey,
+        selectedSchool?.displayName,
+      );
+
+      if (requestedCallbackUrl) {
+        window.location.assign(result.url || requestedCallbackUrl);
+        return;
+      }
+
+      try {
+        const session = await getSession();
+        const role = session?.user?.role;
+        if (role) {
+          window.location.assign(getDefaultRouteForRole(role));
+          return;
+        }
+      } catch {}
+
+      window.location.assign(result.url || callbackUrl);
+    } catch (error: unknown) {
+      setSubmitError(
+        getClientRequestErrorMessage(error, "We couldn't sign you in."),
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -314,7 +320,7 @@ export default function SignInClient({
                 className="app-auth-switcher-item"
               >
                 <Building2 className="h-4 w-4" />
-                Company
+                Administrator
               </Link>
             </div>
 
@@ -346,15 +352,21 @@ export default function SignInClient({
               aria-busy={isLoading}
             >
               {pageErrorMessage ? (
-                <div className="app-feedback app-feedback-error">
+                <FeedbackNotice variant="error">
                   {pageErrorMessage}
-                </div>
+                </FeedbackNotice>
               ) : null}
 
               {schoolsError ? (
-                <div className="app-feedback app-feedback-error">
+                <FeedbackNotice variant="error">
                   {schoolsError}
-                </div>
+                </FeedbackNotice>
+              ) : null}
+
+              {submitError ? (
+                <FeedbackNotice variant="error">
+                  {submitError}
+                </FeedbackNotice>
               ) : null}
 
               <div className="app-field-group">
@@ -399,7 +411,10 @@ export default function SignInClient({
                       : "Email or roll number"
                   }
                   value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
+                  onChange={(e) => {
+                    setIdentifier(e.target.value);
+                    setSubmitError("");
+                  }}
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
@@ -430,7 +445,10 @@ export default function SignInClient({
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setSubmitError("");
+                    }}
                     autoComplete="current-password"
                     className="h-11 pr-12"
                     required
@@ -451,7 +469,10 @@ export default function SignInClient({
                 {showStudentPasswordShortcut ? (
                   <button
                     type="button"
-                    onClick={() => setPassword(trimmedIdentifier)}
+                    onClick={() => {
+                      setPassword(trimmedIdentifier);
+                      setSubmitError("");
+                    }}
                     className="w-fit text-xs font-medium text-foreground underline-offset-4 transition hover:underline"
                   >
                     Use the roll number as the password
@@ -479,12 +500,12 @@ export default function SignInClient({
             </form>
 
             <p className="app-auth-footer">
-              Need company access?{" "}
+              Need administrator access?{" "}
               <Link
                 href="/auth/company-signin"
                 className="font-semibold text-foreground underline-offset-4 hover:underline"
               >
-                Use company admin sign in
+                Use administrator sign in
               </Link>
             </p>
           </section>

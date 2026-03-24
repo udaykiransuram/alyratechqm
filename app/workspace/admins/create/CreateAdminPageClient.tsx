@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ChangeEvent } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import MultiSelectChecklist from "@/components/multi-select-checklist";
+import BulkUploadPanel from "@/components/workspace/BulkUploadPanel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import PageHero from "@/components/layout/PageHero";
@@ -12,6 +13,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
+import { downloadCsvTemplate, parseUploadFile } from "@/lib/client/bulk-upload";
+import {
+  buildWorkspaceUserBulkRows,
+  WORKSPACE_USER_BULK_TEMPLATES,
+} from "@/lib/client/workspace-user-bulk";
+import FeedbackNotice, { type FeedbackNoticeVariant } from "@/components/ui/feedback-notice";
 import type {
   WorkspaceAcademicSectionItem,
   WorkspaceClassItem,
@@ -50,7 +57,22 @@ export default function CreateAdminPageClient({
     subjectIds: [] as string[],
   });
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(initialMessage);
+  const [message, setMessage] = useState<{
+    message: string;
+    variant: FeedbackNoticeVariant;
+  } | null>(
+    initialMessage
+      ? {
+          message: initialMessage,
+          variant: "error",
+        }
+      : null,
+  );
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkFeedback, setBulkFeedback] = useState<{
+    message: string;
+    variant: FeedbackNoticeVariant;
+  } | null>(null);
 
   const availableSections = useMemo(() => {
     if (form.hasAllClasses) {
@@ -137,10 +159,13 @@ export default function CreateAdminPageClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         schoolKey,
-        fallbackMessage: "Error creating admin",
+        fallbackMessage: "We couldn't create the admin account.",
       });
 
-      setMessage("Admin created successfully!");
+      setMessage({
+        message: "Admin account created.",
+        variant: "success",
+      });
       setForm({
         name: "",
         email: "",
@@ -156,16 +181,86 @@ export default function CreateAdminPageClient({
       announceNavigationStart("/workspace/manage/users");
       router.push("/workspace/manage/users");
     } catch (error: any) {
-      setMessage(error?.message || "Error creating admin");
+      setMessage({
+        message: error?.message || "We couldn't create the admin account.",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const messageClassName =
-    message?.toLowerCase().includes("error") || message?.toLowerCase().includes("failed")
-      ? "app-feedback app-feedback-error"
-      : "app-feedback app-feedback-success";
+  const handleBulkUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setBulkLoading(true);
+    setBulkFeedback(null);
+
+    try {
+      const rows = await parseUploadFile(file);
+      const { users, skippedRows } = buildWorkspaceUserBulkRows({
+        role: "admin",
+        rows,
+        classes: initialClasses,
+        sections: initialSections,
+        subjects: initialSubjects,
+      });
+
+      if (users.length === 0) {
+        throw new Error(skippedRows[0] || "No valid admin rows were found in the uploaded file.");
+      }
+
+      const schoolKey = resolveClientSchoolKey();
+      if (!schoolKey) {
+        throw new Error("Please select a school in the navbar first.");
+      }
+
+      const data = await fetchApiJson<any>("/api/users/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ users }),
+        schoolKey,
+        fallbackMessage: "We couldn't complete the bulk upload.",
+      });
+
+      const results = Array.isArray(data.results) ? data.results : [];
+      const failed = results.filter((result: any) => !result.success);
+      const created = results.filter((result: any) => result.success && !result.existed);
+      const existing = results.filter((result: any) => result.existed);
+
+      setBulkFeedback({
+        message: [
+          "Bulk upload complete.",
+          `Created: ${created.length}.`,
+          `Existing: ${existing.length}.`,
+          `Failed after upload: ${failed.length}.`,
+          skippedRows.length ? `Skipped before upload: ${skippedRows.length}.` : null,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        variant:
+          failed.length > 0 || skippedRows.length > 0
+            ? created.length > 0 || existing.length > 0
+              ? "warning"
+              : "error"
+            : "success",
+      });
+    } catch (error: any) {
+      setBulkFeedback({
+        message: error?.message || "We couldn't complete the bulk upload.",
+        variant: "error",
+      });
+    } finally {
+      event.target.value = "";
+      setBulkLoading(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const template = WORKSPACE_USER_BULK_TEMPLATES.admin;
+    downloadCsvTemplate(template.filename, template.headers, template.sampleRows);
+  };
 
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
@@ -215,7 +310,9 @@ export default function CreateAdminPageClient({
         ]}
       />
 
-      {message ? <div className={messageClassName}>{message}</div> : null}
+      {message ? (
+        <FeedbackNotice variant={message.variant}>{message.message}</FeedbackNotice>
+      ) : null}
 
       <div className="app-editor-grid">
         <div className="app-editor-main">
@@ -383,6 +480,20 @@ export default function CreateAdminPageClient({
               </form>
             </CardContent>
           </Card>
+        </div>
+
+        <div className="app-editor-aside">
+          <BulkUploadPanel
+            title="Bulk Upload Admins"
+            description="Upload a CSV or Excel sheet using the admin template to create multiple admin accounts with full or restricted scope."
+            inputId="bulk-upload-admins"
+            onFileChange={handleBulkUpload}
+            onDownloadTemplate={downloadTemplate}
+            loading={bulkLoading}
+            loadingLabel="Uploading admins..."
+            feedback={bulkFeedback}
+            tips={WORKSPACE_USER_BULK_TEMPLATES.admin.tips}
+          />
         </div>
       </div>
     </div>

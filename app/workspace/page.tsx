@@ -155,8 +155,8 @@ export default function WorkspaceHomePage() {
         }
         meta={
           <>
-            <span className="app-meta-chip">ALYRA TECH</span>
-            <span className="app-meta-chip">Tenant-aware operations</span>
+            <span className="app-meta-chip">School workspace</span>
+            <span className="app-meta-chip">Staff operations</span>
             <span className="app-meta-chip">Student online test ready</span>
           </>
         }
@@ -173,7 +173,7 @@ export default function WorkspaceHomePage() {
           },
           {
             label: "School model",
-            value: "Tenant scoped",
+            value: "School scoped",
             meta: "Each school keeps its own workspace, users, and data.",
           },
           {

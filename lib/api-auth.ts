@@ -273,7 +273,8 @@ export async function requireTenantSession(
       response: NextResponse.json(
         {
           success: false,
-          message: "Tenant mismatch for authenticated session.",
+          message:
+            "This request is trying to access a different school than the one you signed in to.",
         },
         { status: 403 },
       ),
@@ -286,7 +287,7 @@ export async function requireTenantSession(
     return {
       ok: false as const,
       response: NextResponse.json(
-        { success: false, message: "schoolKey required" },
+        { success: false, message: "School selection is required." },
         { status: 400 },
       ),
     };

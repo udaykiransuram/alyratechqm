@@ -182,12 +182,12 @@ export default function SchoolSwitcher({
               title={
                 currentSchool
                   ? currentSchool.displayName || currentSchool.key
-                  : "Select school workspace"
+                  : "Select school"
               }
             >
               <SelectValue
                 placeholder={
-                  schools.length > 0 ? "Select school workspace" : "No schools available"
+                  schools.length > 0 ? "Select school" : "No schools available"
                 }
               />
             </SelectTrigger>
@@ -200,7 +200,7 @@ export default function SchoolSwitcher({
                 ))
               ) : (
                 <div className="px-3 py-2 text-sm text-muted-foreground">
-                  Create a school workspace to get started.
+                  Add a school to get started.
                 </div>
               )}
             </SelectContent>
@@ -238,7 +238,7 @@ export default function SchoolSwitcher({
                 <DialogHeader className="text-left">
                   <DialogTitle>Create School</DialogTitle>
                   <DialogDescription>
-                    Add a school workspace with a unique key and a friendly display name.
+                    Add a school with a unique key and a friendly display name.
                   </DialogDescription>
                 </DialogHeader>
 

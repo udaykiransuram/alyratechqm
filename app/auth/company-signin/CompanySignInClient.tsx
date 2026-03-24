@@ -8,14 +8,16 @@ import { Building2, Eye, EyeOff, Loader2, School } from "lucide-react";
 
 import { clearSchoolKeyCookie } from "@/lib/client/school";
 import { getAuthErrorMessage } from "@/lib/auth-runtime";
+import { getClientRequestErrorMessage } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
+import FeedbackNotice from "@/components/ui/feedback-notice";
 import { Input } from "@/components/ui/input";
-import { toast } from "@/components/ui/use-toast";
 
 export default function CompanySignInClient() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const pageErrorMessage = getAuthErrorMessage(
@@ -25,32 +27,40 @@ export default function CompanySignInClient() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    setSubmitError("");
     setIsLoading(true);
 
     const callbackUrl =
       searchParams.get("callbackUrl")?.trim() || "/company/schools";
-    const result = await signIn("company-admin", {
-      redirect: false,
-      email,
-      password,
-      callbackUrl,
-    });
 
-    setIsLoading(false);
-
-    if (!result || !result.ok) {
-      toast({
-        title: "Error",
-        description:
-          getAuthErrorMessage(result?.error, "company") ||
-          "Company admin sign in failed. Please check your credentials.",
-        variant: "destructive",
+    try {
+      const result = await signIn("company-admin", {
+        redirect: false,
+        email,
+        password,
+        callbackUrl,
       });
-      return;
-    }
 
-    clearSchoolKeyCookie();
-    window.location.assign(result.url || callbackUrl);
+      if (!result || !result.ok) {
+        setSubmitError(
+          getAuthErrorMessage(result?.error, "company") ||
+            "We couldn't sign you in to the company admin workspace. Please check your credentials and try again.",
+        );
+        return;
+      }
+
+      clearSchoolKeyCookie();
+      window.location.assign(result.url || callbackUrl);
+    } catch (error: unknown) {
+      setSubmitError(
+        getClientRequestErrorMessage(
+          error,
+          "We couldn't sign you in to the company admin workspace.",
+        ),
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -103,9 +113,15 @@ export default function CompanySignInClient() {
               aria-busy={isLoading}
             >
               {pageErrorMessage ? (
-                <div className="app-feedback app-feedback-error">
+                <FeedbackNotice variant="error">
                   {pageErrorMessage}
-                </div>
+                </FeedbackNotice>
+              ) : null}
+
+              {submitError ? (
+                <FeedbackNotice variant="error">
+                  {submitError}
+                </FeedbackNotice>
               ) : null}
 
               <div className="app-field-group">
@@ -117,7 +133,10 @@ export default function CompanySignInClient() {
                   type="email"
                   placeholder="admin@yourcompany.com"
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setSubmitError("");
+                  }}
                   autoComplete="email"
                   autoFocus
                   className="h-11"
@@ -145,7 +164,10 @@ export default function CompanySignInClient() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter password"
                     value={password}
-                    onChange={(event) => setPassword(event.target.value)}
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                      setSubmitError("");
+                    }}
                     autoComplete="current-password"
                     className="h-11 pr-12"
                     required
