@@ -4,6 +4,9 @@ import { useEffect, useRef } from "react";
 import { signOut } from "next-auth/react";
 
 import { STUDENT_SESSION_HEARTBEAT_INTERVAL_MS } from "@/lib/student-session";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
+
+const studentHeartbeatDisabled = isMockedE2ETestMode();
 
 function buildStudentSessionExpiredCallbackUrl() {
   if (typeof window === "undefined") {
@@ -21,6 +24,10 @@ export default function StudentSessionMonitor() {
   const isSigningOutRef = useRef(false);
 
   useEffect(() => {
+    if (studentHeartbeatDisabled) {
+      return;
+    }
+
     let disposed = false;
 
     async function pingStudentSession() {

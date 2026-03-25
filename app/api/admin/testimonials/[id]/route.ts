@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   req: NextRequest,
-  context: RouteContext<"/api/admin/testimonials/[id]">,
+  context: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
@@ -32,7 +32,7 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  context: RouteContext<"/api/admin/testimonials/[id]">,
+  context: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;
@@ -56,7 +56,7 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  context: RouteContext<"/api/admin/testimonials/[id]">,
+  context: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireCompanyAdminSession(req);
   if (!auth.ok) return auth.response;

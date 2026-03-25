@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Trash2 } from "lucide-react";
 
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchApiJson } from "@/lib/client/api";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 import type { WorkspaceClassItem } from "@/lib/workspace/support-types";
 
 type ManageClassesClientProps = {
@@ -47,12 +48,63 @@ export default function ManageClassesClient({
   initialClasses,
   initialError = null,
 }: ManageClassesClientProps) {
+  const shouldRefreshMockedData =
+    isMockedE2ETestMode() && initialClasses.length === 0;
   const [classes, setClasses] = useState<WorkspaceClassItem[]>(
     sortClassesByName(initialClasses),
   );
   const [archivingClassId, setArchivingClassId] = useState<string | null>(null);
-  const [error] = useState<string | null>(initialError);
+  const [error, setError] = useState<string | null>(initialError);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!initialError && !shouldRefreshMockedData) {
+      return;
+    }
+
+    let active = true;
+
+    void fetchApiJson<any>("/api/classes", {
+      cache: "no-store",
+      fallbackMessage: "We couldn't refresh the class list.",
+    })
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+
+        const nextClasses = Array.isArray(data?.classes)
+          ? data.classes
+              .map((classItem: any) => ({
+                _id: String(classItem?._id || "").trim(),
+                name: String(classItem?.name || "").trim(),
+                description: classItem?.description
+                  ? String(classItem.description).trim()
+                  : undefined,
+              }))
+              .filter(
+                (classItem: WorkspaceClassItem) =>
+                  Boolean(classItem._id) && Boolean(classItem.name),
+              )
+          : [];
+
+        setClasses(sortClassesByName(nextClasses));
+        setError(null);
+      })
+      .catch((loadError: any) => {
+        if (!active) {
+          return;
+        }
+
+        setError(
+          loadError?.message || initialError || "Failed to load classes.",
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [initialError, shouldRefreshMockedData]);
 
   const handleArchiveClass = async (classId: string) => {
     setArchivingClassId(classId);

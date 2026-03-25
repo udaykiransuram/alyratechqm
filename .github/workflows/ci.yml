@@ -3,9 +3,17 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -30,14 +38,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Build
-        run: npm run build
+      - name: Verify core checks
+        run: npm run verify:core
 
   e2e-smoke:
     runs-on: ubuntu-latest
@@ -73,5 +75,55 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-smoke
+          path: playwright-report
+
+  e2e-local-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project_name: chromium-desktop
+            command: test:e2e:desktop
+            artifact_name: playwright-report-desktop
+          - project_name: chromium-mobile
+            command: test:e2e:mobile
+            artifact_name: playwright-report-mobile
+    env:
+      CI: true
+      BASE_URL: http://127.0.0.1:3000
+      MONGODB_URI: mongodb://127.0.0.1:27017/test
+      NEXTAUTH_SECRET: testsecret
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: List local Playwright suite
+        run: npm run test:e2e:list
+
+      - name: Run local Playwright suite for ${{ matrix.project_name }}
+        run: npm run ${{ matrix.command }}
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
           path: playwright-report

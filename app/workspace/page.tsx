@@ -122,7 +122,7 @@ export const metadata: Metadata = {
 
 export default function WorkspaceHomePage() {
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-6 sm:px-0">
+    <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
       <PageHero
         eyebrow="Workspace"
         title={PRODUCT_NAME}
@@ -184,14 +184,14 @@ export default function WorkspaceHomePage() {
         ]}
       />
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {workspaceCards.map((card) => {
           const Icon = card.icon;
           return (
             <div key={card.title} className="app-spotlight-card flex h-full flex-col gap-4">
               <p className="app-spotlight-label">Core module</p>
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/10 bg-primary/10 text-primary shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.32)]">
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="space-y-1">
@@ -216,6 +216,76 @@ export default function WorkspaceHomePage() {
         })}
       </div>
 
+      <div className="app-spotlight-grid">
+        <section className="app-spotlight-card app-spotlight-card-strong">
+          <p className="app-spotlight-label">Operating rhythm</p>
+          <h2 className="app-spotlight-title">
+            Move from setup to reporting without losing context
+          </h2>
+          <p className="app-spotlight-copy">
+            The calmer workspace system is designed to make daily operations feel
+            steady: cleaner actions, stronger hierarchy, and predictable jumps
+            between setup, delivery, and analysis.
+          </p>
+          <div className="app-inline-stat-grid">
+            <div className="app-inline-stat">
+              <p className="app-inline-stat-label">People areas</p>
+              <p className="app-inline-stat-value">{roleAreaLinks.length}</p>
+              <p className="app-inline-stat-copy">Students, teachers, and admins stay intentionally separate.</p>
+            </div>
+            <div className="app-inline-stat">
+              <p className="app-inline-stat-label">Flow stages</p>
+              <p className="app-inline-stat-value">{setupSteps.length}</p>
+              <p className="app-inline-stat-copy">Structure, onboarding, and assessment review stay in one rhythm.</p>
+            </div>
+            <div className="app-inline-stat">
+              <p className="app-inline-stat-label">Workspace mode</p>
+              <p className="app-inline-stat-value">School scoped</p>
+              <p className="app-inline-stat-copy">Each workspace stays focused on one school context at a time.</p>
+            </div>
+          </div>
+          <div className="app-flow-list">
+            {setupSteps.map((step, index) => (
+              <div key={step.title} className="app-flow-item">
+                <div className="app-flow-index">{index + 1}</div>
+                <div className="app-flow-copy">
+                  <p className="app-flow-title">{step.title}</p>
+                  <p className="app-flow-note">{step.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="app-spotlight-card">
+          <p className="app-spotlight-label">Role areas</p>
+          <h2 className="app-spotlight-title">Keep operational work split by audience</h2>
+          <p className="app-spotlight-copy">
+            Each role area is framed for a different job, so enrollment, staff
+            access, and school operations do not blur together.
+          </p>
+          <div className="app-link-grid">
+            {roleAreaLinks.map((area) => {
+              const Icon = area.icon;
+
+              return (
+                <AppPrefetchLink key={area.title} href={area.href} className="app-link-card">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/10 bg-primary/10 text-primary shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.3)]">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="app-link-card-title">{area.title}</p>
+                      <p className="app-link-card-copy">{area.description}</p>
+                    </div>
+                  </div>
+                  <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                </AppPrefetchLink>
+              );
+            })}
+          </div>
+        </section>
       </div>
+    </div>
   );
 }

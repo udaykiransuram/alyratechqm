@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getTenantModels } from "@/lib/db-tenant";
+import { getPublicClassOptions } from "@/lib/server/public-registration-data";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type ClassDoc = {
-  _id: unknown;
-  name?: string;
-};
 
 export async function GET(req: NextRequest) {
   const schoolKey = req.nextUrl.searchParams.get("school")?.trim() || "";
@@ -21,18 +16,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { Class: ClassModel } = await getTenantModels(schoolKey, ["Class"]);
-    const classes = (await ClassModel.find({ isArchived: { $ne: true } })
-      .sort({ name: 1 })
-      .select("name")
-      .lean()) as ClassDoc[];
+    const classes = await getPublicClassOptions(schoolKey);
 
     return NextResponse.json({
       success: true,
-      classes: classes.map((classItem) => ({
-        id: String(classItem._id),
-        name: String(classItem.name || ""),
-      })),
+      classes,
     });
   } catch (error: unknown) {
     return NextResponse.json(

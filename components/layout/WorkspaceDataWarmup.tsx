@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { prefetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 const WARM_WORKSPACE_ROUTES = [
   "/workspace",
@@ -37,12 +38,13 @@ const WARM_WORKSPACE_ROUTES = [
 ];
 
 const warmedWorkspaceRoutes = new Set<string>();
+const workspaceWarmupDisabled = isMockedE2ETestMode();
 
 export default function WorkspaceDataWarmup({ enabled }: { enabled: boolean }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || workspaceWarmupDisabled) {
       return;
     }
 
@@ -57,7 +59,7 @@ export default function WorkspaceDataWarmup({ enabled }: { enabled: boolean }) {
   }, [enabled, router]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || workspaceWarmupDisabled) {
       return;
     }
 

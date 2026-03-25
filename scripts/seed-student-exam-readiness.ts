@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 
 import { connectDB } from "@/lib/db";
 import { getTenantDb, getTenantModels } from "@/lib/db-tenant";
@@ -15,11 +16,33 @@ type ParsedArgs = {
   metaOut: string;
 };
 
+const TENANT_DB_PREFIX = "school_db_";
+const MAX_MONGODB_DB_NAME_LENGTH = 38;
+const MAX_SCHOOL_KEY_LENGTH =
+  MAX_MONGODB_DB_NAME_LENGTH - TENANT_DB_PREFIX.length;
+
 function sanitizeSchoolKey(input: string) {
   return String(input || "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, "_");
+}
+
+function buildDefaultSchoolKey() {
+  return `rg_${Date.now().toString(36)}`;
+}
+
+function assertTenantSafeSchoolKey(schoolKey: string) {
+  if (!schoolKey) {
+    throw new Error("School key cannot be empty.");
+  }
+
+  const dbNameLength = Buffer.byteLength(`${TENANT_DB_PREFIX}${schoolKey}`, "utf8");
+  if (dbNameLength > MAX_MONGODB_DB_NAME_LENGTH) {
+    throw new Error(
+      `School key "${schoolKey}" is too long for tenant DB naming. Max key length is ${MAX_SCHOOL_KEY_LENGTH} characters.`,
+    );
+  }
 }
 
 function parseBoolean(value: string | undefined, defaultValue: boolean) {
@@ -51,10 +74,9 @@ function parseArgs(argv: string[]): ParsedArgs {
     argMap.set(key, rest.join("="));
   }
 
-  const defaultSchoolKey = sanitizeSchoolKey(
-    `readiness_${new Date().toISOString().replace(/[:.]/g, "-")}`,
-  );
+  const defaultSchoolKey = buildDefaultSchoolKey();
   const schoolKey = sanitizeSchoolKey(argMap.get("school") || defaultSchoolKey);
+  assertTenantSafeSchoolKey(schoolKey);
   const studentCount = parsePositiveInt(argMap.get("students"), 100);
   const password = String(argMap.get("password") || "Stress123!").trim();
   if (!password) {
@@ -86,7 +108,6 @@ async function seedReadinessData(args: ParsedArgs) {
     {
       $setOnInsert: {
         key: args.schoolKey,
-        displayName: `Online Test Readiness ${args.schoolKey}`,
       },
       $set: {
         displayName: `Online Test Readiness ${args.schoolKey}`,
@@ -256,7 +277,11 @@ async function main() {
   console.log(`Metadata file: ${args.metaOut}`);
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+main()
+  .catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await mongoose.disconnect().catch(() => undefined);
+  });

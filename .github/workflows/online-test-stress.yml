@@ -1,0 +1,149 @@
+name: Online Test Stress
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Base URL for the app under test. Use loopback to start a managed server on the runner.
+        required: true
+        default: http://127.0.0.1:3000
+        type: string
+      school:
+        description: Optional school key to reuse during auto-seeding.
+        required: false
+        default: ""
+        type: string
+      seed_students:
+        description: Number of disposable students to seed when auto-seeding is enabled.
+        required: true
+        default: "250"
+        type: string
+      concurrency:
+        description: Concurrent student flows.
+        required: true
+        default: "100"
+        type: string
+      rounds:
+        description: Save rounds before the final submit.
+        required: true
+        default: "3"
+        type: string
+      sample_size:
+        description: Persisted-attempt audit sample size.
+        required: true
+        default: "10"
+        type: string
+      submit:
+        description: Submit attempts at the end of the flow.
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      heartbeat:
+        description: Send student heartbeat calls during the flow.
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      list_first:
+        description: Hit /api/student/tests before detail/start.
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      server_mode:
+        description: Managed server mode. Use auto to infer from base_url.
+        required: true
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - dev
+          - prod
+          - external
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: online-test-stress-staging
+  cancel-in-progress: false
+
+jobs:
+  stress:
+    name: Staging Online Test Stress
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: staging
+    env:
+      CI: true
+      BASE_URL: ${{ inputs.base_url }}
+      NEXTAUTH_URL: ${{ inputs.base_url }}
+      NEXT_PUBLIC_SITE_URL: ${{ inputs.base_url }}
+      MONGODB_URI: ${{ secrets.STAGING_MONGODB_URI }}
+      NEXTAUTH_SECRET: ${{ secrets.STAGING_NEXTAUTH_SECRET }}
+      EXAM_RUNTIME_DATABASE_URL: ${{ secrets.STAGING_EXAM_RUNTIME_DATABASE_URL }}
+      ONLINE_TEST_GATE_AUTO_SEED: "true"
+      ONLINE_TEST_GATE_SCHOOL: ${{ inputs.school }}
+      ONLINE_TEST_GATE_SEED_STUDENTS: ${{ inputs.seed_students }}
+      ONLINE_TEST_GATE_CONCURRENCY: ${{ inputs.concurrency }}
+      ONLINE_TEST_GATE_ROUNDS: ${{ inputs.rounds }}
+      ONLINE_TEST_GATE_SAMPLE_SIZE: ${{ inputs.sample_size }}
+      ONLINE_TEST_GATE_SUBMIT: ${{ inputs.submit }}
+      ONLINE_TEST_GATE_HEARTBEAT: ${{ inputs.heartbeat }}
+      ONLINE_TEST_GATE_LIST_FIRST: ${{ inputs.list_first }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Validate required staging secrets
+        run: |
+          if [ -z "${MONGODB_URI}" ]; then
+            echo "Missing required secret: STAGING_MONGODB_URI"
+            exit 1
+          fi
+          if [ -z "${NEXTAUTH_SECRET}" ]; then
+            echo "Missing required secret: STAGING_NEXTAUTH_SECRET"
+            exit 1
+          fi
+
+      - name: Resolve managed server mode
+        shell: bash
+        run: |
+          if [ "${{ inputs.server_mode }}" = "auto" ]; then
+            echo "ONLINE_TEST_GATE_SERVER_MODE=" >> "$GITHUB_ENV"
+          else
+            echo "ONLINE_TEST_GATE_SERVER_MODE=${{ inputs.server_mode }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run online-test stress lane
+        run: npm run stress:online-test
+
+      - name: Upload stress artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: online-test-stress-${{ github.run_id }}
+          path: |
+            /tmp/online-test-stress-seed-*.json
+            /tmp/online-test-stress-*.json
+            /tmp/online-test-stress-*.json.gate.json
+          if-no-files-found: warn

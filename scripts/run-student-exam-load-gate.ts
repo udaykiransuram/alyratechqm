@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import mongoose from "mongoose";
 
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
@@ -20,7 +21,9 @@ type ParsedArgs = {
   sampleSize: number;
   submitEnabled: boolean;
   heartbeatEnabled: boolean;
+  listFirstEnabled: boolean;
   maxFailureRatePct: number;
+  maxP95ListMs: number;
   maxP95StartMs: number;
   maxP95SaveMs: number;
   maxP95SubmitMs: number;
@@ -68,6 +71,43 @@ type AuditRow = {
   ok: boolean;
   message: string;
 };
+
+function printHelp() {
+  console.log(
+    [
+      "Usage: npm run gate:student-tests:load -- --school=<schoolKey> --paper=<paperId> --students=<jsonFile> [options]",
+      "",
+      "Required:",
+      "  --school=<schoolKey>          School key for the student accounts",
+      "  --paper=<paperId>             Online paper id to audit",
+      "  --students=<jsonFile>         JSON file with stress student credentials",
+      "",
+      "Options:",
+      "  --base=<url>                  App base URL (default: http://127.0.0.1:3000)",
+      "  --out=<jsonFile>              Stress summary output path",
+      "  --gate-out=<jsonFile>         Gate report output path",
+      "  --concurrency=<n>             Concurrent student flows (default: 100)",
+      "  --rounds=<n>                  Save rounds before final submit (default: 3)",
+      "  --round-delay-ms=<ms>         Delay between save rounds (default: 400)",
+      "  --jitter-ms=<ms>              Random delay jitter added per round (default: 150)",
+      "  --timeout-ms=<ms>             Per-request timeout (default: 15000)",
+      "  --sample-size=<n>             Persisted-attempt audit sample size (default: 10)",
+      "  --submit=<true|false>         Submit after save rounds (default: true)",
+      "  --heartbeat=<true|false>      Hit the student heartbeat during the flow (default: true)",
+      "  --list-first=<true|false>     Hit /api/student/tests before detail/start (default: true)",
+      "  --max-failure-rate-pct=<n>    Max allowed failure rate percentage (default: 0.5)",
+      "  --max-p95-list-ms=<ms>        Max allowed test.list p95 latency (default: 1200)",
+      "  --max-p95-start-ms=<ms>       Max allowed test.start p95 latency (default: 1200)",
+      "  --max-p95-save-ms=<ms>        Max allowed test.save p95 latency (default: 800)",
+      "  --max-p95-submit-ms=<ms>      Max allowed test.submit p95 latency (default: 1500)",
+      "  --help                        Show this help text",
+      "",
+      "Notes:",
+      "  - This script wraps the raw stress harness, enforces latency/failure thresholds, and audits persisted attempts.",
+      "  - The gate exits non-zero when any threshold or persistence audit fails.",
+    ].join("\n"),
+  );
+}
 
 function parseNumber(value: string | undefined, defaultValue: number) {
   const normalized = String(value || "").trim();
@@ -134,7 +174,9 @@ function parseArgs(argv: string[]): ParsedArgs {
     sampleSize: parsePositiveInt(argMap.get("sample-size"), 10),
     submitEnabled: parseBoolean(argMap.get("submit"), true),
     heartbeatEnabled: parseBoolean(argMap.get("heartbeat"), true),
+    listFirstEnabled: parseBoolean(argMap.get("list-first"), true),
     maxFailureRatePct: parseNumber(argMap.get("max-failure-rate-pct"), 0.5),
+    maxP95ListMs: parsePositiveInt(argMap.get("max-p95-list-ms"), 1200),
     maxP95StartMs: parsePositiveInt(argMap.get("max-p95-start-ms"), 1200),
     maxP95SaveMs: parsePositiveInt(argMap.get("max-p95-save-ms"), 800),
     maxP95SubmitMs: parsePositiveInt(argMap.get("max-p95-submit-ms"), 1500),
@@ -155,6 +197,7 @@ function runStressScript(args: ParsedArgs) {
     `--timeout-ms=${args.timeoutMs}`,
     `--submit=${args.submitEnabled ? "true" : "false"}`,
     `--heartbeat=${args.heartbeatEnabled ? "true" : "false"}`,
+    `--list-first=${args.listFirstEnabled ? "true" : "false"}`,
     `--out=${args.outFile}`,
   ];
 
@@ -301,7 +344,13 @@ async function auditPersistedAnswers(params: {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv.some((arg) => String(arg || "").startsWith("--help"))) {
+    printHelp();
+    return;
+  }
+
+  const args = parseArgs(argv);
   await fs.mkdir(path.dirname(args.outFile), { recursive: true });
   await fs.mkdir(path.dirname(args.gateOutFile), { recursive: true });
 
@@ -313,6 +362,7 @@ async function main() {
     ? stressOutput.requestSummary
     : [];
 
+  const listStep = getStepSummary(requestRows, "test.list");
   const startStep = getStepSummary(requestRows, "test.start");
   const saveStep = getStepSummary(requestRows, "test.save");
   const submitStep = getStepSummary(requestRows, "test.submit");
@@ -323,6 +373,15 @@ async function main() {
     ok: stressExitCode === 0,
     details: `stress script exit code=${stressExitCode}`,
   });
+
+  if (args.listFirstEnabled) {
+    const listFailureRatePct = calculateFailureRatePct(listStep);
+    checks.push({
+      name: "list_failure_rate",
+      ok: listFailureRatePct < args.maxFailureRatePct,
+      details: `list failure rate=${listFailureRatePct.toFixed(3)}% (threshold < ${args.maxFailureRatePct}%)`,
+    });
+  }
 
   const saveFailureRatePct = calculateFailureRatePct(saveStep);
   const submitFailureRatePct = calculateFailureRatePct(submitStep);
@@ -336,6 +395,15 @@ async function main() {
     ok: submitFailureRatePct < args.maxFailureRatePct,
     details: `submit failure rate=${submitFailureRatePct.toFixed(3)}% (threshold < ${args.maxFailureRatePct}%)`,
   });
+
+  if (args.listFirstEnabled) {
+    const listP95 = Number(listStep?.p95Ms || 0);
+    checks.push({
+      name: "list_p95",
+      ok: listP95 > 0 && listP95 < args.maxP95ListMs,
+      details: `test.list p95=${listP95}ms (threshold < ${args.maxP95ListMs}ms)`,
+    });
+  }
 
   const startP95 = Number(startStep?.p95Ms || 0);
   const saveP95 = Number(saveStep?.p95Ms || 0);
@@ -398,7 +466,11 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+main()
+  .catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await mongoose.disconnect().catch(() => undefined);
+  });

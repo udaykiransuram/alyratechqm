@@ -1,4 +1,5 @@
 import { connectDB } from "@/lib/db";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 import School from "@/models/School";
 
 export type PublicSchoolOption = {
@@ -26,6 +27,10 @@ function toPublicSchoolOption(school: SchoolDoc): PublicSchoolOption | null {
 }
 
 export async function getPublicSchoolOptions(): Promise<PublicSchoolOption[]> {
+  if (isMockedE2ETestMode()) {
+    return [];
+  }
+
   await connectDB();
 
   const schools = (await School.find({})

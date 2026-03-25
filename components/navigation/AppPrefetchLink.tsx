@@ -16,6 +16,7 @@ import {
 
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 import { prefetchApiJson, type FetchApiJsonOptions } from "@/lib/client/api";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 type AppPrefetchLinkProps = Omit<ComponentProps<typeof Link>, "href"> & {
   href: string;
@@ -55,6 +56,7 @@ function shouldAnnounceNavigation(event: Parameters<MouseEventHandler<HTMLAnchor
 }
 
 const globallyPrefetchedHrefs = new Set<string>();
+const prefetchDisabled = isMockedE2ETestMode();
 
 const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
   function AppPrefetchLink(
@@ -85,6 +87,10 @@ const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
     );
 
     const prefetchRoutes = useCallback(() => {
+      if (prefetchDisabled) {
+        return;
+      }
+
       prefetchTargets.forEach((target) => {
         if (prefetchedHrefsRef.current.has(target) || globallyPrefetchedHrefs.has(target)) {
           return;
@@ -105,7 +111,7 @@ const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
     }, [prefetchTargets, relatedApiPrefetches, router]);
 
     useEffect(() => {
-      if (!prefetchOnMount) {
+      if (!prefetchOnMount || prefetchDisabled) {
         return;
       }
 
@@ -114,21 +120,21 @@ const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
 
     const handleMouseEnter: MouseEventHandler<HTMLAnchorElement> = (event) => {
       onMouseEnter?.(event);
-      if (!event.defaultPrevented && prefetchOnIntent) {
+      if (!event.defaultPrevented && prefetchOnIntent && !prefetchDisabled) {
         prefetchRoutes();
       }
     };
 
     const handleFocus: FocusEventHandler<HTMLAnchorElement> = (event) => {
       onFocus?.(event);
-      if (!event.defaultPrevented && prefetchOnIntent) {
+      if (!event.defaultPrevented && prefetchOnIntent && !prefetchDisabled) {
         prefetchRoutes();
       }
     };
 
     const handleTouchStart: TouchEventHandler<HTMLAnchorElement> = (event) => {
       onTouchStart?.(event);
-      if (!event.defaultPrevented && prefetchOnIntent) {
+      if (!event.defaultPrevented && prefetchOnIntent && !prefetchDisabled) {
         if (typeof window === "undefined") {
           prefetchRoutes();
           return;
@@ -153,7 +159,7 @@ const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
       <Link
         ref={ref}
         href={href}
-        prefetch={prefetch}
+        prefetch={prefetchDisabled ? false : prefetch}
         onMouseEnter={handleMouseEnter}
         onFocus={handleFocus}
         onTouchStart={handleTouchStart}

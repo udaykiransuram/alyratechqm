@@ -8,12 +8,46 @@ import {
 
 type RateLimitStore = Map<string, number[]>;
 
+function resolvePositiveIntegerEnv(name: string, fallback: number) {
+  const parsed = Number(process.env[name] || "");
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return Math.floor(parsed);
+}
+
+const AUTH_CALLBACK_RATE_LIMIT_WINDOW_MS = resolvePositiveIntegerEnv(
+  "AUTH_CALLBACK_RATE_LIMIT_WINDOW_MS",
+  10 * 60_000,
+);
+const COMPANY_ADMIN_AUTH_CALLBACK_RATE_LIMIT_MAX = resolvePositiveIntegerEnv(
+  "COMPANY_ADMIN_AUTH_CALLBACK_RATE_LIMIT_MAX",
+  10,
+);
+const SCHOOL_USER_AUTH_CALLBACK_RATE_LIMIT_MAX = resolvePositiveIntegerEnv(
+  "SCHOOL_USER_AUTH_CALLBACK_RATE_LIMIT_MAX",
+  250,
+);
+
 function isSchoolSignInRoute(path: string) {
   return path === "/auth/signin";
 }
 
 function isCompanySignInRoute(path: string) {
   return path === "/auth/company-signin";
+}
+
+function resolveAuthCallbackRateLimitMax(path: string) {
+  if (path === "/api/auth/callback/school-user") {
+    return SCHOOL_USER_AUTH_CALLBACK_RATE_LIMIT_MAX;
+  }
+
+  if (path === "/api/auth/callback/company-admin") {
+    return COMPANY_ADMIN_AUTH_CALLBACK_RATE_LIMIT_MAX;
+  }
+
+  return COMPANY_ADMIN_AUTH_CALLBACK_RATE_LIMIT_MAX;
 }
 
 function isCompanyPage(path: string) {
@@ -300,10 +334,11 @@ export async function middleware(req: NextRequest) {
       req.method === "POST" && path.startsWith("/api/auth/callback/");
 
     if (process.env.NODE_ENV === "production" && isAuthCallbackRequest) {
+      const authCallbackRateLimitMax = resolveAuthCallbackRateLimitMax(path);
       const authRateLimit = consumeRateLimit({
         key: `${requestIp}|auth|${path}`,
-        max: 10,
-        windowMs: 10 * 60_000,
+        max: authCallbackRateLimitMax,
+        windowMs: AUTH_CALLBACK_RATE_LIMIT_WINDOW_MS,
       });
 
       if (authRateLimit.limited) {

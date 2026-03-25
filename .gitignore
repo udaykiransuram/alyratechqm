@@ -38,8 +38,14 @@ __pycache__/
 *.egg-info/
 *.test.js
 *.test.ts
-# Local-only Playwright tests and reports
-local-tests/
+# Local-only Playwright artifacts.
+# Keep the test sources/config tracked so CI can run them.
+local-tests/*
+!local-tests/playwright.config.ts
+!local-tests/tests/
+local-tests/tests/*
+!local-tests/tests/e2e/
+!local-tests/tests/e2e/*.spec.ts
 playwright-report/
 test-results/
 blob-report/

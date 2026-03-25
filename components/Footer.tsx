@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Activity } from "lucide-react";
 
 type ContactDoc = {
   email?: string;
@@ -51,45 +52,51 @@ export default function Footer() {
   }, [info.phone, info.whatsappNumber]);
 
   return (
-    <footer className="mt-24 border-t border-neutral-200 bg-gradient-to-b from-emerald-50/40 to-white dark:border-neutral-800 dark:bg-neutral-950">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-4">
+    <footer className="mt-24 border-t border-border/70 bg-[linear-gradient(180deg,hsl(var(--app-surface-2)/0.72)_0%,hsl(var(--app-surface-1))_38%,hsl(var(--secondary)/0.48)_100%)]">
+      <div className="mx-auto grid max-w-[88rem] gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(0,0.8fr))] lg:px-8">
         <div>
-          <div className="mb-3 flex items-center gap-2.5 font-semibold">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white shadow-lg shadow-teal-500/20">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+          <div className="mb-4 flex items-center gap-3 font-semibold">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/80 text-primary-foreground shadow-[0_18px_32px_-20px_hsl(var(--primary)/0.42)] ring-1 ring-primary/10">
+              <Activity className="h-5 w-5" />
             </div>
-            <span>Alyra Tech</span>
+            <div>
+              <p className="text-base font-semibold tracking-[-0.03em] text-foreground">
+                Alyra Tech
+              </p>
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Precision Diagnostics
+              </p>
+            </div>
           </div>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          <p className="max-w-md text-sm leading-6 text-muted-foreground">
             AI-driven diagnostic assessments that go beyond grades to reveal how students think, learn, and grow. Built by IITians &amp; NITians for India&apos;s schools.
           </p>
         </div>
         <div>
-          <h4 className="mb-3 text-sm font-semibold">Company</h4>
-          <ul className="space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
-            <li><Link href="/about" className="transition-colors hover:text-emerald-600 hover:underline underline-offset-4">About</Link></li>
-            <li><Link href="/product" className="transition-colors hover:text-emerald-600 hover:underline underline-offset-4">Product</Link></li>
-            <li><Link href="/case-study" className="transition-colors hover:text-emerald-600 hover:underline underline-offset-4">Case Study</Link></li>
+          <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Company</h4>
+          <ul className="space-y-2.5 text-sm text-muted-foreground">
+            <li><Link href="/about" className="transition-colors hover:text-primary">About</Link></li>
+            <li><Link href="/product" className="transition-colors hover:text-primary">Product</Link></li>
+            <li><Link href="/case-study" className="transition-colors hover:text-primary">Case Study</Link></li>
           </ul>
         </div>
         <div>
-          <h4 className="mb-3 text-sm font-semibold">Resources</h4>
-          <ul className="space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
-            <li><Link href="/benefits" className="transition-colors hover:text-emerald-600 hover:underline underline-offset-4">Benefits</Link></li>
-            <li><Link href="/talent-test" className="transition-colors hover:text-emerald-600 hover:underline underline-offset-4">Talent Test</Link></li>
-            <li><Link href="/terms" className="transition-colors hover:text-emerald-600 hover:underline underline-offset-4">Terms</Link></li>
+          <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Resources</h4>
+          <ul className="space-y-2.5 text-sm text-muted-foreground">
+            <li><Link href="/benefits" className="transition-colors hover:text-primary">Benefits</Link></li>
+            <li><Link href="/talent-test" className="transition-colors hover:text-primary">Talent Test</Link></li>
+            <li><Link href="/terms" className="transition-colors hover:text-primary">Terms</Link></li>
           </ul>
         </div>
         <div>
-          <h4 className="mb-3 text-sm font-semibold">Contact</h4>
-          <ul className="space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
-            <li><a href={`mailto:${info.email}`} className="transition-colors hover:text-emerald-600 hover:underline underline-offset-4">{info.email}</a></li>
-            <li><a href={`tel:${info.phone.replace(/\s+/g, "")}`} className="transition-colors hover:text-emerald-600 hover:underline underline-offset-4">{info.phone}</a></li>
-            <li><span className="text-neutral-500">{info.city}</span></li>
+          <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Contact</h4>
+          <ul className="space-y-2.5 text-sm text-muted-foreground">
+            <li><a href={`mailto:${info.email}`} className="transition-colors hover:text-primary">{info.email}</a></li>
+            <li><a href={`tel:${info.phone.replace(/\s+/g, "")}`} className="transition-colors hover:text-primary">{info.phone}</a></li>
+            <li><span>{info.city}</span></li>
             {waHref ? (
               <li>
-                <a href={waHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-green-600 hover:text-green-700">
-                  <span>💬</span>
+                <a href={waHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full border border-[hsl(var(--app-success)/0.2)] bg-[hsl(var(--app-success)/0.1)] px-3 py-1.5 text-[13px] font-medium text-[hsl(var(--app-success))] transition-colors hover:bg-[hsl(var(--app-success)/0.16)]">
                   <span>WhatsApp us</span>
                 </a>
               </li>
@@ -97,7 +104,7 @@ export default function Footer() {
           </ul>
         </div>
       </div>
-      <div className="border-t border-neutral-200 py-6 text-center text-xs text-neutral-500 dark:border-neutral-800">
+      <div className="border-t border-border/70 py-6 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} Alyra Tech Pvt. Ltd. All rights reserved.
       </div>
     </footer>
