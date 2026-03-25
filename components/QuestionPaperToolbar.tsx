@@ -20,6 +20,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
 import { prefetchApiJson } from "@/lib/client/api";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 export function QuestionPaperToolbar({ paper }: { paper: any }) {
   const { buildReturnHref } = useReturnHrefBuilder("/workspace/question-papers");
@@ -133,8 +134,13 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
     .filter(Boolean).length;
   const createPaperHref = "/workspace/question-papers/create";
   const editHref = buildReturnHref(`/workspace/question-papers/edit/${paper._id}`);
+  const prefetchDisabled = isMockedE2ETestMode();
 
   const prefetchQuestionPaperForm = () => {
+    if (prefetchDisabled) {
+      return;
+    }
+
     router.prefetch(createPaperHref);
     void prefetchApiJson("/api/classes", {
       cache: "no-store",

@@ -32,6 +32,7 @@ function printHelp() {
       '  --jitter-ms=<ms>              Random delay jitter added per round (default: 150)',
       '  --submit=<true|false>         Submit after save rounds (default: true)',
       '  --heartbeat=<true|false>      Hit the student heartbeat during the flow (default: true)',
+      '  --list-first=<true|false>     Hit /api/student/tests before detail/start (default: true)',
       '  --timeout-ms=<ms>             Per-request timeout (default: 15000)',
       '  --out=<jsonFile>              Write JSON summary to a file',
       '  --help                        Show this help text',
@@ -552,6 +553,41 @@ async function heartbeatStudent(context, metrics, studentLabel, timeoutMs) {
   }
 }
 
+async function listStudentTests(
+  context,
+  metrics,
+  studentLabel,
+  paperId,
+  timeoutMs,
+) {
+  const result = await runRequest(
+    context,
+    metrics,
+    studentLabel,
+    'test.list',
+    '/api/student/tests',
+    {
+      method: 'GET',
+      timeoutMs,
+    },
+  );
+
+  const payload = ensureApiSuccess(
+    result,
+    'Failed to load the online test list.',
+  );
+  const tests = Array.isArray(payload?.tests) ? payload.tests : [];
+  const matchedTest = tests.find(
+    (test) => String(test?._id || '').trim() === paperId,
+  );
+
+  if (!matchedTest) {
+    throw new Error('Target online test was not visible in the student test list.');
+  }
+
+  return matchedTest;
+}
+
 async function runStudentFlow({
   baseUrl,
   schoolKey,
@@ -563,6 +599,7 @@ async function runStudentFlow({
   jitterMs,
   submitEnabled,
   heartbeatEnabled,
+  listFirstEnabled,
   timeoutMs,
   metrics,
 }) {
@@ -591,6 +628,16 @@ async function runStudentFlow({
 
     if (heartbeatEnabled) {
       await heartbeatStudent(context, metrics, student.label, timeoutMs);
+    }
+
+    if (listFirstEnabled) {
+      await listStudentTests(
+        context,
+        metrics,
+        student.label,
+        paperId,
+        timeoutMs,
+      );
     }
 
     const detailResult = await runRequest(
@@ -783,6 +830,7 @@ async function main() {
   const jitterMs = parseNonNegativeInteger(args['jitter-ms'], 150);
   const submitEnabled = parseBoolean(args.submit, true);
   const heartbeatEnabled = parseBoolean(args.heartbeat, true);
+  const listFirstEnabled = parseBoolean(args['list-first'], true);
   const timeoutMs = parsePositiveInteger(args['timeout-ms'], 15_000);
   const outputPath = String(args.out || '').trim();
 
@@ -810,6 +858,7 @@ async function main() {
       `  rounds: ${rounds}`,
       `  submit: ${submitEnabled ? 'yes' : 'no'}`,
       `  heartbeat: ${heartbeatEnabled ? 'yes' : 'no'}`,
+      `  list-first: ${listFirstEnabled ? 'yes' : 'no'}`,
     ].join('\n'),
   );
 
@@ -828,6 +877,7 @@ async function main() {
         jitterMs,
         submitEnabled,
         heartbeatEnabled,
+        listFirstEnabled,
         timeoutMs,
         metrics,
       }),
@@ -894,6 +944,7 @@ async function main() {
             jitterMs,
             submitEnabled,
             heartbeatEnabled,
+            listFirstEnabled,
             timeoutMs,
           },
           summary,

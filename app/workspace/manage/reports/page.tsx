@@ -625,7 +625,7 @@ export default function ManageReportJobsPage() {
               </div>
               <div className="space-y-3">
                 {summary.awaitingAck > 0 || summary.recoveredStale > 0 ? (
-                  <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
+                  <div className="app-feedback app-feedback-warning text-xs">
                     {summary.awaitingAck > 0 ? (
                       <p>
                         {summary.awaitingAck} visible job(s) are waiting for

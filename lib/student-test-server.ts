@@ -233,14 +233,14 @@ async function loadOnlinePapersForClassUncached(
     ...buildArchiveFilter(false),
   })
     .select(
-      "title class subject duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections.name sections.questions.marks sections.questions.negativeMarks sections.questions.question",
+      "title class subject duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections.name sections.questions.question",
     )
     .populate({ path: "class", model: ClassModel, select: "name" })
     .populate({ path: "subject", model: SubjectModel, select: "name" })
     .populate({
       path: "sections.questions.question",
       model: QuestionModel,
-      select: "type options answerIndexes matrixOptions matrixAnswers",
+      select: "type matrixOptions",
     })
     .lean();
 }

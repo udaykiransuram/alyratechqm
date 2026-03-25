@@ -152,6 +152,23 @@ type RuntimeSnapshotPayload = {
   gradingJson: any;
 };
 
+type PreparedExamPaperSnapshotPayload = {
+  classId: string;
+  subjectId: string;
+  assignedSectionIds: string[];
+  title: string;
+  instructions: string;
+  durationMinutes: number;
+  passingMarks: number;
+  totalMarks: number;
+  examDate: unknown;
+  onlineStartsAt: unknown;
+  onlineEndsAt: unknown;
+  requiresManualReview: boolean;
+  paperJson: any;
+  gradingJson: any;
+};
+
 type ExamRuntimeClient = import("@neondatabase/serverless").PoolClient;
 type ExamRuntimePool = import("@neondatabase/serverless").Pool;
 
@@ -381,8 +398,21 @@ const EXAM_RUNTIME_SCHEMA_STATEMENTS = [
 ];
 
 const EXAM_RUNTIME_DATABASE_URL = String(
-  process.env.DATABASE_URL || "",
+  process.env.EXAM_RUNTIME_DATABASE_URL || process.env.DATABASE_URL || "",
 ).trim();
+const EXAM_RUNTIME_POOL_MAX = Math.max(
+  10,
+  Number.parseInt(String(process.env.EXAM_RUNTIME_POOL_MAX || "20"), 10) || 20,
+);
+const EXAM_RUNTIME_POOL_IDLE_TIMEOUT_MS = 30_000;
+const EXAM_RUNTIME_POOL_CONNECTION_TIMEOUT_MS = 15_000;
+const EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS = Math.max(
+  5_000,
+  Number.parseInt(
+    String(process.env.EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS || "120000"),
+    10,
+  ) || 120_000,
+);
 
 let examRuntimePoolPromise: Promise<ExamRuntimePool | null> | null = null;
 let examRuntimeSchemaPromise: Promise<boolean> | null = null;
@@ -503,6 +533,119 @@ function parseJsonValue<T>(value: unknown, fallback: T) {
   return value as T;
 }
 
+type CacheEntry<T> = {
+  expiresAt: number;
+  hasValue: boolean;
+  value?: T;
+  promise?: Promise<T>;
+};
+
+function getExamRuntimeResourceCache() {
+  const globalState = global as typeof globalThis & {
+    __examRuntimeResourceCache?: Map<string, CacheEntry<unknown>>;
+  };
+
+  if (!globalState.__examRuntimeResourceCache) {
+    globalState.__examRuntimeResourceCache = new Map();
+  }
+
+  return globalState.__examRuntimeResourceCache;
+}
+
+function createExamRuntimeCacheKey(namespace: string, ...parts: unknown[]) {
+  return [namespace, ...parts.map((part) => String(part || "").trim())].join("::");
+}
+
+async function getCachedExamRuntimeResource<T>(
+  cacheKey: string,
+  ttlMs: number,
+  loader: () => Promise<T>,
+) {
+  const cache = getExamRuntimeResourceCache();
+  const now = Date.now();
+  const existingEntry = cache.get(cacheKey) as CacheEntry<T> | undefined;
+
+  if (existingEntry?.hasValue && existingEntry.expiresAt > now) {
+    return existingEntry.value as T;
+  }
+
+  if (existingEntry?.promise) {
+    return existingEntry.promise;
+  }
+
+  const promise = loader()
+    .then((value) => {
+      cache.set(cacheKey, {
+        expiresAt: Date.now() + ttlMs,
+        hasValue: true,
+        value,
+      });
+      return value;
+    })
+    .catch((error) => {
+      cache.delete(cacheKey);
+      throw error;
+    });
+
+  cache.set(cacheKey, {
+    expiresAt: now + ttlMs,
+    hasValue: false,
+    promise,
+  });
+
+  return promise;
+}
+
+function setCachedExamRuntimeResource<T>(
+  cacheKey: string,
+  ttlMs: number,
+  value: T,
+) {
+  getExamRuntimeResourceCache().set(cacheKey, {
+    expiresAt: Date.now() + ttlMs,
+    hasValue: true,
+    value,
+  });
+}
+
+function deleteCachedExamRuntimeResource(cacheKey: string) {
+  getExamRuntimeResourceCache().delete(cacheKey);
+}
+
+function getExamSnapshotByIdCacheKey(snapshotId: string) {
+  return createExamRuntimeCacheKey("snapshot-by-id", snapshotId);
+}
+
+function getActiveExamSnapshotCacheKey(schoolKey: string, paperId: string) {
+  return createExamRuntimeCacheKey("active-snapshot", schoolKey, paperId);
+}
+
+function getEnsureActiveExamSnapshotCacheKey(schoolKey: string, paperId: string) {
+  return createExamRuntimeCacheKey("ensure-active-snapshot", schoolKey, paperId);
+}
+
+function cacheExamSnapshotInMemory(snapshot: ExamPaperSnapshot) {
+  setCachedExamRuntimeResource(
+    getExamSnapshotByIdCacheKey(snapshot.id),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    snapshot,
+  );
+  setCachedExamRuntimeResource(
+    getActiveExamSnapshotCacheKey(snapshot.schoolKey, snapshot.mongoPaperId),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    snapshot,
+  );
+}
+
+function clearCachedActiveExamSnapshot(schoolKey: string, paperId: string) {
+  deleteCachedExamRuntimeResource(
+    getActiveExamSnapshotCacheKey(schoolKey, paperId),
+  );
+  deleteCachedExamRuntimeResource(
+    getEnsureActiveExamSnapshotCacheKey(schoolKey, paperId),
+  );
+}
+
 async function loadExamRuntimePool() {
   if (!EXAM_RUNTIME_DATABASE_URL) {
     return null;
@@ -510,7 +653,16 @@ async function loadExamRuntimePool() {
 
   if (!examRuntimePoolPromise) {
     examRuntimePoolPromise = import("@neondatabase/serverless")
-      .then(({ Pool }) => new Pool({ connectionString: EXAM_RUNTIME_DATABASE_URL }))
+      .then(({ Pool }) => {
+        const poolConfig = {
+          connectionString: EXAM_RUNTIME_DATABASE_URL,
+          max: EXAM_RUNTIME_POOL_MAX,
+          idleTimeoutMillis: EXAM_RUNTIME_POOL_IDLE_TIMEOUT_MS,
+          connectionTimeoutMillis: EXAM_RUNTIME_POOL_CONNECTION_TIMEOUT_MS,
+        } as any;
+
+        return new Pool(poolConfig);
+      })
       .catch((error) => {
         if (!examRuntimeDriverErrorLogged) {
           examRuntimeDriverErrorLogged = true;
@@ -689,11 +841,13 @@ async function hydrateSnapshotMetadataRow(row: any) {
   );
 
   if (cachedPayload?.paperJson && cachedPayload?.gradingJson) {
-    return {
+    const snapshot = {
       ...metadata,
       paperJson: cachedPayload.paperJson,
       gradingJson: cachedPayload.gradingJson,
     } satisfies ExamPaperSnapshot;
+    cacheExamSnapshotInMemory(snapshot);
+    return snapshot;
   }
 
   const payloadResult = await queryExamRuntime<{
@@ -728,26 +882,38 @@ async function hydrateSnapshotMetadataRow(row: any) {
     ).catch(() => undefined);
   }
 
+  cacheExamSnapshotInMemory(snapshot);
   return snapshot;
 }
 
 async function getExamSnapshotById(snapshotId: string) {
-  const result = await queryExamRuntime(
-    `
-      SELECT ${SNAPSHOT_METADATA_COLUMNS}
-      FROM exam_paper_snapshots
-      WHERE id = $1
-      LIMIT 1
-    `,
-    [snapshotId],
-  );
-
-  const row = result.rows[0];
-  if (!row) {
+  const normalizedSnapshotId = String(snapshotId || "").trim();
+  if (!UUID_PATTERN.test(normalizedSnapshotId)) {
     return null;
   }
 
-  return hydrateSnapshotMetadataRow(row);
+  return getCachedExamRuntimeResource(
+    getExamSnapshotByIdCacheKey(normalizedSnapshotId),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    async () => {
+      const result = await queryExamRuntime(
+        `
+          SELECT ${SNAPSHOT_METADATA_COLUMNS}
+          FROM exam_paper_snapshots
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [normalizedSnapshotId],
+      );
+
+      const row = result.rows[0];
+      if (!row) {
+        return null;
+      }
+
+      return hydrateSnapshotMetadataRow(row);
+    },
+  );
 }
 
 async function getExamSnapshotsByIds(snapshotIds: string[]) {
@@ -767,16 +933,61 @@ async function getExamSnapshotsByIds(snapshotIds: string[]) {
     [normalizedIds],
   );
 
-  return Promise.all(result.rows.map((row) => hydrateSnapshotMetadataRow(row)));
+  const snapshots = await Promise.all(
+    result.rows.map((row) => hydrateSnapshotMetadataRow(row)),
+  );
+
+  snapshots.forEach((snapshot) => {
+    cacheExamSnapshotInMemory(snapshot);
+  });
+
+  return snapshots;
 }
 
 async function getActiveExamSnapshotByPaperId(
   schoolKey: string,
   paperId: string,
 ) {
-  const result = await queryExamRuntime(
+  const normalizedPaperId = String(paperId || "").trim();
+  if (!normalizedPaperId) {
+    return null;
+  }
+
+  return getCachedExamRuntimeResource(
+    getActiveExamSnapshotCacheKey(schoolKey, normalizedPaperId),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    async () => {
+      const result = await queryExamRuntime(
+        `
+          SELECT ${SNAPSHOT_METADATA_COLUMNS}
+          FROM exam_paper_snapshots
+          WHERE school_key = $1
+            AND mongo_paper_id = $2
+            AND status = 'active'
+          ORDER BY snapshot_version DESC
+          LIMIT 1
+        `,
+        [schoolKey, normalizedPaperId],
+      );
+
+      const row = result.rows[0];
+      if (!row) {
+        return null;
+      }
+
+      return hydrateSnapshotMetadataRow(row);
+    },
+  );
+}
+
+async function getActiveExamSnapshotByPaperIdInTransaction(
+  client: ExamRuntimeClient,
+  schoolKey: string,
+  paperId: string,
+) {
+  const result = await client.query(
     `
-      SELECT ${SNAPSHOT_METADATA_COLUMNS}
+      SELECT ${SNAPSHOT_FULL_COLUMNS}
       FROM exam_paper_snapshots
       WHERE school_key = $1
         AND mongo_paper_id = $2
@@ -788,11 +999,7 @@ async function getActiveExamSnapshotByPaperId(
   );
 
   const row = result.rows[0];
-  if (!row) {
-    return null;
-  }
-
-  return hydrateSnapshotMetadataRow(row);
+  return row ? mapSnapshotFullRow(row) : null;
 }
 
 async function listExamAttemptsForStudent(
@@ -1294,6 +1501,164 @@ async function loadSnapshotSourcePaper(schoolKey: string, paperId: string) {
     .lean();
 }
 
+function buildPreparedExamPaperSnapshotPayload(
+  sourcePaper: any,
+): PreparedExamPaperSnapshotPayload {
+  return {
+    classId: String(sourcePaper?.class?._id || sourcePaper?.class || "").trim(),
+    subjectId: String(
+      sourcePaper?.subject?._id || sourcePaper?.subject || "",
+    ).trim(),
+    assignedSectionIds: Array.isArray(sourcePaper?.assignedAcademicSections)
+      ? sourcePaper.assignedAcademicSections
+          .map((section: any) => String(section?._id || section || "").trim())
+          .filter(Boolean)
+      : [],
+    title: String(sourcePaper?.title || ""),
+    instructions: String(sourcePaper?.instructions || ""),
+    durationMinutes: Number(sourcePaper?.duration || 0),
+    passingMarks: Number(sourcePaper?.passingMarks || 0),
+    totalMarks: Number(sourcePaper?.totalMarks || 0),
+    examDate: sourcePaper?.examDate || null,
+    onlineStartsAt: sourcePaper?.onlineStartsAt || null,
+    onlineEndsAt: sourcePaper?.onlineEndsAt || null,
+    requiresManualReview: paperRequiresManualReview(sourcePaper),
+    paperJson: toSerializableValue(sanitizePaperForStudent(sourcePaper)),
+    gradingJson: toSerializableValue(sourcePaper),
+  };
+}
+
+async function acquireExamPaperSnapshotLock(
+  client: ExamRuntimeClient,
+  schoolKey: string,
+  paperId: string,
+) {
+  await client.query(
+    `
+      SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))
+    `,
+    [schoolKey, paperId],
+  );
+}
+
+async function insertExamPaperSnapshot(
+  client: ExamRuntimeClient,
+  schoolKey: string,
+  paperId: string,
+  payload: PreparedExamPaperSnapshotPayload,
+) {
+  const versionResult = await client.query<{ next_version: number }>(
+    `
+      SELECT COALESCE(MAX(snapshot_version), 0) + 1 AS next_version
+      FROM exam_paper_snapshots
+      WHERE school_key = $1
+        AND mongo_paper_id = $2
+    `,
+    [schoolKey, paperId],
+  );
+
+  const snapshotVersion = Number(versionResult.rows[0]?.next_version || 1);
+
+  await client.query(
+    `
+      UPDATE exam_paper_snapshots
+      SET status = 'superseded',
+          updated_at = NOW()
+      WHERE school_key = $1
+        AND mongo_paper_id = $2
+        AND status = 'active'
+    `,
+    [schoolKey, paperId],
+  );
+
+  const result = await client.query(
+    `
+      INSERT INTO exam_paper_snapshots (
+        id,
+        school_key,
+        mongo_paper_id,
+        snapshot_version,
+        status,
+        class_id,
+        subject_id,
+        assigned_section_ids,
+        title,
+        instructions,
+        duration_minutes,
+        passing_marks,
+        total_marks,
+        exam_date,
+        online_starts_at,
+        online_ends_at,
+        requires_manual_review,
+        paper_json,
+        grading_json,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        'active',
+        $5,
+        $6,
+        $7::jsonb,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        $13,
+        $14,
+        $15,
+        $16,
+        $17::jsonb,
+        $18::jsonb,
+        NOW(),
+        NOW()
+      )
+      RETURNING ${SNAPSHOT_FULL_COLUMNS}
+    `,
+    [
+      crypto.randomUUID(),
+      schoolKey,
+      paperId,
+      snapshotVersion,
+      payload.classId,
+      payload.subjectId,
+      JSON.stringify(payload.assignedSectionIds),
+      payload.title,
+      payload.instructions,
+      payload.durationMinutes,
+      payload.passingMarks,
+      payload.totalMarks,
+      payload.examDate,
+      payload.onlineStartsAt,
+      payload.onlineEndsAt,
+      payload.requiresManualReview,
+      JSON.stringify(payload.paperJson),
+      JSON.stringify(payload.gradingJson),
+    ],
+  );
+
+  return mapSnapshotFullRow(result.rows[0]);
+}
+
+async function cacheExamSnapshot(snapshot: ExamPaperSnapshot) {
+  cacheExamSnapshotInMemory(snapshot);
+  await cacheExamSnapshotPayload(
+    snapshot.schoolKey,
+    snapshot.mongoPaperId,
+    snapshot.snapshotVersion,
+    {
+      paperJson: snapshot.paperJson,
+      gradingJson: snapshot.gradingJson,
+    },
+  ).catch(() => undefined);
+}
+
 export async function disableExamPaperSnapshotsForPaperId(
   schoolKey: string,
   paperId: string,
@@ -1314,6 +1679,7 @@ export async function disableExamPaperSnapshotsForPaperId(
     [schoolKey, paperId],
   );
 
+  clearCachedActiveExamSnapshot(schoolKey, paperId);
   return true;
 }
 
@@ -1331,128 +1697,15 @@ export async function syncExamPaperSnapshotForPaperId(
     return null;
   }
 
-  const studentPaper = toSerializableValue(sanitizePaperForStudent(sourcePaper));
-  const gradingPaper = toSerializableValue(sourcePaper);
-  const requiresManualReview = paperRequiresManualReview(sourcePaper);
-  const classId = String(sourcePaper?.class?._id || sourcePaper?.class || "").trim();
-  const subjectId = String(
-    sourcePaper?.subject?._id || sourcePaper?.subject || "",
-  ).trim();
-  const assignedSectionIds = Array.isArray(sourcePaper?.assignedAcademicSections)
-    ? sourcePaper.assignedAcademicSections
-        .map((section: any) => String(section?._id || section || "").trim())
-        .filter(Boolean)
-    : [];
+  clearCachedActiveExamSnapshot(schoolKey, paperId);
+  const snapshotPayload = buildPreparedExamPaperSnapshotPayload(sourcePaper);
 
   const insertedSnapshot = await withExamRuntimeTransaction(async (client) => {
-    const versionResult = await client.query<{ next_version: number }>(
-      `
-        SELECT COALESCE(MAX(snapshot_version), 0) + 1 AS next_version
-        FROM exam_paper_snapshots
-        WHERE school_key = $1
-          AND mongo_paper_id = $2
-      `,
-      [schoolKey, paperId],
-    );
-
-    const snapshotVersion = Number(versionResult.rows[0]?.next_version || 1);
-
-    await client.query(
-      `
-        UPDATE exam_paper_snapshots
-        SET status = 'superseded',
-            updated_at = NOW()
-        WHERE school_key = $1
-          AND mongo_paper_id = $2
-          AND status = 'active'
-      `,
-      [schoolKey, paperId],
-    );
-
-    const result = await client.query(
-      `
-        INSERT INTO exam_paper_snapshots (
-          id,
-          school_key,
-          mongo_paper_id,
-          snapshot_version,
-          status,
-          class_id,
-          subject_id,
-          assigned_section_ids,
-          title,
-          instructions,
-          duration_minutes,
-          passing_marks,
-          total_marks,
-          exam_date,
-          online_starts_at,
-          online_ends_at,
-          requires_manual_review,
-          paper_json,
-          grading_json,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          'active',
-          $5,
-          $6,
-          $7::jsonb,
-          $8,
-          $9,
-          $10,
-          $11,
-          $12,
-          $13,
-          $14,
-          $15,
-          $16,
-          $17::jsonb,
-          $18::jsonb,
-          NOW(),
-          NOW()
-        )
-        RETURNING ${SNAPSHOT_FULL_COLUMNS}
-      `,
-      [
-        crypto.randomUUID(),
-        schoolKey,
-        paperId,
-        snapshotVersion,
-        classId,
-        subjectId,
-        JSON.stringify(assignedSectionIds),
-        String(sourcePaper?.title || ""),
-        String(sourcePaper?.instructions || ""),
-        Number(sourcePaper?.duration || 0),
-        Number(sourcePaper?.passingMarks || 0),
-        Number(sourcePaper?.totalMarks || 0),
-        sourcePaper?.examDate || null,
-        sourcePaper?.onlineStartsAt || null,
-        sourcePaper?.onlineEndsAt || null,
-        requiresManualReview,
-        JSON.stringify(studentPaper),
-        JSON.stringify(gradingPaper),
-      ],
-    );
-
-    return mapSnapshotFullRow(result.rows[0]);
+    await acquireExamPaperSnapshotLock(client, schoolKey, paperId);
+    return insertExamPaperSnapshot(client, schoolKey, paperId, snapshotPayload);
   });
 
-  await cacheExamSnapshotPayload(
-    insertedSnapshot.schoolKey,
-    insertedSnapshot.mongoPaperId,
-    insertedSnapshot.snapshotVersion,
-    {
-      paperJson: insertedSnapshot.paperJson,
-      gradingJson: insertedSnapshot.gradingJson,
-    },
-  ).catch(() => undefined);
+  await cacheExamSnapshot(insertedSnapshot);
 
   return insertedSnapshot;
 }
@@ -1461,15 +1714,70 @@ async function ensureActiveExamSnapshotForPaperId(
   schoolKey: string,
   paperId: string,
 ) {
+  const normalizedPaperId = String(paperId || "").trim();
+  if (!normalizedPaperId) {
+    return null;
+  }
+
   const existingSnapshot = await getActiveExamSnapshotByPaperId(
     schoolKey,
-    paperId,
+    normalizedPaperId,
   );
   if (existingSnapshot) {
     return existingSnapshot;
   }
 
-  return syncExamPaperSnapshotForPaperId(schoolKey, paperId);
+  return getCachedExamRuntimeResource(
+    getEnsureActiveExamSnapshotCacheKey(schoolKey, normalizedPaperId),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    async () => {
+      const cachedSnapshot = await getActiveExamSnapshotByPaperId(
+        schoolKey,
+        normalizedPaperId,
+      );
+      if (cachedSnapshot) {
+        return cachedSnapshot;
+      }
+
+      if (!(await isExamRuntimeEnabled())) {
+        return null;
+      }
+
+      const sourcePaper = await loadSnapshotSourcePaper(
+        schoolKey,
+        normalizedPaperId,
+      );
+      if (!sourcePaper || !paperSupportsOnlineDelivery(sourcePaper)) {
+        await disableExamPaperSnapshotsForPaperId(schoolKey, normalizedPaperId);
+        return null;
+      }
+
+      const snapshotPayload = buildPreparedExamPaperSnapshotPayload(sourcePaper);
+      const snapshot = await withExamRuntimeTransaction(async (client) => {
+        await acquireExamPaperSnapshotLock(client, schoolKey, normalizedPaperId);
+
+        const lockedExistingSnapshot =
+          await getActiveExamSnapshotByPaperIdInTransaction(
+            client,
+            schoolKey,
+            normalizedPaperId,
+          );
+        if (lockedExistingSnapshot) {
+          return lockedExistingSnapshot;
+        }
+
+        return insertExamPaperSnapshot(
+          client,
+          schoolKey,
+          normalizedPaperId,
+          snapshotPayload,
+        );
+      });
+
+      await cacheExamSnapshot(snapshot);
+      return snapshot;
+    },
+  );
 }
 
 async function getAttemptAnswerBundle(
@@ -1905,6 +2213,43 @@ function buildPaperListItem(
   };
 }
 
+function didAttemptStateChange(
+  previousAttempt: ExamAttempt,
+  nextAttempt: ExamAttempt,
+) {
+  return (
+    previousAttempt.status !== nextAttempt.status ||
+    previousAttempt.submittedAt !== nextAttempt.submittedAt ||
+    previousAttempt.lastSavedAt !== nextAttempt.lastSavedAt ||
+    previousAttempt.totalMarksAwarded !== nextAttempt.totalMarksAwarded
+  );
+}
+
+function isStudentEligibleForSnapshot(snapshot: ExamPaperSnapshot, student: any) {
+  const studentClassId = String(student?.class?._id || student?.class || "").trim();
+  if (!studentClassId || studentClassId !== snapshot.classId) {
+    return false;
+  }
+
+  const assignedSectionIds = new Set(
+    (Array.isArray(snapshot.assignedSectionIds)
+      ? snapshot.assignedSectionIds
+      : []
+    )
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
+  );
+
+  if (assignedSectionIds.size === 0) {
+    return true;
+  }
+
+  const studentSectionId = String(
+    student?.academicSection?._id || student?.academicSection || "",
+  ).trim();
+  return Boolean(studentSectionId && assignedSectionIds.has(studentSectionId));
+}
+
 export async function listStudentExamRuntimeTests(
   schoolKey: string,
   studentId: string,
@@ -1927,27 +2272,32 @@ export async function listStudentExamRuntimeTests(
   }
 
   const studentClassId = String(student.class?._id || student.class || "").trim();
-  const currentPapers = studentClassId
-    ? await loadOnlinePapersForClass(models, schoolKey, studentClassId)
-    : [];
+  const [currentPapers, attempts] = await Promise.all([
+    studentClassId
+      ? loadOnlinePapersForClass(models, schoolKey, studentClassId)
+      : Promise.resolve([]),
+    listExamAttemptsForStudent(schoolKey, studentId),
+  ]);
   const eligibleCurrentPapers = currentPapers.filter(
     (paper: any) =>
       paperSupportsOnlineDelivery(paper) &&
       isStudentEligibleForPaper(paper, student),
   );
 
-  const attempts = await listExamAttemptsForStudent(schoolKey, studentId);
   const snapshotsById = new Map(
     (
       await getExamSnapshotsByIds(attempts.map((attempt) => attempt.snapshotId))
     ).map((snapshot) => [snapshot.id, snapshot]),
   );
   const initialAnswerRowsByAttemptId = buildAnswerRowsByAttemptId(
-    await listExamAnswerRowsByAttemptIds(attempts.map((attempt) => attempt.id)),
+    attempts.length > 0
+      ? await listExamAnswerRowsByAttemptIds(attempts.map((attempt) => attempt.id))
+      : [],
   );
 
   const attemptRowsById = new Map<string, ExamAnswerRow[]>();
   const mongoProjectionIdByKey = new Map<string, string>();
+  let attemptsChanged = false;
 
   for (const attempt of attempts) {
     const snapshot = snapshotsById.get(attempt.snapshotId) || null;
@@ -1965,7 +2315,11 @@ export async function listStudentExamRuntimeTests(
     });
     attemptRowsById.set(nextAttemptBundle.attempt.id, nextAttemptBundle.answerRows);
     snapshotsById.set(snapshot.id, snapshot);
+    if (didAttemptStateChange(attempt, nextAttemptBundle.attempt)) {
+      attemptsChanged = true;
+    }
     if (nextAttemptBundle.mongoResponseId) {
+      attemptsChanged = true;
       mongoProjectionIdByKey.set(
         buildMongoAttemptProjectionKey(
           nextAttemptBundle.attempt.mongoPaperId,
@@ -1976,14 +2330,18 @@ export async function listStudentExamRuntimeTests(
     }
   }
 
-  const refreshedAttempts = await listExamAttemptsForStudent(schoolKey, studentId);
-  const existingProjectionIds = await loadMongoAttemptProjectionIdMap(
-    schoolKey,
-    refreshedAttempts,
-  );
-  existingProjectionIds.forEach((value, key) => {
-    mongoProjectionIdByKey.set(key, value);
-  });
+  const refreshedAttempts = attemptsChanged
+    ? await listExamAttemptsForStudent(schoolKey, studentId)
+    : attempts;
+  if (refreshedAttempts.length > 0) {
+    const existingProjectionIds = await loadMongoAttemptProjectionIdMap(
+      schoolKey,
+      refreshedAttempts,
+    );
+    existingProjectionIds.forEach((value, key) => {
+      mongoProjectionIdByKey.set(key, value);
+    });
+  }
   const refreshedAttemptsByPaperId = new Map(
     refreshedAttempts.map((attempt) => [attempt.mongoPaperId, attempt]),
   );
@@ -1996,14 +2354,11 @@ export async function listStudentExamRuntimeTests(
       continue;
     }
 
-    const activeSnapshot = await ensureActiveExamSnapshotForPaperId(
-      schoolKey,
-      paperId,
-    );
     const attempt = refreshedAttemptsByPaperId.get(paperId) || null;
     const snapshot = attempt
-      ? snapshotsById.get(attempt.snapshotId) || activeSnapshot
-      : activeSnapshot;
+      ? snapshotsById.get(attempt.snapshotId) ||
+        (await ensureActiveExamSnapshotForPaperId(schoolKey, paperId))
+      : null;
     const answerRows = attempt ? attemptRowsById.get(attempt.id) || [] : [];
     const mongoResponseId =
       attempt && snapshot
@@ -2025,12 +2380,21 @@ export async function listStudentExamRuntimeTests(
         ? serializeRuntimeAttempt(attempt, snapshot.paperJson, answerRows, {
             responseId: mongoResponseId,
           })
+        : attempt
+          ? serializeRuntimeAttempt(
+              attempt,
+              sanitizePaperForStudent(paper),
+              answerRows,
+              { responseId: mongoResponseId },
+            )
         : null;
 
     testsByPaperId.set(
       paperId,
       buildPaperListItem(
-        snapshot?.paperJson || sanitizePaperForStudent(paper),
+        attempt && snapshot
+          ? snapshot.paperJson
+          : sanitizePaperForStudent(paper),
         attempt,
         serializedAttempt,
         now,
@@ -2135,6 +2499,42 @@ export async function getStudentExamRuntimeDetail(
     };
   }
 
+  const [student, snapshot] = await Promise.all([
+    loadStudentUser(UserModel, studentId, {
+      schoolKey,
+      useCache: true,
+    }),
+    ensureActiveExamSnapshotForPaperId(schoolKey, paperId),
+  ]);
+  if (!student) {
+    throwExamRuntimeError({
+      message: "Student profile not found.",
+      code: "STUDENT_NOT_FOUND",
+      httpStatus: 404,
+      retryable: false,
+    });
+  }
+
+  if (snapshot) {
+    if (!isStudentEligibleForSnapshot(snapshot, student)) {
+      throwExamRuntimeError({
+        message: "You are not assigned to this online test.",
+        code: "ONLINE_TEST_NOT_ASSIGNED",
+        httpStatus: 403,
+        retryable: false,
+      });
+    }
+
+    return {
+      success: true,
+      paper: snapshot.paperJson,
+      attempt: null,
+      status: deriveStudentTestStatus(snapshot.paperJson, null, now),
+      remainingTimeMs: null,
+      deadlineAt: null,
+    };
+  }
+
   const paper = await loadOnlinePaperById(models, schoolKey, paperId);
   if (!paper) {
     throwExamRuntimeError({
@@ -2155,19 +2555,6 @@ export async function getStudentExamRuntimeDetail(
     });
   }
 
-  const student = await loadStudentUser(UserModel, studentId, {
-    schoolKey,
-    useCache: true,
-  });
-  if (!student) {
-    throwExamRuntimeError({
-      message: "Student profile not found.",
-      code: "STUDENT_NOT_FOUND",
-      httpStatus: 404,
-      retryable: false,
-    });
-  }
-
   if (!isStudentEligibleForPaper(paper, student)) {
     throwExamRuntimeError({
       message: "You are not assigned to this online test.",
@@ -2177,18 +2564,11 @@ export async function getStudentExamRuntimeDetail(
     });
   }
 
-  const snapshot =
-    (await ensureActiveExamSnapshotForPaperId(schoolKey, paperId)) || null;
-
   return {
     success: true,
-    paper: snapshot?.paperJson || sanitizePaperForStudent(paper),
+    paper: sanitizePaperForStudent(paper),
     attempt: null,
-    status: deriveStudentTestStatus(
-      snapshot?.paperJson || paper,
-      null,
-      now,
-    ),
+    status: deriveStudentTestStatus(paper, null, now),
     remainingTimeMs: null,
     deadlineAt: null,
   };
@@ -2237,6 +2617,148 @@ export async function startStudentExamRuntimeAttempt(
 
     const models = await getStudentTestModels(schoolKey);
     const { User: UserModel } = models;
+    const [student, existingSnapshot] = await Promise.all([
+      loadStudentUser(UserModel, studentId, {
+        schoolKey,
+        useCache: true,
+      }),
+      ensureActiveExamSnapshotForPaperId(schoolKey, paperId),
+    ]);
+    if (!student) {
+      throwExamRuntimeError({
+        message: "Student profile not found.",
+        code: "STUDENT_NOT_FOUND",
+        httpStatus: 404,
+        retryable: false,
+      });
+    }
+
+    if (existingSnapshot) {
+      if (!isStudentEligibleForSnapshot(existingSnapshot, student)) {
+        throwExamRuntimeError({
+          message: "You are not assigned to this online test.",
+          code: "ONLINE_TEST_NOT_ASSIGNED",
+          httpStatus: 403,
+          retryable: false,
+        });
+      }
+
+      const windowStart = getPaperWindowStart(existingSnapshot);
+      const windowEnd = getPaperWindowEnd(existingSnapshot);
+
+      if (windowStart && now.getTime() < windowStart.getTime()) {
+        throwExamRuntimeError({
+          message: "This online test is not open yet.",
+          code: "ONLINE_TEST_NOT_OPEN_YET",
+          httpStatus: 403,
+          retryable: false,
+        });
+      }
+
+      if (windowEnd && now.getTime() > windowEnd.getTime()) {
+        throwExamRuntimeError({
+          message: "This online test is closed.",
+          code: "ONLINE_TEST_CLOSED",
+          httpStatus: 403,
+          retryable: false,
+        });
+      }
+
+      attempt = await withExamRuntimeTransaction(async (client) => {
+        const deadlineMs = getPaperWindowEnd(existingSnapshot.paperJson)
+          ? Math.min(
+              new Date(existingSnapshot.paperJson.onlineEndsAt).getTime(),
+              now.getTime() +
+                Number(existingSnapshot.paperJson.duration || 0) * 60_000,
+            )
+          : now.getTime() +
+            Number(existingSnapshot.paperJson.duration || 0) * 60_000;
+
+        const result = await client.query(
+          `
+            INSERT INTO exam_attempts (
+              id,
+              school_key,
+              snapshot_id,
+              mongo_paper_id,
+              student_id,
+              status,
+              started_at,
+              deadline_at,
+              last_saved_at,
+              total_marks_awarded,
+              manual_review_required,
+              created_at,
+              updated_at
+            )
+            VALUES (
+              $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              'in_progress',
+              $6,
+              $7,
+              $6,
+              0,
+              $8,
+              NOW(),
+              NOW()
+            )
+            ON CONFLICT (school_key, mongo_paper_id, student_id)
+            DO NOTHING
+            RETURNING ${ATTEMPT_COLUMNS}
+          `,
+          [
+            crypto.randomUUID(),
+            schoolKey,
+            existingSnapshot.id,
+            paperId,
+            studentId,
+            now.toISOString(),
+            Number.isFinite(deadlineMs)
+              ? new Date(deadlineMs).toISOString()
+              : null,
+            existingSnapshot.requiresManualReview,
+          ],
+        );
+
+        const insertedRow = result.rows[0];
+        if (insertedRow) {
+          return mapAttemptRow(insertedRow);
+        }
+
+        const existingResult = await client.query(
+          `
+            SELECT ${ATTEMPT_COLUMNS}
+            FROM exam_attempts
+            WHERE school_key = $1
+              AND mongo_paper_id = $2
+              AND student_id = $3
+            LIMIT 1
+          `,
+          [schoolKey, paperId, studentId],
+        );
+
+        return mapAttemptRow(existingResult.rows[0]);
+      });
+
+      return {
+        success: true,
+        attempt: serializeRuntimeAttempt(attempt, existingSnapshot.paperJson, [], {
+          sectionAnswers: [],
+        }),
+        status: deriveStudentTestStatus(
+          existingSnapshot.paperJson,
+          buildAttemptStateForStatus(attempt),
+          now,
+        ),
+        remainingTimeMs: getAttemptRemainingTimeMs(attempt, now),
+        deadlineAt: attempt.deadlineAt,
+      };
+    }
+
     const paper = await loadOnlinePaperById(models, schoolKey, paperId);
     if (!paper) {
       throwExamRuntimeError({
@@ -2253,19 +2775,6 @@ export async function startStudentExamRuntimeAttempt(
           "This paper cannot be delivered online because it contains unsupported question types.",
         code: "ONLINE_TEST_UNSUPPORTED",
         httpStatus: 400,
-        retryable: false,
-      });
-    }
-
-    const student = await loadStudentUser(UserModel, studentId, {
-      schoolKey,
-      useCache: true,
-    });
-    if (!student) {
-      throwExamRuntimeError({
-        message: "Student profile not found.",
-        code: "STUDENT_NOT_FOUND",
-        httpStatus: 404,
         retryable: false,
       });
     }
@@ -2659,6 +3168,12 @@ export async function submitStudentExamRuntimeAttempt(params: {
 
       if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
         const storedAnswerRows = await loadExistingAnswerRows();
+        await upsertMongoAttemptProjection({
+          schoolKey: params.schoolKey,
+          attempt,
+          snapshot,
+          answerRows: storedAnswerRows,
+        });
 
         return {
           success: true,
@@ -2789,12 +3304,23 @@ export async function submitStudentExamRuntimeAttempt(params: {
         });
       }
 
+      const resolvedAnswerRows = await listExamAnswerRowsByAttemptIds([
+        resolvedAttempt.id,
+      ]);
+      await upsertMongoAttemptProjection({
+        schoolKey: params.schoolKey,
+        attempt: resolvedAttempt,
+        snapshot,
+        answerRows: resolvedAnswerRows,
+        sectionAnswers: graded.sectionAnswers,
+      });
+
       return {
         success: true,
         attempt: serializeRuntimeAttempt(
           resolvedAttempt,
           snapshot.paperJson,
-          [],
+          resolvedAnswerRows,
           {
             sectionAnswers: graded.sectionAnswers,
           },

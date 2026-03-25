@@ -291,23 +291,23 @@ export default function StudentAccountPage() {
             <CardTitle>Profile Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <div className="app-detail-grid">
+              <div className="app-detail-item">
+                <p className="app-detail-label">
                   Username
                 </p>
-                <p className="mt-1 text-sm font-medium text-foreground">
+                <p className="app-detail-value">
                   {student?.rollNumber || "—"}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   This roll number is used for online-test sign-in.
                 </p>
               </div>
-              <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <div className="app-detail-item">
+                <p className="app-detail-label">
                   Placement
                 </p>
-                <p className="mt-1 text-sm font-medium text-foreground">
+                <p className="app-detail-value">
                   {student?.className || "Not assigned"}
                   {student?.academicSectionName
                     ? ` • ${student.academicSectionName}`
@@ -438,7 +438,7 @@ export default function StudentAccountPage() {
           <CardTitle>Online-Test Analysis Reports</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3">
+          <div className="app-toolbar">
             <p className="text-sm font-semibold text-foreground">
               Completed online tests
             </p>
@@ -467,7 +467,7 @@ export default function StudentAccountPage() {
                 return (
                   <div
                     key={responseId}
-                    className="rounded-2xl border border-border/60 bg-background/95 px-4 py-4 shadow-sm"
+                    className="app-link-card rounded-[calc(var(--app-radius-lg)+2px)] px-4 py-4"
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <div className="space-y-1.5">

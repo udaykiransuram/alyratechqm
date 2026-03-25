@@ -25,14 +25,14 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-start justify-between gap-3 overflow-hidden rounded-2xl border px-5 py-4 pr-10 shadow-xl backdrop-blur transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-3 data-[state=open]:sm:slide-in-from-bottom-3",
+  "group pointer-events-auto relative flex w-full items-start justify-between gap-3 overflow-hidden rounded-[calc(var(--app-radius-lg)+2px)] border px-5 py-4 pr-10 shadow-[0_24px_48px_-28px_hsl(var(--app-shadow-deep)/0.34)] backdrop-blur transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-3 data-[state=open]:sm:slide-in-from-bottom-3",
   {
     variants: {
       variant: {
         default:
-          "border-border/60 bg-background/95 text-foreground supports-[backdrop-filter]:bg-background/90",
+          "border-border/60 bg-background/96 text-foreground supports-[backdrop-filter]:bg-background/92",
         destructive:
-          "destructive group border-destructive/40 bg-destructive/10 text-destructive",
+          "destructive group border-destructive/28 bg-destructive/10 text-destructive",
       },
     },
     defaultVariants: {
@@ -63,7 +63,7 @@ const ToastAction = React.forwardRef<
   <ToastPrimitives.Action
     ref={ref}
     className={cn(
-      "inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-input bg-background/80 px-3 text-sm font-medium shadow-sm ring-offset-background transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-destructive/30 group-[.destructive]:bg-background/70 group-[.destructive]:text-destructive group-[.destructive]:hover:bg-destructive/15 group-[.destructive]:focus:ring-destructive",
+      "inline-flex h-9 shrink-0 items-center justify-center rounded-[var(--app-radius-md)] border border-input bg-background/84 px-3 text-sm font-medium shadow-[0_10px_24px_-24px_hsl(var(--app-shadow-deep)/0.18)] ring-offset-background transition-[background-color,border-color] hover:bg-accent/70 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-destructive/24 group-[.destructive]:bg-background/76 group-[.destructive]:text-destructive group-[.destructive]:hover:bg-destructive/15 group-[.destructive]:focus:ring-destructive",
       className,
     )}
     {...props}
@@ -78,7 +78,7 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "absolute right-3 top-3 rounded-lg p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-accent hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 group-hover:opacity-100 group-[.destructive]:text-destructive/70 group-[.destructive]:hover:bg-destructive/15 group-[.destructive]:hover:text-destructive group-[.destructive]:focus:ring-destructive",
+      "absolute right-3 top-3 rounded-[var(--app-radius-sm)] p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-accent/70 hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 group-hover:opacity-100 group-[.destructive]:text-destructive/70 group-[.destructive]:hover:bg-destructive/15 group-[.destructive]:hover:text-destructive group-[.destructive]:focus:ring-destructive",
       className,
     )}
     toast-close=""

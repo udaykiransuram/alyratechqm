@@ -26,7 +26,7 @@ function getFirstSearchParam(
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const [schools, cookieStore, resolvedSearchParams] = await Promise.all([
-    getPublicSchoolOptions(),
+    getPublicSchoolOptions().catch(() => []),
     cookies(),
     searchParams,
   ]);

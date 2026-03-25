@@ -9,6 +9,7 @@ import {
   getSchoolKeyFromCookie,
   setSchoolSelectionCookies,
 } from "@/lib/client/school";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -69,6 +70,7 @@ const SIDEBAR_WIDTH_STORAGE_KEY = "app-sidebar-width";
 const SIDEBAR_DEFAULT_WIDTH = 272;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 420;
+const sidebarPrefetchDisabled = isMockedE2ETestMode();
 
 type SidebarSide = "left" | "right";
 
@@ -362,14 +364,16 @@ function Brand() {
   return (
     <AppPrefetchLink
       href={href}
-      className="app-nav-brand flex min-w-0 items-center gap-2.5 px-1.5 py-1.5"
+      className="app-nav-brand flex min-w-0 items-center gap-3 px-2 py-1.5"
     >
-      <div className="app-nav-logo flex h-9 w-9 items-center justify-center rounded-xl">
+      <div className="app-nav-logo flex h-10 w-10 items-center justify-center rounded-2xl">
         <Layers className="h-5 w-5" />
       </div>
       <div className="min-w-0">
-        <p className="text-[13px] font-semibold tracking-wide">ALYRA TECH</p>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
+        <p className="text-[13px] font-semibold tracking-[0.16em] text-foreground">
+          ALYRA TECH
+        </p>
+        <p className="text-[11px] text-muted-foreground">{subtitle}</p>
       </div>
     </AppPrefetchLink>
   );
@@ -413,6 +417,18 @@ function useCurrentSchoolInfo(enabled: boolean): CurrentSchoolInfo {
 
     const schoolKey = getSchoolKeyFromCookie();
     const schoolDisplayName = getSchoolDisplayNameFromCookie();
+
+    if (sidebarPrefetchDisabled) {
+      setSchool({
+        key: schoolKey,
+        label: schoolDisplayName || schoolKey,
+        resolved: true,
+      });
+
+      return () => {
+        active = false;
+      };
+    }
 
     setSchool({
       key: schoolKey,
@@ -487,7 +503,7 @@ function CollapsedSchoolBadge({ school }: { school: CurrentSchoolInfo }) {
       aria-label={`Current school: ${school.label || school.key}`}
       className="app-nav-chip mt-2.5 flex items-center justify-center p-1.5"
     >
-      <div className="app-nav-logo flex h-9 w-9 items-center justify-center rounded-xl text-xs font-semibold tracking-[0.08em]">
+      <div className="app-nav-logo flex h-9 w-9 items-center justify-center rounded-xl text-xs font-semibold tracking-[0.1em]">
         {school.initials}
       </div>
     </div>
@@ -510,11 +526,11 @@ function CurrentSchoolBadge({
       title={title}
       aria-label={title}
       className={cn(
-        "app-nav-chip flex h-9 max-w-[min(32rem,44vw)] items-center gap-2 px-3",
+        "app-nav-chip flex h-10 max-w-[min(32rem,44vw)] items-center gap-2.5 px-3.5",
         compact ? "max-w-full" : null,
       )}
     >
-      <div className="app-nav-logo flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-semibold tracking-[0.08em]">
+      <div className="app-nav-logo flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-semibold tracking-[0.1em]">
         {school.initials}
       </div>
       <p className="min-w-0 truncate text-[13px] font-medium leading-none text-foreground">
@@ -554,7 +570,7 @@ function DesktopSidebarItem({
 
   const openMenu = () => {
     clearCloseTimeout();
-    if (!hasPrefetchedChildrenRef.current) {
+    if (!sidebarPrefetchDisabled && !hasPrefetchedChildrenRef.current) {
       hasPrefetchedChildrenRef.current = true;
       item.children.forEach((child) => {
         router.prefetch(child.href);
@@ -1037,7 +1053,7 @@ export default function SiteHeader() {
   return (
     <>
       <header className="app-nav-shell fixed inset-x-0 top-0 z-50 h-[var(--app-header-height)] border-b">
-        <div className="flex h-full items-center justify-between gap-3 px-3 lg:px-4">
+        <div className="flex h-full items-center justify-between gap-3 px-3 lg:px-5">
           <div className="flex min-w-0 items-center gap-3">
             {hasSidebar ? (
               <MobileSidebar
@@ -1174,8 +1190,8 @@ export default function SiteHeader() {
           <div className="flex h-full flex-col">
             <div
               className={cn(
-                "border-b border-[hsl(var(--app-nav-border)/0.85)] py-2.5",
-                collapsed ? "px-1.5" : "px-3",
+                "border-b border-[hsl(var(--app-nav-border)/0.85)] py-3",
+                collapsed ? "px-1.5" : "px-3.5",
               )}
             >
               <div
@@ -1186,7 +1202,7 @@ export default function SiteHeader() {
               >
                 {!collapsed && (
                   <div className="flex items-center gap-2 px-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                       Navigation
                     </p>
                     <Button
@@ -1265,7 +1281,7 @@ export default function SiteHeader() {
                 aria-label="Resize sidebar"
                 onPointerDown={startSidebarResize}
                 className={cn(
-                  "absolute bottom-0 top-0 z-10 w-2 cursor-col-resize select-none bg-transparent transition-colors hover:bg-primary/10",
+                  "absolute bottom-0 top-0 z-10 w-2 cursor-col-resize select-none bg-transparent transition-colors hover:bg-primary/12",
                   sidebarSide === "left" ? "-right-1" : "-left-1",
                 )}
               />

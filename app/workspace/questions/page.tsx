@@ -543,6 +543,7 @@ export default function ViewQuestionsPage() {
       <PageHero
         eyebrow="Question Bank"
         title="Questions"
+        description="Filter by class, subject, tags, and search terms without leaving the question workspace."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline">
@@ -833,14 +834,14 @@ export default function ViewQuestionsPage() {
 	      </div>
 
 	      {filteredQuestions.length > QUESTIONS_VISIBLE_PAGE_SIZE ? (
-	        <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-3">
-	          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-	            <div className="space-y-1">
-	              <p className="text-sm font-medium text-foreground">
+	        <div className="app-toolbar">
+	          <div className="app-toolbar-row">
+	            <div className="app-toolbar-copy">
+	              <p className="app-toolbar-title">
 	                Showing {visibleQuestions.length} of {filteredQuestions.length} loaded question
 	                {filteredQuestions.length === 1 ? '' : 's'}
 	              </p>
-	              <p className="text-xs text-muted-foreground">
+	              <p className="app-toolbar-note">
 	                Load more when you want to expand the current result set without jumping pages.
 	              </p>
 	            </div>

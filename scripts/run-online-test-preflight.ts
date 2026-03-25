@@ -2,6 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
+import {
+  resolveManagedOnlineTestBaseUrl,
+  resolveOnlineTestServerMode,
+  withOnlineTestServer,
+} from "./online-test-server.ts";
+
 type ParsedArgs = {
   baseUrl: string;
   schoolKey: string;
@@ -11,6 +17,7 @@ type ParsedArgs = {
   seedStudents: number;
   concurrency: number;
   rounds: number;
+  serverMode?: string;
 };
 
 type SeedMeta = {
@@ -19,6 +26,36 @@ type SeedMeta = {
   studentsFile: string;
   studentCount: number;
 };
+
+function printHelp() {
+  console.log(
+    [
+      "Usage: npm run preflight:online-test -- [options]",
+      "",
+      "Options:",
+      "  --base=<url>                  App base URL (default: http://127.0.0.1:3000)",
+      "  --school=<schoolKey>          Existing school key to reuse instead of auto-seeding",
+      "  --paper=<paperId>             Existing paper id to reuse instead of auto-seeding",
+      "  --students=<jsonFile>         Existing student credential file to reuse",
+      "  --auto-seed=<true|false>      Seed disposable data when inputs are missing (default: true)",
+      "  --seed-students=<n>           Number of disposable students to seed (default: 100)",
+      "  --concurrency=<n>             Concurrent student flows for the load gate (default: 100)",
+      "  --rounds=<n>                  Save rounds per student before submit (default: 3)",
+      "  --server-mode=<mode>          external, dev, or prod (default: auto from --base)",
+      "  --help                        Show this help text",
+      "",
+      "What it runs:",
+      "  1. npm run typecheck",
+      "  2. targeted lint for student online-test routes",
+      "  3. integration e2e against the online student test flow",
+      "  4. the online student load gate with list/detail/start/save/heartbeat/submit coverage",
+    ].join("\n"),
+  );
+}
+
+function resolveCommand(name: string) {
+  return process.platform === "win32" ? `${name}.cmd` : name;
+}
 
 function parseBoolean(value: string | undefined, defaultValue: boolean) {
   const normalized = String(value || "")
@@ -82,19 +119,65 @@ function parseArgs(argv: string[]): ParsedArgs {
       argMap.get("rounds") || process.env.ONLINE_TEST_GATE_ROUNDS,
       3,
     ),
+    serverMode:
+      String(
+        argMap.get("server-mode") || process.env.ONLINE_TEST_GATE_SERVER_MODE || "",
+      ).trim() || undefined,
   };
 }
 
-function runCommand(command: string, args: string[], label: string) {
+function runCommand(
+  command: string,
+  args: string[],
+  label: string,
+  envOverrides: Record<string, string> = {},
+) {
   console.log(`\n== ${label} ==`);
-  const result = spawnSync(command, args, {
+  const result = spawnSync(resolveCommand(command), args, {
     stdio: "inherit",
-    env: process.env,
+    env: {
+      ...process.env,
+      ...envOverrides,
+    },
   });
   const exitCode = result.status === null ? 1 : result.status;
   if (exitCode !== 0) {
     throw new Error(`${label} failed with exit code ${exitCode}.`);
   }
+}
+
+function ensureManagedSchoolUserAuthRateLimit(args: ParsedArgs, serverMode: string) {
+  if (serverMode === "external") {
+    return;
+  }
+
+  if (String(process.env.SCHOOL_USER_AUTH_CALLBACK_RATE_LIMIT_MAX || "").trim()) {
+    return;
+  }
+
+  const derivedLimit = Math.max(
+    250,
+    args.seedStudents * 2,
+    args.concurrency * 4,
+  );
+  process.env.SCHOOL_USER_AUTH_CALLBACK_RATE_LIMIT_MAX = String(derivedLimit);
+  console.log(
+    `School-user auth callback rate limit max: ${process.env.SCHOOL_USER_AUTH_CALLBACK_RATE_LIMIT_MAX}`,
+  );
+}
+
+function ensureManagedExamRuntimePoolMax(args: ParsedArgs, serverMode: string) {
+  if (serverMode === "external") {
+    return;
+  }
+
+  if (String(process.env.EXAM_RUNTIME_POOL_MAX || "").trim()) {
+    return;
+  }
+
+  const derivedPoolMax = Math.min(100, Math.max(20, args.concurrency));
+  process.env.EXAM_RUNTIME_POOL_MAX = String(derivedPoolMax);
+  console.log(`Exam runtime pool max: ${process.env.EXAM_RUNTIME_POOL_MAX}`);
 }
 
 async function maybeSeed(args: ParsedArgs) {
@@ -143,7 +226,25 @@ async function maybeSeed(args: ParsedArgs) {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv.some((arg) => String(arg || "").startsWith("--help"))) {
+    printHelp();
+    return;
+  }
+
+  const args = parseArgs(argv);
+  const serverMode = resolveOnlineTestServerMode(args.baseUrl, args.serverMode);
+  const managedBaseUrl = await resolveManagedOnlineTestBaseUrl(
+    args.baseUrl,
+    serverMode,
+  );
+  ensureManagedSchoolUserAuthRateLimit(args, serverMode);
+  ensureManagedExamRuntimePoolMax(args, serverMode);
+  const commandEnv = {
+    BASE_URL: managedBaseUrl,
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL || managedBaseUrl,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || managedBaseUrl,
+  };
 
   runCommand("npm", ["run", "typecheck"], "Typecheck");
   runCommand(
@@ -165,35 +266,50 @@ async function main() {
     ],
     "Targeted lint",
   );
-  runCommand(
-    "npm",
-    ["run", "test:e2e:online-integration"],
-    "Student online-test integration e2e",
-  );
 
   const seeded = await maybeSeed(args);
 
   const stressOut = path.resolve(`/tmp/online-test-preflight-stress-${Date.now()}.json`);
   const gateOut = `${stressOut}.gate.json`;
 
-  runCommand(
-    "npm",
-    [
-      "run",
-      "gate:student-tests:load",
-      "--",
-      `--base=${args.baseUrl}`,
-      `--school=${seeded.schoolKey}`,
-      `--paper=${seeded.paperId}`,
-      `--students=${seeded.studentsFile}`,
-      `--concurrency=${args.concurrency}`,
-      `--rounds=${args.rounds}`,
-      "--submit=true",
-      "--heartbeat=true",
-      `--out=${stressOut}`,
-      `--gate-out=${gateOut}`,
-    ],
-    "Student online-test load gate",
+  await withOnlineTestServer(
+    {
+      baseUrl: managedBaseUrl,
+      mode: serverMode,
+    },
+    async () => {
+      runCommand(
+        "npm",
+        ["run", "test:e2e:online-integration"],
+        "Student online-test integration e2e",
+        {
+          ...commandEnv,
+          PLAYWRIGHT_USE_EXTERNAL_SERVER: "1",
+        },
+      );
+
+      runCommand(
+        "npm",
+        [
+          "run",
+          "gate:student-tests:load",
+          "--",
+          `--base=${managedBaseUrl}`,
+          `--school=${seeded.schoolKey}`,
+          `--paper=${seeded.paperId}`,
+          `--students=${seeded.studentsFile}`,
+          `--concurrency=${args.concurrency}`,
+          `--rounds=${args.rounds}`,
+          "--submit=true",
+          "--heartbeat=true",
+          "--list-first=true",
+          `--out=${stressOut}`,
+          `--gate-out=${gateOut}`,
+        ],
+        "Student online-test load gate",
+        commandEnv,
+      );
+    },
   );
 
   console.log("\n== Manual operational checks required before go-live ==");

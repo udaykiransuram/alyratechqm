@@ -1,6 +1,7 @@
 import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 import type {
   WorkspaceAcademicSectionItem,
   WorkspaceClassItem,
@@ -86,6 +87,10 @@ function mapTagItem(value: any): WorkspaceTagItem {
 export async function getWorkspaceClasses(
   schoolKey: string,
 ): Promise<WorkspaceClassItem[]> {
+  if (isMockedE2ETestMode()) {
+    return [];
+  }
+
   await connectDB();
   const { Class: ClassModel } = await getTenantModels(schoolKey, ["Class"]);
   const classes = await ClassModel.find(buildArchiveFilter(false))
@@ -101,6 +106,10 @@ export async function getWorkspaceSections(
     includeInactive?: boolean;
   },
 ): Promise<WorkspaceAcademicSectionItem[]> {
+  if (isMockedE2ETestMode()) {
+    return [];
+  }
+
   await connectDB();
   const includeInactive = options?.includeInactive === true;
   const {
@@ -122,6 +131,10 @@ export async function getWorkspaceSections(
 export async function getWorkspaceSubjects(
   schoolKey: string,
 ): Promise<WorkspaceSubjectItem[]> {
+  if (isMockedE2ETestMode()) {
+    return [];
+  }
+
   await connectDB();
   const {
     Subject: SubjectModel,
@@ -143,6 +156,10 @@ export async function getWorkspaceSubjects(
 export async function getWorkspaceTagTypes(
   schoolKey: string,
 ): Promise<WorkspaceTagTypeItem[]> {
+  if (isMockedE2ETestMode()) {
+    return [];
+  }
+
   await connectDB();
   const { TagType: TagTypeModel } = await getTenantModels(schoolKey, [
     "TagType",
@@ -159,6 +176,10 @@ export async function getWorkspaceTagTypes(
 export async function getWorkspaceTags(
   schoolKey: string,
 ): Promise<WorkspaceTagItem[]> {
+  if (isMockedE2ETestMode()) {
+    return [];
+  }
+
   await connectDB();
   const { Tag: TagModel } = await getTenantModels(schoolKey, ["Tag", "TagType"]);
   const tags = await TagModel.find(buildArchiveFilter(false))
@@ -179,6 +200,14 @@ export async function getWorkspaceTagsWithSubjects(
   total: number;
   partial: boolean;
 }> {
+  if (isMockedE2ETestMode()) {
+    return {
+      tags: [],
+      total: 0,
+      partial: false,
+    };
+  }
+
   await connectDB();
   const { Tag: TagModel, Subject: SubjectModel } = await getTenantModels(
     schoolKey,

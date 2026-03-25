@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: online-test-preflight-${{ github.ref }}
   cancel-in-progress: true
@@ -33,6 +36,7 @@ jobs:
       ONLINE_TEST_GATE_SEED_STUDENTS: "100"
       ONLINE_TEST_GATE_CONCURRENCY: "100"
       ONLINE_TEST_GATE_ROUNDS: "3"
+      ONLINE_TEST_GATE_SERVER_MODE: "prod"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

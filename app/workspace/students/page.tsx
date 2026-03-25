@@ -476,7 +476,17 @@ export default function StudentsByClassPage() {
           dense
         />
       ) : groups.length === 0 ? (
-        <div className="app-empty-state">No students found.</div>
+        <div className="app-empty-state">
+          <p>No students found for the current filters.</p>
+          <div className="mt-4 flex justify-center">
+            <AppPrefetchLink
+              href="/workspace/students/create"
+              relatedApiPrefetches={["/api/classes", "/api/sections"]}
+            >
+              <Button variant="outline">Create student</Button>
+            </AppPrefetchLink>
+          </div>
+        </div>
       ) : (
         <div className="space-y-3">
           <ListPagination
@@ -518,13 +528,11 @@ export default function StudentsByClassPage() {
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 px-4 pb-4 sm:px-5">
-                      <div className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3">
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                          <div className="space-y-1">
-                            <p className="text-sm font-semibold text-foreground">
-                              Section actions
-                            </p>
-                            <p className="text-xs leading-5 text-muted-foreground">
+                      <div className="app-toolbar">
+                        <div className="app-toolbar-row">
+                          <div className="app-toolbar-copy">
+                            <p className="app-toolbar-title">Section actions</p>
+                            <p className="app-toolbar-note">
                               Page {page} of {maxPage}. Export uses the same student grouping shown here.
                             </p>
                           </div>
