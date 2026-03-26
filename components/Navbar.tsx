@@ -35,6 +35,7 @@ const navItems = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const isHome = pathname === "/";
   const [scrolled, setScrolled] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -150,7 +151,15 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [openDropdown]);
 
+  const homeHeroMode = isHome && !scrolled;
+
   const getTextColor = (active: boolean) => {
+    if (homeHeroMode) {
+      return active
+        ? "bg-white/[0.12] text-white shadow-[0_16px_36px_-30px_rgba(255,255,255,0.28)] ring-1 ring-white/[0.14]"
+        : "text-white/[0.74] hover:bg-white/[0.08] hover:text-white";
+    }
+
     return active
       ? "bg-primary/10 text-primary shadow-[0_10px_24px_-24px_hsl(var(--primary)/0.35)] ring-1 ring-primary/15"
       : "text-foreground/78 hover:bg-accent/72 hover:text-foreground";
@@ -162,9 +171,14 @@ export default function Navbar() {
       ref={headerRef}
       className={cn(
         "fixed top-0 z-[1000] w-full border-b transition-all duration-300",
+        homeHeroMode
+          ? "border-white/10 bg-transparent shadow-none"
+          : "",
         scrolled
           ? "border-border/80 bg-background/88 shadow-[0_18px_40px_-30px_hsl(var(--app-shadow-deep)/0.28)] backdrop-blur-2xl"
-          : "border-border/60 bg-background/72 shadow-[0_14px_32px_-30px_hsl(var(--app-shadow-deep)/0.18)] backdrop-blur-xl"
+          : homeHeroMode
+            ? "backdrop-blur-none"
+            : "border-border/60 bg-background/72 shadow-[0_14px_32px_-30px_hsl(var(--app-shadow-deep)/0.18)] backdrop-blur-xl"
       )}
     >
       <div
@@ -176,16 +190,44 @@ export default function Navbar() {
       >
         {/* Logo */}
         <Link href="/" className="group flex items-center gap-3 transition-transform hover:-translate-y-0.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/80 text-primary-foreground shadow-[0_18px_32px_-20px_hsl(var(--primary)/0.42)] ring-1 ring-primary/10">
+          <div
+            className={cn(
+              "flex h-10 w-10 items-center justify-center rounded-2xl ring-1",
+              homeHeroMode
+                ? "bg-white/[0.12] text-white shadow-[0_18px_32px_-22px_rgba(0,0,0,0.58)] ring-white/[0.12] backdrop-blur-md"
+                : "bg-gradient-to-br from-primary via-primary to-primary/80 text-primary-foreground shadow-[0_18px_32px_-20px_hsl(var(--primary)/0.42)] ring-primary/10",
+            )}
+          >
             <Activity className="h-5 w-5" />
           </div>
           {/* Compact brand on mobile, full on desktop */}
           <div className="flex md:hidden">
-            <span className="text-[13px] font-semibold leading-none tracking-[-0.02em] text-foreground">Alyra Tech</span>
+            <span
+              className={cn(
+                "text-[13px] font-semibold leading-none tracking-[-0.02em]",
+                homeHeroMode ? "text-white" : "text-foreground",
+              )}
+            >
+              Alyra Tech
+            </span>
           </div>
           <div className="hidden flex-col md:flex">
-            <span className="text-lg font-semibold leading-none tracking-[-0.03em] text-foreground transition-colors">Alyra Tech</span>
-            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground transition-colors">Precision Diagnostics</span>
+            <span
+              className={cn(
+                "text-lg font-semibold leading-none tracking-[-0.03em] transition-colors",
+                homeHeroMode ? "text-white" : "text-foreground",
+              )}
+            >
+              Alyra Tech
+            </span>
+            <span
+              className={cn(
+                "text-[10px] font-medium uppercase tracking-[0.18em] transition-colors",
+                homeHeroMode ? "text-white/[0.62]" : "text-muted-foreground",
+              )}
+            >
+              Precision Diagnostics
+            </span>
           </div>
         </Link>
 
@@ -217,7 +259,8 @@ export default function Navbar() {
                     {item.label}
                     <ChevronDown
                       className={cn(
-                        "h-4 w-4 transition-transform duration-200 text-muted-foreground",
+                        "h-4 w-4 transition-transform duration-200",
+                        homeHeroMode ? "text-white/[0.56]" : "text-muted-foreground",
                         openDropdown === item.href && "rotate-180",
                       )}
                     />
@@ -284,31 +327,77 @@ export default function Navbar() {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link 
-            href="/contact"
-            className="hidden px-2 text-sm font-medium text-foreground/74 transition-colors hover:text-foreground md:block"
-          >
-            Contact
-          </Link>
-          <Link
-            href="/auth/signin"
-            className="app-button-secondary hidden h-10 px-5 md:inline-flex"
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/talent-test"
-            className="app-button-primary inline-flex h-10 whitespace-nowrap px-4 sm:px-5"
-            aria-label="Start Baseline Test"
-          >
-            <span className="whitespace-nowrap">Baseline Test</span>
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          {isHome ? (
+            <>
+              <Link
+                href="/auth/signin"
+                className={cn(
+                  "hidden px-2 text-sm font-medium transition-colors md:block",
+                  homeHeroMode
+                    ? "text-white/[0.68] hover:text-white"
+                    : "text-foreground/74 hover:text-foreground",
+                )}
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/talent-test"
+                className={cn(
+                  "hidden h-10 items-center justify-center rounded-full px-4 text-sm font-semibold md:inline-flex",
+                  homeHeroMode
+                    ? "border border-white/[0.14] bg-white/[0.08] text-white shadow-[0_18px_36px_-28px_rgba(0,0,0,0.36)] backdrop-blur-md transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/[0.12]"
+                    : "app-button-secondary",
+                )}
+                aria-label="Start Baseline Test"
+              >
+                <span className="whitespace-nowrap">Start Baseline Test</span>
+              </Link>
+              <Link
+                href="/contact"
+                className={cn(
+                  "inline-flex h-10 whitespace-nowrap items-center justify-center gap-2 rounded-full px-4 sm:px-5",
+                  homeHeroMode
+                    ? "bg-white text-slate-950 shadow-[0_22px_42px_-24px_rgba(255,255,255,0.42)] transition-[background-color,transform,box-shadow] hover:-translate-y-0.5 hover:bg-white"
+                    : "app-button-primary",
+                )}
+                aria-label="Book Demo"
+              >
+                <span className="whitespace-nowrap">Book Demo</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link 
+                href="/contact"
+                className="hidden px-2 text-sm font-medium text-foreground/74 transition-colors hover:text-foreground md:block"
+              >
+                Contact
+              </Link>
+              <Link
+                href="/auth/signin"
+                className="app-button-secondary hidden h-10 px-5 md:inline-flex"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/talent-test"
+                className="app-button-primary inline-flex h-10 whitespace-nowrap px-4 sm:px-5"
+                aria-label="Start Baseline Test"
+              >
+                <span className="whitespace-nowrap">Baseline Test</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </>
+          )}
           
           {/* Mobile Menu Button */}
           <button 
             className={cn(
-              "flex h-11 w-11 items-center justify-center rounded-[var(--app-radius-md)] border border-border/60 bg-background/88 text-foreground shadow-[0_10px_24px_-24px_hsl(var(--app-shadow-deep)/0.18)] transition-[background-color,border-color,transform] hover:-translate-y-0.5 hover:border-primary/16 hover:bg-accent/60 md:hidden"
+              "flex h-11 w-11 items-center justify-center rounded-[var(--app-radius-md)] border transition-[background-color,border-color,transform] md:hidden",
+              homeHeroMode
+                ? "border-white/10 bg-white/[0.08] text-white shadow-[0_18px_36px_-30px_rgba(0,0,0,0.38)] backdrop-blur-md hover:-translate-y-0.5 hover:bg-white/[0.12]"
+                : "border-border/60 bg-background/88 text-foreground shadow-[0_10px_24px_-24px_hsl(var(--app-shadow-deep)/0.18)] hover:-translate-y-0.5 hover:border-primary/16 hover:bg-accent/60"
             )}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
@@ -418,15 +507,31 @@ export default function Navbar() {
 
               {/* Footer quick actions */}
               <div className="mt-3 px-2 grid grid-cols-3 gap-2">
-                <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center justify-center rounded-[var(--app-radius-lg)] border border-border/60 bg-background/92 py-2 text-sm font-semibold text-foreground shadow-[0_12px_24px_-24px_hsl(var(--app-shadow-deep)/0.18)] transition-[background-color,border-color] hover:border-primary/16 hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2">
-                  Sign In
-                </Link>
-                <Link href="/register" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center justify-center rounded-[var(--app-radius-lg)] bg-primary py-2 text-sm font-semibold text-primary-foreground shadow-[0_18px_30px_-22px_hsl(var(--primary)/0.4)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-primary/95 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                  Register
-                </Link>
-                <Link href="/contact" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center justify-center rounded-[var(--app-radius-lg)] border border-border/60 bg-background/92 py-2 text-sm font-semibold text-foreground shadow-[0_12px_24px_-24px_hsl(var(--app-shadow-deep)/0.18)] transition-[background-color,border-color] hover:border-primary/16 hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2">
-                  Contact
-                </Link>
+                {isHome ? (
+                  <>
+                    <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center justify-center rounded-[var(--app-radius-lg)] border border-border/60 bg-background/92 py-2 text-sm font-semibold text-foreground shadow-[0_12px_24px_-24px_hsl(var(--app-shadow-deep)/0.18)] transition-[background-color,border-color] hover:border-primary/16 hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2">
+                      Sign In
+                    </Link>
+                    <Link href="/talent-test" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center justify-center rounded-[var(--app-radius-lg)] border border-border/60 bg-background/92 py-2 text-sm font-semibold text-foreground shadow-[0_12px_24px_-24px_hsl(var(--app-shadow-deep)/0.18)] transition-[background-color,border-color] hover:border-primary/16 hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2">
+                      Baseline
+                    </Link>
+                    <Link href="/contact" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center justify-center rounded-[var(--app-radius-lg)] bg-primary py-2 text-sm font-semibold text-primary-foreground shadow-[0_18px_30px_-22px_hsl(var(--primary)/0.4)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-primary/95 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus:ring-offset-2">
+                      Demo
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center justify-center rounded-[var(--app-radius-lg)] border border-border/60 bg-background/92 py-2 text-sm font-semibold text-foreground shadow-[0_12px_24px_-24px_hsl(var(--app-shadow-deep)/0.18)] transition-[background-color,border-color] hover:border-primary/16 hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2">
+                      Sign In
+                    </Link>
+                    <Link href="/register" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center justify-center rounded-[var(--app-radius-lg)] bg-primary py-2 text-sm font-semibold text-primary-foreground shadow-[0_18px_30px_-22px_hsl(var(--primary)/0.4)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-primary/95 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus:ring-offset-2">
+                      Register
+                    </Link>
+                    <Link href="/contact" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center justify-center rounded-[var(--app-radius-lg)] border border-border/60 bg-background/92 py-2 text-sm font-semibold text-foreground shadow-[0_12px_24px_-24px_hsl(var(--app-shadow-deep)/0.18)] transition-[background-color,border-color] hover:border-primary/16 hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2">
+                      Contact
+                    </Link>
+                  </>
+                )}
               </div>
             </nav>
           </div>

@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Activity } from "lucide-react";
+
+import { cn } from "@/lib/utils";
 
 type ContactDoc = {
   email?: string;
@@ -19,6 +22,8 @@ const FALLBACK_CONTACT: Required<ContactDoc> = {
 };
 
 export default function Footer() {
+  const pathname = usePathname();
+  const isHome = pathname === "/";
   const [info, setInfo] = useState<Required<ContactDoc>>(FALLBACK_CONTACT);
 
   useEffect(() => {
@@ -52,7 +57,12 @@ export default function Footer() {
   }, [info.phone, info.whatsappNumber]);
 
   return (
-    <footer className="mt-24 border-t border-border/70 bg-[linear-gradient(180deg,hsl(var(--app-surface-2)/0.72)_0%,hsl(var(--app-surface-1))_38%,hsl(var(--secondary)/0.48)_100%)]">
+    <footer
+      className={cn(
+        "border-t border-border/70 bg-[linear-gradient(180deg,hsl(var(--app-surface-2)/0.72)_0%,hsl(var(--app-surface-1))_38%,hsl(var(--secondary)/0.48)_100%)]",
+        isHome ? "mt-0" : "mt-24",
+      )}
+    >
       <div className="mx-auto grid max-w-[88rem] gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(0,0.8fr))] lg:px-8">
         <div>
           <div className="mb-4 flex items-center gap-3 font-semibold">
