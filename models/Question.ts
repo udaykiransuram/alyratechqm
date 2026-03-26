@@ -97,7 +97,7 @@ const QuestionSchema: Schema<IQuestion> = new Schema(
       },
       validate: [
         {
-          validator: function(val: any[]) {
+          validator: function(this: any, val: any[]) {
             if (this.type === 'single' || this.type === 'multiple') {
               return Array.isArray(val) && val.length >= 2;
             }
@@ -113,7 +113,7 @@ const QuestionSchema: Schema<IQuestion> = new Schema(
         return this.type === 'single' || this.type === 'multiple';
       },
       validate: {
-        validator: function(arr: number[]) {
+        validator: function(this: any, arr: number[]) {
           if (this.type === 'single' || this.type === 'multiple') {
             if (!Array.isArray(this.options)) return false;
             return arr.every(idx => idx >= 0 && this.options && idx < this.options.length);
@@ -131,7 +131,7 @@ const QuestionSchema: Schema<IQuestion> = new Schema(
       },
       validate: [
         {
-          validator: function(val: any[]) {
+          validator: function(this: any, val: any[]) {
             if (this.type === 'matrix-match') {
               return Array.isArray(val) && val.length >= 1;
             }
