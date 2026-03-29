@@ -100,12 +100,13 @@ export default function SubjectsPageClient({
   }, [subjectToDeleteId, toast]);
 
   return (
-    <PageShell width="content">
+    <PageShell width="wide" padding="standard" className="app-directory-stack">
       <PageHero
         variant="directory"
+        density="compact"
         eyebrow="Curriculum"
         title="Subjects"
-        description="Browse, update, and organize subject definitions and the tags used across your paper-authoring flow."
+        description="Browse, update, and archive subject definitions."
         actions={
           <Button asChild className="app-button-page">
             <AppPrefetchLink
@@ -147,7 +148,12 @@ export default function SubjectsPageClient({
 
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
-          <CardTitle>Existing Subjects</CardTitle>
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <CardTitle>Existing Subjects</CardTitle>
+            <div className="app-chip-cloud-tight">
+              <span className="app-meta-chip">{subjects.length} subjects</span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="app-section-body">
           {fetchError ? (
@@ -174,7 +180,7 @@ export default function SubjectsPageClient({
               }
             />
           ) : (
-            <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <ul className="app-directory-card-grid">
               {subjects.map((subject) => (
                 <SubjectItem
                   key={subject._id}

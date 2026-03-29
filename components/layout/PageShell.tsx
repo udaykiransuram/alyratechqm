@@ -6,14 +6,14 @@ export type PageShellWidth = "narrow" | "content" | "wide";
 export type PageShellPadding = "standard" | "relaxed" | "none";
 
 const widthClasses: Record<PageShellWidth, string> = {
-  narrow: "max-w-6xl",
-  content: "max-w-[78rem]",
-  wide: "max-w-[92rem]",
+  narrow: "max-w-[64rem]",
+  content: "max-w-[76rem]",
+  wide: "max-w-[88rem]",
 };
 
 const paddingClasses: Record<PageShellPadding, string> = {
-  standard: "px-4 py-5 sm:px-0",
-  relaxed: "px-4 py-6 sm:px-0",
+  standard: "px-4 py-4 sm:px-0",
+  relaxed: "px-4 py-5 sm:px-0",
   none: "px-0 py-0",
 };
 

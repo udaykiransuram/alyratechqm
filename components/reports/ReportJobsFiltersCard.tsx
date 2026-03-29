@@ -28,7 +28,6 @@ const STATUS_FILTER_OPTIONS: SearchableCommandOption[] = [
   {
     value: "all",
     label: "All statuses",
-    description: "See queued, processing, sent, and failed jobs together.",
   },
   { value: "queued", label: "Queued" },
   { value: "processing", label: "Processing" },
@@ -40,7 +39,6 @@ const RECIPIENT_FILTER_OPTIONS: SearchableCommandOption[] = [
   {
     value: "all",
     label: "All recipients",
-    description: "Review student, teacher, admin, and exam dispatches together.",
   },
   { value: "student", label: "Students" },
   { value: "teacher", label: "Teachers" },
@@ -52,7 +50,6 @@ const REPORT_SCOPE_FILTER_OPTIONS: SearchableCommandOption[] = [
   {
     value: "all",
     label: "All report scopes",
-    description: "Include both benchmark and student report jobs.",
   },
   { value: "benchmark", label: "Benchmark reports" },
   { value: "student", label: "Student reports" },
@@ -100,7 +97,6 @@ export default function ReportJobsFiltersCard({
       {
         value: "all",
         label: "All class sections",
-        description: "Keep the queue scoped to every class section.",
       },
       ...academicSectionOptions,
     ],
@@ -113,10 +109,6 @@ export default function ReportJobsFiltersCard({
         <div className="app-filter-panel-heading">
           <div className="app-filter-panel-copy">
             <CardTitle className="app-filter-panel-title">Report Filters</CardTitle>
-            <p className="app-filter-panel-note">
-              Narrow the delivery queue by dispatch state, recipient type, report scope, and
-              class-section context.
-            </p>
           </div>
           <div className="app-filter-panel-chips">
             <span className="app-meta-chip">
@@ -197,8 +189,8 @@ export default function ReportJobsFiltersCard({
             </p>
             <p className="app-filter-summary-note">
               {hasActiveFilters
-                ? `${totalJobs} job${totalJobs === 1 ? "" : "s"} match the current server-side filters.`
-                : "Browse the full delivery queue, then narrow the list when a retry or delivery issue needs attention."}
+                ? `${totalJobs} job${totalJobs === 1 ? "" : "s"} match the current filters.`
+                : `${totalJobs} job${totalJobs === 1 ? "" : "s"} in the full queue.`}
             </p>
           </div>
           <div className="app-filter-summary-actions">

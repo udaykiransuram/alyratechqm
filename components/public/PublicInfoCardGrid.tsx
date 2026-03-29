@@ -20,17 +20,20 @@ export function PublicInfoCardGrid({
   className,
 }: PublicInfoCardGridProps) {
   return (
-    <div className={cn("grid gap-4 md:grid-cols-3", className)}>
+    <div className={cn("grid gap-5 md:grid-cols-2 xl:grid-cols-3", className)}>
       {items.map((item, index) => {
         const content = (
-          <article key={`${item.eyebrow}-${index}`} className="public-info-card public-card p-6">
-            <div className="flex items-start gap-4">
-              {item.icon ? <div className="public-icon-chip">{item.icon}</div> : null}
-              <div className="min-w-0 flex-1">
+          <article
+            key={`public-info-card-${index}`}
+            className="public-info-card public-card flex h-full flex-col p-5 md:p-6"
+          >
+            <div className="flex h-full items-start gap-4">
+              {item.icon ? <div className="public-icon-chip mt-0.5">{item.icon}</div> : null}
+              <div className="flex min-h-full min-w-0 flex-1 flex-col">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--public-muted))]">
                   {item.eyebrow}
                 </p>
-                <div className="mt-3 text-base font-semibold leading-7 text-[hsl(var(--public-ink))]">
+                <div className="mt-2.5 text-[1.02rem] font-semibold leading-7 text-[hsl(var(--public-ink))]">
                   {item.title}
                 </div>
                 {item.supportingText ? (
@@ -48,7 +51,7 @@ export function PublicInfoCardGrid({
         }
 
         return (
-          <a key={`${item.eyebrow}-${index}`} href={item.href} className="block">
+          <a key={`public-info-card-link-${index}`} href={item.href} className="block h-full">
             {content}
           </a>
         );

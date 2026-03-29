@@ -65,14 +65,14 @@ export default function Navbar() {
   );
   const [mounted, setMounted] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
-  const [headerHeight, setHeaderHeight] = useState(80);
+  const [headerHeight, setHeaderHeight] = useState(72);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
+    const handleScroll = () => setScrolled(window.scrollY > 16);
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setDesktopDropdown(null);
@@ -202,7 +202,7 @@ export default function Navbar() {
       style={
         isMarketingHome
           ? {
-              paddingTop: "max(env(safe-area-inset-top, 0px), 12px)",
+              paddingTop: "max(env(safe-area-inset-top, 0px), 10px)",
               paddingLeft: "max(env(safe-area-inset-left, 0px), 12px)",
               paddingRight: "max(env(safe-area-inset-right, 0px), 12px)",
             }
@@ -214,10 +214,10 @@ export default function Navbar() {
           "mx-auto flex items-center justify-between gap-2",
           isMarketingHome
             ? cn(
-                "public-nav-frame h-20 w-full max-w-[84rem] px-4 sm:px-6 md:px-8",
+                "public-nav-frame h-[4.5rem] w-full max-w-[82rem] px-4 sm:px-5 md:px-7",
                 shellClassName,
               )
-            : "h-20 max-w-7xl px-4 sm:px-8 md:px-16",
+            : "h-[4.5rem] max-w-[82rem] px-4 sm:px-6 md:px-10",
         )}
         style={
           isMarketingHome
@@ -267,7 +267,7 @@ export default function Navbar() {
           </div>
         </Link>
 
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden items-center gap-0.5 md:flex lg:gap-1">
           {navItems.map((item) => {
             const active = isActivePath(item.href);
             const hasDropdown = "dropdown" in item;
@@ -392,11 +392,11 @@ export default function Navbar() {
           })}
         </nav>
 
-        <div className="hidden items-center gap-4 md:flex">
+        <div className="hidden items-center gap-2 md:flex lg:gap-3">
           <Link
             href="/auth/signin"
             className={cn(
-              "public-nav-secondary-action",
+              "public-nav-secondary-action text-[13px]",
               isMarketingHome && "text-white/80 hover:text-white",
             )}
           >
@@ -405,7 +405,7 @@ export default function Navbar() {
           <Link
             href="/contact"
             className={cn(
-              "public-nav-secondary-action",
+              "public-nav-secondary-action text-[13px]",
               isMarketingHome && "text-white/80 hover:text-white",
             )}
           >
@@ -417,7 +417,7 @@ export default function Navbar() {
             aria-label="Start Baseline Test"
           >
             <span className="mr-2 whitespace-nowrap drop-shadow-sm">
-              Baseline Test
+              Start Test
             </span>
             <ArrowRight className="h-3.5 w-3.5 drop-shadow-sm transition-transform group-hover:translate-x-1 md:h-4 md:w-4" />
           </Link>
@@ -449,13 +449,13 @@ export default function Navbar() {
                 onClick={() => setMobileMenuOpen(false)}
               />
               <div
-                className="public-mobile-sheet fixed right-0 top-0 z-[9999] h-screen w-[85vw] max-w-sm overflow-y-auto overscroll-contain border-l shadow-2xl ring-1 ring-[hsl(var(--public-shadow))/0.06] backdrop-blur-xl md:hidden"
+                className="public-mobile-sheet fixed right-0 top-0 z-[9999] h-screen w-[84vw] max-w-sm overflow-y-auto overscroll-contain border-l shadow-2xl ring-1 ring-[hsl(var(--public-shadow))/0.06] backdrop-blur-xl md:hidden"
                 style={{ paddingTop: `${headerHeight}px` }}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Mobile navigation"
               >
-                <div className="flex items-center justify-between px-6 pb-3">
+                <div className="flex items-center justify-between px-6 pb-2">
                   <span className="text-base font-semibold text-[hsl(var(--public-accent))]">
                     Menu
                   </span>
@@ -469,7 +469,7 @@ export default function Navbar() {
                   </button>
                 </div>
                 <nav
-                  className="flex flex-col gap-2 px-5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6"
+                  className="flex flex-col gap-1.5 px-5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6"
                   role="menu"
                   aria-label="Mobile navigation"
                 >
@@ -577,7 +577,7 @@ export default function Navbar() {
                   <Link
                     href="/talent-test"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="public-mobile-menu-link mx-2 mt-1 inline-flex items-center justify-center"
+                    className="public-mobile-menu-link mx-2 mt-2 inline-flex items-center justify-center"
                   >
                     Start Baseline Test
                     <ArrowRight className="ml-2 h-4 w-4" />

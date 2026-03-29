@@ -250,12 +250,13 @@ export default function TagsPageClient({
   }, [tagToArchiveId, tags, toast]);
 
   return (
-    <PageShell width="content">
+    <PageShell width="wide" padding="standard" className="app-directory-stack">
       <PageHero
         variant="directory"
+        density="compact"
         eyebrow="Curriculum"
         title="Tags"
-        description="Browse, edit, and assign tags across subjects so question authoring and analytics stay aligned."
+        description="Browse, edit, and assign tags across subjects."
         actions={
           <Button asChild className="app-button-page">
             <AppPrefetchLink
@@ -321,7 +322,14 @@ export default function TagsPageClient({
 
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
-          <CardTitle>Tag Library</CardTitle>
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <CardTitle>Tag Library</CardTitle>
+            <div className="app-chip-cloud-tight">
+              <span className="app-meta-chip">
+                {totalTags ?? tags.length} tags
+              </span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="app-section-body">
           {fetchError ? (
@@ -356,7 +364,7 @@ export default function TagsPageClient({
               }
             />
           ) : (
-            <div className="space-y-3">
+            <div className="app-directory-stack">
               {backgroundLoading ? (
                 <FeedbackNotice variant="info">
                   Loaded {tags.length} tag{tags.length === 1 ? "" : "s"} so far. The remaining
@@ -374,7 +382,7 @@ export default function TagsPageClient({
                 onPageChange={(nextPage) => setTagPage(nextPage)}
               />
 
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="app-directory-card-grid">
                 {visibleTags.map((tag) => (
                   <Card
                     key={tag._id}

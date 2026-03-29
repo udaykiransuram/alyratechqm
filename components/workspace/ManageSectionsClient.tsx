@@ -94,7 +94,6 @@ export default function ManageSectionsClient({
       {
         value: "all",
         label: "All classes",
-        description: "Review sections across every class in the school.",
       },
       ...classes.map((classItem) => ({
         value: classItem._id,
@@ -133,12 +132,13 @@ export default function ManageSectionsClient({
   };
 
   return (
-    <PageShell width="wide" padding="relaxed">
+    <PageShell width="wide" padding="standard" className="app-directory-stack">
       <PageHero
         variant="directory"
+        density="compact"
         eyebrow="Academic Setup"
         title="Manage Sections"
-        description="Review and archive sections from the directory page, while moving section creation and bulk import into a dedicated setup route."
+        description="Review and archive sections from the directory page."
         actions={
           <Button asChild className="app-button-page">
             <AppPrefetchLink href="/workspace/manage/sections/create" prefetchOnMount>
@@ -182,7 +182,12 @@ export default function ManageSectionsClient({
 
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
-          <CardTitle>Existing Sections</CardTitle>
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <CardTitle>Existing Sections</CardTitle>
+            <div className="app-chip-cloud-tight">
+              <span className="app-meta-chip">{sections.length} sections</span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="app-section-body">
           {error ? (
@@ -193,14 +198,9 @@ export default function ManageSectionsClient({
             />
           ) : (
             <>
-              <div className="app-filter-summary mb-4">
+              <div className="app-filter-summary mb-3">
                 <div className="app-filter-summary-copy">
                   <p className="app-filter-summary-title">Current scope</p>
-                  <p className="app-filter-summary-note">
-                    {sectionFilterClassId !== "all"
-                      ? "Showing sections only for the selected class."
-                      : "Showing sections across all classes."}
-                  </p>
                 </div>
                 <div className="app-filter-summary-actions">
                   <div className="w-full sm:w-[260px]">
@@ -240,12 +240,11 @@ export default function ManageSectionsClient({
                   }
                 />
               ) : (
-                <div className="app-table-wrap">
+                <div className="app-table-wrap app-table-dense">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Section</TableHead>
-                        <TableHead>Class</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -253,8 +252,14 @@ export default function ManageSectionsClient({
                     <TableBody>
                       {filteredSections.map((section) => (
                         <TableRow key={section._id}>
-                          <TableCell className="font-medium">{section.name}</TableCell>
-                          <TableCell>{getSectionClass(section)?.name || "-"}</TableCell>
+                          <TableCell>
+                            <div className="app-table-cell-stack">
+                              <div className="app-table-cell-title">{section.name}</div>
+                              <div className="app-table-cell-note">
+                                {getSectionClass(section)?.name || "No class linked"}
+                              </div>
+                            </div>
+                          </TableCell>
                           <TableCell>
                             {section.isActive === false ? "Inactive" : "Active"}
                           </TableCell>
@@ -263,7 +268,8 @@ export default function ManageSectionsClient({
                               <AlertDialogTrigger asChild>
                                 <Button
                                   variant="ghost"
-                                  size="icon"
+                                  size="sm"
+                                  className="app-button-compact"
                                   disabled={Boolean(archivingSectionId)}
                                 >
                                   <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />

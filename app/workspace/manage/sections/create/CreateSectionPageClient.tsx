@@ -7,6 +7,10 @@ import { ArrowLeft } from "lucide-react";
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
 import BulkUploadPanel from "@/components/workspace/BulkUploadPanel";
+import {
+  WorkspaceCreateModeToggle,
+  type WorkspaceCreateMode,
+} from "@/components/workspace/WorkspaceCreateGuideCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FeedbackNotice, {
@@ -81,6 +85,7 @@ export default function CreateSectionPageClient({
     message: string;
     variant: FeedbackNoticeVariant;
   } | null>(null);
+  const [createMode, setCreateMode] = useState<WorkspaceCreateMode>("single");
 
   const selectedClass = useMemo(
     () => initialClasses.find((classItem) => classItem._id === selectedClassId),
@@ -277,7 +282,7 @@ export default function CreateSectionPageClient({
         variant="editor"
         eyebrow="Academic Setup"
         title="Create Sections"
-        description="Add one section at a time or import many sections in bulk, all from a dedicated class-linked setup page."
+        description="Create one section or switch to bulk upload."
         actions={
           <Button type="button" variant="outline" onClick={navigateBack} className="app-button-back">
             <ArrowLeft className="h-4 w-4" />
@@ -287,29 +292,24 @@ export default function CreateSectionPageClient({
         meta={
           <>
             <span className="app-meta-chip">Dedicated create route</span>
-            <span className="app-meta-chip">Class-linked import</span>
+            <span className="app-meta-chip">{sections.length} sections</span>
           </>
         }
         stats={[
           {
             label: "Classes available",
             value: String(initialClasses.length),
-            meta: "Classes that can receive new sections right now.",
+            meta: "Available for mapping.",
           },
           {
             label: "Sections tracked",
             value: String(sections.length),
-            meta: "Current active sections loaded for quick review.",
+            meta: "Current active sections.",
           },
           {
-            label: "Single create",
-            value: isSubmitting ? "Saving" : "Ready",
-            meta: "Create one section from the form on this page.",
-          },
-          {
-            label: "Bulk import",
-            value: isBulkUploading ? "Uploading" : "Ready",
-            meta: "Import many sections from CSV or Excel.",
+            label: "Mode",
+            value: createMode === "single" ? "Single" : "Bulk",
+            meta: createMode === "single" ? "Manual form" : "CSV/Excel upload",
           },
         ]}
       />
@@ -318,16 +318,23 @@ export default function CreateSectionPageClient({
         <FeedbackNotice variant={feedback.variant}>{feedback.message}</FeedbackNotice>
       ) : null}
 
-      <div className="app-editor-grid">
-        <div className="app-editor-main">
+      <WorkspaceCreateModeToggle
+        value={createMode}
+        onChange={setCreateMode}
+        singleLabel="Single section"
+        bulkLabel="Bulk sections"
+      />
+
+      {createMode === "single" ? (
+        <div className="space-y-4">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle>Create Individual Section</CardTitle>
+              <CardTitle>Create Section</CardTitle>
             </CardHeader>
             <CardContent className="app-section-body">
               {initialClasses.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Create a class first before adding sections.
+                  Create a class first.
                 </p>
               ) : (
                 <form onSubmit={handleCreateSection} className="space-y-4">
@@ -387,7 +394,7 @@ export default function CreateSectionPageClient({
             <CardContent className="app-section-body">
               {!selectedClassId ? (
                 <p className="text-sm text-muted-foreground">
-                  Select a class above to review its current sections before adding another one.
+                  Select a class to view sections.
                 </p>
               ) : selectedClassSections.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
@@ -405,11 +412,10 @@ export default function CreateSectionPageClient({
             </CardContent>
           </Card>
         </div>
-
-        <div className="app-editor-aside">
+      ) : (
+        <div className="space-y-4">
           <BulkUploadPanel
             title="Bulk Upload Sections"
-            description="Upload sections with their class names or class ids. Existing archived sections are restored automatically."
             inputId="bulk-upload-sections"
             onFileChange={handleBulkUpload}
             onDownloadTemplate={downloadTemplate}
@@ -422,8 +428,30 @@ export default function CreateSectionPageClient({
               "Archived matching sections are restored automatically.",
             ]}
           />
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Existing Sections</CardTitle>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              {!selectedClassId ? (
+                <p className="text-sm text-muted-foreground">Select a class to view sections.</p>
+              ) : selectedClassSections.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No sections exist for this class yet.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {selectedClassSections.map((section) => (
+                    <span key={section._id} className="app-meta-chip">
+                      {section.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      )}
     </PageShell>
   );
 }

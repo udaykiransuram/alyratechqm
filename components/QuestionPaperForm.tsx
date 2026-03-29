@@ -918,11 +918,13 @@ export default function QuestionPaperForm({
   return (
     <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
       <PageHero
+        variant="editor"
+        density="compact"
         eyebrow="Assessments"
         title={pageTitle}
         description={pageSubtitle}
         actions={
-          <Button type="button" variant="outline" onClick={navigateBack}>
+          <Button type="button" variant="outline" onClick={navigateBack} className="app-button-back">
             {isEditMode ? 'Back' : 'Cancel'}
           </Button>
         }
@@ -955,7 +957,7 @@ export default function QuestionPaperForm({
         <div className="app-feedback app-feedback-info">{initialSupportMessage}</div>
       ) : null}
 
-      <div className="app-editor-grid">
+      <div className="app-editor-grid app-editor-grid-builder">
         <main className="app-editor-main">
           <div className="app-surface overflow-hidden">
             <div className="app-section-header">
@@ -1122,7 +1124,7 @@ export default function QuestionPaperForm({
           </div>
         </main>
 
-        <aside className="app-editor-aside xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
+        <aside className="app-editor-aside app-editor-aside-sticky">
           <PaperDetailsForm
             paperTitle={paperTitle}
             setPaperTitle={setPaperTitle}

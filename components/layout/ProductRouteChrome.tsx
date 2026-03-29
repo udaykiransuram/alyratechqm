@@ -61,7 +61,7 @@ export default function ProductRouteChrome({
       {enableClientApiProbe ? <ClientApiRequestProbe /> : null}
       <WorkspaceDataWarmup enabled={workspaceVisualMode} />
       <SiteHeader />
-      <main className="app-shell-sidebar-offset min-h-screen pt-[calc(var(--app-header-height)+var(--app-mobile-school-switcher-height))] transition-[margin-left] duration-200 ease-in-out md:pt-[var(--app-header-height)] lg:ml-[var(--app-sidebar-width,0px)]">
+      <main className="app-route-main app-route-main-workspace app-shell-sidebar-offset">
         <AppViewport key={schoolKey || "no-school"}>{children}</AppViewport>
       </main>
     </>

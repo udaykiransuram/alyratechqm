@@ -732,7 +732,7 @@ export default function QuestionPapersDirectoryClient({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="app-directory-stack">
       {pageNotice ? (
         <FeedbackNotice variant={pageNotice.variant}>
           {pageNotice.message}
@@ -757,7 +757,7 @@ export default function QuestionPapersDirectoryClient({
       />
 
       {selectedPaperCount > 0 ? (
-        <div className="app-toolbar">
+        <div className="app-toolbar app-toolbar-compact">
           <div className="app-toolbar-row">
             <div className="flex flex-wrap items-center gap-2">
               <span className="app-meta-chip">
@@ -768,12 +768,12 @@ export default function QuestionPapersDirectoryClient({
               ) : null}
             </div>
             <div className="app-toolbar-actions">
-              <Button onClick={handleDownloadAllZip} disabled={zipLoading}>
+              <Button className="app-button-compact" onClick={handleDownloadAllZip} disabled={zipLoading}>
                 {zipLoading
                   ? "Zipping..."
                   : `Download Selected (${selectedPaperCount})`}
               </Button>
-              <Button variant="outline" onClick={clearSelection}>
+              <Button variant="outline" className="app-button-compact" onClick={clearSelection}>
                 Clear Selection
               </Button>
             </div>

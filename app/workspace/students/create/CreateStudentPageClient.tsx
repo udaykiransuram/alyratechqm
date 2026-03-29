@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 
 import BulkUploadPanel from "@/components/workspace/BulkUploadPanel";
-import WorkspaceCreateGuideCard from "@/components/workspace/WorkspaceCreateGuideCard";
+import {
+  WorkspaceCreateModeToggle,
+  type WorkspaceCreateMode,
+} from "@/components/workspace/WorkspaceCreateGuideCard";
 import WorkspaceCreateShell from "@/components/workspace/WorkspaceCreateShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +29,7 @@ import {
   parseUploadFile,
 } from "@/lib/client/bulk-upload";
 import {
+  buildWorkspaceBulkStructureSummary,
   buildWorkspaceUserBulkRows,
   WORKSPACE_USER_BULK_TEMPLATES,
 } from "@/lib/client/workspace-user-bulk";
@@ -53,6 +57,7 @@ export default function CreateStudentPageClient({
   const [currentSchoolKey, setCurrentSchoolKey] = useState("");
   const [form, setForm] = useState({
     name: "",
+    fatherName: "",
     email: "",
     mobileNumber: "",
     class: "",
@@ -77,6 +82,7 @@ export default function CreateStudentPageClient({
     message: string;
     variant: FeedbackNoticeVariant;
   } | null>(null);
+  const [createMode, setCreateMode] = useState<WorkspaceCreateMode>("single");
 
   const filteredSections = useMemo(
     () => initialSections.filter((section) => getSectionClassId(section) === form.class),
@@ -102,6 +108,7 @@ export default function CreateStudentPageClient({
   const resetForm = () => {
     setForm({
       name: "",
+      fatherName: "",
       email: "",
       mobileNumber: "",
       class: "",
@@ -131,6 +138,7 @@ export default function CreateStudentPageClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name,
+          fatherName: form.fatherName,
           email: form.email,
           mobileNumber: form.mobileNumber,
           class: form.class,
@@ -193,6 +201,7 @@ export default function CreateStudentPageClient({
       });
 
       const results = Array.isArray(data.results) ? data.results : [];
+      const structureSummary = buildWorkspaceBulkStructureSummary(data);
       const failed = results.filter((result: any) => !result.success);
       const created = results.filter((result: any) => result.success && !result.existed);
       const existing = results.filter((result: any) => result.existed);
@@ -200,6 +209,7 @@ export default function CreateStudentPageClient({
       setBulkFeedback({
         message: [
           "Bulk upload complete.",
+          ...structureSummary,
           `Created: ${created.length}.`,
           `Existing: ${existing.length}.`,
           `Failed after upload: ${failed.length}.`,
@@ -238,9 +248,10 @@ export default function CreateStudentPageClient({
     <WorkspaceCreateShell
       eyebrow="People"
       title="Create Student"
-      description="Add one student with clear sign-in and placement details, or import a full class list once the academic structure is ready."
+      description="Create one student or switch to bulk upload."
       backLabel="Back to Students"
       onBack={navigateBack}
+      mainClassName="space-y-4"
       badges={
         <>
           <span className="app-meta-chip">
@@ -248,228 +259,181 @@ export default function CreateStudentPageClient({
           </span>
           <span className="app-meta-chip">Roll number login</span>
           <span className="app-meta-chip">Section required</span>
-          <span className="app-meta-chip">{`${initialSections.length} sections loaded`}</span>
-        </>
-      }
-      aside={
-        <>
-          <WorkspaceCreateGuideCard
-            title="Quick rules"
-            description="Set up the student so sign-in works immediately and the school placement is unmistakable."
-            items={[
-              {
-                title: "Roll number becomes login",
-                note: "The roll number is the username, and the first password is the saved phone-number digits exactly as stored.",
-              },
-              {
-                title: "Pick class before section",
-                note: "Sections are filtered by the selected class so placement stays accurate.",
-              },
-              {
-                title: "Use bulk upload for full lists",
-                note: "CSV and Excel imports work best once classes and sections already exist.",
-              },
-            ]}
-          />
-
-          <BulkUploadPanel
-            id="student-bulk-upload"
-            title="Bulk upload students"
-            description="Import a student list with class, section, roll number, and contact details for the active school."
-            inputId="bulk-upload-students"
-            onFileChange={handleBulkUpload}
-            onDownloadTemplate={downloadTemplate}
-            templateLabel="Download Student Template"
-            loading={bulkLoading}
-            loadingLabel="Uploading students..."
-            disabled={initialClasses.length === 0}
-            feedback={bulkFeedback}
-            tips={WORKSPACE_USER_BULK_TEMPLATES.student.tips}
-          />
+          <span className="app-meta-chip">{`${initialSections.length} sections`}</span>
         </>
       }
     >
+      <WorkspaceCreateModeToggle
+        value={createMode}
+        onChange={setCreateMode}
+        singleLabel="Single student"
+        bulkLabel="Bulk students"
+      />
+
       {feedback ? (
         <FeedbackNotice variant={feedback.variant}>{feedback.message}</FeedbackNotice>
       ) : null}
 
-      <Card className="app-surface overflow-hidden">
-        <CardHeader className="app-section-header space-y-4">
-          <div className="space-y-2.5">
+      {createMode === "single" ? (
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header space-y-2.5">
             <CardTitle>Create Student Account</CardTitle>
-            <p className="app-form-section-copy">
-              Start with identity and family contact details, then lock the student into the right class, section, and roll number.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="app-section-body">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="app-section space-y-4">
-              <div className="app-form-section-heading">
+          </CardHeader>
+          <CardContent className="app-section-body">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="app-section space-y-4">
                 <p className="app-form-section-title">Identity and contact</p>
-                <p className="app-form-section-copy">
-                  Keep contact details clean so reports and parent communication stay reliable.
-                </p>
-              </div>
 
-              <div className="app-field-group">
-                <Label htmlFor="student-name">Student name</Label>
-                <Input
-                  id="student-name"
-                  name="name"
-                  placeholder="Enter student name"
-                  value={form.name}
-                  onChange={handleInputChange}
-                  required
-                />
-                <p className="app-field-note">
-                  Use the student&apos;s full school name so attendance, reports, and analytics stay consistent.
-                </p>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
                 <div className="app-field-group">
-                  <Label htmlFor="student-email">Email</Label>
+                  <Label htmlFor="student-name">Student name</Label>
                   <Input
-                    id="student-email"
-                    name="email"
-                    type="email"
-                    placeholder="Optional email address"
-                    value={form.email}
-                    onChange={handleInputChange}
-                  />
-                  <p className="app-field-note">
-                    Optional for most students, but useful when the account needs a cleaner long-term contact record.
-                  </p>
-                </div>
-
-                <div className="app-field-group">
-                  <Label htmlFor="student-mobile">Parent phone</Label>
-                  <Input
-                    id="student-mobile"
-                    name="mobileNumber"
-                    placeholder="Parent or guardian phone"
-                    value={form.mobileNumber}
-                    onChange={handleInputChange}
-                  />
-                  <p className="app-field-note">
-                    Best number for report delivery, parent contact, and follow-up around tests.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="app-section space-y-4">
-              <div className="app-form-section-heading">
-                <p className="app-form-section-title">Login setup</p>
-                <p className="app-form-section-copy">
-                  The roll number is the one field students and staff will notice most during sign-in support.
-                </p>
-              </div>
-
-              <div className="app-form-callout">
-                <p className="font-semibold text-foreground">Student sign-in</p>
-                <p className="mt-1.5">
-                  Students use the school key plus their roll number to sign in. The first password is the saved phone-number digits exactly as stored, including country code digits if they were saved.
-                </p>
-              </div>
-            </div>
-
-            <div className="app-section space-y-4">
-              <div className="app-form-section-heading">
-                <p className="app-form-section-title">School placement</p>
-                <p className="app-form-section-copy">
-                  These fields control class grouping, section assignment, and student-test eligibility.
-                </p>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="app-field-group">
-                  <Label htmlFor="student-class">Class</Label>
-                  <Select value={form.class} onValueChange={handleClassChange}>
-                    <SelectTrigger id="student-class">
-                      <SelectValue placeholder="Select class" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {initialClasses.map((classItem) => (
-                        <SelectItem key={classItem._id} value={classItem._id}>
-                          {classItem.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="app-field-note">
-                    Choose class first. It controls section options and where the student appears everywhere else.
-                  </p>
-                </div>
-
-                <div className="app-field-group">
-                  <Label htmlFor="student-roll-number">Roll number</Label>
-                  <Input
-                    id="student-roll-number"
-                    name="rollNumber"
-                    placeholder="Enter roll number"
-                    value={form.rollNumber}
+                    id="student-name"
+                    name="name"
+                    placeholder="Enter student name"
+                    value={form.name}
                     onChange={handleInputChange}
                     required
                   />
-                  <p className="app-field-note">
-                    Most important placement field. This becomes the student&apos;s username. If sign-in support is needed later, admins can reset the password from the student detail page.
-                  </p>
                 </div>
 
-                <div className="app-field-group">
-                  <Label htmlFor="student-section">Section</Label>
-                  <Select
-                    value={form.academicSection}
-                    onValueChange={(value) =>
-                      setForm((currentForm) => ({
-                        ...currentForm,
-                        academicSection: value,
-                      }))
-                    }
-                    disabled={!form.class}
-                  >
-                    <SelectTrigger id="student-section">
-                      <SelectValue
-                        placeholder={form.class ? "Select section" : "Choose class first"}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredSections.map((section) => (
-                        <SelectItem key={section._id} value={section._id}>
-                          {section.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="app-field-note">
-                    Required for this flow. Sections are filtered by the chosen class so placement stays accurate.
-                  </p>
-                </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="app-field-group">
+                    <Label htmlFor="student-father-name">Father name</Label>
+                    <Input
+                      id="student-father-name"
+                      name="fatherName"
+                      placeholder="Optional father name"
+                      value={form.fatherName}
+                      onChange={handleInputChange}
+                    />
+                  </div>
 
-                <div className="app-field-group">
-                  <Label htmlFor="student-enrolled-at">Enrollment date</Label>
-                  <Input
-                    id="student-enrolled-at"
-                    name="enrolledAt"
-                    type="date"
-                    value={form.enrolledAt}
-                    onChange={handleInputChange}
-                  />
-                  <p className="app-field-note">
-                    Useful for backfilling legacy data or recording mid-year admissions.
-                  </p>
+                  <div className="app-field-group">
+                    <Label htmlFor="student-email">Email</Label>
+                    <Input
+                      id="student-email"
+                      name="email"
+                      type="email"
+                      placeholder="Optional email address"
+                      value={form.email}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+
+                  <div className="app-field-group">
+                    <Label htmlFor="student-mobile">Parent phone</Label>
+                    <Input
+                      id="student-mobile"
+                      name="mobileNumber"
+                      placeholder="Parent or guardian phone"
+                      value={form.mobileNumber}
+                      onChange={handleInputChange}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <Button type="submit" size="xl" className="w-full" disabled={loading}>
-              {loading ? "Creating..." : "Create Student Account"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              <div className="app-section space-y-4">
+                <p className="app-form-section-title">School placement</p>
+
+                <div className="app-form-callout">
+                  <p className="font-semibold text-foreground">Student sign-in</p>
+                  <p className="mt-1.5">
+                    Username is roll number. First password uses saved phone digits.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="app-field-group">
+                    <Label htmlFor="student-class">Class</Label>
+                    <Select value={form.class} onValueChange={handleClassChange}>
+                      <SelectTrigger id="student-class">
+                        <SelectValue placeholder="Select class" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {initialClasses.map((classItem) => (
+                          <SelectItem key={classItem._id} value={classItem._id}>
+                            {classItem.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="app-field-group">
+                    <Label htmlFor="student-roll-number">Roll number</Label>
+                    <Input
+                      id="student-roll-number"
+                      name="rollNumber"
+                      placeholder="Enter roll number"
+                      value={form.rollNumber}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+
+                  <div className="app-field-group">
+                    <Label htmlFor="student-section">Section</Label>
+                    <Select
+                      value={form.academicSection}
+                      onValueChange={(value) =>
+                        setForm((currentForm) => ({
+                          ...currentForm,
+                          academicSection: value,
+                        }))
+                      }
+                      disabled={!form.class}
+                    >
+                      <SelectTrigger id="student-section">
+                        <SelectValue
+                          placeholder={form.class ? "Select section" : "Choose class first"}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredSections.map((section) => (
+                          <SelectItem key={section._id} value={section._id}>
+                            {section.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="app-field-group">
+                    <Label htmlFor="student-enrolled-at">Enrollment date</Label>
+                    <Input
+                      id="student-enrolled-at"
+                      name="enrolledAt"
+                      type="date"
+                      value={form.enrolledAt}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Button type="submit" size="xl" className="w-full" disabled={loading}>
+                {loading ? "Creating..." : "Create Student Account"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      ) : (
+        <BulkUploadPanel
+          id="student-bulk-upload"
+          title="Bulk upload students"
+          inputId="bulk-upload-students"
+          onFileChange={handleBulkUpload}
+          onDownloadTemplate={downloadTemplate}
+          templateLabel="Download Student Template"
+          loading={bulkLoading}
+          loadingLabel="Uploading students..."
+          disabled={initialClasses.length === 0}
+          compact
+          feedback={bulkFeedback}
+          tips={WORKSPACE_USER_BULK_TEMPLATES.student.tips}
+        />
+      )}
     </WorkspaceCreateShell>
   );
 }

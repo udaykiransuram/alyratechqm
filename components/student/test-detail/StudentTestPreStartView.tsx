@@ -2,7 +2,6 @@
 
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
-import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FeedbackNotice from "@/components/ui/feedback-notice";
@@ -64,7 +63,7 @@ export default function StudentTestPreStartView({
         eyebrow="Student Portal"
         title={paper.title}
         variant="overview"
-        description="Review the test window, instructions, and scoring details before you begin your online attempt."
+        description="Review details before you start."
         actions={
           <div className="app-student-action-cluster">
             <Button
@@ -108,20 +107,20 @@ export default function StudentTestPreStartView({
             label: "Status",
             value: statusLabel,
             meta: canStartNow
-              ? "This test is ready to begin now."
+              ? "Ready to start"
               : testStatus === "upcoming"
-                ? "Wait for the scheduled opening time."
-                : "This test is not currently available to start.",
+                ? "Opens at scheduled time"
+                : "Unavailable now",
           },
           {
             label: "Questions",
             value: String(questionCount),
-            meta: "Questions across every section in this paper.",
+            meta: "Total",
           },
           {
             label: "Duration",
             value: `${paper.duration} min`,
-            meta: "One timer runs for the full test once you start.",
+            meta: "Single timer",
           },
           {
             label: "Marks",
@@ -129,9 +128,7 @@ export default function StudentTestPreStartView({
             meta: `Passing marks: ${paper.passingMarks}`,
           },
         ]}
-      >
-        <StudentPortalNav />
-      </PageHero>
+      />
 
       {actionError ? (
         <FeedbackNotice variant="error">{actionError}</FeedbackNotice>
@@ -139,7 +136,7 @@ export default function StudentTestPreStartView({
 
       {testStatus === "upcoming" ? (
         <FeedbackNotice variant="info">
-          This test has not opened yet. Online access starts at {effectiveStart}.
+          This test opens at {effectiveStart}.
         </FeedbackNotice>
       ) : null}
 
@@ -149,26 +146,9 @@ export default function StudentTestPreStartView({
         </FeedbackNotice>
       ) : null}
 
-      <div className="app-toolbar">
-        <div className="app-toolbar-row">
-          <div className="app-toolbar-copy">
-            <p className="app-toolbar-title">Before you start</p>
-            <p className="app-toolbar-note">
-              Double-check the test window, scoring, and review rules before launching the timer.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="app-meta-chip">{questionCount} questions</span>
-            <span className="app-meta-chip">Opens {effectiveStart}</span>
-            <span className="app-meta-chip">Closes {effectiveEnd}</span>
-            <span className="app-meta-chip">Passing {paper.passingMarks}</span>
-          </div>
-        </div>
-      </div>
-
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
-          <CardTitle>Test Details</CardTitle>
+          <CardTitle>Details</CardTitle>
         </CardHeader>
         <CardContent className="app-section-body">
           <div className="app-detail-grid">
@@ -214,7 +194,7 @@ export default function StudentTestPreStartView({
 
       {hasManualReviewQuestions ? (
         <FeedbackNotice variant="info">
-          Descriptive answers will be reviewed after submission.
+          Descriptive answers are reviewed after submission.
         </FeedbackNotice>
       ) : null}
 

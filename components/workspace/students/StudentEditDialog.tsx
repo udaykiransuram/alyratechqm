@@ -34,6 +34,7 @@ type AcademicSectionItem = {
 type StudentEditDraft = {
   _id: string;
   name: string;
+  fatherName: string;
   classId: string;
   academicSectionId: string;
   rollNumber: string;
@@ -66,6 +67,7 @@ export default function StudentEditDialog({
 }: StudentEditDialogProps) {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
+  const [fatherName, setFatherName] = useState("");
   const [classId, setClassId] = useState("");
   const [academicSectionId, setAcademicSectionId] = useState("");
   const [rollNumber, setRollNumber] = useState("");
@@ -74,6 +76,7 @@ export default function StudentEditDialog({
   useEffect(() => {
     if (!open || !student) return;
     setName(student.name);
+    setFatherName(student.fatherName);
     setClassId(student.classId);
     setAcademicSectionId(student.academicSectionId);
     setRollNumber(student.rollNumber);
@@ -91,6 +94,7 @@ export default function StudentEditDialog({
       setSaving(true);
       const body: any = {
         name,
+        fatherName,
         role: "student",
         class: classId,
         academicSection: academicSectionId,
@@ -140,6 +144,17 @@ export default function StudentEditDialog({
               className="col-span-3"
               value={name}
               onChange={(event) => setName(event.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="father-name" className="text-right">
+              Father
+            </Label>
+            <Input
+              id="father-name"
+              className="col-span-3"
+              value={fatherName}
+              onChange={(event) => setFatherName(event.target.value)}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">

@@ -119,10 +119,10 @@ export default function Footer() {
   }, [info.phone, info.whatsappNumber]);
 
   return (
-    <footer className="public-footer-shell mt-24 border-t border-white/10 text-white">
-      <div className="public-shell py-14 md:py-20">
-        <div className="grid gap-8 lg:grid-cols-[1.25fr_0.72fr_0.72fr_0.95fr]">
-          <div className="space-y-5">
+    <footer className="public-footer-shell mt-20 border-t border-white/10 text-white">
+      <div className="public-shell py-12 md:py-16">
+        <div className="grid gap-8 md:gap-10 lg:grid-cols-[1.18fr_0.74fr_0.74fr_0.96fr]">
+          <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="public-brand-mark flex h-11 w-11 items-center justify-center rounded-2xl text-white">
                 <Activity className="h-5 w-5" />
@@ -141,7 +141,7 @@ export default function Footer() {
               how students think, learn, and grow. Built for schools that want
               clearer academic decisions without more operational noise.
             </p>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2.5">
               <Link href="/contact" className="public-button-secondary">
                 Book a demo
               </Link>
@@ -203,7 +203,7 @@ export default function Footer() {
             </ul>
           </div>
 
-          <div className="public-footer-card">
+          <div className="public-footer-card h-full">
             <h4 className="public-footer-heading mb-4">Contact</h4>
             <ul className="space-y-3 text-sm">
               <li>
@@ -235,7 +235,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-10 flex flex-col gap-4 border-t border-white/10 pt-6 text-xs sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-8 flex flex-col gap-3 border-t border-white/10 pt-5 text-xs sm:flex-row sm:items-center sm:justify-between">
           <p className="public-footer-note">
             © {new Date().getFullYear()} Alyra Tech Pvt. Ltd. All rights
             reserved.

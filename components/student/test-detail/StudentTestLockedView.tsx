@@ -4,7 +4,6 @@ import { useMemo } from "react";
 
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
-import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FeedbackNotice from "@/components/ui/feedback-notice";
@@ -150,7 +149,7 @@ export default function StudentTestLockedView({
         eyebrow="Student Portal"
         title={paper.title}
         variant="overview"
-        description="Your attempt is locked. Review the submission summary and subject-separated breakdown below."
+        description="Your attempt is locked. Review your submission summary."
         actions={
           <Button
             asChild
@@ -183,19 +182,19 @@ export default function StudentTestLockedView({
           {
             label: "Status",
             value: submissionStatus,
-            meta: "This attempt can no longer be edited or reopened.",
+            meta: "Attempt closed",
           },
           {
             label: hasManualReviewQuestions ? "Auto-Graded Score" : "Score",
             value: `${attempt?.totalMarksAwarded ?? 0} / ${paper.totalMarks}`,
             meta: hasManualReviewQuestions
-              ? "Manual review can still change the final score."
-              : "This reflects the current evaluated result.",
+              ? "Manual review pending"
+              : "Final score",
           },
           {
             label: "Questions",
             value: String(questionCount),
-            meta: "Questions included in the submitted test.",
+            meta: "Submitted",
           },
           {
             label: "Subjects",
@@ -206,12 +205,10 @@ export default function StudentTestLockedView({
                 1,
               ),
             ),
-            meta: "Subject-separated review appears below when available.",
+            meta: "Breakdown",
           },
         ]}
-      >
-        <StudentPortalNav />
-      </PageHero>
+      />
 
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
@@ -242,18 +239,13 @@ export default function StudentTestLockedView({
           </div>
 
           {submittedSubjectSummaries.length > 1 ? (
-            <div className="mt-6 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="app-title-sm">Subject Breakdown</p>
-                <span className="app-copy-meta">
-                  One paper, separated by subject for review
-                </span>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-5 space-y-2.5">
+              <p className="app-title-sm">Subject Breakdown</p>
+              <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
                 {submittedSubjectSummaries.map((subject) => (
                   <div
                     key={subject._id}
-                    className="rounded-[1.15rem] border border-border/60 bg-[hsl(var(--app-surface-2)/0.48)] p-4"
+                    className="rounded-[1.15rem] border border-border/60 bg-[hsl(var(--app-surface-2)/0.48)] p-3.5"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="app-title-sm">{subject.name}</p>
@@ -261,7 +253,7 @@ export default function StudentTestLockedView({
                         {subject.answered}/{subject.total} answered
                       </span>
                     </div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
                       <div className="app-detail-item">
                         <p className="app-detail-label">Auto-graded marks</p>
                         <div className="app-detail-value">
@@ -288,8 +280,8 @@ export default function StudentTestLockedView({
                     {subject.manualReviewPending > 0 ? (
                       <p className="mt-3 text-xs font-medium text-amber-700">
                         {subject.manualReviewPending} descriptive response
-                        {subject.manualReviewPending === 1 ? "" : "s"} still
-                        pending manual review.
+                        {subject.manualReviewPending === 1 ? "" : "s"} pending
+                        review.
                       </p>
                     ) : null}
                   </div>
@@ -300,7 +292,7 @@ export default function StudentTestLockedView({
 
           {hasManualReviewQuestions ? (
             <FeedbackNotice variant="info">
-              Manual review is still pending for descriptive answers.
+              Descriptive answer review is pending.
             </FeedbackNotice>
           ) : null}
         </CardContent>

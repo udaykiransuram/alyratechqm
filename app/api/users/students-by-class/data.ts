@@ -7,6 +7,7 @@ import { getTenantModels } from "@/lib/db-tenant";
 type StudentItem = {
   _id: string;
   name: string;
+  fatherName?: string;
   email?: string;
   rollNumber?: string;
   enrolledAt?: string;
@@ -124,13 +125,14 @@ export async function getStudentsByClassPageData({
     const regex = new RegExp(q, "i");
     studentQuery.$or = [
       { name: { $regex: regex } },
+      { fatherName: { $regex: regex } },
       { email: { $regex: regex } },
       { rollNumber: { $regex: regex } },
     ];
   }
 
   const students = await UserModel.find(studentQuery)
-    .select("name email rollNumber enrolledAt class academicSection")
+    .select("name fatherName email rollNumber enrolledAt class academicSection")
     .sort({ name: 1 })
     .lean();
 
@@ -251,6 +253,7 @@ export async function getStudentsByClassPageData({
     group.students.push({
       _id: String(student._id),
       name: student.name,
+      fatherName: student.fatherName,
       email: student.email,
       rollNumber: student.rollNumber,
       enrolledAt: student.enrolledAt,

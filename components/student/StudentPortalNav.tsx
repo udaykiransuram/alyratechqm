@@ -35,7 +35,7 @@ export default function StudentPortalNav() {
             key={link.href}
             href={link.href}
             className={cn(
-              "app-segmented-link min-w-[7.5rem] items-center text-center",
+              "app-segmented-link min-w-[6.5rem] items-center text-center",
               active && "app-segmented-link-active",
             )}
           >

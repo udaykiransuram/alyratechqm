@@ -40,9 +40,6 @@ export default function StudentHeader() {
             <p className="app-nav-text text-[14px] font-semibold tracking-[0.01em]">
               Alyra Tech
             </p>
-            <p className="app-nav-text-muted text-[11px]">
-              Student Test Portal
-            </p>
           </div>
         </AppPrefetchLink>
 

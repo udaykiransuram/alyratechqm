@@ -46,7 +46,7 @@ export default function StudentTestPageClient({
     return (
       <PageLoadingState
         title="Loading test"
-        description="Preparing your exam."
+        description="Preparing your test."
       />
     );
   }
@@ -58,7 +58,7 @@ export default function StudentTestPageClient({
           eyebrow="Student Portal"
           title="Test"
           variant="overview"
-          description="We couldn't open this test right now. Return to your test list and try again."
+          description="We couldn't open this test right now."
           actions={
             <Button
               asChild

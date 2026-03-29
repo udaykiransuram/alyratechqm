@@ -3,11 +3,8 @@
 import Link from "next/link";
 import React, { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight,
   Building2,
   Pencil,
-  Settings2,
-  ShieldCheck,
   Trash2,
 } from "lucide-react";
 
@@ -79,41 +76,6 @@ const EMPTY_CREATE_FORM = {
   adminPassword: "",
   adminMobileNumber: "",
 };
-
-const schoolProvisioningSteps = [
-  {
-    title: "Choose the permanent school key",
-    description:
-      "The key becomes part of tenant routing, cookies, and provisioning, so it stays fixed after creation.",
-  },
-  {
-    title: "Bootstrap the first school admin",
-    description:
-      "Each school is provisioned together with its first admin so the team can continue immediately from the school login flow.",
-  },
-  {
-    title: "Hand off ongoing school operations",
-    description:
-      "After provisioning, the school admin owns daily user creation and password management inside the tenant workspace.",
-  },
-];
-
-const schoolOpsLinks = [
-  {
-    title: "Operations activity",
-    description:
-      "Review the company-level trail for maintenance actions and other operational changes.",
-    href: "/company/activity",
-    icon: ShieldCheck,
-  },
-  {
-    title: "Maintenance console",
-    description:
-      "Open reindexing and maintenance tools when company-level follow-up is needed.",
-    href: "/company/indexing",
-    icon: Settings2,
-  },
-];
 
 export default function ManageSchoolsPage() {
   const [schools, setSchools] = useState<SchoolItem[]>([]);
@@ -361,7 +323,7 @@ export default function ManageSchoolsPage() {
       <PageHero
         eyebrow="Company Admin"
         title="Manage Schools"
-        description="Create, rename, and remove school workspaces for company-level operations."
+        description="Create, update, and remove school workspaces from one company-level console."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/company/activity">
@@ -390,8 +352,7 @@ export default function ManageSchoolsPage() {
           <>
             <span className="app-meta-chip">School keys are permanent</span>
             <span className="app-meta-chip">Bootstrap admin required</span>
-            <span className="app-meta-chip">Operations trail available</span>
-            <span className="app-meta-chip">Legacy student cleanup available</span>
+            <span className="app-meta-chip">Company-admin only actions</span>
           </>
         }
         stats={[
@@ -403,7 +364,7 @@ export default function ManageSchoolsPage() {
           {
             label: "Selected workspace",
             value: selectedSchoolKey || "None",
-            meta: "Current school key from the browser workspace context.",
+            meta: "Current school key in the browser workspace context.",
           },
           {
             label: "Provisioning mode",
@@ -413,12 +374,12 @@ export default function ManageSchoolsPage() {
           {
             label: "Access boundary",
             value: "Company only",
-            meta: "Only company-admin sessions can create or delete schools.",
+            meta: "Only company-admin sessions can create, edit, or delete schools.",
           },
         ]}
       />
 
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] xl:items-start">
         <Card className="app-surface overflow-hidden">
           <CardHeader className="app-section-header">
             <div className="flex items-start gap-3">
@@ -428,7 +389,7 @@ export default function ManageSchoolsPage() {
               <div className="space-y-1">
                 <CardTitle>Create School</CardTitle>
                 <CardDescription>
-                  School keys are permanent tenant identifiers. Choose them carefully.
+                  School keys are permanent tenant identifiers.
                 </CardDescription>
               </div>
             </div>
@@ -441,49 +402,51 @@ export default function ManageSchoolsPage() {
                     School identity
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    These values establish the tenant workspace that school users will continue from.
+                    Set the permanent key and display name for this tenant workspace.
                   </p>
                 </div>
-                <div className="app-field-group">
-                  <label className="app-field-label" htmlFor="create-school-key">
-                    School Key
-                  </label>
-                  <Input
-                    id="create-school-key"
-                    placeholder="e.g., alpha-high"
-                    value={createForm.key}
-                    onChange={(event) =>
-                      setCreateForm((current) => ({
-                        ...current,
-                        key: event.target.value,
-                      }))
-                    }
-                    disabled={isSubmitting}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Used for tenant database names, cookies, and API routing.
-                  </p>
-                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="app-field-group">
+                    <label className="app-field-label" htmlFor="create-school-key">
+                      School Key
+                    </label>
+                    <Input
+                      id="create-school-key"
+                      placeholder="e.g., alpha-high"
+                      value={createForm.key}
+                      onChange={(event) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          key: event.target.value,
+                        }))
+                      }
+                      disabled={isSubmitting}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Used for tenant database names, cookies, and routing.
+                    </p>
+                  </div>
 
-                <div className="app-field-group">
-                  <label
-                    className="app-field-label"
-                    htmlFor="create-school-display-name"
-                  >
-                    Display Name
-                  </label>
-                  <Input
-                    id="create-school-display-name"
-                    placeholder="e.g., Alpha High School"
-                    value={createForm.displayName}
-                    onChange={(event) =>
-                      setCreateForm((current) => ({
-                        ...current,
-                        displayName: event.target.value,
-                      }))
-                    }
-                    disabled={isSubmitting}
-                  />
+                  <div className="app-field-group">
+                    <label
+                      className="app-field-label"
+                      htmlFor="create-school-display-name"
+                    >
+                      Display Name
+                    </label>
+                    <Input
+                      id="create-school-display-name"
+                      placeholder="e.g., Alpha High School"
+                      value={createForm.displayName}
+                      onChange={(event) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          displayName: event.target.value,
+                        }))
+                      }
+                      disabled={isSubmitting}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -493,8 +456,7 @@ export default function ManageSchoolsPage() {
                     Bootstrap School Admin
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Every new school must start with its first admin account so
-                    the school team can log in and manage users immediately.
+                    Every new school starts with its first admin so the school can log in immediately.
                   </p>
                 </div>
 
@@ -587,7 +549,7 @@ export default function ManageSchoolsPage() {
                 </div>
 
                 <div className="rounded-xl border border-dashed border-border/70 bg-background/70 px-3.5 py-3 text-sm text-muted-foreground">
-                  This admin uses the school-user sign-in and can immediately create more users inside the school workspace.
+                  This admin uses school-user sign-in and can immediately create additional users.
                 </div>
               </div>
 
@@ -604,7 +566,7 @@ export default function ManageSchoolsPage() {
               <div className="space-y-1">
                 <CardTitle>Existing Schools</CardTitle>
                 <CardDescription>
-                  Update school names and bootstrap school-admin details here. Deleting a school also removes its tenant database.
+                  Edit school names and bootstrap admin details. Deleting a school also removes its tenant database.
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -637,20 +599,6 @@ export default function ManageSchoolsPage() {
               </div>
             ) : (
               <>
-                <div className="app-toolbar mb-4">
-                  <div className="app-toolbar-row">
-                    <div className="app-toolbar-copy">
-                      <p className="app-toolbar-title">School operations snapshot</p>
-                      <p className="app-toolbar-note">
-                        Review the permanent tenant key, open school maintenance, and edit the bootstrap admin details from here.
-                      </p>
-                    </div>
-                    <div className="app-toolbar-actions">
-                      <Badge variant="outline">Keys stay fixed</Badge>
-                      <Badge variant="outline">Delete removes tenant data</Badge>
-                    </div>
-                  </div>
-                </div>
                 <div className="app-table-wrap">
                   <Table>
                   <TableHeader>

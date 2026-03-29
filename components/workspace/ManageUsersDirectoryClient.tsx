@@ -281,9 +281,10 @@ export default function ManageUsersDirectoryClient({
   };
 
   return (
-    <PageShell width="wide" padding="relaxed">
+    <PageShell width="wide" padding="standard" className="app-directory-stack">
       <PageHero
         variant="directory"
+        density="compact"
         eyebrow="School Workspace"
         title="Manage Users"
         description="Browse every school user from one directory, then open the dedicated student, teacher, or admin flows when you need deeper edits."
@@ -345,21 +346,16 @@ export default function ManageUsersDirectoryClient({
         ]}
       />
 
-      <div className="space-y-6">
+      <div className="app-directory-stack">
         {supportDataNotice ? (
           <FeedbackNotice variant="info">{supportDataNotice}</FeedbackNotice>
         ) : null}
 
-        <Card className="app-surface overflow-hidden">
-          <CardHeader className="app-section-header">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-1">
-                <CardTitle>User Directory</CardTitle>
-                <p className="app-form-section-copy">
-                  Scan identity, login context, role, and scope quickly here, then open the dedicated detail page for deeper edits.
-                </p>
-              </div>
-              <div className="app-chip-cloud">
+      <Card className="app-surface overflow-hidden">
+        <CardHeader className="app-section-header">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+              <CardTitle>User Directory</CardTitle>
+              <div className="app-chip-cloud-tight">
                 <span className="app-meta-chip">{`${roleCounts.admin} admins loaded`}</span>
                 <span className="app-meta-chip">{`${roleCounts.teacher} teachers loaded`}</span>
                 <span className="app-meta-chip">{`${roleCounts.student} students loaded`}</span>
@@ -396,13 +392,12 @@ export default function ManageUsersDirectoryClient({
                 }
               />
             ) : (
-              <div className="space-y-4">
-                <div className="app-toolbar">
+              <div className="space-y-3">
+                <div className="app-toolbar app-toolbar-compact">
                   <div className="app-toolbar-row">
                     <div className="app-toolbar-copy">
-                      <p className="app-toolbar-title">Loaded users</p>
-                      <p className="app-toolbar-note">
-                        Total {total} users. Page {page} of {pages}. Open a row to continue in the dedicated student, teacher, or admin flow.
+                      <p className="app-toolbar-title">
+                        Total {total} users • Page {page} of {pages}
                       </p>
                     </div>
                     <div className="app-toolbar-actions">
@@ -430,13 +425,12 @@ export default function ManageUsersDirectoryClient({
                   </div>
                 </div>
 
-                <div className="app-table-wrap">
+                <div className="app-table-wrap app-table-dense">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
+                        <TableHead>Contact</TableHead>
                         <TableHead>Role</TableHead>
                         <TableHead>Scope</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
@@ -445,10 +439,10 @@ export default function ManageUsersDirectoryClient({
                     <TableBody>
                       {users.map((user) => (
                         <TableRow key={user._id}>
-                          <TableCell className="font-medium">
-                            <div className="space-y-1">
-                              <div className="app-table-primary">{user.name}</div>
-                              <div className="app-table-secondary">
+                          <TableCell>
+                            <div className="app-table-cell-stack">
+                              <div className="app-table-cell-title">{user.name}</div>
+                              <div className="app-table-cell-note">
                                 {user.role === "student" && user.rollNumber
                                   ? `Roll number login: ${user.rollNumber}`
                                   : getRoleAccountLabel(user.role)}
@@ -456,18 +450,14 @@ export default function ManageUsersDirectoryClient({
                             </div>
                           </TableCell>
                           <TableCell>
-                            {user.email ? (
-                              <div className="app-table-primary">{user.email}</div>
-                            ) : (
-                              <span className="app-table-secondary">No email</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {user.mobileNumber ? (
-                              <div className="app-table-primary">{user.mobileNumber}</div>
-                            ) : (
-                              <span className="app-table-secondary">No phone</span>
-                            )}
+                            <div className="app-table-cell-stack">
+                              <div className="app-table-cell-title">
+                                {user.email || "No email"}
+                              </div>
+                              <div className="app-table-cell-note">
+                                {user.mobileNumber || "No phone"}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -478,11 +468,11 @@ export default function ManageUsersDirectoryClient({
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <div className="space-y-1">
-                              <div className="app-table-primary">
+                            <div className="app-table-cell-stack">
+                              <div className="app-table-cell-title">
                                 {getScopeSummary(user)}
                               </div>
-                              <div className="app-table-secondary">
+                              <div className="app-table-cell-note">
                                 {user.role === "student"
                                   ? "Student placement"
                                   : "Academic access scope"}

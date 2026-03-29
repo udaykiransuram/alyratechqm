@@ -143,7 +143,7 @@ export default function HomeNavbar() {
         <div className="mx-auto flex max-w-[98rem] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div
             className={cn(
-              "home-nav-shell home-nav-desktop-shell hidden w-full items-center justify-between gap-4 px-3 py-2.5 lg:flex",
+              "home-glass-surface home-nav-shell home-nav-desktop-shell hidden w-full items-center justify-between gap-4 px-3 py-2.5 lg:flex",
               scrolled && "home-nav-shell-scrolled",
             )}
           >
@@ -155,13 +155,9 @@ export default function HomeNavbar() {
                 <Activity className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold tracking-[-0.03em] text-[hsl(var(--home-text))]">
-                  Alyra Tech
-                </p>
+                <p className="home-nav-brand-title">Alyra Tech</p>
                 <div className="mt-1 flex items-center gap-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--home-text-muted))]">
-                    Diagnostics For Schools
-                  </p>
+                  <p className="home-nav-brand-subtitle">Diagnostics For Schools</p>
                   <span className="home-nav-brand-pill hidden xl:inline-flex">
                     School Intelligence
                   </span>
@@ -184,14 +180,14 @@ export default function HomeNavbar() {
                 asChild
                 size="sm"
                 variant="outline"
-                className="home-nav-cta-secondary rounded-full px-4 text-[hsl(var(--home-text))]"
+                className="home-nav-action-button home-nav-cta-secondary rounded-full px-4 text-[hsl(var(--home-text))]"
               >
                 <Link href="/talent-test">Start Baseline Test</Link>
               </Button>
               <Button
                 asChild
                 size="sm"
-                className="home-nav-cta-primary rounded-full border-0 px-4.5 text-[hsl(var(--home-bg-0))]"
+                className="home-nav-action-button home-nav-cta-primary rounded-full border-0 px-4.5 text-[hsl(var(--home-bg-0))]"
                 style={{
                   background:
                     "linear-gradient(135deg, hsl(var(--home-accent-strong)) 0%, hsl(var(--home-accent)) 100%)",
@@ -209,7 +205,7 @@ export default function HomeNavbar() {
             <Link
               href="/platform-home"
               className={cn(
-                "home-nav-shell home-nav-brand-shell flex min-w-0 flex-1 items-center gap-3 rounded-full px-3 py-2 transition-all duration-300",
+                "home-glass-surface home-nav-shell home-nav-brand-shell flex min-w-0 flex-1 items-center gap-3 rounded-full px-3 py-2 transition-all duration-300",
                 scrolled && "home-nav-shell-scrolled",
               )}
             >
@@ -217,10 +213,8 @@ export default function HomeNavbar() {
                 <Activity className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold tracking-[-0.03em] text-[hsl(var(--home-text))]">
-                  Alyra Tech
-                </p>
-                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--home-text-muted))]">
+                <p className="home-nav-brand-title truncate">Alyra Tech</p>
+                <p className="home-nav-brand-subtitle truncate">
                   Diagnostics For Schools
                 </p>
               </div>
@@ -229,7 +223,7 @@ export default function HomeNavbar() {
             <button
               type="button"
               className={cn(
-                "home-nav-shell home-nav-menu-button inline-flex h-12 w-12 items-center justify-center rounded-full",
+                "home-glass-surface home-nav-shell home-nav-menu-button inline-flex h-12 w-12 items-center justify-center rounded-full",
                 scrolled && "home-nav-shell-scrolled",
               )}
               aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
@@ -258,10 +252,8 @@ export default function HomeNavbar() {
                   <Activity className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold tracking-[-0.03em] text-[hsl(var(--home-text))]">
-                    Alyra Tech
-                  </p>
-                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--home-text-muted))]">
+                  <p className="home-nav-brand-title truncate">Alyra Tech</p>
+                  <p className="home-nav-brand-subtitle truncate">
                     Diagnostics For Schools
                   </p>
                 </div>
@@ -278,7 +270,7 @@ export default function HomeNavbar() {
             </div>
 
             <div className="home-nav-mobile-summary">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[hsl(var(--home-text-muted))]">
+              <p className="home-nav-mobile-summary-label">
                 School review flow
               </p>
               <h2 className="home-flagship-display mt-3 text-3xl text-[hsl(var(--home-text))]">
@@ -305,7 +297,7 @@ export default function HomeNavbar() {
             <div className="mt-auto space-y-3">
               <Button
                 asChild
-                className="home-nav-cta-primary h-12 w-full rounded-full border-0 text-[hsl(var(--home-bg-0))]"
+                className="home-nav-action-button home-nav-cta-primary h-12 w-full rounded-full border-0 text-[hsl(var(--home-bg-0))]"
                 style={{
                   background:
                     "linear-gradient(135deg, hsl(var(--home-accent-strong)) 0%, hsl(var(--home-accent)) 100%)",
@@ -319,7 +311,7 @@ export default function HomeNavbar() {
               <Button
                 asChild
                 variant="outline"
-                className="home-nav-cta-secondary h-12 w-full rounded-full border-[hsl(var(--home-border)/0.84)] bg-[hsl(var(--home-surface)/0.48)] text-[hsl(var(--home-text))]"
+                className="home-nav-action-button home-nav-cta-secondary h-12 w-full rounded-full border-[hsl(var(--home-border)/0.84)] bg-[hsl(var(--home-surface)/0.48)] text-[hsl(var(--home-text))]"
               >
                 <Link href="/talent-test" onClick={() => setMobileOpen(false)}>
                   Start Baseline Test

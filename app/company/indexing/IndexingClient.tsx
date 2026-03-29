@@ -415,11 +415,11 @@ export default function IndexingClient({
   };
 
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-6 sm:px-0">
+    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
       <PageHero
         eyebrow="Company Admin"
         title="Maintenance Console"
-        description="Run company-wide maintenance tasks for tenant databases and clean up legacy student roll-number conflicts without entering a school workspace."
+        description="Run tenant index maintenance and resolve legacy student roll-number conflicts from one company-level console."
         actions={
           <Button type="button" variant="outline" size="sm" className="app-button-compact" onClick={navigateBack}>
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -471,19 +471,14 @@ export default function IndexingClient({
           </div>
         </CardHeader>
         <CardContent className="app-section-body space-y-4">
-          <div className="app-toolbar">
-            <div className="app-toolbar-row">
-              <div className="app-toolbar-copy">
-                <p className="app-toolbar-title">Index Maintenance</p>
-                <p className="app-toolbar-note">
-                  Use the full-company option for global maintenance, or narrow it to a single school before a targeted check.
-                </p>
-              </div>
-              <div className="app-toolbar-actions">
-                <Button size="sm" className="app-button-compact" onClick={handleIndexAll} disabled={indexLoading}>
-                  {indexLoading ? 'Indexing...' : 'Index All Tenants'}
-                </Button>
-              </div>
+          <div className="app-toolbar space-y-3">
+            <p className="app-toolbar-note">
+              Use full-company indexing for global maintenance, or target one school for focused checks.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" className="app-button-compact" onClick={handleIndexAll} disabled={indexLoading}>
+                {indexLoading ? 'Indexing...' : 'Index All Tenants'}
+              </Button>
             </div>
           </div>
 
@@ -534,7 +529,7 @@ export default function IndexingClient({
                   Raw response from the most recent indexing action.
                 </p>
               </div>
-              <pre className="overflow-auto rounded-xl border border-border/60 bg-background p-4 text-sm text-foreground">
+              <pre className="max-h-[22rem] overflow-auto rounded-xl border border-border/60 bg-background p-4 text-sm text-foreground">
                 {JSON.stringify(indexResults, null, 2)}
               </pre>
             </div>
@@ -551,21 +546,21 @@ export default function IndexingClient({
             <div className="space-y-1">
               <CardTitle>Student Roll Number Cleanup</CardTitle>
               <CardDescription>
-                Audit older student data, run safe auto-fixes, and apply the recommended duplicate roll-number suggestions in bulk when you want to clear an entire scope quickly.
+                Audit older student data, run safe auto-fixes, and apply suggested duplicate roll-number updates in bulk.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="app-section-body space-y-5">
-          <div className="app-toolbar">
-            <div className="app-toolbar-row">
+          <div className="app-toolbar space-y-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
               <div className="app-toolbar-copy">
                 <p className="app-toolbar-title">Cleanup Scope</p>
                 <p className="app-toolbar-note">
-                  Audit all schools or focus on a single school first. Safe auto-fix only renames duplicates with no linked student data. The suggested-values action uses the recommended keeper for every duplicate group in the audited scope, including linked-data groups.
+                  Audit all schools or a single school first, then apply safe fixes or suggested values.
                 </p>
               </div>
-              <div className="app-toolbar-actions">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {!hasSchoolOptions ? (
                   <Input
                     placeholder="Enter school key"
@@ -607,37 +602,40 @@ export default function IndexingClient({
                 >
                   {cleanupLoading ? 'Auditing...' : 'Audit Selected School'}
                 </Button>
-                <Button
-                  size="sm"
-                  className="app-button-compact"
-                  onClick={handleAutoFixSafeDuplicates}
-                  disabled={
-                    cleanupLoading ||
-                    cleanupActionLoading ||
-                    !cleanupSummary ||
-                    cleanupSummary.autoFixCandidateCount === 0
-                  }
-                >
-                  {cleanupActionLoading && cleanupActionType === 'safe-fix'
-                    ? 'Applying safe fixes...'
-                    : 'Auto-fix Safe Duplicates'}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="app-button-compact"
-                  onClick={handleApplySuggestedValuesToAll}
-                  disabled={
-                    cleanupLoading ||
-                    cleanupActionLoading ||
-                    !cleanupSummary ||
-                    cleanupSummary.duplicateGroupCount === 0
-                  }
-                >
-                  {cleanupActionLoading && cleanupActionType === 'apply-suggested-fix'
-                    ? 'Applying suggestions...'
-                    : 'Auto-fix All Suggested Values'}
-                </Button>
               </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+              <Button
+                size="sm"
+                className="app-button-compact"
+                onClick={handleAutoFixSafeDuplicates}
+                disabled={
+                  cleanupLoading ||
+                  cleanupActionLoading ||
+                  !cleanupSummary ||
+                  cleanupSummary.autoFixCandidateCount === 0
+                }
+              >
+                {cleanupActionLoading && cleanupActionType === 'safe-fix'
+                  ? 'Applying safe fixes...'
+                  : 'Auto-fix Safe Duplicates'}
+              </Button>
+              <Button
+                variant="outline"
+                className="app-button-compact"
+                onClick={handleApplySuggestedValuesToAll}
+                disabled={
+                  cleanupLoading ||
+                  cleanupActionLoading ||
+                  !cleanupSummary ||
+                  cleanupSummary.duplicateGroupCount === 0
+                }
+              >
+                {cleanupActionLoading && cleanupActionType === 'apply-suggested-fix'
+                  ? 'Applying suggestions...'
+                  : 'Auto-fix All Suggested Values'}
+              </Button>
             </div>
           </div>
 
@@ -825,7 +823,7 @@ export default function IndexingClient({
                                 )}
 
                                 <div className="app-table-wrap">
-                                  <Table>
+                                  <Table className="text-[13px]">
                                     <TableHeader>
                                       <TableRow>
                                         <TableHead>Student</TableHead>

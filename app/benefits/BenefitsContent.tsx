@@ -205,7 +205,7 @@ export default function BenefitsContent({
   testimonials,
 }: BenefitsContentProps) {
   return (
-    <main className="min-h-screen bg-slate-50/50">
+    <main className="min-h-screen bg-slate-50/60">
       <InnerHero
         title="Why Choose Alyra Tech?"
         subtitle="Physical reports with precision diagnostics — no software needed. Any school can get started."
@@ -214,11 +214,11 @@ export default function BenefitsContent({
         lottieLeft="/animations/financial-charts.lottie"
       />
 
-      <section className="relative mx-auto max-w-7xl px-6 py-20 lg:px-8 lg:py-28">
+      <section className="relative mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-20">
         {roiStats.length > 0 && (
-          <div className="mb-20">
+          <div className="mb-16">
             <Reveal>
-              <div className="mb-10 text-center">
+              <div className="mb-8 text-center">
                 <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-4 py-1.5">
                   <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
                     Proven Results
@@ -229,11 +229,11 @@ export default function BenefitsContent({
                 </h2>
               </div>
             </Reveal>
-            <Stagger className="grid grid-cols-2 gap-6 md:grid-cols-4">
+            <Stagger className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {roiStats.map((stat) => (
                 <div
                   key={stat.label || stat.value}
-                  className="rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors duration-300 hover:shadow-md md:p-8"
+                  className="flex h-full flex-col justify-center rounded-2xl border border-slate-100 bg-white p-5 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors duration-300 hover:shadow-md md:p-6"
                 >
                   <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-lg text-emerald-700 ring-1 ring-emerald-100">
                     {stat.icon}
@@ -264,17 +264,17 @@ export default function BenefitsContent({
             Reports You Can Hold.
             <br className="hidden sm:block" /> Insights You Can Act On.
           </h2>
-          <p className="mx-auto mb-16 max-w-2xl text-center text-lg leading-relaxed text-slate-500">
+          <p className="mx-auto mb-12 max-w-2xl text-center text-lg leading-relaxed text-slate-500">
             We don&apos;t sell software. We deliver physical, detailed diagnostic
             reports to your school — no tech setup, no training, no friction.
           </p>
         </Reveal>
 
-        <Stagger className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {pillars.map((pillar) => (
             <div
               key={pillar.title}
-              className="relative flex flex-col items-start overflow-hidden rounded-2xl border border-slate-100 bg-white p-7 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-shadow duration-300 hover:shadow-md"
+              className="relative flex h-full flex-col items-start overflow-hidden rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-shadow duration-300 hover:shadow-md"
             >
               <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-200 to-teal-200" />
               <div className="relative z-10 mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
@@ -290,9 +290,9 @@ export default function BenefitsContent({
           ))}
         </Stagger>
 
-        <div className="mt-28 md:mt-36">
+        <div className="mt-20 md:mt-24">
           <Reveal>
-            <div className="mb-20 text-center">
+            <div className="mb-14 text-center">
               <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-4 py-1.5">
                 <span className="text-xs font-semibold uppercase tracking-wider text-blue-700">
                   For Every Stakeholder
@@ -308,7 +308,7 @@ export default function BenefitsContent({
             </div>
           </Reveal>
 
-          <div className="space-y-24 md:space-y-36">
+          <div className="space-y-16 md:space-y-20">
             {stakeholders.map((stakeholder, index) => {
               const isReversed = index % 2 !== 0;
 
@@ -319,7 +319,7 @@ export default function BenefitsContent({
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, amount: 0.3 }}
                     transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                    className="mb-10"
+                    className="mb-8"
                   >
                     <div className="mb-3 flex items-center gap-4">
                       <div
@@ -331,7 +331,7 @@ export default function BenefitsContent({
                         <h3 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
                           {stakeholder.role}
                         </h3>
-                        <p className="mt-0.5 text-sm font-medium text-slate-400">
+                        <p className="mt-0.5 text-sm font-medium text-slate-500">
                           {stakeholder.tagline}
                         </p>
                       </div>
@@ -339,21 +339,21 @@ export default function BenefitsContent({
                   </motion.div>
 
                   <div
-                    className={`grid grid-cols-1 items-start gap-8 lg:grid-cols-12 ${isReversed ? "lg:direction-rtl" : ""}`}
+                    className={`grid grid-cols-1 items-start gap-6 lg:grid-cols-12 ${isReversed ? "lg:direction-rtl" : ""}`}
                   >
                     <motion.div
                       initial={{ opacity: 0, x: isReversed ? 40 : -40 }}
                       whileInView={{ opacity: 1, x: 0 }}
                       viewport={{ once: true, amount: 0.2 }}
                       transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                      className={`sticky top-28 hidden lg:col-span-4 lg:block ${isReversed ? "lg:order-last" : ""}`}
+                      className={`sticky top-24 hidden lg:col-span-4 lg:block ${isReversed ? "lg:order-last" : ""}`}
                     >
                       <div
-                        className={`rounded-3xl bg-gradient-to-br ${stakeholder.lightBg} p-6 shadow-md ring-1 ring-black/[0.03]`}
+                        className={`rounded-3xl bg-gradient-to-br ${stakeholder.lightBg} p-5 shadow-md ring-1 ring-black/[0.03]`}
                       >
                         <LottieAnimation
                           src={stakeholder.lottie}
-                          className="h-[280px] w-full"
+                          className="h-[250px] w-full"
                         />
                       </div>
                     </motion.div>
@@ -363,7 +363,7 @@ export default function BenefitsContent({
                       {stakeholder.features.map((feature) => (
                         <div
                           key={feature.title}
-                          className="group relative overflow-hidden rounded-xl border border-slate-100 bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/50"
+                          className="group relative flex h-full overflow-hidden rounded-xl border border-slate-100 bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/50 md:p-5"
                         >
                           <div
                             className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${stakeholder.color}`}
@@ -372,7 +372,7 @@ export default function BenefitsContent({
                             <div
                               className={`flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-gradient-to-br ${stakeholder.color} text-white shadow-sm`}
                             >
-                              <feature.icon className="h-4.5 w-4.5" />
+                              <feature.icon className="h-4 w-4" />
                             </div>
                             <div className="min-w-0">
                               <h4 className="text-sm font-semibold leading-tight text-slate-900">
@@ -393,7 +393,7 @@ export default function BenefitsContent({
           </div>
         </div>
 
-        <div className="flow-root mt-24 md:mt-36">
+        <div className="flow-root mt-20 md:mt-24">
           <Reveal>
             <div className="pointer-events-none absolute left-1/2 top-[-50px] h-[300px] w-[80%] -translate-x-1/2 rounded-full bg-emerald-100/20 blur-[120px]" />
             <div className="relative z-10 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl shadow-slate-200/30 md:rounded-3xl">
@@ -409,13 +409,13 @@ export default function BenefitsContent({
                 <table className="w-full text-left text-sm text-slate-600">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                     <tr>
-                      <th className="px-4 py-4 font-semibold md:px-8 md:py-6">
+                      <th className="px-4 py-3.5 font-semibold md:px-7 md:py-5">
                         Feature
                       </th>
-                      <th className="px-4 py-4 font-semibold md:px-8 md:py-6">
+                      <th className="px-4 py-3.5 font-semibold md:px-7 md:py-5">
                         Traditional Reports
                       </th>
-                      <th className="border-b-2 border-emerald-500 bg-emerald-50/50 px-4 py-4 font-semibold text-emerald-700 md:px-8 md:py-6">
+                      <th className="border-b-2 border-emerald-500 bg-emerald-50/50 px-4 py-3.5 font-semibold text-emerald-700 md:px-7 md:py-5">
                         Alyra Tech
                       </th>
                     </tr>
@@ -472,13 +472,13 @@ export default function BenefitsContent({
                         key={feature}
                         className="transition-colors hover:bg-slate-50"
                       >
-                        <td className="px-4 py-4 text-sm font-medium text-slate-900 md:px-8 md:py-5 md:text-base">
+                        <td className="px-4 py-3.5 text-sm font-medium text-slate-900 md:px-7 md:py-4 md:text-base">
                           {feature}
                         </td>
-                        <td className="px-4 py-4 text-sm text-slate-500 md:px-8 md:py-5">
+                        <td className="px-4 py-3.5 text-sm text-slate-500 md:px-7 md:py-4">
                           {traditional}
                         </td>
-                        <td className="bg-emerald-50/10 px-4 py-4 text-sm font-medium text-emerald-700 md:px-8 md:py-5 md:text-base">
+                        <td className="bg-emerald-50/10 px-4 py-3.5 text-sm font-medium text-emerald-700 md:px-7 md:py-4 md:text-base">
                           {alyra}
                         </td>
                       </tr>
@@ -490,8 +490,8 @@ export default function BenefitsContent({
           </Reveal>
         </div>
 
-        <div className="mt-24 md:mt-36">
-          <div className="grid grid-cols-1 items-center gap-16 lg:grid-cols-2">
+        <div className="mt-20 md:mt-24">
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-12">
             <motion.div
               initial={{ opacity: 0, x: -40 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -509,13 +509,13 @@ export default function BenefitsContent({
                 <br />
                 Physical reports for everyone.
               </h3>
-              <p className="mb-8 text-base leading-relaxed text-slate-500">
+              <p className="mb-7 text-base leading-relaxed text-slate-500">
                 A single diagnostic generates a set of tailored physical reports
                 — administration gets printed metrics, teachers get teaching plans
                 with heat maps and worksheets, and every student gets a
                 personalised sub-skill breakdown.
               </p>
-              <ul className="space-y-3.5">
+              <ul className="space-y-3">
                 {[
                   "Printed school-level benchmarking & administrative KPIs",
                   "Class & section heat maps delivered to teachers",
@@ -547,10 +547,10 @@ export default function BenefitsContent({
               className="relative"
             >
               <div className="pointer-events-none absolute inset-0 scale-95 rounded-3xl bg-gradient-to-br from-emerald-100/40 to-teal-50/40 blur-2xl" />
-              <div className="relative rounded-3xl bg-gradient-to-br from-emerald-50/80 to-teal-50/60 p-6 shadow-md ring-1 ring-black/[0.03]">
+              <div className="relative rounded-3xl bg-gradient-to-br from-emerald-50/80 to-teal-50/60 p-5 shadow-md ring-1 ring-black/[0.03]">
                 <LottieAnimation
                   src="/animations/isometric-data-analysis.lottie"
-                  className="mx-auto h-[300px] w-full max-w-md lg:h-[340px]"
+                  className="mx-auto h-[260px] w-full max-w-md lg:h-[300px]"
                 />
               </div>
             </motion.div>
@@ -558,9 +558,9 @@ export default function BenefitsContent({
         </div>
 
         {testimonials.length > 0 && (
-          <div className="mt-24 md:mt-36">
+          <div className="mt-20 md:mt-24">
             <Reveal>
-              <div className="mb-12 text-center">
+              <div className="mb-10 text-center">
                 <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-amber-100 bg-amber-50 px-4 py-1.5">
                   <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">
                     Testimonials
@@ -571,11 +571,11 @@ export default function BenefitsContent({
                 </h2>
               </div>
             </Reveal>
-            <Stagger className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+            <Stagger className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
               {testimonials.map((testimonial) => (
                 <div
                   key={`${testimonial.author}-${testimonial.quote.slice(0, 20)}`}
-                  className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-shadow duration-300 hover:shadow-lg md:p-8"
+                  className="flex h-full flex-col rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-shadow duration-300 hover:shadow-lg md:p-6"
                 >
                   <div className="mb-4 flex gap-1">
                     {[...Array(testimonial.rating)].map((_, index) => (
@@ -602,10 +602,10 @@ export default function BenefitsContent({
           </div>
         )}
 
-        <div className="relative mt-24 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-8 text-white md:mt-36 md:rounded-3xl sm:p-12 lg:p-16">
+        <div className="relative mt-20 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-7 text-white md:mt-24 md:rounded-3xl sm:p-10 lg:p-14">
           <div className="pointer-events-none absolute left-1/2 top-0 h-[300px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/15 blur-[120px]" />
           <div className="pointer-events-none absolute bottom-0 right-0 h-[200px] w-[400px] translate-y-1/2 rounded-full bg-teal-500/10 blur-[100px]" />
-          <div className="relative z-10 grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
+          <div className="relative z-10 grid grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-10">
             <div className="hidden items-center justify-center lg:flex">
               <div className="rounded-2xl bg-white/[0.04] p-6 backdrop-blur-sm ring-1 ring-white/[0.06]">
                 <LottieAnimation
@@ -622,16 +622,16 @@ export default function BenefitsContent({
                 Take the Talent Test and experience reports that put traditional
                 report cards to shame.
               </p>
-              <div className="flex flex-col items-center justify-center gap-3 sm:flex-row lg:justify-start">
+              <div className="flex flex-col items-center justify-center gap-2.5 sm:flex-row lg:justify-start">
                 <Link
                   href="/talent-test"
-                  className="rounded-full bg-emerald-500 px-7 py-3.5 text-base font-bold text-slate-950 transition-all duration-300 hover:scale-105 hover:bg-emerald-400 hover:shadow-[0_0_40px_-8px_rgba(16,185,129,0.5)]"
+                  className="inline-flex min-w-[10.75rem] items-center justify-center rounded-full bg-emerald-500 px-6 py-3.5 text-base font-bold text-slate-950 transition-all duration-300 hover:scale-105 hover:bg-emerald-400 hover:shadow-[0_0_40px_-8px_rgba(16,185,129,0.5)]"
                 >
                   Take the Talent Test
                 </Link>
                 <Link
                   href="/contact"
-                  className="rounded-full border-2 border-white/30 px-7 py-3.5 text-base font-medium text-white transition-all duration-300 hover:scale-105 hover:bg-white hover:text-slate-900"
+                  className="inline-flex min-w-[10.75rem] items-center justify-center rounded-full border-2 border-white/30 px-6 py-3.5 text-base font-medium text-white transition-all duration-300 hover:scale-105 hover:bg-white hover:text-slate-900"
                 >
                   Contact Sales
                 </Link>

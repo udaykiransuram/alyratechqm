@@ -227,6 +227,7 @@ export async function PUT(
       email,
       password,
       mobileNumber,
+      fatherName,
       classIds,
       academicSectionIds,
       subjectIds,
@@ -240,6 +241,7 @@ export async function PUT(
       rawAcademicSectionId ?? rawAcademicSection,
     );
     const normalizedMobileNumber = String(mobileNumber || "").trim();
+    const normalizedFatherName = String(fatherName || "").trim();
     const normalizedEmail = normalizeEmail(email);
     const normalizedRollNumber = normalizeRollNumber(rollNumber);
     const {
@@ -344,6 +346,8 @@ export async function PUT(
       name,
       role,
       mobileNumber: normalizedMobileNumber,
+      fatherName:
+        role === "student" ? normalizedFatherName || undefined : undefined,
     };
 
     if (typeof email !== "undefined") {

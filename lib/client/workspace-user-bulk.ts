@@ -27,6 +27,13 @@ type BuildWorkspaceUserBulkRowsResult = {
   skippedRows: string[];
 };
 
+export type WorkspaceBulkStructureChangeItem = {
+  _id?: string;
+  name?: string;
+  classId?: string;
+  className?: string;
+};
+
 type BulkUploadTemplate = {
   filename: string;
   headers: string[];
@@ -42,6 +49,7 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     filename: "students-bulk-template.csv",
     headers: [
       "name",
+      "fatherName",
       "email",
       "mobileNumber",
       "class",
@@ -52,6 +60,7 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     sampleRows: [
       [
         "Aarav Sharma",
+        "Rakesh Sharma",
         "aarav@example.com",
         "9876543210",
         "Grade 10",
@@ -61,7 +70,8 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
       ],
     ],
     tips: [
-      "Use class and section names exactly as they appear in the workspace.",
+      "Use the class and section names you want in the workspace. Missing class and section names are created during bulk upload.",
+      "The fatherName column is optional, but it helps when schools verify students through family records.",
       "Students sign in with the roll number. If no password is supplied, saved phone-number digits become the default password exactly as stored (including country code digits, if present).",
     ],
   },
@@ -91,7 +101,9 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     ],
     tips: [
       "Separate multiple classes, sections, and subjects with the `|` character.",
-      "For sections, use `Class Name:Section Name` when section names repeat across classes.",
+      "Missing classes are created during bulk upload, and sections are always created inside a class.",
+      "If the same section names repeat across the selected classes, entering `A|B` applies those section names to each selected class.",
+      "Use `Class Name:Section Name` when a section should be limited to one class or when the row does not list classes.",
     ],
   },
   admin: {
@@ -124,23 +136,13 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     ],
     tips: [
       "Leave the class, section, or subject columns empty when the corresponding `hasAll...` flag is `true`.",
+      "Missing classes are created during bulk upload, and sections are always created inside a class.",
+      "When the same section names repeat across the selected classes, entering `A|B` applies those section names to each selected class.",
+      "Use `Class Name:Section Name` when a section should be tied to one specific class or when class scope is not listed in the row.",
       "Use `true` or `false` in the scope columns to control whether the admin has full access.",
     ],
   },
 };
-
-function getSectionClassId(section: WorkspaceAcademicSectionItem) {
-  return typeof section.class === "string" ? section.class : section.class?._id || "";
-}
-
-function buildClassLookup(classes: WorkspaceClassItem[]) {
-  const lookup = new Map<string, WorkspaceClassItem>();
-  classes.forEach((classItem) => {
-    lookup.set(classItem._id, classItem);
-    lookup.set(toUploadLookupKey(classItem.name), classItem);
-  });
-  return lookup;
-}
 
 function buildSubjectLookup(subjects: WorkspaceSubjectItem[]) {
   const lookup = new Map<string, WorkspaceSubjectItem>();
@@ -152,30 +154,6 @@ function buildSubjectLookup(subjects: WorkspaceSubjectItem[]) {
     }
   });
   return lookup;
-}
-
-function resolveClassIds(
-  value: unknown,
-  classes: WorkspaceClassItem[],
-) {
-  const classLookup = buildClassLookup(classes);
-  const tokens = splitUploadListCell(value);
-  const ids = new Set<string>();
-  const unresolved: string[] = [];
-
-  tokens.forEach((token) => {
-    const match = classLookup.get(token) || classLookup.get(toUploadLookupKey(token));
-    if (match?._id) {
-      ids.add(match._id);
-      return;
-    }
-    unresolved.push(token);
-  });
-
-  return {
-    ids: Array.from(ids),
-    unresolved,
-  };
 }
 
 function resolveSubjectIds(
@@ -203,72 +181,6 @@ function resolveSubjectIds(
   };
 }
 
-function resolveSectionIds(
-  value: unknown,
-  sections: WorkspaceAcademicSectionItem[],
-  classes: WorkspaceClassItem[],
-  classScopeIds: string[] = [],
-) {
-  const tokens = splitUploadListCell(value);
-  const ids = new Set<string>();
-  const unresolved: string[] = [];
-  const scopedClassIds = new Set(classScopeIds);
-  const classLookup = buildClassLookup(classes);
-
-  tokens.forEach((token) => {
-    const directMatch = sections.find((section) => section._id === token);
-    if (directMatch?._id) {
-      ids.add(directMatch._id);
-      return;
-    }
-
-    const classSectionMatch = token.match(/^(.+?)(?::|>|\/)(.+)$/);
-    if (classSectionMatch) {
-      const classToken = classSectionMatch[1]?.trim();
-      const sectionToken = classSectionMatch[2]?.trim();
-      const classMatch =
-        classLookup.get(classToken) || classLookup.get(toUploadLookupKey(classToken));
-
-      if (classMatch?._id) {
-        const sectionMatch = sections.find(
-          (section) =>
-            getSectionClassId(section) === classMatch._id &&
-            toUploadLookupKey(section.name) === toUploadLookupKey(sectionToken),
-        );
-
-        if (sectionMatch?._id) {
-          ids.add(sectionMatch._id);
-          return;
-        }
-      }
-    }
-
-    const candidateSections = sections.filter((section) => {
-      if (toUploadLookupKey(section.name) !== toUploadLookupKey(token)) {
-        return false;
-      }
-
-      if (scopedClassIds.size === 0) {
-        return true;
-      }
-
-      return scopedClassIds.has(getSectionClassId(section));
-    });
-
-    if (candidateSections.length === 1) {
-      ids.add(candidateSections[0]._id);
-      return;
-    }
-
-    unresolved.push(token);
-  });
-
-  return {
-    ids: Array.from(ids),
-    unresolved,
-  };
-}
-
 function buildRowLabel(row: ParsedUploadRow, index: number) {
   const name = String(getUploadCell(row, "name") || "").trim();
   return name ? `Row ${index + 2} (${name})` : `Row ${index + 2}`;
@@ -281,12 +193,17 @@ export function buildWorkspaceUserBulkRows({
   sections,
   subjects,
 }: BuildWorkspaceUserBulkRowsArgs): BuildWorkspaceUserBulkRowsResult {
+  void classes;
+  void sections;
   const users: Array<Record<string, unknown>> = [];
   const skippedRows: string[] = [];
 
   rows.forEach((row, index) => {
     const rowLabel = buildRowLabel(row, index);
     const name = String(getUploadCell(row, "name") || "").trim();
+    const fatherName = String(
+      getUploadCell(row, "fathername", "father", "father_name"),
+    ).trim();
     const email = String(getUploadCell(row, "email") || "").trim();
     const mobileNumber = String(
       getUploadCell(row, "mobilenumber", "mobile", "phone"),
@@ -311,34 +228,24 @@ export function buildWorkspaceUserBulkRows({
       const rollNumber = String(
         getUploadCell(row, "rollnumber", "username"),
       ).trim();
-      const classResolution = resolveClassIds(classToken, classes);
+      const normalizedClass = String(classToken || "").trim();
+      const normalizedSection = String(sectionToken || "").trim();
 
-      if (!rollNumber || classResolution.ids.length !== 1) {
+      if (!rollNumber || !normalizedClass) {
         skippedRows.push(
-          `${rowLabel}: students need one valid class and a roll number.`,
-        );
-        return;
-      }
-
-      const classId = classResolution.ids[0];
-      const sectionResolution = String(sectionToken).trim()
-        ? resolveSectionIds(sectionToken, sections, classes, [classId])
-        : { ids: [], unresolved: [] as string[] };
-
-      if (sectionResolution.unresolved.length > 0) {
-        skippedRows.push(
-          `${rowLabel}: couldn't resolve sections ${sectionResolution.unresolved.join(", ")}.`,
+          `${rowLabel}: students need a class and a roll number.`,
         );
         return;
       }
 
       users.push({
         name,
+        fatherName: fatherName || undefined,
         email,
         mobileNumber,
         role,
-        class: classId,
-        academicSection: sectionResolution.ids[0] || undefined,
+        class: normalizedClass,
+        academicSection: normalizedSection || undefined,
         rollNumber,
         enrolledAt: parseUploadDate(getUploadCell(row, "enrolledat", "admissiondate")),
       });
@@ -346,9 +253,8 @@ export function buildWorkspaceUserBulkRows({
     }
 
     if (role === "teacher") {
-      const classResolution = resolveClassIds(
+      const classTokens = splitUploadListCell(
         getUploadCell(row, "classids", "classes", "classid", "class"),
-        classes,
       );
       const subjectResolution = resolveSubjectIds(
         getUploadCell(row, "subjectids", "subjects", "subjectid", "subject"),
@@ -358,9 +264,9 @@ export function buildWorkspaceUserBulkRows({
         getUploadCell(row, "hasallsections"),
         true,
       );
-      const sectionResolution = hasAllSections
-        ? { ids: [], unresolved: [] as string[] }
-        : resolveSectionIds(
+      const sectionTokens = hasAllSections
+        ? []
+        : splitUploadListCell(
             getUploadCell(
               row,
               "academicsectionids",
@@ -368,17 +274,7 @@ export function buildWorkspaceUserBulkRows({
               "academicsections",
               "sections",
             ),
-            sections,
-            classes,
-            classResolution.ids,
           );
-
-      if (classResolution.unresolved.length > 0) {
-        skippedRows.push(
-          `${rowLabel}: couldn't resolve classes ${classResolution.unresolved.join(", ")}.`,
-        );
-        return;
-      }
 
       if (subjectResolution.unresolved.length > 0) {
         skippedRows.push(
@@ -387,14 +283,7 @@ export function buildWorkspaceUserBulkRows({
         return;
       }
 
-      if (sectionResolution.unresolved.length > 0) {
-        skippedRows.push(
-          `${rowLabel}: couldn't resolve sections ${sectionResolution.unresolved.join(", ")}.`,
-        );
-        return;
-      }
-
-      if (classResolution.ids.length === 0 || subjectResolution.ids.length === 0) {
+      if (classTokens.length === 0 || subjectResolution.ids.length === 0) {
         skippedRows.push(
           `${rowLabel}: teachers need at least one class and one subject.`,
         );
@@ -407,8 +296,8 @@ export function buildWorkspaceUserBulkRows({
         mobileNumber,
         password: password || undefined,
         role,
-        classIds: classResolution.ids,
-        academicSectionIds: hasAllSections ? [] : sectionResolution.ids,
+        classIds: classTokens,
+        academicSectionIds: hasAllSections ? [] : sectionTokens,
         hasAllSections,
         subjectIds: subjectResolution.ids,
       });
@@ -427,11 +316,10 @@ export function buildWorkspaceUserBulkRows({
       getUploadCell(row, "hasallsubjects"),
       true,
     );
-    const classResolution = hasAllClasses
-      ? { ids: [], unresolved: [] as string[] }
-      : resolveClassIds(
+    const classTokens = hasAllClasses
+      ? []
+      : splitUploadListCell(
           getUploadCell(row, "classids", "classes", "classid", "class"),
-          classes,
         );
     const subjectResolution = hasAllSubjects
       ? { ids: [], unresolved: [] as string[] }
@@ -439,9 +327,9 @@ export function buildWorkspaceUserBulkRows({
           getUploadCell(row, "subjectids", "subjects", "subjectid", "subject"),
           subjects,
         );
-    const sectionResolution = hasAllSections
-      ? { ids: [], unresolved: [] as string[] }
-      : resolveSectionIds(
+    const sectionTokens = hasAllSections
+      ? []
+      : splitUploadListCell(
           getUploadCell(
             row,
             "academicsectionids",
@@ -449,28 +337,11 @@ export function buildWorkspaceUserBulkRows({
             "academicsections",
             "sections",
           ),
-          sections,
-          classes,
-          classResolution.ids,
         );
-
-    if (classResolution.unresolved.length > 0) {
-      skippedRows.push(
-        `${rowLabel}: couldn't resolve classes ${classResolution.unresolved.join(", ")}.`,
-      );
-      return;
-    }
 
     if (subjectResolution.unresolved.length > 0) {
       skippedRows.push(
         `${rowLabel}: couldn't resolve subjects ${subjectResolution.unresolved.join(", ")}.`,
-      );
-      return;
-    }
-
-    if (sectionResolution.unresolved.length > 0) {
-      skippedRows.push(
-        `${rowLabel}: couldn't resolve sections ${sectionResolution.unresolved.join(", ")}.`,
       );
       return;
     }
@@ -484,8 +355,8 @@ export function buildWorkspaceUserBulkRows({
       hasAllClasses,
       hasAllSections,
       hasAllSubjects,
-      classIds: hasAllClasses ? [] : classResolution.ids,
-      academicSectionIds: hasAllSections ? [] : sectionResolution.ids,
+      classIds: hasAllClasses ? [] : classTokens,
+      academicSectionIds: hasAllSections ? [] : sectionTokens,
       subjectIds: hasAllSubjects ? [] : subjectResolution.ids,
     });
   });
@@ -494,4 +365,73 @@ export function buildWorkspaceUserBulkRows({
     users,
     skippedRows,
   };
+}
+
+function formatStructureChangeList(
+  items: WorkspaceBulkStructureChangeItem[],
+  getLabel: (item: WorkspaceBulkStructureChangeItem) => string,
+) {
+  const labels = items
+    .map(getLabel)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (labels.length === 0) {
+    return "";
+  }
+
+  const preview = labels.slice(0, 3);
+  const remaining = labels.length - preview.length;
+  return remaining > 0
+    ? `${preview.join(", ")} +${remaining} more`
+    : preview.join(", ");
+}
+
+export function buildWorkspaceBulkStructureSummary(data: {
+  createdClasses?: WorkspaceBulkStructureChangeItem[];
+  restoredClasses?: WorkspaceBulkStructureChangeItem[];
+  createdSections?: WorkspaceBulkStructureChangeItem[];
+  restoredSections?: WorkspaceBulkStructureChangeItem[];
+}) {
+  const createdClasses = Array.isArray(data?.createdClasses)
+    ? data.createdClasses
+    : [];
+  const restoredClasses = Array.isArray(data?.restoredClasses)
+    ? data.restoredClasses
+    : [];
+  const createdSections = Array.isArray(data?.createdSections)
+    ? data.createdSections
+    : [];
+  const restoredSections = Array.isArray(data?.restoredSections)
+    ? data.restoredSections
+    : [];
+
+  return [
+    createdClasses.length
+      ? `Classes created: ${createdClasses.length} (${formatStructureChangeList(
+          createdClasses,
+          (item) => item.name || "",
+        )}).`
+      : null,
+    restoredClasses.length
+      ? `Classes restored: ${restoredClasses.length} (${formatStructureChangeList(
+          restoredClasses,
+          (item) => item.name || "",
+        )}).`
+      : null,
+    createdSections.length
+      ? `Sections created: ${createdSections.length} (${formatStructureChangeList(
+          createdSections,
+          (item) =>
+            item.className ? `${item.className}:${item.name || ""}` : item.name || "",
+        )}).`
+      : null,
+    restoredSections.length
+      ? `Sections restored: ${restoredSections.length} (${formatStructureChangeList(
+          restoredSections,
+          (item) =>
+            item.className ? `${item.className}:${item.name || ""}` : item.name || "",
+        )}).`
+      : null,
+  ].filter(Boolean);
 }

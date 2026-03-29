@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 import GlassPanel from "@/components/GlassPanel";
 import { useClientRuntimeSignals } from "@/lib/client/runtime-signals";
@@ -114,13 +114,20 @@ export function Hero3D({ whatsappHref }: Hero3DProps) {
   const panelSaturation = Math.max(112, 140 - panelRevealProgress * 30);
   const panelVerticalOffset = panelRevealProgress * 10;
   const heroPanelStyle = {
-    background: `linear-gradient(180deg, rgba(7, 14, 18, ${panelTopAlpha}) 0%, rgba(7, 14, 18, ${panelBottomAlpha}) 100%)`,
-    borderColor: `rgba(255, 255, 255, ${panelBorderAlpha})`,
-    boxShadow: `0 ${18 - panelRevealProgress * 6}px ${52 - panelRevealProgress * 18}px rgba(0, 0, 0, ${panelShadowAlpha})`,
-    backdropFilter: `blur(${panelBlur}px) saturate(${panelSaturation}%)`,
-    WebkitBackdropFilter: `blur(${panelBlur}px) saturate(${panelSaturation}%)`,
+    "--home-glass-top-alpha": panelTopAlpha.toFixed(3),
+    "--home-glass-bottom-alpha": panelBottomAlpha.toFixed(3),
+    "--home-glass-border-alpha": panelBorderAlpha.toFixed(3),
+    "--home-glass-shadow-alpha": panelShadowAlpha.toFixed(3),
+    "--home-glass-blur": `${panelBlur.toFixed(2)}px`,
+    "--home-glass-saturation": `${panelSaturation.toFixed(0)}%`,
+    "--home-glass-cyan-alpha": `${Math.max(0.06, 0.12 - panelRevealProgress * 0.06).toFixed(3)}`,
+    "--home-glass-accent-alpha": `${Math.max(0.04, 0.08 - panelRevealProgress * 0.04).toFixed(3)}`,
+    "--home-glass-gold-alpha": `${Math.max(0.03, 0.07 - panelRevealProgress * 0.04).toFixed(3)}`,
+    "--home-glass-white-top-alpha": `${Math.max(0.03, 0.08 - panelRevealProgress * 0.05).toFixed(3)}`,
+    "--home-glass-white-bottom-alpha": `${Math.max(0.006, 0.016 - panelRevealProgress * 0.01).toFixed(3)}`,
+    "--home-glass-inner-highlight-alpha": `${Math.max(0.05, 0.12 - panelRevealProgress * 0.07).toFixed(3)}`,
     transform: `translateY(-${panelVerticalOffset}px)`,
-  } as const;
+  } as CSSProperties;
 
   return (
     <section
@@ -194,13 +201,13 @@ export function Hero3D({ whatsappHref }: Hero3DProps) {
           </div>
 
           <GlassPanel
-            className="w-full border p-6 transition-[background,border-color,box-shadow,backdrop-filter,transform] duration-200 ease-out will-change-[background,border-color,box-shadow,backdrop-filter,transform] sm:p-7 md:p-10"
+            className="home-glass-surface home-hero-glass-panel w-full p-6 transition-[background,border-color,box-shadow,backdrop-filter,transform] duration-200 ease-out will-change-[background,border-color,box-shadow,backdrop-filter,transform] sm:p-7 md:p-10"
             style={heroPanelStyle}
             bgClassName="bg-transparent"
             blurClassName=""
-            borderClassName="border-transparent"
             noHighlight
             edgeHighlight
+            radiusClassName="rounded-[1.85rem]"
           >
             <div className="max-w-none">
               <h1 className="mb-6 text-[2.25rem] font-bold leading-tight tracking-tight text-white drop-shadow-2xl sm:text-5xl md:mb-8 md:text-7xl lg:text-8xl">

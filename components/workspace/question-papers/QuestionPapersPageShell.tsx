@@ -63,9 +63,10 @@ export default function QuestionPapersPageShell({
   ).length;
 
   return (
-    <PageShell width="wide" padding="standard">
+    <PageShell width="wide" padding="standard" className="app-directory-stack">
       <PageHero
         variant="directory"
+        density="compact"
         eyebrow="Assessments"
         title="Question Papers"
         description="Manage paper scope, responses, analytics, downloads, and report actions from one assessment directory built for school operations."

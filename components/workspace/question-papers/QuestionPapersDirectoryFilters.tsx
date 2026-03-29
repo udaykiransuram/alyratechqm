@@ -54,14 +54,13 @@ export default function QuestionPapersDirectoryFilters({
   onResetFilters,
 }: QuestionPapersDirectoryFiltersProps) {
   return (
-    <div className="app-filter-panel">
+    <div className="app-filter-panel app-filter-panel-tight">
       <div className="app-filter-panel-header">
         <div className="app-filter-panel-heading">
           <div className="app-filter-panel-copy">
             <p className="app-filter-panel-title">Paper Filters</p>
             <p className="app-filter-panel-note">
-              Search papers by title and narrow by class or section before
-              opening responses, analytics, or report actions.
+              Search by title and narrow by class or section before opening responses or analytics.
             </p>
           </div>
           <div className="app-filter-panel-chips">
@@ -76,10 +75,10 @@ export default function QuestionPapersDirectoryFilters({
       </div>
 
       <form
-        className="app-filter-panel-body space-y-4"
+        className="app-filter-panel-body space-y-3"
         onSubmit={onApplyFilters}
       >
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_180px_180px_7.5rem] xl:items-end">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_6.5rem] xl:items-end">
           <div className="space-y-2">
             <p className="app-field-label">Search</p>
             <Input
@@ -136,8 +135,7 @@ export default function QuestionPapersDirectoryFilters({
               {totalPapers} paper{totalPapers === 1 ? "" : "s"} in view
             </p>
             <p className="app-filter-summary-note">
-              Filters now run server-side so each page loads only the current
-              results.
+              Filters run server-side so each page loads only current results.
             </p>
           </div>
           <div className="app-filter-summary-actions">

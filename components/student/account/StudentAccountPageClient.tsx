@@ -194,7 +194,7 @@ export default function StudentAccountPageClient({
   }
 
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-6 sm:px-0">
+    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
       <PageHero
         eyebrow="Student Portal"
         title="Student Account"
@@ -246,7 +246,9 @@ export default function StudentAccountPageClient({
           },
         ]}
       >
-        <StudentPortalNav />
+        <div className="sm:hidden">
+          <StudentPortalNav />
+        </div>
       </PageHero>
 
       {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
@@ -254,12 +256,12 @@ export default function StudentAccountPageClient({
         <div className="app-feedback app-feedback-success">{successMessage}</div>
       ) : null}
 
-      <div className="app-student-card-grid">
+      <div className="app-student-card-grid items-start">
         <Card className="app-surface">
           <CardHeader className="app-section-header">
             <CardTitle>Profile Details</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-4">
             <div className="app-detail-grid">
               <div className="app-detail-item">
                 <p className="app-detail-label">Username</p>
@@ -283,60 +285,60 @@ export default function StudentAccountPageClient({
             </div>
 
             <form onSubmit={handleProfileSave} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="studentName">Student Name</Label>
-                <Input
-                  id="studentName"
-                  type="text"
-                  value={profileForm.name}
-                  onChange={(event) =>
-                    setProfileForm((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  placeholder="Enter your name"
-                  required
-                />
-              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="studentName">Student Name</Label>
+                  <Input
+                    id="studentName"
+                    type="text"
+                    value={profileForm.name}
+                    onChange={(event) =>
+                      setProfileForm((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                    placeholder="Enter your name"
+                    required
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="studentEmail">Email</Label>
-                <Input
-                  id="studentEmail"
-                  type="email"
-                  value={profileForm.email}
-                  onChange={(event) =>
-                    setProfileForm((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                  placeholder="Enter your email"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Email is optional, but it helps keep your student account details
-                  current.
-                </p>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="studentEmail">Email</Label>
+                  <Input
+                    id="studentEmail"
+                    type="email"
+                    value={profileForm.email}
+                    onChange={(event) =>
+                      setProfileForm((current) => ({
+                        ...current,
+                        email: event.target.value,
+                      }))
+                    }
+                    placeholder="Enter your email"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional, but useful for account recovery communication.
+                  </p>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="studentMobileNumber">Phone Number</Label>
-                <Input
-                  id="studentMobileNumber"
-                  type="tel"
-                  value={profileForm.mobileNumber}
-                  onChange={(event) =>
-                    setProfileForm((current) => ({
-                      ...current,
-                      mobileNumber: event.target.value,
-                    }))
-                  }
-                  placeholder="Enter your phone number"
-                  required
-                />
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="studentMobileNumber">Phone Number</Label>
+                  <Input
+                    id="studentMobileNumber"
+                    type="tel"
+                    value={profileForm.mobileNumber}
+                    onChange={(event) =>
+                      setProfileForm((current) => ({
+                        ...current,
+                        mobileNumber: event.target.value,
+                      }))
+                    }
+                    placeholder="Enter your phone number"
+                    required
+                  />
+                </div>
               </div>
-
               <Button
                 type="submit"
                 size="lg"
@@ -367,37 +369,35 @@ export default function StudentAccountPageClient({
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="newPassword">New Password</Label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  placeholder="Choose a new password"
-                  autoComplete="new-password"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Use at least 6 characters, or reuse your saved phone-number digits
-                  exactly as stored if you want to return to the default password.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  If your saved number includes country code digits (for example, starting with 91), those digits are part of the default password.
-                </p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">New Password</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    placeholder="Choose a new password"
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="Re-enter your new password"
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  placeholder="Re-enter your new password"
-                  autoComplete="new-password"
-                  required
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Use at least 6 characters, or set the saved phone-number digits exactly as stored to return to the default password.
+              </p>
               <Button
                 type="submit"
                 size="lg"
@@ -446,12 +446,10 @@ export default function StudentAccountPageClient({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[20rem]">Test</TableHead>
-                    <TableHead className="w-[11rem]">Subject</TableHead>
+                    <TableHead className="w-[24rem]">Test</TableHead>
                     <TableHead className="w-[13rem]">Submitted</TableHead>
                     <TableHead className="w-[11rem]">Status</TableHead>
-                    <TableHead className="w-[9rem]">Score</TableHead>
-                    <TableHead className="w-[12rem]">Report Access</TableHead>
+                    <TableHead className="w-[13rem]">Score</TableHead>
                     <TableHead className="text-right min-w-[10rem]">Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -482,7 +480,7 @@ export default function StudentAccountPageClient({
                     return (
                       <TableRow key={responseId}>
                         <TableCell>
-                          <div className="min-w-[16rem] space-y-2">
+                          <div className="min-w-[18rem] space-y-2">
                             {index === 0 ? (
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant="info">Most Recent</Badge>
@@ -495,15 +493,18 @@ export default function StudentAccountPageClient({
                               <div className="app-list-meta">
                                 Completed analysis report
                               </div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {test.subject?.name ? (
+                                  <Badge variant="outline">{subjectLabel}</Badge>
+                                ) : (
+                                  <span className="app-list-meta">{subjectLabel}</span>
+                                )}
+                                <span className="app-list-meta">
+                                  Window end {windowLabel}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {test.subject?.name ? (
-                            <Badge variant="outline">{subjectLabel}</Badge>
-                          ) : (
-                            <span className="app-list-meta">{subjectLabel}</span>
-                          )}
                         </TableCell>
                         <TableCell>
                           <div className="min-w-[11rem] space-y-1">
@@ -525,15 +526,12 @@ export default function StudentAccountPageClient({
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
+                          <div className="min-w-[11rem] space-y-1">
                             <div className="app-list-value">{scoreLabel}</div>
                             <div className="app-list-meta">Marks awarded</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="min-w-[11rem] space-y-1">
-                            <div className="app-list-value">{windowLabel}</div>
-                            <div className="app-list-meta">Report window</div>
+                            <div className="app-list-meta">
+                              Window end {windowLabel}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-right">

@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import PageShell from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type WorkspaceCreateShellProps = {
   eyebrow?: ReactNode;
@@ -14,6 +15,9 @@ type WorkspaceCreateShellProps = {
   badges?: ReactNode;
   children: ReactNode;
   aside?: ReactNode;
+  mainClassName?: string;
+  asideClassName?: string;
+  stickyAside?: boolean;
 };
 
 export default function WorkspaceCreateShell({
@@ -25,10 +29,13 @@ export default function WorkspaceCreateShell({
   badges,
   children,
   aside,
+  mainClassName,
+  asideClassName,
+  stickyAside = true,
 }: WorkspaceCreateShellProps) {
   return (
-    <PageShell width="wide" padding="relaxed">
-      <div className="space-y-6">
+    <PageShell width="wide" padding="standard">
+      <div className="space-y-5">
         <Button
           type="button"
           variant="outline"
@@ -40,7 +47,7 @@ export default function WorkspaceCreateShell({
         </Button>
 
         <section className="app-spotlight-card app-spotlight-card-strong">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
               {eyebrow ? (
                 <div className="app-spotlight-label">{eyebrow}</div>
@@ -58,14 +65,26 @@ export default function WorkspaceCreateShell({
           </div>
         </section>
 
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-          <div className="min-w-0 space-y-5">{children}</div>
-          {aside ? (
-            <aside className="space-y-5 xl:sticky xl:top-6 xl:self-start">
+        {aside ? (
+          <div className="app-create-shell-grid">
+            <div className={cn("app-create-shell-main", mainClassName)}>
+              {children}
+            </div>
+            <aside
+              className={cn(
+                "app-create-shell-aside",
+                stickyAside && "app-create-shell-aside-sticky",
+                asideClassName,
+              )}
+            >
               {aside}
             </aside>
-          ) : null}
-        </div>
+          </div>
+        ) : (
+          <div className={cn("app-create-shell-main", mainClassName)}>
+            {children}
+          </div>
+        )}
       </div>
     </PageShell>
   );

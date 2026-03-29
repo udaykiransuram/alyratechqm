@@ -27,7 +27,7 @@ const StudentTestsFilters = dynamic(
   () => import("@/components/student/StudentTestsFilters"),
   {
     ssr: false,
-    loading: () => <div className="h-[6.5rem] rounded-xl border border-border/60" />,
+    loading: () => <div className="h-[5.5rem] rounded-xl border border-border/60" />,
   },
 );
 
@@ -400,38 +400,39 @@ export default function StudentTestsPageClient({
           eyebrow="Student Portal"
           title="Tests"
           variant="overview"
-          description="Track assigned online tests, continue active attempts, and open analysis reports after each submission."
+          description="View and continue your assigned tests."
           meta={
             <>
               <span className="app-meta-chip">Draft recovery on this device</span>
-              <span className="app-meta-chip">Subject-based filtering</span>
-              <span className="app-meta-chip">Analysis reports after submission</span>
+              <span className="app-meta-chip">Analysis reports</span>
             </>
           }
           stats={[
             {
               label: "Assigned",
               value: String(tests.length),
-              meta: "All tests currently visible in your student queue.",
+              meta: "In your queue",
             },
             {
               label: "Ready Now",
               value: String(queueSummary.readyNow),
-              meta: "Tests that can be started immediately.",
+              meta: "Start now",
             },
             {
               label: "In Progress",
               value: String(queueSummary.inProgress),
-              meta: "Attempts that can be continued from this device.",
+              meta: "Continue",
             },
             {
               label: "Reports Ready",
               value: String(queueSummary.reportsReady),
-              meta: "Submitted tests with analysis access.",
+              meta: "Review",
             },
           ]}
         >
-          <StudentPortalNav />
+          <div className="sm:hidden">
+            <StudentPortalNav />
+          </div>
         </PageHero>
         <FeedbackNotice variant="error">{error}</FeedbackNotice>
       </div>
@@ -447,40 +448,42 @@ export default function StudentTestsPageClient({
         eyebrow="Student Portal"
         title="Tests"
         variant="overview"
-        description="Track assigned online tests, continue active attempts, and open analysis reports after each submission."
+        description="View and continue your assigned tests."
         meta={
           <>
             <span className="app-meta-chip">Draft recovery on this device</span>
             <span className="app-meta-chip">
               {subjectOptions.length} subject{subjectOptions.length === 1 ? "" : "s"} in queue
             </span>
-            <span className="app-meta-chip">Analysis reports after submission</span>
+            <span className="app-meta-chip">Analysis reports</span>
           </>
         }
         stats={[
           {
             label: "Assigned",
             value: String(tests.length),
-            meta: "All online tests assigned to your account right now.",
+            meta: "In your queue",
           },
           {
             label: "Ready Now",
             value: String(queueSummary.readyNow),
-            meta: "Tests that can be started immediately.",
+            meta: "Start now",
           },
           {
             label: "In Progress",
             value: String(queueSummary.inProgress),
-            meta: "Attempts with saved answers waiting to continue.",
+            meta: "Continue",
           },
           {
             label: "Reports Ready",
             value: String(queueSummary.reportsReady),
-            meta: "Submitted tests that can open their analysis report.",
+            meta: "Review",
           },
         ]}
       >
-        <StudentPortalNav />
+        <div className="sm:hidden">
+          <StudentPortalNav />
+        </div>
       </PageHero>
 
       {submissionNotice ? (
@@ -493,10 +496,10 @@ export default function StudentTestsPageClient({
         <div className="app-toolbar">
           <div className="app-toolbar-row">
             <div className="app-toolbar-copy">
-              <p className="app-kicker">Latest Assigned Test</p>
+              <p className="app-kicker">Latest</p>
               <p className="app-title-md">{recentAssignedTest.title}</p>
               {recentAssignedTestMeta ? (
-                <p className="app-copy-muted">{recentAssignedTestMeta}</p>
+                <p className="app-copy-meta">{recentAssignedTestMeta}</p>
               ) : null}
             </div>
             <div className="app-toolbar-actions">
@@ -523,7 +526,7 @@ export default function StudentTestsPageClient({
         </div>
       ) : null}
 
-      <div className="app-toolbar space-y-4">
+      <div className="app-toolbar space-y-3">
         {showFilters ? (
           <StudentTestsFilters
             testFilter={testFilter}
@@ -539,7 +542,7 @@ export default function StudentTestsPageClient({
         <div
           className={
             showFilters
-              ? "flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3.5"
+              ? "flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3"
               : "flex flex-wrap items-center justify-between gap-3"
           }
         >
@@ -574,7 +577,7 @@ export default function StudentTestsPageClient({
                 setSubjectFilter(ALL_SUBJECTS_VALUE);
               }}
             >
-              Clear Filters
+              Clear
             </Button>
           ) : null}
         </div>
@@ -594,7 +597,7 @@ export default function StudentTestsPageClient({
 
         <CardContent className="p-0">
           {filteredTests.length === 0 ? (
-            <div className="app-empty-state rounded-none border-0 py-12">
+            <div className="app-empty-state rounded-none border-0 py-10">
               {filterActive
                 ? "No exams match the current filters."
                 : "No online tests are assigned right now."}
@@ -604,13 +607,10 @@ export default function StudentTestsPageClient({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[18rem]">Test</TableHead>
-                    <TableHead className="w-[11rem]">Subject</TableHead>
-                    <TableHead className="w-[11rem]">Class</TableHead>
-                    <TableHead className="w-[8rem]">Duration</TableHead>
-                    <TableHead className="w-[9rem]">Marks</TableHead>
-                    <TableHead className="w-[14rem]">Status</TableHead>
-                    <TableHead className="w-[12rem]">Score</TableHead>
+                    <TableHead className="w-[24rem]">Test</TableHead>
+                    <TableHead className="w-[14rem]">Window</TableHead>
+                    <TableHead className="w-[14rem]">Attempt</TableHead>
+                    <TableHead className="w-[14rem]">Result</TableHead>
                     <TableHead className="text-right min-w-[10rem]">Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -630,8 +630,22 @@ export default function StudentTestsPageClient({
                     return (
                       <TableRow key={test._id}>
                         <TableCell>
-                          <div className="min-w-[15rem] space-y-1.5">
+                          <div className="min-w-[17rem] space-y-2">
                             <div className="app-list-title">{test.title}</div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {classLabel ? (
+                                <Badge variant="secondary">{classLabel}</Badge>
+                              ) : null}
+                              {subjectLabels.length > 0 ? (
+                                subjectLabels.map((subject) => (
+                                  <Badge key={subject._id} variant="outline">
+                                    {subject.name || subject._id}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="app-list-meta">No subject</span>
+                              )}
+                            </div>
                             <div className="app-list-meta">
                               {test.onlineEndsAt
                                 ? `Closes ${formatDateTime(test.onlineEndsAt)}`
@@ -640,39 +654,17 @@ export default function StudentTestsPageClient({
                           </div>
                         </TableCell>
                         <TableCell>
-                          {subjectLabels.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5">
-                              {subjectLabels.map((subject) => (
-                                <Badge key={subject._id} variant="outline">
-                                  {subject.name || subject._id}
-                                </Badge>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="app-list-value">-</div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="app-list-value">{classLabel || "-"}</div>
-                        </TableCell>
-                        <TableCell>
                           <div className="space-y-1">
-                            <div className="app-list-value">{test.duration} min</div>
+                            <div className="app-list-value">
+                              Opens {formatDateTime(test.onlineStartsAt || test.examDate)}
+                            </div>
                             <div className="app-list-meta">
-                              {formatDateTime(test.onlineStartsAt || test.examDate)}
+                              Closes {formatDateTime(test.onlineEndsAt)}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
-                            <div className="app-list-value">{test.totalMarks} total</div>
-                            <div className="app-list-meta">
-                              Pass {test.passingMarks}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="min-w-[12rem] space-y-2">
+                          <div className="min-w-[11rem] space-y-1.5">
                             <Badge variant={getStatusVariant(test.status)}>
                               {STATUS_LABELS[test.status] || test.status}
                             </Badge>
@@ -687,25 +679,33 @@ export default function StudentTestsPageClient({
                           </div>
                         </TableCell>
                         <TableCell>
-                          {scoreVisible ? (
-                            <div className="min-w-[10rem] space-y-1">
-                              <div className="app-list-value">
-                                {test.attempt?.totalMarksAwarded ?? 0} / {test.totalMarks}
-                              </div>
-                              <div className="app-list-meta">
-                                {test.requiresManualReview
-                                  ? "Auto-graded only"
-                                  : "Final score"}
-                              </div>
-                              {test.requiresManualReview ? (
-                                <div className="app-list-meta">
-                                  Manual review pending
-                                </div>
-                              ) : null}
+                          <div className="min-w-[12rem] space-y-1">
+                            <div className="app-list-value">
+                              {test.duration} min • {test.totalMarks} marks
                             </div>
-                          ) : (
-                            <span className="app-list-meta">-</span>
-                          )}
+                            <div className="app-list-meta">
+                              Pass {test.passingMarks}
+                            </div>
+                            {scoreVisible ? (
+                              <>
+                                <div className="app-list-value">
+                                  Score {test.attempt?.totalMarksAwarded ?? 0} / {test.totalMarks}
+                                </div>
+                                <div className="app-list-meta">
+                                  {test.requiresManualReview
+                                    ? "Auto-graded only"
+                                    : "Final score"}
+                                </div>
+                                {test.requiresManualReview ? (
+                                  <div className="app-list-meta">
+                                    Manual review pending
+                                  </div>
+                                ) : null}
+                              </>
+                            ) : (
+                              <div className="app-list-meta">Not submitted yet</div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <Button

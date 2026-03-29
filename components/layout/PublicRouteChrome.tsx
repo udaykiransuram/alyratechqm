@@ -14,6 +14,7 @@ import {
   clearPublicThemeFromElement,
   resolveStoredPublicTheme,
 } from "@/lib/client/public-theme";
+import { cn } from "@/lib/utils";
 
 const enableClientApiProbe = process.env.NODE_ENV !== "production";
 
@@ -71,7 +72,12 @@ export default function PublicRouteChrome({
       </div>
       <Navbar />
       <ViewportHover />
-      <main className={isHomeRoute ? "flex-1 pt-0" : "flex-1 pt-20"}>
+      <main
+        className={cn(
+          "app-route-main app-route-main-public flex-1",
+          isHomeRoute && "app-route-main-public-home",
+        )}
+      >
         {children}
       </main>
       <Footer />

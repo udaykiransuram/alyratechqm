@@ -43,6 +43,7 @@ type AcademicSectionItem = {
 type UserItem = {
   _id: string;
   name: string;
+  fatherName?: string;
   email?: string;
   mobileNumber?: string;
   role: string;
@@ -467,6 +468,10 @@ export default function StudentDetailPageClient({
             </CardHeader>
             <CardContent className="app-section-body">
               <div className="app-detail-grid">
+                <div className="app-detail-item">
+                  <div className="app-detail-label">Father Name</div>
+                  <div className="app-detail-value">{user.fatherName || "-"}</div>
+                </div>
                 <div className="app-detail-item">
                   <div className="app-detail-label">Email</div>
                   <div className="app-detail-value">{user.email || "-"}</div>
