@@ -167,6 +167,11 @@ function buildContentSecurityPolicy(path: string, nonce: string) {
   }
 
   const isDev = process.env.NODE_ENV !== "production";
+  // Nonce-based script CSP only works cleanly when the whole app renders
+  // dynamically and Next can attach the nonce to every framework/inline script.
+  // This app still ships ISR/static routes, so production falls back to
+  // same-origin + inline allowlisting until we can move fully to dynamic nonce
+  // rendering or SRI-based CSP.
   const scriptSources = isDev
     ? [
         "'self'",
@@ -178,8 +183,7 @@ function buildContentSecurityPolicy(path: string, nonce: string) {
       ].join(" ")
     : [
         "'self'",
-        `'nonce-${nonce}'`,
-        "'strict-dynamic'",
+        "'unsafe-inline'",
         "'wasm-unsafe-eval'",
         "https://sdk.cashfree.com",
       ].join(" ");
@@ -198,6 +202,7 @@ function buildContentSecurityPolicy(path: string, nonce: string) {
   return [
     "default-src 'self'",
     `script-src ${scriptSources}`,
+    `script-src-elem ${scriptSources}`,
     "script-src-attr 'none'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
