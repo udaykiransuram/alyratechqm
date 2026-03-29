@@ -307,7 +307,7 @@ export function MultiSelectTags({
         </PopoverTrigger>
         <PopoverContent
           forceMount
-          className="tag-popover-content app-selection-popover"
+          className="tag-popover-content app-selection-popover w-[min(34rem,calc(100vw-1rem))]"
           align="start"
         >
           <Command shouldFilter={false}>
@@ -358,7 +358,7 @@ export function MultiSelectTags({
                 </CommandEmpty>
               ) : null}
               {showCreateForm ? (
-                <div className="p-3 border-t">
+                <div className="border-t border-border/60 p-3">
                   <div className="space-y-3">
                     <h4 className="font-medium text-sm text-foreground">Create New Tag</h4>
                     <input
@@ -383,11 +383,11 @@ export function MultiSelectTags({
                         <PlusCircle className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:justify-end">
+                    <div className="grid grid-cols-2 gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="app-button-compact sm:min-w-[8.5rem]"
+                        className="app-button-compact min-w-0"
                         onClick={() => setShowCreateForm(false)}
                       >
                         Cancel
@@ -395,7 +395,7 @@ export function MultiSelectTags({
                       <Button
                         type="button"
                         size="sm"
-                        className="app-button-compact sm:min-w-[8.5rem]"
+                        className="app-button-compact min-w-0"
                         onClick={handleConfirmCreateNewTag}
                         disabled={isCreatingNewTag}
                       >

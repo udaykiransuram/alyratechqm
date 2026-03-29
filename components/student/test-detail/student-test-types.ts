@@ -24,6 +24,9 @@ export type StudentPaper = {
   sections: Array<{
     name: string;
     description?: string;
+    instructions?: string;
+    defaultMarks?: number;
+    defaultNegativeMarks?: number;
     marks: number;
     questions: Array<{
       question: StudentQuestion;
@@ -80,6 +83,9 @@ export type StudentTestDetailResponse = {
 export type StudentQuestionListItem = {
   sectionName: string;
   sectionDescription: string;
+  sectionInstructions: string;
+  sectionDefaultMarks: number;
+  sectionDefaultNegativeMarks: number;
   sectionMarks: number;
   marks: number;
   negativeMarks: number;

@@ -6,6 +6,7 @@ import PageHero from '@/components/layout/PageHero';
 import PageShell from '@/components/layout/PageShell';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import FilePickerField from '@/components/ui/file-picker-field';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
 
 export default function UploadPage() {
@@ -83,15 +84,13 @@ export default function UploadPage() {
           <Card className="app-surface">
             <CardContent className="app-surface-body">
               <div className="app-field-group">
-                <label className="app-field-label" htmlFor="questionPdf">
-                  PDF File
-                </label>
-                <input
+                <FilePickerField
                   id="questionPdf"
-                  type="file"
+                  label="PDF File"
                   accept="application/pdf"
                   onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-                  className="app-form-file"
+                  selectedFileName={pdfFile?.name || null}
+                  placeholder="PDF file"
                 />
               </div>
 

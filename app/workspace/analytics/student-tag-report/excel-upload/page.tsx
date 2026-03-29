@@ -14,6 +14,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
+import { Input } from "@/components/ui/input";
 import PageLoadingState from "@/components/ui/page-loading-state";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { getClientRequestErrorMessage } from "@/lib/client/api";
@@ -954,32 +955,31 @@ function ExcelStudentResponseUploadPageContent() {
                 <div className="analytics-toolbar-copy">
                   <p className="analytics-toolbar-title">Select workbook</p>
                 </div>
-                <label htmlFor="file-upload" className="block cursor-pointer">
-                  <div className="flex h-56 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/70 bg-background text-center transition-colors hover:bg-muted/20">
-                    <UploadCloudIcon className="mb-3 h-10 w-10 text-muted-foreground" />
-                    <span className="text-base font-semibold text-foreground">
-                      {fileName ? "Replace selected workbook" : "Choose workbook"}
-                    </span>
-                    <span className="mt-1 text-sm text-muted-foreground">
-                      Drag and drop or click to browse
-                    </span>
-                    <p className="mt-3 text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                      XLSX • XLS
-                    </p>
-                  </div>
-                </label>
-                <input
-                  ref={fileInputRef}
-                  id="file-upload"
-                  type="file"
-                  className="hidden"
-                  accept=".xlsx,.xls"
-                  onChange={handleFile}
-                />
-                <div className="analytics-toolbar-actions">
-                  <label htmlFor="file-upload" className="app-button-secondary cursor-pointer">
-                    {fileName ? "Change file" : "Choose file"}
+                <div className="space-y-3">
+                  <label htmlFor="file-upload" className="block cursor-pointer">
+                    <div className="flex h-56 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/70 bg-background text-center transition-colors hover:bg-muted/20">
+                      <UploadCloudIcon className="mb-3 h-10 w-10 text-muted-foreground" />
+                      <span className="text-base font-semibold text-foreground">
+                        {fileName ? "Replace selected workbook" : "Choose workbook"}
+                      </span>
+                      <span className="mt-1 text-sm text-muted-foreground">
+                        Drag and drop or click to browse
+                      </span>
+                      <p className="mt-3 text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                        XLSX • XLS
+                      </p>
+                    </div>
                   </label>
+                  <Input
+                    ref={fileInputRef}
+                    id="file-upload"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFile}
+                    className="cursor-pointer file:mr-3 file:rounded-[calc(var(--app-radius-sm)-2px)] file:border file:border-border/70 file:bg-muted/35 file:px-3.5 file:py-1.5 file:text-[13px] file:font-semibold file:text-foreground hover:file:bg-muted/55"
+                  />
+                </div>
+                <div className="analytics-toolbar-actions">
                   {fileName ? (
                     <button
                       type="button"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
 
 import BulkUploadPanel from "@/components/workspace/BulkUploadPanel";
 import {
@@ -33,6 +34,7 @@ import {
   buildWorkspaceUserBulkRows,
   WORKSPACE_USER_BULK_TEMPLATES,
 } from "@/lib/client/workspace-user-bulk";
+import { USER_GENDER_OPTIONS } from "@/lib/user-gender";
 import type {
   WorkspaceAcademicSectionItem,
   WorkspaceClassItem,
@@ -53,11 +55,13 @@ export default function CreateStudentPageClient({
   initialSections,
   initialMessage = null,
 }: CreateStudentPageClientProps) {
+  const router = useRouter();
   const { navigateBack } = useBackNavigation("/workspace/students");
   const [currentSchoolKey, setCurrentSchoolKey] = useState("");
   const [form, setForm] = useState({
     name: "",
     fatherName: "",
+    gender: "",
     email: "",
     mobileNumber: "",
     class: "",
@@ -109,6 +113,7 @@ export default function CreateStudentPageClient({
     setForm({
       name: "",
       fatherName: "",
+      gender: "",
       email: "",
       mobileNumber: "",
       class: "",
@@ -139,6 +144,7 @@ export default function CreateStudentPageClient({
         body: JSON.stringify({
           name: form.name,
           fatherName: form.fatherName,
+          gender: form.gender || undefined,
           email: form.email,
           mobileNumber: form.mobileNumber,
           class: form.class,
@@ -224,6 +230,7 @@ export default function CreateStudentPageClient({
               : "error"
             : "success",
       });
+      router.refresh();
     } catch (error: any) {
       setBulkFeedback({
         message: error?.message || "We couldn't complete the bulk upload.",
@@ -296,7 +303,7 @@ export default function CreateStudentPageClient({
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <div className="app-field-group">
                     <Label htmlFor="student-father-name">Father name</Label>
                     <Input
@@ -306,6 +313,31 @@ export default function CreateStudentPageClient({
                       value={form.fatherName}
                       onChange={handleInputChange}
                     />
+                  </div>
+
+                  <div className="app-field-group">
+                    <Label htmlFor="student-gender">Gender</Label>
+                    <Select
+                      value={form.gender || "unspecified"}
+                      onValueChange={(value) =>
+                        setForm((currentForm) => ({
+                          ...currentForm,
+                          gender: value === "unspecified" ? "" : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="student-gender">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unspecified">Select gender</SelectItem>
+                        {USER_GENDER_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="app-field-group">
@@ -428,7 +460,6 @@ export default function CreateStudentPageClient({
           templateLabel="Download Student Template"
           loading={bulkLoading}
           loadingLabel="Uploading students..."
-          disabled={initialClasses.length === 0}
           compact
           feedback={bulkFeedback}
           tips={WORKSPACE_USER_BULK_TEMPLATES.student.tips}

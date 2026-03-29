@@ -83,16 +83,12 @@ export function useStudentTestRuntime({
   const [deadlineAt, setDeadlineAt] = useState<string | null>(
     initialData?.deadlineAt || null,
   );
-  const [isOffline, setIsOffline] = useState(
-    () => typeof navigator !== "undefined" && navigator.onLine === false,
-  );
+  const [isOffline, setIsOffline] = useState(false);
   const [connectionNotice, setConnectionNotice] = useState<string | null>(null);
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [pendingSubmitRetry, setPendingSubmitRetry] = useState(false);
   const [saveRetryAtMs, setSaveRetryAtMs] = useState<number | null>(null);
-  const [autosaveIntervalMs, setAutosaveIntervalMs] = useState(() =>
-    getAutosaveIntervalMsByConnection(),
-  );
+  const [autosaveIntervalMs, setAutosaveIntervalMs] = useState(30000);
 
   const answersRef = useRef<Record<string, StudentAnswerState>>(
     initialHydration.answers,
@@ -124,6 +120,9 @@ export function useStudentTestRuntime({
       (section.questions || []).map((entry) => ({
         sectionName: section.name,
         sectionDescription: section.description || "",
+        sectionInstructions: section.instructions || "",
+        sectionDefaultMarks: Number(section.defaultMarks || 0),
+        sectionDefaultNegativeMarks: Number(section.defaultNegativeMarks || 0),
         sectionMarks: section.marks,
         marks: entry.marks,
         negativeMarks: entry.negativeMarks,

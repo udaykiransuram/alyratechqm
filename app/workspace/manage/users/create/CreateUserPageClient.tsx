@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 
 import { GraduationCap, ShieldCheck, Users } from "lucide-react";
 
@@ -39,6 +40,7 @@ import {
   buildWorkspaceUserBulkRows,
   WORKSPACE_USER_BULK_TEMPLATES,
 } from "@/lib/client/workspace-user-bulk";
+import { USER_GENDER_OPTIONS } from "@/lib/user-gender";
 import { cn } from "@/lib/utils";
 import type {
   WorkspaceAcademicSectionItem,
@@ -82,6 +84,7 @@ const defaultFormState = {
   email: "",
   password: "",
   mobileNumber: "",
+  gender: "",
   role: "teacher" as Role,
   classId: "",
   academicSection: "",
@@ -145,6 +148,7 @@ export default function CreateUserPageClient({
   initialSchoolKey,
   initialMessage = null,
 }: CreateUserPageClientProps) {
+  const router = useRouter();
   const { navigateBack } = useBackNavigation("/workspace/manage/users");
   const { toast } = useToast();
 
@@ -319,6 +323,7 @@ export default function CreateUserPageClient({
         name: formData.name,
         email: formData.email,
         mobileNumber: formData.mobileNumber,
+        gender: formData.gender || undefined,
         role: formData.role,
       };
 
@@ -461,6 +466,7 @@ export default function CreateUserPageClient({
               : "error"
             : "success",
       });
+      router.refresh();
     } catch (error: any) {
       setBulkFeedback({
         message: error?.message || "We couldn't complete the bulk upload.",
@@ -564,7 +570,7 @@ export default function CreateUserPageClient({
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-3">
                   <div className="app-field-group">
                     <Label htmlFor="create-email">Email</Label>
                     <Input
@@ -590,6 +596,31 @@ export default function CreateUserPageClient({
                       onChange={handleInputChange}
                       required
                     />
+                  </div>
+
+                  <div className="app-field-group">
+                    <Label htmlFor="create-gender">Gender</Label>
+                    <Select
+                      value={formData.gender || "unspecified"}
+                      onValueChange={(value) =>
+                        setFormData((currentState) => ({
+                          ...currentState,
+                          gender: value === "unspecified" ? "" : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="create-gender">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unspecified">Select gender</SelectItem>
+                        {USER_GENDER_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -840,7 +871,6 @@ export default function CreateUserPageClient({
           templateLabel={`Download ${activeRolePreset.title} Template`}
           loading={isBulkUploading}
           loadingLabel="Uploading users..."
-          disabled={initialClasses.length === 0 && formData.role !== "admin"}
           compact
           feedback={bulkFeedback}
           tips={WORKSPACE_USER_BULK_TEMPLATES[formData.role].tips}

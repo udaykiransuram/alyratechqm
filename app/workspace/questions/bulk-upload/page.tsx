@@ -6,6 +6,7 @@ import PageHero from '@/components/layout/PageHero';
 import PageShell from '@/components/layout/PageShell';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import FilePickerField from '@/components/ui/file-picker-field';
 import { Textarea } from '@/components/ui/textarea';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
 
@@ -99,15 +100,12 @@ export default function BulkQuestionUploadPage() {
             <CardContent className="app-surface-body">
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="app-field-group">
-                  <label className="app-field-label" htmlFor="bulkJsonFile">
-                    Upload JSON File
-                  </label>
-                  <input
+                  <FilePickerField
                     id="bulkJsonFile"
-                    type="file"
+                    label="Upload JSON File"
                     accept=".json,application/json"
                     onChange={handleFileChange}
-                    className="app-form-file"
+                    placeholder="JSON file"
                   />
                 </div>
 

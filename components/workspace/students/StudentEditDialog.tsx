@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { USER_GENDER_OPTIONS } from "@/lib/user-gender";
 
 type ClassItem = {
   _id: string;
@@ -34,7 +35,9 @@ type AcademicSectionItem = {
 type StudentEditDraft = {
   _id: string;
   name: string;
+  gender: string;
   fatherName: string;
+  mobileNumber: string;
   classId: string;
   academicSectionId: string;
   rollNumber: string;
@@ -67,7 +70,9 @@ export default function StudentEditDialog({
 }: StudentEditDialogProps) {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
+  const [gender, setGender] = useState("");
   const [fatherName, setFatherName] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
   const [classId, setClassId] = useState("");
   const [academicSectionId, setAcademicSectionId] = useState("");
   const [rollNumber, setRollNumber] = useState("");
@@ -76,7 +81,9 @@ export default function StudentEditDialog({
   useEffect(() => {
     if (!open || !student) return;
     setName(student.name);
+    setGender(student.gender);
     setFatherName(student.fatherName);
+    setMobileNumber(student.mobileNumber);
     setClassId(student.classId);
     setAcademicSectionId(student.academicSectionId);
     setRollNumber(student.rollNumber);
@@ -94,7 +101,9 @@ export default function StudentEditDialog({
       setSaving(true);
       const body: any = {
         name,
+        gender: gender || undefined,
         fatherName,
+        mobileNumber,
         role: "student",
         class: classId,
         academicSection: academicSectionId,
@@ -155,6 +164,40 @@ export default function StudentEditDialog({
               className="col-span-3"
               value={fatherName}
               onChange={(event) => setFatherName(event.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Gender</Label>
+            <div className="col-span-3">
+              <Select
+                value={gender || "unspecified"}
+                onValueChange={(value) =>
+                  setGender(value === "unspecified" ? "" : value)
+                }
+              >
+                <SelectTrigger className="app-control-compact">
+                  <SelectValue placeholder="Select gender" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unspecified">Select gender</SelectItem>
+                  {USER_GENDER_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="mobile-number" className="text-right">
+              Mobile
+            </Label>
+            <Input
+              id="mobile-number"
+              className="col-span-3"
+              value={mobileNumber}
+              onChange={(event) => setMobileNumber(event.target.value)}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">

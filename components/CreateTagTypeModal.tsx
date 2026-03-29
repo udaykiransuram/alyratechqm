@@ -82,32 +82,43 @@ export function CreateTagTypeModal({ open, onClose, onTagTypeCreated }: CreateTa
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader className="text-left">
-          <DialogTitle>Create New Tag Type</DialogTitle>
-          <DialogDescription>
-            Define a reusable category for tags, such as difficulty, topic, or skill area.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="overflow-hidden p-0 sm:max-w-md">
+        <div className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
+          <DialogHeader className="text-left">
+            <DialogTitle>Create New Tag Type</DialogTitle>
+            <DialogDescription>
+              Define a reusable category for tags, such as difficulty, topic, or skill area.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="app-field-group">
-          <Label htmlFor="new-tag-type-name" className="app-field-label">
-            Tag Type Name
-          </Label>
-          <Input
-            id="new-tag-type-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="e.g., Difficulty"
-            disabled={loading}
-          />
+          <div className="app-field-group">
+            <Label htmlFor="new-tag-type-name" className="app-field-label">
+              Tag Type Name
+            </Label>
+            <Input
+              id="new-tag-type-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="e.g., Difficulty"
+              disabled={loading}
+            />
+          </div>
         </div>
 
-        <DialogFooter className="gap-2 pt-2">
-          <Button variant="outline" onClick={() => handleDialogChange(false)} disabled={loading}>
+        <DialogFooter className="border-t border-border/60 bg-muted/10 px-5 py-4 sm:px-6">
+          <Button
+            variant="outline"
+            className="app-button-compact sm:min-w-[8.5rem]"
+            onClick={() => handleDialogChange(false)}
+            disabled={loading}
+          >
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
+          <Button
+            className="app-button-compact-primary sm:min-w-[8.5rem]"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
             {loading ? <Spinner /> : 'Create Tag Type'}
           </Button>
         </DialogFooter>

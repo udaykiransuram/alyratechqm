@@ -255,13 +255,8 @@ export function PaperDetailsForm({
                   ))}
                 </div>
               ) : (
-                <p className="app-copy-muted">
-                  Subjects are derived automatically from the questions you add to this paper.
-                </p>
+                <p className="app-copy-muted">No subjects yet.</p>
               )}
-              <p className="mt-2 text-xs text-muted-foreground">
-                The paper subject mix updates as you change the question selection.
-              </p>
             </div>
           </div>
 
@@ -372,15 +367,37 @@ export function PaperDetailsForm({
             </div>
 
             {onlineEnabled ? (
-              <div className={cn("mt-4 grid gap-4 sm:grid-cols-2", compact && "mt-3 gap-3")}>
+              <div className={cn("mt-4 grid gap-3.5", compact && "mt-3 gap-3")}>
                 <div className="app-online-window-card">
-                  <div className="app-field-group">
-                    <Label htmlFor="onlineStartsAt" className="app-field-label">
-                      Online Start
-                    </Label>
-                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                  <div className="app-online-window-header">
+                    <div className="app-online-window-header-copy">
+                      <Label htmlFor="onlineStartsAtDate" className="app-field-label">
+                        Online Start
+                      </Label>
+                      <p className="app-field-note">
+                        Leave blank to start from the paper exam date.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="app-online-window-clear"
+                      onClick={() => {
+                        setOnlineStartsAtDateInput('');
+                        setOnlineStartsAtTimeInput('');
+                        setOnlineStartsAt(null);
+                      }}
+                      disabled={!onlineStartsAtDateInput && !onlineStartsAtTimeInput}
+                    >
+                      Clear start
+                    </Button>
+                  </div>
+                  <div className="app-online-window-input-grid">
+                    <div className="app-online-window-input-field">
+                      <p className="app-online-window-input-label">Start date</p>
                       <Input
-                        id="onlineStartsAt"
+                        id="onlineStartsAtDate"
                         type="date"
                         value={onlineStartsAtDateInput}
                         onChange={(e) => {
@@ -406,7 +423,11 @@ export function PaperDetailsForm({
                           }
                         }}
                       />
+                    </div>
+                    <div className="app-online-window-input-field">
+                      <p className="app-online-window-input-label">Start time</p>
                       <Input
+                        id="onlineStartsAtTime"
                         type="time"
                         step={60}
                         value={onlineStartsAtTimeInput}
@@ -430,37 +451,39 @@ export function PaperDetailsForm({
                       />
                     </div>
                   </div>
-                  <div className="app-online-window-footer">
-                    <p className="app-field-note app-online-window-note">
-                      Leave blank to start from the paper exam date.
-                    </p>
-                    <div className="app-online-window-footer-actions">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="app-online-window-clear"
-                        onClick={() => {
-                          setOnlineStartsAtDateInput('');
-                          setOnlineStartsAtTimeInput('');
-                          setOnlineStartsAt(null);
-                        }}
-                        disabled={!onlineStartsAtDateInput && !onlineStartsAtTimeInput}
-                      >
-                        Clear start
-                      </Button>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="app-online-window-card">
-                  <div className="app-field-group">
-                    <Label htmlFor="onlineEndsAt" className="app-field-label">
-                      Online End
-                    </Label>
-                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                  <div className="app-online-window-header">
+                    <div className="app-online-window-header-copy">
+                      <Label htmlFor="onlineEndsAtDate" className="app-field-label">
+                        Online End
+                      </Label>
+                      <p className="app-field-note">
+                        Optional global cutoff. Student timers still respect the
+                        paper duration.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="app-online-window-clear"
+                      onClick={() => {
+                        setOnlineEndsAtDateInput('');
+                        setOnlineEndsAtTimeInput('');
+                        setOnlineEndsAt(null);
+                      }}
+                      disabled={!onlineEndsAtDateInput && !onlineEndsAtTimeInput}
+                    >
+                      Clear end
+                    </Button>
+                  </div>
+                  <div className="app-online-window-input-grid">
+                    <div className="app-online-window-input-field">
+                      <p className="app-online-window-input-label">End date</p>
                       <Input
-                        id="onlineEndsAt"
+                        id="onlineEndsAtDate"
                         type="date"
                         value={onlineEndsAtDateInput}
                         onChange={(e) => {
@@ -486,7 +509,11 @@ export function PaperDetailsForm({
                           }
                         }}
                       />
+                    </div>
+                    <div className="app-online-window-input-field">
+                      <p className="app-online-window-input-label">End time</p>
                       <Input
+                        id="onlineEndsAtTime"
                         type="time"
                         step={60}
                         value={onlineEndsAtTimeInput}
@@ -508,28 +535,6 @@ export function PaperDetailsForm({
                           }
                         }}
                       />
-                    </div>
-                  </div>
-                  <div className="app-online-window-footer">
-                    <p className="app-field-note app-online-window-note">
-                      Optional global cutoff. Student timers still respect the
-                      paper duration.
-                    </p>
-                    <div className="app-online-window-footer-actions">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="app-online-window-clear"
-                        onClick={() => {
-                          setOnlineEndsAtDateInput('');
-                          setOnlineEndsAtTimeInput('');
-                          setOnlineEndsAt(null);
-                        }}
-                        disabled={!onlineEndsAtDateInput && !onlineEndsAtTimeInput}
-                      >
-                        Clear end
-                      </Button>
                     </div>
                   </div>
                 </div>

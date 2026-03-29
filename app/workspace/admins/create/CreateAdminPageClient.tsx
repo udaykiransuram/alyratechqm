@@ -15,6 +15,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
@@ -25,6 +32,7 @@ import {
   WORKSPACE_USER_BULK_TEMPLATES,
 } from "@/lib/client/workspace-user-bulk";
 import FeedbackNotice, { type FeedbackNoticeVariant } from "@/components/ui/feedback-notice";
+import { USER_GENDER_OPTIONS } from "@/lib/user-gender";
 import type {
   WorkspaceAcademicSectionItem,
   WorkspaceClassItem,
@@ -55,6 +63,7 @@ export default function CreateAdminPageClient({
     email: "",
     password: "",
     mobileNumber: "",
+    gender: "",
     hasAllClasses: true,
     hasAllSections: true,
     hasAllSubjects: true,
@@ -148,6 +157,7 @@ export default function CreateAdminPageClient({
     const payload = {
       ...form,
       role: "admin",
+      gender: form.gender || undefined,
       classIds: form.hasAllClasses ? [] : form.classIds,
       academicSectionIds: form.hasAllSections
         ? []
@@ -178,6 +188,7 @@ export default function CreateAdminPageClient({
         email: "",
         password: "",
         mobileNumber: "",
+        gender: "",
         hasAllClasses: true,
         hasAllSections: true,
         hasAllSubjects: true,
@@ -255,6 +266,7 @@ export default function CreateAdminPageClient({
               : "error"
             : "success",
       });
+      router.refresh();
     } catch (error: any) {
       setBulkFeedback({
         message: error?.message || "We couldn't complete the bulk upload.",
@@ -324,7 +336,7 @@ export default function CreateAdminPageClient({
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-3">
                   <div className="app-field-group">
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -347,6 +359,31 @@ export default function CreateAdminPageClient({
                       onChange={handleChange}
                       required
                     />
+                  </div>
+
+                  <div className="app-field-group">
+                    <Label htmlFor="admin-gender">Gender</Label>
+                    <Select
+                      value={form.gender || "unspecified"}
+                      onValueChange={(value) =>
+                        setForm((currentForm) => ({
+                          ...currentForm,
+                          gender: value === "unspecified" ? "" : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="admin-gender">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unspecified">Select gender</SelectItem>
+                        {USER_GENDER_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 

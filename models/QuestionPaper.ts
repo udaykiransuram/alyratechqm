@@ -33,6 +33,9 @@ interface IQuestionInPaper {
 interface ISection {
   name: string;
   description?: string;
+  instructions?: string;
+  defaultMarks?: number;
+  defaultNegativeMarks?: number;
   marks: number;
   questions: IQuestionInPaper[];
 }
@@ -90,6 +93,20 @@ const SectionSchema = new Schema<ISection>(
     description: {
       type: String,
       default: "",
+    },
+    instructions: {
+      type: String,
+      default: "",
+    },
+    defaultMarks: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    defaultNegativeMarks: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
     marks: {
       type: Number,
@@ -205,6 +222,9 @@ if (
     !existingQuestionPaperModel.schema.path("onlineEndsAt") ||
     !existingQuestionPaperModel.schema.path("subjectIds") ||
     !existingQuestionPaperModel.schema.path("assignedAcademicSections") ||
+    !existingQuestionPaperModel.schema.path("sections.instructions") ||
+    !existingQuestionPaperModel.schema.path("sections.defaultMarks") ||
+    !existingQuestionPaperModel.schema.path("sections.defaultNegativeMarks") ||
     !hasArchiveFields(existingQuestionPaperModel))
 ) {
   delete modelRegistry.QuestionPaper;

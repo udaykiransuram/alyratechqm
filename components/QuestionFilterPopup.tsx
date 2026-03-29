@@ -200,9 +200,8 @@ export function QuestionFilterPopup({
           <aside className="app-surface flex min-h-0 flex-col overflow-hidden shadow-none">
             <div className="app-section-header py-3.5">
               <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
+                <div>
                   <h3 className="text-base font-semibold text-foreground">Question Bank Filters</h3>
-                  <p className="text-sm text-muted-foreground">Use class to narrow the source level of bank questions, then refine by subject, tags, and search. The paper details still decide which class sections receive the final paper.</p>
                 </div>
                 <Button
                   type="button"

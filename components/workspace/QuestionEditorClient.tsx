@@ -679,12 +679,12 @@ export default function QuestionEditorClient({
                     {getQuestionTypeLabel(type)}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       variant={type === "single" ? "default" : "outline"}
                       onClick={() => setType("single")}
                       size="sm"
-                      className="h-10 w-full"
+                      className="min-h-10 min-w-[8rem] flex-1 px-3 sm:flex-none"
                     >
                       Single
                     </Button>
@@ -692,7 +692,7 @@ export default function QuestionEditorClient({
                       variant={type === "multiple" ? "default" : "outline"}
                       onClick={() => setType("multiple")}
                       size="sm"
-                      className="h-10 w-full"
+                      className="min-h-10 min-w-[8rem] flex-1 px-3 sm:flex-none"
                     >
                       Multiple
                     </Button>
@@ -700,7 +700,7 @@ export default function QuestionEditorClient({
                       variant={type === "matrix-match" ? "default" : "outline"}
                       onClick={() => setType("matrix-match")}
                       size="sm"
-                      className="h-10 w-full"
+                      className="min-h-10 min-w-[8rem] flex-1 px-3 sm:flex-none"
                     >
                       Matrix
                     </Button>
@@ -708,7 +708,7 @@ export default function QuestionEditorClient({
                       variant={type === "descriptive" ? "default" : "outline"}
                       onClick={() => setType("descriptive")}
                       size="sm"
-                      className="h-10 w-full"
+                      className="min-h-10 min-w-[8rem] flex-1 px-3 sm:flex-none"
                     >
                       Descriptive
                     </Button>

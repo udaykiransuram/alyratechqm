@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FeedbackNotice, {
   type FeedbackNoticeVariant,
 } from "@/components/ui/feedback-notice";
-import { Label } from "@/components/ui/label";
+import FilePickerField from "@/components/ui/file-picker-field";
 import { cn } from "@/lib/utils";
 
 type BulkUploadPanelProps = {
@@ -28,6 +28,7 @@ type BulkUploadPanelProps = {
   tips?: string[];
   children?: ReactNode;
   disabled?: boolean;
+  disabledMessage?: string;
   compact?: boolean;
 };
 
@@ -46,6 +47,7 @@ export default function BulkUploadPanel({
   tips = [],
   children,
   disabled = false,
+  disabledMessage,
   compact = false,
 }: BulkUploadPanelProps) {
   return (
@@ -75,16 +77,22 @@ export default function BulkUploadPanel({
         className={cn("app-section-body", compact ? "space-y-3" : "space-y-4")}
       >
         <div className={cn("space-y-2", compact && "space-y-1.5")}>
-          <Label htmlFor={inputId}>Upload file</Label>
-          <input
+          <FilePickerField
             id={inputId}
-            type="file"
+            label="Upload file"
             accept={accept}
             onChange={onFileChange}
             disabled={disabled || loading}
-            className="app-form-file"
+            placeholder={
+              disabled
+                ? "Upload unavailable"
+                : "CSV or Excel file"
+            }
           />
           {loading ? <p className="app-field-note">{loadingLabel}</p> : null}
+          {disabled && disabledMessage ? (
+            <p className="app-field-note text-amber-700">{disabledMessage}</p>
+          ) : null}
         </div>
 
         {feedback?.message ? (
