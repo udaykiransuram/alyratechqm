@@ -16,8 +16,6 @@ import {
   X,
 } from "lucide-react";
 
-import { performNextAuthSignOutAndRedirect } from "@/lib/client/next-auth-client";
-import { usePublicNavSession } from "@/lib/client/public-nav-session";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -59,7 +57,6 @@ const navItems = [
 
 export default function Navbar() {
   const pathname = usePathname() || "/";
-  const { signedIn, portalHref, portalLabel } = usePublicNavSession();
   const [scrolled, setScrolled] = useState(false);
   const [desktopDropdown, setDesktopDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -67,7 +64,6 @@ export default function Navbar() {
     null,
   );
   const [mounted, setMounted] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
   const [headerHeight, setHeaderHeight] = useState(80);
 
@@ -193,17 +189,6 @@ export default function Navbar() {
       useHeroChrome && "public-nav-link-hero",
       active && "public-nav-link-active",
     );
-
-  async function handleSignOut() {
-    setDesktopDropdown(null);
-    setMobileDropdownOpen(null);
-    setMobileMenuOpen(false);
-    setSigningOut(true);
-
-    await performNextAuthSignOutAndRedirect({
-      callbackUrl: window.location.href,
-    });
-  }
 
   return (
     <header
@@ -408,62 +393,34 @@ export default function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-4 md:flex">
-          {signedIn ? (
-            <>
-              <button
-                type="button"
-                className={cn(
-                  "public-nav-secondary-action",
-                  isMarketingHome && "text-white/80 hover:text-white",
-                )}
-                onClick={() => void handleSignOut()}
-                disabled={signingOut}
-              >
-                {signingOut ? "Signing out..." : "Sign out"}
-              </button>
-              <Link
-                href={portalHref}
-                className="public-nav-cta focus:outline-none focus:ring-2 focus:ring-[hsl(var(--public-accent))/0.34] focus:ring-offset-2"
-                aria-label={portalLabel}
-              >
-                <span className="mr-2 whitespace-nowrap drop-shadow-sm">
-                  {portalLabel}
-                </span>
-                <ArrowRight className="h-3.5 w-3.5 drop-shadow-sm transition-transform group-hover:translate-x-1 md:h-4 md:w-4" />
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link
-                href="/auth/signin"
-                className={cn(
-                  "public-nav-secondary-action",
-                  isMarketingHome && "text-white/80 hover:text-white",
-                )}
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/contact"
-                className={cn(
-                  "public-nav-secondary-action",
-                  isMarketingHome && "text-white/80 hover:text-white",
-                )}
-              >
-                Request Demo
-              </Link>
-              <Link
-                href="/talent-test"
-                className="public-nav-cta focus:outline-none focus:ring-2 focus:ring-[hsl(var(--public-accent))/0.34] focus:ring-offset-2"
-                aria-label="Start Baseline Test"
-              >
-                <span className="mr-2 whitespace-nowrap drop-shadow-sm">
-                  Baseline Test
-                </span>
-                <ArrowRight className="h-3.5 w-3.5 drop-shadow-sm transition-transform group-hover:translate-x-1 md:h-4 md:w-4" />
-              </Link>
-            </>
-          )}
+          <Link
+            href="/auth/signin"
+            className={cn(
+              "public-nav-secondary-action",
+              isMarketingHome && "text-white/80 hover:text-white",
+            )}
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/contact"
+            className={cn(
+              "public-nav-secondary-action",
+              isMarketingHome && "text-white/80 hover:text-white",
+            )}
+          >
+            Request Demo
+          </Link>
+          <Link
+            href="/talent-test"
+            className="public-nav-cta focus:outline-none focus:ring-2 focus:ring-[hsl(var(--public-accent))/0.34] focus:ring-offset-2"
+            aria-label="Start Baseline Test"
+          >
+            <span className="mr-2 whitespace-nowrap drop-shadow-sm">
+              Baseline Test
+            </span>
+            <ArrowRight className="h-3.5 w-3.5 drop-shadow-sm transition-transform group-hover:translate-x-1 md:h-4 md:w-4" />
+          </Link>
         </div>
 
         <button
@@ -601,52 +558,30 @@ export default function Navbar() {
                       </div>
                     ))}
 
-                  {signedIn ? (
-                    <div className="mt-3 grid grid-cols-2 gap-2 px-2">
-                      <Link
-                        href={portalHref}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className="public-mobile-menu-action public-mobile-menu-action-primary"
-                      >
-                        Portal
-                      </Link>
-                      <button
-                        type="button"
-                        className="public-mobile-menu-action public-mobile-menu-action-secondary"
-                        onClick={() => void handleSignOut()}
-                        disabled={signingOut}
-                      >
-                        {signingOut ? "Signing out..." : "Sign out"}
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="mt-3 grid grid-cols-2 gap-2 px-2">
-                        <Link
-                          href="/auth/signin"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className="public-mobile-menu-action public-mobile-menu-action-primary"
-                        >
-                          Sign In
-                        </Link>
-                        <Link
-                          href="/contact"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className="public-mobile-menu-action public-mobile-menu-action-secondary"
-                        >
-                          Contact
-                        </Link>
-                      </div>
-                      <Link
-                        href="/talent-test"
-                        onClick={() => setMobileMenuOpen(false)}
-                        className="public-mobile-menu-link mx-2 mt-1 inline-flex items-center justify-center"
-                      >
-                        Start Baseline Test
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Link>
-                    </>
-                  )}
+                  <div className="mt-3 grid grid-cols-2 gap-2 px-2">
+                    <Link
+                      href="/auth/signin"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="public-mobile-menu-action public-mobile-menu-action-primary"
+                    >
+                      Sign In
+                    </Link>
+                    <Link
+                      href="/contact"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="public-mobile-menu-action public-mobile-menu-action-secondary"
+                    >
+                      Contact
+                    </Link>
+                  </div>
+                  <Link
+                    href="/talent-test"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="public-mobile-menu-link mx-2 mt-1 inline-flex items-center justify-center"
+                  >
+                    Start Baseline Test
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </nav>
               </div>
             </>,
