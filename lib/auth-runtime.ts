@@ -1,4 +1,4 @@
-import { getConfiguredSiteOrigin } from "@/lib/site-url";
+import { getConfiguredSiteOrigin, isAllowedConfiguredSiteOrigin } from "@/lib/site-url";
 
 export function getNextAuthSecret() {
   const secret = String(
@@ -32,7 +32,7 @@ export function getAuthConfigurationIssue(requestOrigin?: string) {
   const normalizedRequestOrigin = normalizeOrigin(requestOrigin);
   if (
     normalizedRequestOrigin &&
-    normalizedRequestOrigin !== configuredOrigin
+    !isAllowedConfiguredSiteOrigin(normalizedRequestOrigin)
   ) {
     return "request_origin_mismatch" as const;
   }

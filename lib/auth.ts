@@ -20,6 +20,7 @@ import {
   normalizeEmail,
   normalizeRollNumber,
 } from "@/lib/user-credentials";
+import { isAllowedConfiguredSiteUrl } from "@/lib/site-url";
 import { getPublicSchoolOptionByKey } from "@/lib/server/public-school-data";
 import CompanyAdmin from "@/models/CompanyAdmin";
 
@@ -318,7 +319,7 @@ export const authOptions: NextAuthOptions = {
         return `${baseUrl}${url}`;
       }
 
-      if (url.startsWith(baseUrl)) {
+      if (isAllowedConfiguredSiteUrl(url, baseUrl)) {
         return url;
       }
 
