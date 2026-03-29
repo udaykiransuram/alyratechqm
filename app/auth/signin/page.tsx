@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 
 import { cookies } from "next/headers";
 
-import { getPublicSchoolOptions } from "@/lib/server/public-school-data";
+import {
+  getPublicSchoolOptionByKey,
+  getPublicSchoolOptions,
+} from "@/lib/server/public-school-data";
 import SignInClient from "./SignInClient";
 
 export const metadata: Metadata = {
@@ -25,17 +28,42 @@ function getFirstSearchParam(
 }
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
-  const [schools, cookieStore, resolvedSearchParams] = await Promise.all([
-    getPublicSchoolOptions().catch(() => []),
+  const [cookieStore, resolvedSearchParams] = await Promise.all([
     cookies(),
     searchParams,
   ]);
+  const requestedCallbackUrl = getFirstSearchParam(
+    resolvedSearchParams?.callbackUrl,
+  );
+  const signedOut = getFirstSearchParam(
+    resolvedSearchParams?.signedOut,
+  ) === "1";
 
   const rememberedSchoolKey = String(
     cookieStore.get("schoolKey")?.value || "",
   )
     .trim()
     .toLowerCase();
+  const rememberedSchoolDisplayName = String(
+    cookieStore.get("schoolDisplayName")?.value || "",
+  ).trim();
+
+  const shouldBootstrapFromCookies = Boolean(
+    rememberedSchoolKey && rememberedSchoolDisplayName,
+  );
+  const schools = shouldBootstrapFromCookies
+    ? [
+        {
+          key: rememberedSchoolKey,
+          displayName: rememberedSchoolDisplayName,
+        },
+      ]
+    : rememberedSchoolKey
+      ? await getPublicSchoolOptionByKey(rememberedSchoolKey)
+          .then((school) => (school ? [school] : []))
+          .catch(() => getPublicSchoolOptions().catch(() => []))
+      : await getPublicSchoolOptions().catch(() => []);
+
   const rememberedSchool = schools.find(
     (school) => school.key === rememberedSchoolKey,
   );
@@ -43,11 +71,15 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     rememberedSchool || (schools.length === 1 ? schools[0] : undefined);
 
   return (
-    <SignInClient
-      initialSchools={schools}
-      initialSchoolKey={autoSelectedSchool?.key}
-      requestedCallbackUrl={getFirstSearchParam(resolvedSearchParams?.callbackUrl)}
-      pageError={getFirstSearchParam(resolvedSearchParams?.error)}
-    />
+    <>
+      <SignInClient
+        initialSchools={schools}
+        initialSchoolKey={autoSelectedSchool?.key}
+        requestedCallbackUrl={requestedCallbackUrl}
+        pageError={getFirstSearchParam(resolvedSearchParams?.error)}
+        initialSchoolsPartial={shouldBootstrapFromCookies}
+        signedOut={signedOut}
+      />
+    </>
   );
 }

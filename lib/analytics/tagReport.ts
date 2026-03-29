@@ -2,6 +2,11 @@ import {
   buildPaperQuestionLookup,
   evaluateQuestionAnswer,
 } from "@/lib/question-paper/grading";
+import {
+  resolveAnalyticsTags,
+  type AnalyticsResolvedTag,
+  type AnalyticsTagLookup,
+} from "@/lib/analytics/tag-resolution";
 
 export function buildTagReport({
   responses,
@@ -10,6 +15,7 @@ export function buildTagReport({
   isClassLevel,
   questionStats = {},
   filters = {},
+  tagLookup,
 }: {
   responses: any[];
   paperSections: any[];
@@ -19,10 +25,23 @@ export function buildTagReport({
   filters?: {
     classId?: string;
     subjectId?: string;
+    subjectIds?: string[];
+    paperDefaultSubject?: {
+      _id: string;
+      name: string;
+    } | null;
   };
+  tagLookup?: AnalyticsTagLookup;
 }) {
-  function getTagValue(tags: any[], type: string) {
-    const tag = tags.find((t: any) => t.type?.name?.toLowerCase() === type.toLowerCase());
+  function getQuestionTags(question: any) {
+    return resolveAnalyticsTags(question?.tags || [], tagLookup);
+  }
+
+  function getTagValue(tags: AnalyticsResolvedTag[], type: string) {
+    const tag = tags.find(
+      (candidate) =>
+        candidate.type?.name?.toLowerCase() === type.toLowerCase(),
+    );
     return tag?.name || `Unknown ${type.charAt(0).toUpperCase() + type.slice(1)}`;
   }
 
@@ -31,23 +50,59 @@ export function buildTagReport({
   }
 
   function getQuestionSubjectId(question: any) {
-    return String(question?.subject?._id || question?.subject || "");
+    const subject = getResolvedQuestionSubject(question);
+    return String(subject?._id || subject || "");
   }
 
-  function getGroupKey(question: any, group: string, sectionName: string) {
+  function getResolvedQuestionSubject(question: any) {
+    return question?.subject || filters.paperDefaultSubject || null;
+  }
+
+  function getGroupKey(
+    question: any,
+    tags: AnalyticsResolvedTag[],
+    group: string,
+    sectionName: string,
+  ) {
     if (group === 'section') return sectionName;
     if (group === 'class') return question?.class?.name || 'Unknown Class';
-    if (group === 'subject') return question?.subject?.name || 'Unknown Subject';
+    if (group === 'subject') {
+      const subject = getResolvedQuestionSubject(question);
+      return subject?.name || 'Unknown Subject';
+    }
     if (group === 'tagtype') {
-      return (question.tags || [])
-        .map((tag: any) => `${tag.type?.name || 'Other'}: ${tag.name || 'Unknown'}`)
+      if (tags.length === 0) {
+        return 'No Tags';
+      }
+      return tags
+        .map((tag: AnalyticsResolvedTag) => `${tag.type?.name || 'Other'}: ${tag.name || 'Unknown'}`)
+        .sort((left, right) => left.localeCompare(right))
         .join(', ');
     }
-    return getTagValue(question.tags || [], group);
+    return getTagValue(tags, group);
   }
 
   const stats: any = {};
   const questionLookup = buildPaperQuestionLookup({ sections: paperSections });
+  const questionNumbersByKey = new Map<string, number>();
+  (Array.isArray(paperSections) ? paperSections : []).forEach((paperSection: any) => {
+    const sectionName = String(paperSection?.name || "");
+    let questionNumber = 1;
+    (Array.isArray(paperSection?.questions) ? paperSection.questions : []).forEach(
+      (qWrap: any) => {
+        const questionId = String(qWrap?.question?._id || qWrap?.question || "");
+        if (sectionName && questionId) {
+          questionNumbersByKey.set(`${sectionName}::${questionId}`, questionNumber);
+        }
+        questionNumber += 1;
+      },
+    );
+  });
+  const allowedSubjectIdSet = new Set(
+    (Array.isArray(filters.subjectIds) ? filters.subjectIds : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
+  );
 
   for (const response of responses) {
     const answerMap: Record<string, Record<string, any>> = {};
@@ -61,15 +116,21 @@ export function buildTagReport({
     for (const paperSection of paperSections) {
       const sectionName = paperSection.name;
       const questions = paperSection.questions || [];
-      let questionNumber = 1;
 
       for (const qWrap of questions) {
         const question = qWrap.question;
-        if (!question || !question.tags || !question._id) continue;
+        if (!question || !question._id) continue;
+        const questionTags = getQuestionTags(question);
 
         const questionClassId = getQuestionClassId(question);
         const questionSubjectId = getQuestionSubjectId(question);
         if (filters.classId && questionClassId !== filters.classId) continue;
+        if (
+          allowedSubjectIdSet.size > 0 &&
+          !allowedSubjectIdSet.has(questionSubjectId)
+        ) {
+          continue;
+        }
         if (filters.subjectId && questionSubjectId !== filters.subjectId) continue;
 
         const ans = answerMap[sectionName]?.[String(question._id)];
@@ -84,7 +145,9 @@ export function buildTagReport({
         // Compose question object for frontend
         const questionObj = {
           id: questionIdStr,
-          number: questionNumber,
+          number:
+            questionNumbersByKey.get(`${sectionName}::${questionIdStr}`) ??
+            undefined,
           section: sectionName,
           ...(isClassLevel && questionStats[questionIdStr]
             ? {
@@ -101,7 +164,7 @@ export function buildTagReport({
         let pointer = stats;
         for (let i = 0; i < groupBy.length; i++) {
           const group = groupBy[i];
-          const key = getGroupKey(question, group, sectionName);
+          const key = getGroupKey(question, questionTags, group, sectionName);
 
           if (!pointer[key]) pointer[key] = i === groupBy.length - 1
             ? { 
@@ -136,11 +199,12 @@ export function buildTagReport({
         if (attempted && evaluation.selectedOptions.length > 0) {
           evaluation.selectedOptions.forEach((optIdx: number) => {
             const optionTagType = `option ${String.fromCharCode(97 + optIdx)}`;
-            const tagsForOption = (question.tags || []).filter(
-              (tag: any) => tag.type?.name?.toLowerCase() === optionTagType
+            const tagsForOption = questionTags.filter(
+              (tag: AnalyticsResolvedTag) =>
+                tag.type?.name?.toLowerCase() === optionTagType,
             );
             const isOptionCorrect = (question.answerIndexes || []).includes(optIdx);
-            tagsForOption.forEach((tag: any) => {
+            tagsForOption.forEach((tag: AnalyticsResolvedTag) => {
               pointer.optionTags ??= [];
               pointer.optionTags.push({
                 option: optionTagType,
@@ -157,12 +221,10 @@ export function buildTagReport({
           });
         }
 
-        pointer.tags = (question.tags || []).map((tag: any) => ({
+        pointer.tags = questionTags.map((tag: AnalyticsResolvedTag) => ({
           type: tag.type?.name || 'Unknown',
           value: tag.name
         }));
-
-        questionNumber++;
       }
     }
   }

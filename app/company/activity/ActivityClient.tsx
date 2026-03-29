@@ -1,10 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import PageHero from "@/components/layout/PageHero";
 import { Button } from "@/components/ui/button";
+import type { SearchableCommandOption } from "@/components/ui/searchable-command-select";
 import { fetchApiJson } from "@/lib/client/api";
 
 type CompanyAuditLogItem = {
@@ -24,20 +26,99 @@ type CompanyAuditLogItem = {
   requestPath?: string;
 };
 
-export default function ActivityClient() {
-  const [logs, setLogs] = useState<CompanyAuditLogItem[]>([]);
-  const [schoolKeys, setSchoolKeys] = useState<string[]>([]);
-  const [actions, setActions] = useState<string[]>([]);
-  const [sources, setSources] = useState<string[]>([]);
+type CompanyActivityResponse = {
+  logs?: CompanyAuditLogItem[];
+  filters?: {
+    schoolKeys?: string[];
+    actions?: string[];
+    sources?: string[];
+  };
+};
+
+type ActivityClientProps = {
+  initialLogs?: CompanyAuditLogItem[];
+  initialSchoolKeys?: string[];
+  initialActions?: string[];
+  initialSources?: string[];
+  initialError?: string | null;
+};
+
+const SearchableCommandSelect = dynamic(
+  () =>
+    import("@/components/ui/searchable-command-select").then(
+      (mod) => mod.SearchableCommandSelect,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-11 w-full rounded-xl border border-input bg-background" />
+    ),
+  },
+);
+
+export default function ActivityClient({
+  initialLogs = [],
+  initialSchoolKeys = [],
+  initialActions = [],
+  initialSources = [],
+  initialError = null,
+}: ActivityClientProps) {
+  const [logs, setLogs] = useState<CompanyAuditLogItem[]>(initialLogs);
+  const [schoolKeys, setSchoolKeys] = useState<string[]>(initialSchoolKeys);
+  const [actions, setActions] = useState<string[]>(initialActions);
+  const [sources, setSources] = useState<string[]>(initialSources);
   const [schoolKeyFilter, setSchoolKeyFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
+  const didHydrate = useRef(false);
   const hasActiveFilters =
     schoolKeyFilter !== "all" ||
     actionFilter !== "all" ||
     sourceFilter !== "all";
+  const schoolKeyOptions = useMemo<SearchableCommandOption[]>(
+    () => [
+      {
+        value: "all",
+        label: "All schools",
+        description: "Review activity across every school tenant.",
+      },
+      ...schoolKeys.map((schoolKey) => ({
+        value: schoolKey,
+        label: schoolKey,
+      })),
+    ],
+    [schoolKeys],
+  );
+  const actionOptions = useMemo<SearchableCommandOption[]>(
+    () => [
+      {
+        value: "all",
+        label: "All actions",
+        description: "Include every operational action in the company trail.",
+      },
+      ...actions.map((action) => ({
+        value: action,
+        label: action,
+      })),
+    ],
+    [actions],
+  );
+  const sourceOptions = useMemo<SearchableCommandOption[]>(
+    () => [
+      {
+        value: "all",
+        label: "All sources",
+        description: "Show both UI and API initiated activity together.",
+      },
+      ...sources.map((source) => ({
+        value: source,
+        label: source,
+      })),
+    ],
+    [sources],
+  );
 
   const loadLogs = useCallback(async () => {
     try {
@@ -50,7 +131,7 @@ export default function ActivityClient() {
       if (sourceFilter !== "all") params.set("source", sourceFilter);
       params.set("limit", "100");
 
-      const data = await fetchApiJson<any>(
+      const data = await fetchApiJson<CompanyActivityResponse>(
         `/api/admin/audit-logs?${params.toString()}`,
         {
           cache: "no-store",
@@ -77,6 +158,11 @@ export default function ActivityClient() {
   }, [actionFilter, schoolKeyFilter, sourceFilter]);
 
   useEffect(() => {
+    if (!didHydrate.current) {
+      didHydrate.current = true;
+      return;
+    }
+
     void loadLogs();
   }, [loadLogs]);
 
@@ -165,51 +251,45 @@ export default function ActivityClient() {
         </div>
         <div className="app-filter-panel-body">
           <div className="app-filter-grid xl:grid-cols-[220px_240px_180px_minmax(0,1fr)] xl:items-end">
-            <label className="app-field-group">
+            <div className="app-field-group">
               <span className="app-field-label">School</span>
-              <select
-                className="app-form-input"
+              <SearchableCommandSelect
                 value={schoolKeyFilter}
-                onChange={(event) => setSchoolKeyFilter(event.target.value)}
-              >
-                <option value="all">All schools</option>
-                {schoolKeys.map((schoolKey) => (
-                  <option key={schoolKey} value={schoolKey}>
-                    {schoolKey}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="app-field-group">
+                options={schoolKeyOptions}
+                onValueChange={setSchoolKeyFilter}
+                placeholder="All schools"
+                searchPlaceholder="Search schools..."
+                emptyText="No schools found."
+                onClear={() => setSchoolKeyFilter("all")}
+                showCloseAction
+              />
+            </div>
+            <div className="app-field-group">
               <span className="app-field-label">Action</span>
-              <select
-                className="app-form-input"
+              <SearchableCommandSelect
                 value={actionFilter}
-                onChange={(event) => setActionFilter(event.target.value)}
-              >
-                <option value="all">All actions</option>
-                {actions.map((action) => (
-                  <option key={action} value={action}>
-                    {action}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="app-field-group">
+                options={actionOptions}
+                onValueChange={setActionFilter}
+                placeholder="All actions"
+                searchPlaceholder="Search actions..."
+                emptyText="No actions found."
+                onClear={() => setActionFilter("all")}
+                showCloseAction
+              />
+            </div>
+            <div className="app-field-group">
               <span className="app-field-label">Source</span>
-              <select
-                className="app-form-input"
+              <SearchableCommandSelect
                 value={sourceFilter}
-                onChange={(event) => setSourceFilter(event.target.value)}
-              >
-                <option value="all">All sources</option>
-                {sources.map((source) => (
-                  <option key={source} value={source}>
-                    {source}
-                  </option>
-                ))}
-              </select>
-            </label>
+                options={sourceOptions}
+                onValueChange={setSourceFilter}
+                placeholder="All sources"
+                searchPlaceholder="Search sources..."
+                emptyText="No sources found."
+                onClear={() => setSourceFilter("all")}
+                showCloseAction
+              />
+            </div>
             <div className="app-filter-summary">
               <div className="app-filter-summary-copy">
                 <p className="app-filter-summary-title">Current scope</p>
@@ -222,6 +302,7 @@ export default function ActivityClient() {
                   <Button
                     type="button"
                     variant="outline"
+                    className="app-button-filter"
                     onClick={() => {
                       setSchoolKeyFilter("all");
                       setActionFilter("all");

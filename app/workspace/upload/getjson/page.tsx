@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 
 import PageHero from '@/components/layout/PageHero';
+import PageShell from '@/components/layout/PageShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -207,15 +208,14 @@ export default function ImportQuestionsPage() {
   const hasData = !!payload.questions?.length;
 
   return (
-    <main className="py-6">
-      <div className="container">
-        <div className="app-page-shell">
+    <PageShell width="wide" padding="relaxed">
           <PageHero
+            variant="editor"
             eyebrow="Import Tools"
             title="Question Import & Test Builder"
             description="Convert spreadsheet uploads, review the generated artifacts, and publish directly to the question bank."
             actions={
-              <Button type="button" variant="outline" onClick={navigateBack} className="gap-2">
+              <Button type="button" variant="outline" onClick={navigateBack} className="app-button-back">
                 <ArrowLeft className="h-4 w-4" />
                 Back
               </Button>
@@ -361,8 +361,6 @@ export default function ImportQuestionsPage() {
               </CardContent>
             </Card>
           )}
-        </div>
-      </div>
-    </main>
+    </PageShell>
   );
 }

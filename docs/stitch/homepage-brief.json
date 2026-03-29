@@ -1,0 +1,104 @@
+{
+  "generatedAt": "2026-03-26T23:23:10.074Z",
+  "brandName": "Alyra Tech",
+  "audience": "school leaders, principals, academic directors, and quality teams",
+  "tone": "flagship, cinematic, credible, calm-premium, and outcome-led",
+  "ctas": {
+    "primary": "Request Demo",
+    "secondary": "Start Baseline Test",
+    "support": "WhatsApp Support"
+  },
+  "palette": {
+    "id": "obsidian-teal",
+    "name": "Obsidian Teal",
+    "recommended": true,
+    "narrative": "Dark cinematic opening, luminous teal signal moments, and warm ivory proof surfaces for a flagship education brand.",
+    "tokens": {
+      "bg": "#071319",
+      "surface": "#0c1e26",
+      "surface2": "#122a35",
+      "text": "#f3fbfc",
+      "muted": "#91a8b1",
+      "border": "#1d3b46",
+      "primary": "#58dbc9",
+      "primaryContrast": "#041114",
+      "accent": "#8fcff6",
+      "success": "#54c98a",
+      "warning": "#f0c679",
+      "danger": "#f27f72",
+      "focus": "#9ee8ff",
+      "warm": "#f4e4ca"
+    },
+    "useCases": [
+      "Premium hero scenes with luminous depth",
+      "School-leader-first trust framing",
+      "Abstract 3D signal metaphors"
+    ]
+  },
+  "designPrinciples": [
+    "No emoji iconography, no generic SaaS card wall, and no fake AI visuals.",
+    "Use fewer stronger sections instead of many stacked blocks.",
+    "Keep the first half dark and cinematic, then transition to warmer premium proof surfaces.",
+    "Use selective translucency only in the opening chapters; favor solid premium surfaces elsewhere.",
+    "Make motion scroll-linked and purposeful rather than autoplay-heavy."
+  ],
+  "implementationConstraints": [
+    "Keep the current homepage server data contract intact: stats, testimonials, FAQs, pricing, and WhatsApp remain server-driven from app/page.tsx.",
+    "Client-only motion and 3D layers should hydrate after readable content is already on screen.",
+    "Reduced-motion and no-WebGL fallbacks must still look polished, not broken or empty.",
+    "The homepage should align with the public navbar and footer instead of feeling like a different product."
+  ],
+  "chapters": [
+    {
+      "id": "hero",
+      "label": "Hero",
+      "outcome": "Establish trust with school leaders immediately and make the product feel like a premium operating system rather than another SaaS page.",
+      "headline": "Reveal hidden thinking patterns before they become school performance headlines.",
+      "scene": "A dark cinematic abstract intelligence field with a luminous signal core, orbit lines, and translucent interface planes.",
+      "cta": [
+        "Request Demo",
+        "Start Baseline Test",
+        "WhatsApp Support"
+      ]
+    },
+    {
+      "id": "what-grades-miss",
+      "label": "Chapter 2",
+      "outcome": "Show that identical scores can hide very different reasoning quality, hesitation, and misconception patterns.",
+      "headline": "What grades miss",
+      "scene": "Score bars dissolve into misconception clusters, timing pulses, and recovery trails that visualize the hidden story behind the mark."
+    },
+    {
+      "id": "school-class-student",
+      "label": "Chapter 3",
+      "outcome": "Demonstrate school-to-class-to-student drill-down as the signature intelligence story.",
+      "headline": "School -> Class -> Student",
+      "scene": "Camera zoom transitions through a leadership map, a class cluster lattice, and a learner action card."
+    },
+    {
+      "id": "platform",
+      "label": "Chapter 4",
+      "outcome": "Present diagnostics, reports, OMR, ERP, and school workflows as one connected premium operating system.",
+      "headline": "One platform, one operating layer",
+      "scene": "Module planes organize into a clean system ribbon instead of a generic feature grid."
+    },
+    {
+      "id": "proof",
+      "label": "Chapter 5",
+      "outcome": "Close with trust, evidence, and a strong conversion band without losing the premium feel.",
+      "headline": "Proof and conversion",
+      "scene": "The visual tone shifts lighter and warmer with premium proof cards, testimonials, FAQ surfaces, and a final CTA band."
+    }
+  ],
+  "implementationReferences": [
+    "app/page.tsx",
+    "app/globals.css",
+    "components/home/HomePageClient.tsx",
+    "components/home/HomeSceneCanvas.tsx",
+    "components/home/home-content.ts",
+    "components/Navbar.tsx",
+    "components/Footer.tsx",
+    "docs/ui-design-system.md"
+  ],
+  "stitchPrompt": "Design a flagship homepage for Alyra Tech, a premium edtech company serving school leaders, principals, academic directors, and quality teams.\nTone: flagship, cinematic, credible, calm-premium, and outcome-led.\nPrimary conversion hierarchy: Request Demo first, Start Baseline Test second, WhatsApp Support as the support CTA.\nCreative direction: Dark cinematic opening, luminous teal signal moments, and warm ivory proof surfaces for a flagship education brand.\nBuild the experience as a dark-to-light cinematic scroll story with an abstract 3D system in the first half and calmer trust/proof sections in the second half.\nUse premium product metaphors instead of literal students or stock classroom footage: signal cores, orbit lines, translucent data slabs, misconception clusters, drill-down lattices, and connected module planes.\nKeep the product meaning anchored around: revealing hidden thinking patterns, drilling from school to class to student, connecting diagnosis to intervention, and presenting the broader platform as one operating system.\nUse Fraunces for large editorial display headlines and Manrope for body/UI text.\nKeep shapes crisp and expensive: 24px main radius, pill CTAs, thin borders, selective highlights, and high-contrast hero buttons.\nAvoid muddy glass, visual clutter, teal-on-white repetition, and generic feature-grid SaaS styling.\nPalette tokens to work from: {\"bg\":\"#071319\",\"surface\":\"#0c1e26\",\"surface2\":\"#122a35\",\"text\":\"#f3fbfc\",\"muted\":\"#91a8b1\",\"border\":\"#1d3b46\",\"primary\":\"#58dbc9\",\"primaryContrast\":\"#041114\",\"accent\":\"#8fcff6\",\"success\":\"#54c98a\",\"warning\":\"#f0c679\",\"danger\":\"#f27f72\",\"focus\":\"#9ee8ff\",\"warm\":\"#f4e4ca\"}.\nThe page should preserve current dynamic content inputs for stats, testimonials, FAQs, pricing, and WhatsApp while redesigning the full presentation layer.\nDesktop should feel like one continuous story across the first four chapters. Mobile should adapt the same narrative into premium stacked sections with lighter motion rather than forcing desktop pinning.\nInclude a polished reduced-motion and no-WebGL fallback with strong static composition and intact CTA hierarchy."
+}

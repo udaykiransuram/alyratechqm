@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import PageHero from '@/components/layout/PageHero';
+import PageShell from '@/components/layout/PageShell';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -60,13 +61,14 @@ export default function BulkQuestionUploadPage() {
   };
 
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+    <PageShell width="wide" padding="standard">
       <PageHero
+        variant="editor"
         eyebrow="Question Bank"
         title="Bulk Question Upload"
         description="Upload a JSON file or paste structured JSON to create multiple questions in one go."
         actions={
-          <Button variant="outline" onClick={navigateBack} className="gap-2">
+          <Button variant="outline" onClick={navigateBack} className="app-button-back">
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
@@ -179,6 +181,6 @@ export default function BulkQuestionUploadPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

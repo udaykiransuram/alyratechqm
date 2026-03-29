@@ -3,6 +3,7 @@ import {
   ArrowRight,
   BarChart2,
   BookOpen,
+  FileQuestion,
   GraduationCap,
   MessageSquareText,
   ShieldCheck,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/seo";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 
 const workspaceCards = [
   {
@@ -27,12 +29,20 @@ const workspaceCards = [
     icon: BookOpen,
   },
   {
-    title: "Analytics",
+    title: "Questions",
     description:
-      "Inspect class trends, student tag reports, and workbook upload workflows.",
-    href: "/workspace/analytics",
-    cta: "Open analytics",
-    icon: BarChart2,
+      "Build and curate the question bank with metadata, tags, and authoring tools designed for reuse.",
+    href: "/workspace/questions",
+    cta: "Open questions",
+    icon: FileQuestion,
+  },
+  {
+    title: "Students",
+    description:
+      "Manage enrollment, section grouping, and student test access from one clean operations area.",
+    href: "/workspace/students",
+    cta: "Open students",
+    icon: GraduationCap,
   },
   {
     title: "Report Delivery",
@@ -42,36 +52,28 @@ const workspaceCards = [
     cta: "Open report jobs",
     icon: MessageSquareText,
   },
-  {
-    title: "Users & Access",
-    description:
-      "Create admins, teachers, and students, then keep password and access management in one place.",
-    href: "/workspace/manage/users",
-    cta: "Open users",
-    icon: Users,
-  },
 ];
 
 const roleAreaLinks = [
   {
-    title: "Students",
+    title: "Manage Users",
     description:
-      "Manage enrollment, roll-number usernames, and student test access from a dedicated area.",
-    href: "/workspace/students",
-    icon: GraduationCap,
-  },
-  {
-    title: "Teachers",
-    description:
-      "Review teacher records, academic scope, and classroom assignments without mixing student workflows.",
-    href: "/workspace/teachers",
+      "Create and manage admins, teachers, and students from one role-aware directory before you move into dedicated detail flows.",
+    href: "/workspace/manage/users",
     icon: Users,
   },
   {
-    title: "Admins",
+    title: "Analytics Hub",
     description:
-      "Keep school admins and operational access separate from teacher and learner records.",
-    href: "/workspace/admins",
+      "Move from question papers into benchmark views, workbook uploads, and reporting without changing the visual rhythm.",
+    href: "/workspace/analytics",
+    icon: BarChart2,
+  },
+  {
+    title: "Staff Areas",
+    description:
+      "Open teacher and admin areas when school operations need clearer ownership and access separation.",
+    href: "/workspace/teachers",
     icon: ShieldCheck,
   },
 ];
@@ -88,9 +90,14 @@ const setupSteps = [
       "Add admins, teachers, and students in their own management areas before assignments begin.",
   },
   {
-    title: "Run assessments and review outcomes",
+    title: "Run assessments with confidence",
     description:
-      "Move from question papers into analytics, workbook uploads, and report delivery without changing context.",
+      "Move from question papers into responses and analytics without losing the school context.",
+  },
+  {
+    title: "Deliver reporting with control",
+    description:
+      "Track report jobs, retry failures, and review delivery state from a dedicated operational queue.",
   },
 ];
 
@@ -122,11 +129,12 @@ export const metadata: Metadata = {
 
 export default function WorkspaceHomePage() {
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
+    <PageShell width="wide" padding="relaxed">
       <PageHero
-        eyebrow="Workspace"
-        title={PRODUCT_NAME}
-        description={HOME_DESCRIPTION}
+        variant="overview"
+        eyebrow="School Operations"
+        title="Workspace Overview"
+        description="Run academic setup, learner operations, assessments, and reporting from one calmer command surface designed for international-school administration."
         actions={
           <>
             <AppPrefetchLink
@@ -142,8 +150,11 @@ export default function WorkspaceHomePage() {
             >
               Create question paper
             </AppPrefetchLink>
-            <AppPrefetchLink href="/" className="app-button-secondary">
-              Open talent test
+            <AppPrefetchLink
+              href="/workspace/questions"
+              className="app-button-secondary"
+            >
+              Open question bank
             </AppPrefetchLink>
             <AppPrefetchLink
               href="/workspace/manage/users"
@@ -155,31 +166,31 @@ export default function WorkspaceHomePage() {
         }
         meta={
           <>
-            <span className="app-meta-chip">School workspace</span>
-            <span className="app-meta-chip">Staff operations</span>
-            <span className="app-meta-chip">Student online test ready</span>
+            <span className="app-meta-chip">School-scoped workspace</span>
+            <span className="app-meta-chip">Assessment operations</span>
+            <span className="app-meta-chip">Online test ready</span>
           </>
         }
         stats={[
           {
-            label: "Core modules",
+            label: "Primary workflows",
             value: String(workspaceCards.length),
-            meta: "Papers, analytics, reports, and user operations.",
+            meta: "The most common daily operations stay up front.",
           },
           {
-            label: "People surfaces",
-            value: "3",
-            meta: "Dedicated students, teachers, and admins pages stay separate.",
+            label: "Workflow stages",
+            value: String(setupSteps.length),
+            meta: "Setup, onboarding, assessments, and reporting stay connected.",
           },
           {
-            label: "School model",
-            value: "School scoped",
-            meta: "Each school keeps its own workspace, users, and data.",
+            label: "Operational model",
+            value: "Balanced",
+            meta: "Dense enough for real school work without feeling crowded.",
           },
           {
-            label: "Assessment mode",
-            value: "Hybrid",
-            meta: "Manual uploads and student online tests share the same response stack.",
+            label: "School context",
+            value: "Single workspace",
+            meta: "People, setup, and assessment operations stay under one school identity.",
           },
         ]}
       />
@@ -188,30 +199,30 @@ export default function WorkspaceHomePage() {
         {workspaceCards.map((card) => {
           const Icon = card.icon;
           return (
-            <div key={card.title} className="app-spotlight-card flex h-full flex-col gap-4">
-              <p className="app-spotlight-label">Core module</p>
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/10 bg-primary/10 text-primary shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.32)]">
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div className="space-y-1">
-                  <h2 className="text-lg font-semibold text-foreground">
-                    {card.title}
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    {card.description}
-                  </p>
+            <AppPrefetchLink
+              key={card.title}
+              href={card.href}
+              className="group app-workspace-module-card"
+            >
+              <div>
+                <span className="app-workspace-module-label">Core module</span>
+                <div className="app-workspace-module-header mt-4">
+                  <div className="app-workspace-module-icon">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="app-workspace-module-title">{card.title}</h2>
+                    <p className="app-workspace-module-copy">
+                      {card.description}
+                    </p>
+                  </div>
                 </div>
               </div>
-
-              <AppPrefetchLink
-                href={card.href}
-                className="mt-auto inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80"
-              >
+              <div className="app-workspace-module-cta">
                 {card.cta}
                 <ArrowRight className="h-4 w-4" />
-              </AppPrefetchLink>
-            </div>
+              </div>
+            </AppPrefetchLink>
           );
         })}
       </div>
@@ -223,20 +234,22 @@ export default function WorkspaceHomePage() {
             Move from setup to reporting without losing context
           </h2>
           <p className="app-spotlight-copy">
-            The calmer workspace system is designed to make daily operations feel
-            steady: cleaner actions, stronger hierarchy, and predictable jumps
-            between setup, delivery, and analysis.
+            Daily work feels better when setup, people management, and report
+            delivery share the same visual rhythm. This overview is meant to
+            answer where you are, what matters next, and which workflows are
+            most important without forcing you to scan a wall of equal-looking
+            cards.
           </p>
           <div className="app-inline-stat-grid">
             <div className="app-inline-stat">
-              <p className="app-inline-stat-label">People areas</p>
+              <p className="app-inline-stat-label">Support links</p>
               <p className="app-inline-stat-value">{roleAreaLinks.length}</p>
-              <p className="app-inline-stat-copy">Students, teachers, and admins stay intentionally separate.</p>
+              <p className="app-inline-stat-copy">Analytics, people management, and staff tools stay within easy reach.</p>
             </div>
             <div className="app-inline-stat">
               <p className="app-inline-stat-label">Flow stages</p>
               <p className="app-inline-stat-value">{setupSteps.length}</p>
-              <p className="app-inline-stat-copy">Structure, onboarding, and assessment review stay in one rhythm.</p>
+              <p className="app-inline-stat-copy">Structure, onboarding, assessment, and reporting stay in one rhythm.</p>
             </div>
             <div className="app-inline-stat">
               <p className="app-inline-stat-label">Workspace mode</p>
@@ -261,8 +274,9 @@ export default function WorkspaceHomePage() {
           <p className="app-spotlight-label">Role areas</p>
           <h2 className="app-spotlight-title">Keep operational work split by audience</h2>
           <p className="app-spotlight-copy">
-            Each role area is framed for a different job, so enrollment, staff
-            access, and school operations do not blur together.
+            Supporting areas still feel connected to the dashboard system, but
+            each one is framed for a different job so school operations do not
+            blur into one crowded admin layer.
           </p>
           <div className="app-link-grid">
             {roleAreaLinks.map((area) => {
@@ -286,6 +300,6 @@ export default function WorkspaceHomePage() {
           </div>
         </section>
       </div>
-    </div>
+    </PageShell>
   );
 }

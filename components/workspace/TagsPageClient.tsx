@@ -252,11 +252,12 @@ export default function TagsPageClient({
   return (
     <PageShell width="content">
       <PageHero
+        variant="directory"
         eyebrow="Curriculum"
         title="Tags"
         description="Browse, edit, and assign tags across subjects so question authoring and analytics stay aligned."
         actions={
-          <Button asChild className="gap-2">
+          <Button asChild className="app-button-page">
             <AppPrefetchLink
               href="/workspace/tags/create"
               prefetchOnMount
@@ -346,12 +347,12 @@ export default function TagsPageClient({
               title="No tags yet"
               description="Create your first tag to organize curriculum data and keep analytics labels consistent."
               action={
-                <AppPrefetchLink href="/workspace/tags/create">
-                  <Button variant="outline" className="gap-2">
+                <Button asChild variant="outline" className="app-button-page">
+                  <AppPrefetchLink href="/workspace/tags/create">
                     <Plus className="h-4 w-4" />
                     Create your first tag
-                  </Button>
-                </AppPrefetchLink>
+                  </AppPrefetchLink>
+                </Button>
               }
             />
           ) : (
@@ -370,7 +371,7 @@ export default function TagsPageClient({
                 totalItems={tags.length}
                 pageSize={TAGS_PAGE_SIZE}
                 itemLabel="tags"
-                onPageChange={setTagPage}
+                onPageChange={(nextPage) => setTagPage(nextPage)}
               />
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

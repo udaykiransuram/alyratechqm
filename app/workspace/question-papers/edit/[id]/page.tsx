@@ -1,6 +1,7 @@
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import QuestionPaperForm from "@/components/QuestionPaperForm";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/button";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { getWorkspaceQuestionPaperById } from "@/lib/server/workspace-assessment-data";
@@ -26,7 +27,6 @@ function buildQuestionPaperInitialData(rawData: any) {
     onlineStartsAt: rawData.onlineStartsAt ?? "",
     onlineEndsAt: rawData.onlineEndsAt ?? "",
     classId: rawData.class?._id ?? "",
-    subjectId: rawData.subject?._id ?? "",
     assignedAcademicSectionIds: (rawData.assignedAcademicSections || []).map(
       (section: any) => String(section?._id || section),
     ),
@@ -92,24 +92,25 @@ export default async function EditQuestionPaperPage({
 
   if (supportResults.some((result) => result.status === "rejected")) {
     supportMessage =
-      "Some editor options could not be loaded. You can still edit the paper, but class, section, subject, or tag controls may be limited until you refresh.";
+      "Some editor options could not be loaded. You can still edit the paper, but class, section, or tag controls may be limited until you refresh.";
   }
 
   if (!paper) {
     return (
-      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+      <PageShell width="wide" padding="standard">
         <PageHero
+          variant="editor"
           eyebrow="Assessments"
           title="Edit Question Paper"
           description="The requested paper could not be loaded."
           actions={
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="app-button-back">
               <AppPrefetchLink href={backHref}>Back</AppPrefetchLink>
             </Button>
           }
         />
         <div className="app-empty-state">Question paper not found.</div>
-      </div>
+      </PageShell>
     );
   }
 

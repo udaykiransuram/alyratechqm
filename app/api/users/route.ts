@@ -17,6 +17,7 @@ import {
   normalizeRollNumber,
   resolveUserPasswordInput,
   validatePasswordInput,
+  validateStudentDefaultPasswordSource,
 } from "@/lib/user-credentials";
 
 export const dynamic = "force-dynamic";
@@ -143,7 +144,7 @@ async function validateStudentAcademicSection(
 
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, {
-    allowRoles: ["admin", "teacher"],
+    allowRoles: ["admin"],
   });
   if (!auth.ok) return auth.response;
   const schoolKey = auth.schoolKey as string;
@@ -263,6 +264,19 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    if (role === "student") {
+      const studentPasswordSourceValidation =
+        validateStudentDefaultPasswordSource(mobileNumber);
+      if (!studentPasswordSourceValidation.ok) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: studentPasswordSourceValidation.message,
+          },
+          { status: 400 },
+        );
+      }
+    }
     if (role === "teacher") {
       if (
         normalizedClassIds.length === 0 ||
@@ -336,11 +350,13 @@ export async function POST(req: NextRequest) {
     const effectivePassword = resolveUserPasswordInput({
       role,
       rollNumber,
+      mobileNumber,
       password,
     });
     const passwordValidation = validatePasswordInput({
       role,
       rollNumber,
+      mobileNumber,
       password: effectivePassword,
     });
     if (!passwordValidation.ok) {

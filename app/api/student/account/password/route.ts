@@ -4,10 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import {
-  normalizeRollNumber,
-  validatePasswordInput,
-} from "@/lib/user-credentials";
+import { validatePasswordInput } from "@/lib/user-credentials";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +20,7 @@ export async function PATCH(req: NextRequest) {
     await connectDB();
     const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
     const student = await UserModel.findById(auth.session.user.id).select(
-      "passwordHash rollNumber",
+      "passwordHash mobileNumber",
     );
 
     if (!student?.passwordHash) {
@@ -36,7 +33,6 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const currentPassword = String(body?.currentPassword || "");
     const newPassword = String(body?.newPassword || "");
-    const rollNumber = normalizeRollNumber(student.rollNumber);
 
     if (!currentPassword.trim() || !newPassword.trim()) {
       return NextResponse.json(
@@ -71,7 +67,7 @@ export async function PATCH(req: NextRequest) {
 
     const passwordValidation = validatePasswordInput({
       role: "student",
-      rollNumber,
+      mobileNumber: String(student.mobileNumber || ""),
       password: newPassword,
     });
     if (!passwordValidation.ok) {

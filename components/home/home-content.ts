@@ -1,13 +1,14 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   BarChart3,
-  BookOpen,
+  BookOpenText,
   Building2,
   GraduationCap,
-  Layers3,
   Radar,
   ScanLine,
   ShieldCheck,
+  Target,
   Users,
   Workflow,
 } from "lucide-react";
@@ -32,552 +33,490 @@ export type HomeFaq = {
   answer: string;
 };
 
-export type HomeSceneKey =
-  | "hero"
-  | "signal"
-  | "patterns"
-  | "intervention"
-  | "school"
-  | "class"
-  | "student";
+export type HomeRenderMode = "full3d" | "lite" | "poster";
 
-export type HomeChapter = {
-  id: string;
-  shortLabel: string;
-  eyebrow: string;
+export type HomeSceneKey = "hero" | "patterns" | "drilldown" | "platform";
+
+export type HomeStoryBeat = {
+  label: string;
   title: string;
-  description: string;
-  bullets: string[];
-  sceneKey: HomeSceneKey;
-  metricLabel: string;
-  metricValue: string;
-  metricNote: string;
+  body: string;
 };
 
-export type HomeSceneTone = "teal" | "cyan" | "amber" | "emerald" | "ink";
+export type HomeStoryMetric = {
+  label: string;
+  value: string;
+};
 
-export type HomeSceneCard = {
-  level: string;
+export type HomeChapter = {
+  id: HomeSceneKey;
+  anchor: string;
+  chapterLabel: string;
+  navLabel: string;
+  eyebrow: string;
   title: string;
-  footer: string;
-  tone: HomeSceneTone;
-  rows: Array<{
-    label: string;
-    value: number;
-  }>;
+  body: string;
+  sceneLabel: string;
+  sceneSummary: string;
+  sceneMarkers: string[];
+  highlights: string[];
+  beats: HomeStoryBeat[];
+  metric: HomeStoryMetric;
+  support: HomeStoryMetric;
+};
+
+export type HomePlatformItem = {
+  icon: LucideIcon;
+  title: string;
+  body: string;
+};
+
+export type HomeProofPoint = {
+  icon: LucideIcon;
+  title: string;
+  body: string;
+};
+
+export type HomeFounderNote = {
+  eyebrow: string;
+  quote: string;
+  author: string;
+  role: string;
 };
 
 export type HomeSceneState = {
-  id: HomeSceneKey;
-  badge: string;
-  headline: string;
-  supporting: string;
-  imageSrc: string;
-  imageAlt: string;
-  glowA: string;
-  glowB: string;
-  chips: string[];
-  cards: [HomeSceneCard, HomeSceneCard, HomeSceneCard];
+  camera: [number, number, number];
+  target: [number, number, number];
+  coreScale: number;
+  ringScale: number;
+  ringTilt: number;
+  orbitRadius: number;
+  slabSpread: number;
+  slabLift: number;
+  slabOpacity: number;
+  columnBias: number;
+  columnHeights: [number, number, number, number];
+  moduleArc: number;
+  moduleLift: number;
+  clusterScale: number;
+  latticeScale: number;
+  glow: number;
+  warmMix: number;
 };
 
-export type HomePlatformPillar = {
-  title: string;
-  eyebrow: string;
-  description: string;
-  modules: string[];
-  icon: LucideIcon;
-};
+export const HOME_NAV_LINKS = [
+  { href: "#story", label: "Story" },
+  { href: "#platform", label: "Solutions" },
+  { href: "#proof", label: "Proof" },
+  { href: "/case-study", label: "Case Studies" },
+] as const;
 
-export const HOME_CHAPTERS: HomeChapter[] = [
+export const HOME_TRUST_STRIP = [
+  "Turn paper tests into a leadership-ready diagnostic signal.",
+  "Keep school, class, and student views connected in one review flow.",
+  "Carry diagnostics, reporting, OMR, and follow-through inside one system.",
+] as const;
+
+export const HOME_STORY_CHAPTERS: HomeChapter[] = [
   {
     id: "hero",
-    shortLabel: "Intro",
-    eyebrow: "Trust-first diagnostics",
-    title: "We reveal hidden thinking patterns before they become marks lost.",
-    description:
-      "Alyra Tech helps school leaders and teachers see what grades alone cannot: hesitation, misconception clusters, confidence gaps, and the exact interventions worth making next.",
-    bullets: [
-      "Leadership-ready visibility from school to student.",
-      "Teacher-ready next moves instead of generic remediation.",
-      "One baseline assessment powering diagnosis, action, and proof.",
+    anchor: "story",
+    chapterLabel: "Chapter 01",
+    navLabel: "Paper to Power",
+    eyebrow: "Paper to power diagnostic engine",
+    title: "Turn every paper test into a live academic signal.",
+    body:
+      "Alyra scans ordinary OMR sheets and transforms them into a premium diagnostic story for school leaders, revealing hidden pressure, misconception patterns, and fragile understanding before they vanish inside score summaries.",
+    sceneLabel: "Paper -> Power scan",
+    sceneSummary:
+      "A floating answer sheet is scanned, the marked bubbles lift off, and the paper transforms into an academic intelligence signal leadership teams can act on immediately.",
+    sceneMarkers: [
+      "OMR scan",
+      "Signal lift",
+      "Leadership view",
     ],
-    sceneKey: "hero",
-    metricLabel: "View stack",
-    metricValue: "School -> Class -> Student",
-    metricNote: "A single diagnostic flow that stays coherent as you zoom in.",
-  },
-  {
-    id: "signal",
-    shortLabel: "Signal",
-    eyebrow: "What grades miss",
-    title: "The mark is the summary. The signal is in how the student got there.",
-    description:
-      "Two students can land on the same score and still need entirely different teaching responses. We capture the pattern behind the mark, not just the mark itself.",
-    bullets: [
-      "Separate conceptual gaps from slips and rushed choices.",
-      "Track repeated confusion instead of one-off misses.",
-      "Give teachers evidence they can act on in the next class.",
+    highlights: [
+      "Leadership sees the shift from paper capture to diagnostic clarity in one motion.",
+      "Teachers get a signal they can act on, not just a score they have to interpret later.",
+      "The platform carries that same truth from diagnosis into reporting and intervention.",
     ],
-    sceneKey: "signal",
-    metricLabel: "Blind spot removed",
-    metricValue: "Score-only reporting",
-    metricNote: "The system keeps the path to the answer visible for diagnosis.",
+    beats: [
+      {
+        label: "Scan",
+        title: "Standard testing becomes premium signal capture.",
+        body:
+          "The opening moment reframes OMR and answer sheets as the starting point for a clearer academic operating system, not the end of assessment.",
+      },
+      {
+        label: "Leadership effect",
+        title: "Marks are only the surface. The real value is what rises out of them.",
+        body:
+          "Alyra helps schools act on the patterns behind the marks, so review meetings begin with insight instead of guesswork.",
+      },
+    ],
+    metric: {
+      label: "Transformation",
+      value: "Paper -> Signal -> Action",
+    },
+    support: {
+      label: "Leadership promise",
+      value: "See pressure before performance slips",
+    },
   },
   {
     id: "patterns",
-    shortLabel: "Patterns",
-    eyebrow: "Risk clarity",
-    title: "Accuracy without confidence and speed without transfer create different risks.",
-    description:
-      "Surface-level scores compress too much. Our story layer helps schools distinguish between a student who guessed correctly, a student who hesitated, and a student who truly transferred understanding.",
-    bullets: [
-      "See confidence and reasoning friction alongside accuracy.",
-      "Spot clusters before they grow into section-wide underperformance.",
-      "Move from hindsight reporting to earlier intervention.",
+    anchor: "patterns",
+    chapterLabel: "Chapter 02",
+    navLabel: "What Grades Miss",
+    eyebrow: "Beyond score-only reporting",
+    title: "The same score can hide entirely different learning risk.",
+    body:
+      "Alyra reveals hesitation, confidence drift, and misconception clusters that grade summaries hide, so schools can stop treating every low-scoring learner as the same problem.",
+    sceneLabel: "Valley zoom",
+    sceneSummary:
+      "A weak region of the terrain opens into hesitation, confidence drift, and misconception clusters so similar marks stop looking like the same problem.",
+    sceneMarkers: [
+      "Valley focus",
+      "Confidence drift",
+      "Cluster trace",
     ],
-    sceneKey: "patterns",
-    metricLabel: "Risk lens",
-    metricValue: "Confidence x transfer",
-    metricNote: "The platform shows why similar marks can require different support.",
+    highlights: [
+      "Separate fragile guessing from secure reasoning.",
+      "Make hesitation visible before it turns into concept loss.",
+      "Turn a broad score dip into a reteachable concept cluster.",
+    ],
+    beats: [
+      {
+        label: "Beat 01",
+        title: "Marks dissolve into hesitation traces.",
+        body:
+          "The first scroll beat reframes the score as a delayed-response pattern, not a stable understanding signal.",
+      },
+      {
+        label: "Beat 02",
+        title: "Confidence drift becomes visible.",
+        body:
+          "Students with similar marks split apart once pace, consistency, and confidence are mapped over time.",
+      },
+      {
+        label: "Beat 03",
+        title: "Misconception clusters emerge.",
+        body:
+          "The problem becomes a concept map the school can act on, not a generic low-performance bucket.",
+      },
+    ],
+    metric: {
+      label: "Blind spot removed",
+      value: "Score-only reporting",
+    },
+    support: {
+      label: "Diagnostic mode",
+      value: "Confidence + pace + misconception cluster",
+    },
   },
   {
-    id: "intervention",
-    shortLabel: "Action",
-    eyebrow: "Intervention logic",
-    title: "Once the pattern is visible, remediation stops being generic.",
-    description:
-      "Schools can stop reteaching everything. Teachers get a narrower target, leadership gets cleaner evidence of what changed, and students receive support matched to the actual error pattern.",
-    bullets: [
-      "Turn diagnosis into a sharper reteach plan.",
-      "Connect misconception clusters to specific action steps.",
-      "Create calmer follow-up cycles that feel measurable.",
+    id: "drilldown",
+    anchor: "drilldown",
+    chapterLabel: "Chapter 03",
+    navLabel: "Drill-Down",
+    eyebrow: "School -> Class -> Student",
+    title: "Move from school signal to the exact class and learner who need the next move.",
+    body:
+      "Alyra begins with the school-wide map, narrows to the class cluster under pressure, and lands on the student and concept that need action next.",
+    sceneLabel: "Prerequisite constellation",
+    sceneSummary:
+      "A flagged concept lights up and the prerequisite path behind it glows warm, helping teachers trace where the comprehension breakdown likely began.",
+    sceneMarkers: [
+      "Target concept",
+      "Prerequisite path",
+      "Teacher next move",
     ],
-    sceneKey: "intervention",
-    metricLabel: "Intervention style",
-    metricValue: "Specific, not broad",
-    metricNote: "Better diagnosis reduces noisy, low-confidence remediation cycles.",
+    highlights: [
+      "Leadership starts with the whole-school picture.",
+      "Teachers narrow the problem to a real cluster, not vague concern.",
+      "Student-level detail closes with a clear reteach or follow-up move.",
+    ],
+    beats: [
+      {
+        label: "School",
+        title: "Find the grade or stream carrying hidden pressure.",
+        body:
+          "The first drill-down step shows where pressure is building before it becomes a larger leadership problem.",
+      },
+      {
+        label: "Class",
+        title: "Pinpoint the class cluster behind the signal.",
+        body:
+          "The second step turns a school trend into a teacher-owned reteach cluster that can actually be addressed.",
+      },
+      {
+        label: "Student",
+        title: "Close with the learner who needs the next move most.",
+        body:
+          "The final step surfaces diagnosis, confidence context, and the concept-level action path together.",
+      },
+    ],
+    metric: {
+      label: "Decision style",
+      value: "Wide first, precise next",
+    },
+    support: {
+      label: "Intervention path",
+      value: "School -> Class -> Student",
+    },
   },
   {
-    id: "school",
-    shortLabel: "School",
-    eyebrow: "School -> class -> student",
-    title: "Start at school level. Spot the signal before it becomes a board-room problem.",
-    description:
-      "Leadership gets a calm overview first: where the trend sits, which grades are drifting, and where intervention capacity should go before the next assessment cycle.",
-    bullets: [
-      "Grade-wide and subject-wide trend visibility.",
-      "Cleaner prioritization for reviews and support planning.",
-      "Proof of progress that is easier to explain to stakeholders.",
+    id: "platform",
+    anchor: "platform",
+    chapterLabel: "Chapter 04",
+    navLabel: "Operating System",
+    eyebrow: "One platform, one operating layer",
+    title: "Diagnostics prove the value. The platform carries that truth across the whole school.",
+    body:
+      "Alyra connects diagnostics, reports, OMR, ERP, and school engagement into one system so the same academic signal can move cleanly through operations, reporting, and follow-through.",
+    sceneLabel: "Connected operating layer",
+    sceneSummary:
+      "Once the academic signal is trusted, diagnostics, reports, OMR, and school workflows can arrange around the same source of truth.",
+    sceneMarkers: [
+      "Diagnostics core",
+      "Connected modules",
+      "Action layer",
     ],
-    sceneKey: "school",
-    metricLabel: "Leadership view",
-    metricValue: "Trend before escalation",
-    metricNote: "School-wide patterns appear first so teams can respond earlier.",
-  },
-  {
-    id: "class",
-    shortLabel: "Class",
-    eyebrow: "Cluster drill-down",
-    title: "Drop into one class and see which misconception cluster needs reteaching next.",
-    description:
-      "The platform narrows from leadership signal to classroom action. Teams can see whether the issue is concentrated, repeated, or spreading between groups.",
-    bullets: [
-      "Class clusters reveal repeated friction points quickly.",
-      "Teachers can focus on the concept, not just the score drop.",
-      "Support conversations become tighter and less subjective.",
+    highlights: [
+      "One shared view across diagnosis, review, capture, and follow-through.",
+      "Fewer disconnected tools and fewer context resets for teams.",
+      "A coherent system that stays trustworthy during real school use, not just demos.",
     ],
-    sceneKey: "class",
-    metricLabel: "Teacher view",
-    metricValue: "Cluster-aware",
-    metricNote: "One drill-down shows which class needs the next attention window.",
-  },
-  {
-    id: "student",
-    shortLabel: "Student",
-    eyebrow: "Learner detail",
-    title: "Open one learner and leave with the next teaching move, not just a label.",
-    description:
-      "Student detail should feel practical. The final layer shows the learner, the misconception pattern, the confidence risk, and the next action worth trying in class or follow-up.",
-    bullets: [
-      "Concept-level diagnosis with cleaner learner context.",
-      "Confidence and misconception detail in one view.",
-      "Action-ready support for teacher, parent, and learner conversations.",
+    beats: [
+      {
+        label: "Connected layer",
+        title: "Diagnostics anchor the academic truth.",
+        body:
+          "The platform starts from diagnosis, then carries that truth across review, reporting, and intervention workflows.",
+      },
+      {
+        label: "Operational flow",
+        title: "Reports, OMR, ERP, and engagement stay connected.",
+        body:
+          "School teams move between modules without rebuilding context or trust from scratch.",
+      },
     ],
-    sceneKey: "student",
-    metricLabel: "Student view",
-    metricValue: "Pattern + next step",
-    metricNote: "Diagnosis closes with a clear intervention handoff instead of a label alone.",
+    metric: {
+      label: "Platform promise",
+      value: "One connected operating system",
+    },
+    support: {
+      label: "Workflow effect",
+      value: "Fewer tools. Clearer action.",
+    },
   },
 ];
 
-export const HOME_SCENES: Record<HomeSceneKey, HomeSceneState> = {
+export const HOME_SCENE_STATES: Record<HomeSceneKey, HomeSceneState> = {
   hero: {
-    id: "hero",
-    badge: "Live diagnostic scene",
-    headline: "A premium story layer for diagnosis, drill-down, and intervention.",
-    supporting:
-      "The opening scene frames the whole product as one connected system instead of separate feature cards.",
-    imageSrc: "/images/source-frontend/ttf-hero-classroom.jpg",
-    imageAlt: "Students concentrating in a classroom",
-    glowA: "rgba(57, 205, 190, 0.34)",
-    glowB: "rgba(74, 222, 248, 0.22)",
-    chips: ["Thinking pattern map", "Trust-first dashboard", "Intervention ready"],
-    cards: [
-      {
-        level: "School view",
-        title: "Hidden pattern index",
-        footer: "Leadership-ready overview",
-        tone: "teal",
-        rows: [
-          { label: "Concept transfer", value: 72 },
-          { label: "Confidence stability", value: 61 },
-          { label: "Intervention priority", value: 84 },
-        ],
-      },
-      {
-        level: "Class view",
-        title: "Cluster watch",
-        footer: "Repeated friction pockets",
-        tone: "cyan",
-        rows: [
-          { label: "Grade 7A", value: 66 },
-          { label: "Grade 7B", value: 81 },
-          { label: "Grade 8A", value: 58 },
-        ],
-      },
-      {
-        level: "Student view",
-        title: "Learner card",
-        footer: "Pattern + next move",
-        tone: "emerald",
-        rows: [
-          { label: "Inference clarity", value: 78 },
-          { label: "Retry confidence", value: 52 },
-          { label: "Follow-up urgency", value: 69 },
-        ],
-      },
-    ],
-  },
-  signal: {
-    id: "signal",
-    badge: "What grades miss",
-    headline: "Score-only reporting hides the path that produced the mark.",
-    supporting:
-      "This state brings the diagnostic signal forward: hesitation, recovery, and repeated misconception patterns.",
-    imageSrc: "/images/source-frontend/ttf-mcq-exam.jpg",
-    imageAlt: "Students working through a test sheet",
-    glowA: "rgba(248, 113, 113, 0.28)",
-    glowB: "rgba(45, 212, 191, 0.18)",
-    chips: ["Same score, different need", "Signal before failure", "Reasoning path visible"],
-    cards: [
-      {
-        level: "Signal card",
-        title: "Same mark, different story",
-        footer: "Score alone is not the diagnosis",
-        tone: "amber",
-        rows: [
-          { label: "Recovered after hesitation", value: 67 },
-          { label: "Conceptual miss", value: 83 },
-          { label: "Guess corrected later", value: 44 },
-        ],
-      },
-      {
-        level: "Teacher lens",
-        title: "Error pattern split",
-        footer: "Concept vs carelessness",
-        tone: "teal",
-        rows: [
-          { label: "Concept gap", value: 79 },
-          { label: "Process slip", value: 36 },
-          { label: "Reading miss", value: 58 },
-        ],
-      },
-      {
-        level: "Review lens",
-        title: "Retest risk",
-        footer: "Who needs follow-up first",
-        tone: "ink",
-        rows: [
-          { label: "Likely to repeat", value: 74 },
-          { label: "Recoverable in class", value: 52 },
-          { label: "Needs parent note", value: 28 },
-        ],
-      },
-    ],
+    camera: [0.15, 0.3, 7.6],
+    target: [0, 0.1, 0],
+    coreScale: 1.28,
+    ringScale: 1.22,
+    ringTilt: 0.24,
+    orbitRadius: 2.75,
+    slabSpread: 3.9,
+    slabLift: 0.55,
+    slabOpacity: 0.2,
+    columnBias: 0.15,
+    columnHeights: [1.5, 2.2, 2.8, 1.9],
+    moduleArc: 3.6,
+    moduleLift: 1.6,
+    clusterScale: 0.82,
+    latticeScale: 1,
+    glow: 1.02,
+    warmMix: 0.2,
   },
   patterns: {
-    id: "patterns",
-    badge: "Risk patterns",
-    headline: "Confidence, transfer, and pace tell very different stories even at similar scores.",
-    supporting:
-      "The middle state separates students who are fragile from students who are actually secure.",
-    imageSrc: "/images/source-frontend/ttf-students-laptop.jpg",
-    imageAlt: "Students using laptops in class",
-    glowA: "rgba(56, 189, 248, 0.3)",
-    glowB: "rgba(250, 204, 21, 0.18)",
-    chips: ["Confidence gap", "Transfer signal", "Reteach with precision"],
-    cards: [
-      {
-        level: "Cluster model",
-        title: "Confidence x transfer",
-        footer: "Not all accuracy is equal",
-        tone: "cyan",
-        rows: [
-          { label: "Secure and transferable", value: 76 },
-          { label: "Correct but fragile", value: 49 },
-          { label: "Fast but unstable", value: 58 },
-        ],
-      },
-      {
-        level: "Class signal",
-        title: "Cluster spread",
-        footer: "Where the friction is pooling",
-        tone: "amber",
-        rows: [
-          { label: "High-confidence cluster", value: 63 },
-          { label: "Low-confidence cluster", value: 71 },
-          { label: "Mixed evidence", value: 46 },
-        ],
-      },
-      {
-        level: "Leader note",
-        title: "Escalation timing",
-        footer: "Intervene before it becomes visible in aggregate marks",
-        tone: "teal",
-        rows: [
-          { label: "Now", value: 82 },
-          { label: "Next review", value: 54 },
-          { label: "Monitor only", value: 34 },
-        ],
-      },
-    ],
+    camera: [1.1, 0.82, 6.35],
+    target: [0.45, 0.22, 0],
+    coreScale: 0.92,
+    ringScale: 1.46,
+    ringTilt: 0.64,
+    orbitRadius: 2.25,
+    slabSpread: 2.45,
+    slabLift: 0.95,
+    slabOpacity: 0.28,
+    columnBias: 0.4,
+    columnHeights: [2.8, 1.8, 3.15, 2.25],
+    moduleArc: 2.4,
+    moduleLift: 1.2,
+    clusterScale: 1.28,
+    latticeScale: 0.86,
+    glow: 1.12,
+    warmMix: 0.16,
   },
-  intervention: {
-    id: "intervention",
-    badge: "Intervention mode",
-    headline: "Good diagnosis narrows the teaching response instead of widening it.",
-    supporting:
-      "The scene pivots from detection to action with smaller, calmer intervention windows.",
-    imageSrc: "/images/source-frontend/ttf-team-meeting.jpg",
-    imageAlt: "Educators in a collaborative meeting",
-    glowA: "rgba(16, 185, 129, 0.28)",
-    glowB: "rgba(34, 197, 94, 0.2)",
-    chips: ["Reteach narrow", "Teacher-ready", "Progress-friendly"],
-    cards: [
-      {
-        level: "Action board",
-        title: "Next teaching move",
-        footer: "Specific beats generic",
-        tone: "emerald",
-        rows: [
-          { label: "Small-group reteach", value: 84 },
-          { label: "Example rebuild", value: 63 },
-          { label: "Parent follow-up", value: 31 },
-        ],
-      },
-      {
-        level: "Class card",
-        title: "Who needs it first",
-        footer: "Intervention sequence",
-        tone: "teal",
-        rows: [
-          { label: "Immediate", value: 78 },
-          { label: "This week", value: 58 },
-          { label: "Monitor", value: 37 },
-        ],
-      },
-      {
-        level: "Leadership card",
-        title: "Proof loop",
-        footer: "What changed after support",
-        tone: "ink",
-        rows: [
-          { label: "Signal improved", value: 69 },
-          { label: "Confidence recovered", value: 61 },
-          { label: "Still unresolved", value: 28 },
-        ],
-      },
-    ],
+  drilldown: {
+    camera: [-1.05, 0.42, 5.95],
+    target: [0.85, -0.18, 0],
+    coreScale: 0.84,
+    ringScale: 0.98,
+    ringTilt: -0.18,
+    orbitRadius: 1.65,
+    slabSpread: 1.8,
+    slabLift: 1.8,
+    slabOpacity: 0.18,
+    columnBias: -0.38,
+    columnHeights: [2.9, 2.2, 1.45, 0.9],
+    moduleArc: 1.7,
+    moduleLift: 0.25,
+    clusterScale: 0.96,
+    latticeScale: 0.72,
+    glow: 0.86,
+    warmMix: 0.28,
   },
-  school: {
-    id: "school",
-    badge: "School layer",
-    headline: "The school story comes first so leadership can allocate attention with confidence.",
-    supporting:
-      "From here the scene begins a premium drill-down from institution signal to classroom action.",
-    imageSrc: "/images/source-frontend/ttf-analytics-dashboard.jpg",
-    imageAlt: "Educational analytics dashboard",
-    glowA: "rgba(20, 184, 166, 0.32)",
-    glowB: "rgba(59, 130, 246, 0.18)",
-    chips: ["Grade patterns", "Leadership prioritization", "Review-ready evidence"],
-    cards: [
-      {
-        level: "School",
-        title: "Trend map",
-        footer: "Signal before escalation",
-        tone: "teal",
-        rows: [
-          { label: "Grade 6 stability", value: 74 },
-          { label: "Grade 7 risk", value: 82 },
-          { label: "Grade 8 recovery", value: 57 },
-        ],
-      },
-      {
-        level: "Class",
-        title: "Hotspot shortlist",
-        footer: "Classes to review this week",
-        tone: "cyan",
-        rows: [
-          { label: "7B mathematics", value: 86 },
-          { label: "8A science", value: 62 },
-          { label: "6C reading", value: 48 },
-        ],
-      },
-      {
-        level: "Student",
-        title: "Representative learners",
-        footer: "Open cases under the hotspot",
-        tone: "ink",
-        rows: [
-          { label: "Needs concept rebuild", value: 72 },
-          { label: "Needs confidence rebuild", value: 51 },
-          { label: "Needs practice only", value: 34 },
-        ],
-      },
-    ],
-  },
-  class: {
-    id: "class",
-    badge: "Class layer",
-    headline: "The class view reveals the misconception cluster, not just the average drop.",
-    supporting:
-      "At this level the system turns broad concern into teacher-ready focus areas.",
-    imageSrc: "/images/source-frontend/ttf-students-laptop.jpg",
-    imageAlt: "Students learning on laptops",
-    glowA: "rgba(45, 212, 191, 0.32)",
-    glowB: "rgba(245, 158, 11, 0.16)",
-    chips: ["Cluster-aware view", "Teacher action", "Less noisy follow-up"],
-    cards: [
-      {
-        level: "Class",
-        title: "Cluster 02",
-        footer: "Repeated friction around proportional reasoning",
-        tone: "cyan",
-        rows: [
-          { label: "Concept confusion", value: 87 },
-          { label: "Confidence drop", value: 68 },
-          { label: "Practice readiness", value: 46 },
-        ],
-      },
-      {
-        level: "Student",
-        title: "Learners inside the cluster",
-        footer: "Who needs reteach vs reinforcement",
-        tone: "amber",
-        rows: [
-          { label: "Reteach now", value: 73 },
-          { label: "Coach briefly", value: 58 },
-          { label: "Monitor only", value: 33 },
-        ],
-      },
-      {
-        level: "Teacher",
-        title: "Recommended response",
-        footer: "Short intervention band",
-        tone: "teal",
-        rows: [
-          { label: "Concept rebuild", value: 81 },
-          { label: "Worked example", value: 64 },
-          { label: "Parent note", value: 24 },
-        ],
-      },
-    ],
-  },
-  student: {
-    id: "student",
-    badge: "Student layer",
-    headline: "The learner card closes the loop with a pattern, a risk, and a next move.",
-    supporting:
-      "This is the endpoint of the drill-down: diagnosis that feels practical in the next conversation.",
-    imageSrc: "/images/source-frontend/ttf-hero-classroom.jpg",
-    imageAlt: "A student thinking during class",
-    glowA: "rgba(34, 197, 94, 0.24)",
-    glowB: "rgba(56, 189, 248, 0.18)",
-    chips: ["Pattern + next step", "Learner context", "Parent-ready explanation"],
-    cards: [
-      {
-        level: "Student",
-        title: "Riya N.",
-        footer: "Concept gap with low retry confidence",
-        tone: "emerald",
-        rows: [
-          { label: "Reasoning clarity", value: 43 },
-          { label: "Confidence recovery", value: 38 },
-          { label: "Follow-up impact", value: 81 },
-        ],
-      },
-      {
-        level: "Teacher",
-        title: "Recommended next move",
-        footer: "Short reteach + worked example",
-        tone: "teal",
-        rows: [
-          { label: "Visual rebuild", value: 82 },
-          { label: "Guided practice", value: 68 },
-          { label: "Independent check", value: 41 },
-        ],
-      },
-      {
-        level: "Home note",
-        title: "Parent conversation cue",
-        footer: "Clarity without alarm",
-        tone: "ink",
-        rows: [
-          { label: "Explain concept gap", value: 77 },
-          { label: "Show next support step", value: 71 },
-          { label: "Escalate further", value: 22 },
-        ],
-      },
-    ],
+  platform: {
+    camera: [0, 0.95, 8.15],
+    target: [0, 0.2, 0],
+    coreScale: 1.04,
+    ringScale: 1.3,
+    ringTilt: 0.14,
+    orbitRadius: 2.8,
+    slabSpread: 4.1,
+    slabLift: 0.8,
+    slabOpacity: 0.24,
+    columnBias: 0.08,
+    columnHeights: [1.9, 2.8, 3, 2.05],
+    moduleArc: 4.3,
+    moduleLift: 1.48,
+    clusterScale: 0.88,
+    latticeScale: 1.08,
+    glow: 1.04,
+    warmMix: 0.42,
   },
 };
 
-export const HOME_PLATFORM_PILLARS: HomePlatformPillar[] = [
+export const HOME_PLATFORM_ITEMS: HomePlatformItem[] = [
   {
-    eyebrow: "Intelligence layer",
-    title: "Diagnostics that make thinking visible",
-    description:
-      "Baseline assessments, misconception mapping, confidence signals, and leadership dashboards aligned into one diagnostic operating layer.",
-    modules: ["Baseline assessment", "Pattern analysis", "Leadership dashboard", "Growth tracking"],
     icon: Radar,
+    title: "Precision Diagnostics",
+    body:
+      "Reveal hesitation, misconception clusters, and fragile understanding before review conversations turn reactive.",
   },
   {
-    eyebrow: "Execution layer",
-    title: "Teacher and school workflows that feel connected",
-    description:
-      "The platform turns diagnosis into coordinated next actions for classrooms, reviews, interventions, and follow-up loops without fragmenting the experience.",
-    modules: ["Teacher action plans", "Class reviews", "OMR digitization", "Progress checkpoints"],
+    icon: BarChart3,
+    title: "Leadership Reporting",
+    body:
+      "Give school leaders one clear view from whole-school signal to concept-level pressure points.",
+  },
+  {
+    icon: ScanLine,
+    title: "OMR Intelligence",
+    body:
+      "Capture and digitize assessment evidence quickly without losing diagnostic fidelity.",
+  },
+  {
     icon: Workflow,
+    title: "School Workflow Layer",
+    body:
+      "Move diagnosis into intervention, reporting, and daily follow-through from one connected system.",
   },
   {
-    eyebrow: "Institution layer",
-    title: "A calmer operating system for the broader school",
-    description:
-      "Assessment intelligence connects cleanly with operational modules so the product feels like one premium system rather than a loose collection of tools.",
-    modules: ["School ERP", "Parent communication", "Alumni engagement", "Administrative control"],
     icon: Building2,
+    title: "ERP And Operations",
+    body:
+      "Keep academic and operational context aligned instead of splitting them across disconnected tools.",
+  },
+  {
+    icon: GraduationCap,
+    title: "Engagement Extensions",
+    body:
+      "Extend the platform beyond one exam cycle into broader school quality and relationship workflows.",
   },
 ];
 
-export const HOME_PLATFORM_RIBBON: Array<{
-  label: string;
-  icon: LucideIcon;
-}> = [
-  { label: "Diagnostics", icon: Layers3 },
-  { label: "Reports", icon: BarChart3 },
-  { label: "Teachers", icon: Users },
-  { label: "Students", icon: GraduationCap },
-  { label: "Question banks", icon: BookOpen },
-  { label: "OMR capture", icon: ScanLine },
-  { label: "Governance", icon: ShieldCheck },
+export const HOME_PROOF_POINTS: HomeProofPoint[] = [
+  {
+    icon: ShieldCheck,
+    title: "Built for leadership reviews",
+    body:
+      "The platform is designed for calm, evidence-led academic conversations rather than noisy dashboard theater.",
+  },
+  {
+    icon: Target,
+    title: "Diagnosis to intervention",
+    body:
+      "Alyra keeps the academic signal intact from the first diagnosis through reteach, reporting, and next action.",
+  },
+  {
+    icon: Users,
+    title: "One shared view for teams",
+    body:
+      "Principals, academic heads, teachers, and coordinators work from the same truth instead of competing versions of performance.",
+  },
 ];
+
+export const HOME_FOUNDER_NOTE: HomeFounderNote = {
+  eyebrow: "Founder note",
+  quote:
+    "Schools do not need another decorative dashboard. They need a system that reveals academic truth early, makes decisions calmer, and helps teams act with confidence.",
+  author: "Alyra Tech",
+  role: "School Intelligence Platform",
+};
+
+export const HOME_DEFAULT_TESTIMONIALS: HomeTestimonial[] = [
+  {
+    quote:
+      "Alyra changed how our leadership team reads assessment reviews. We can see the pressure signal much earlier now.",
+    author: "Academic Director",
+    role: "Senior Secondary School",
+    rating: 5,
+    image: null,
+  },
+  {
+    quote:
+      "The school-to-class-to-student view gives teachers a much clearer action path than score summaries ever did.",
+    author: "Principal",
+    role: "Integrated School Group",
+    rating: 5,
+    image: null,
+  },
+];
+
+export const HOME_DEFAULT_FAQS: HomeFaq[] = [
+  {
+    question: "Who is Alyra built for first?",
+    answer:
+      "Alyra is designed first for school leadership and academic quality teams who need a clearer view of hidden learning risk across the school.",
+  },
+  {
+    question: "Is diagnostics the whole product?",
+    answer:
+      "Diagnostics is the sharpest proof point, but Alyra connects that academic signal to reporting, OMR, workflow, and wider school operations.",
+  },
+  {
+    question: "Can schools start with a baseline assessment first?",
+    answer:
+      "Yes. Schools can begin with a baseline test to establish academic signal quickly, then expand into broader diagnostics and platform workflows.",
+  },
+];
+
+export function resolveSceneBlend(progress: number) {
+  const chapters = HOME_STORY_CHAPTERS;
+  const clamped = Math.min(1, Math.max(0, progress));
+
+  if (chapters.length === 1) {
+    return {
+      current: chapters[0],
+      next: chapters[0],
+      blend: 0,
+      index: 0,
+    };
+  }
+
+  const scaled = clamped * (chapters.length - 1);
+  const index = Math.min(chapters.length - 1, Math.floor(scaled));
+  const nextIndex = Math.min(chapters.length - 1, index + 1);
+
+  return {
+    current: chapters[index],
+    next: chapters[nextIndex],
+    blend: nextIndex === index ? 0 : scaled - index,
+    index,
+  };
+}

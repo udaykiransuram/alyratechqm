@@ -10,7 +10,14 @@ export async function GET() {
   try {
     await connectDB();
     const doc = await ContactInfo.findOne();
-    return NextResponse.json({ success: true, data: doc || null });
+    return NextResponse.json(
+      { success: true, data: doc || null },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+        },
+      },
+    );
   } catch (error: unknown) {
     return NextResponse.json(
       {

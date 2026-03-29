@@ -12,10 +12,13 @@ import { recordTenantAudit } from "@/lib/audit";
 import { requireTenantSession } from "@/lib/api-auth";
 import {
   findStudentsByRollNumber,
+  getDefaultStudentPassword,
   normalizeEmail,
   normalizeRollNumber,
+  resolveStudentPasswordAdminInfo,
   resolveUserPasswordInput,
   validatePasswordInput,
+  validateStudentDefaultPasswordSource,
 } from "@/lib/user-credentials";
 
 export const dynamic = "force-dynamic";
@@ -146,7 +149,7 @@ export async function GET(
 ) {
   await connectDB();
   const auth = await requireTenantSession(req, {
-    allowRoles: ["admin", "teacher"],
+    allowRoles: ["admin"],
   });
   if (!auth.ok) return auth.response;
   const schoolKey = auth.schoolKey as string;
@@ -160,16 +163,29 @@ export async function GET(
       );
     }
     const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
-    const user = await UserModel.findOne({
+    const rawUser = await UserModel.findOne({
       _id: userId,
       ...buildArchiveFilter(resolveIncludeArchived(req.nextUrl)),
-    }).select("-passwordHash");
-    if (!user) {
+    }).lean();
+    if (!rawUser) {
       return NextResponse.json(
         { success: false, message: "User not found" },
         { status: 404 },
       );
     }
+
+    const user = {
+      ...rawUser,
+      passwordHash: undefined,
+      ...(String(rawUser?.role || "") === "student"
+        ? {
+            studentPasswordInfo: await resolveStudentPasswordAdminInfo({
+              mobileNumber: rawUser?.mobileNumber,
+              passwordHash: rawUser?.passwordHash,
+            }),
+          }
+        : {}),
+    };
     return NextResponse.json({ success: true, user });
   } catch (error: any) {
     return NextResponse.json(
@@ -257,6 +273,19 @@ export async function PUT(
         { success: false, message: "Phone number is required." },
         { status: 400 },
       );
+    }
+    if (role === "student") {
+      const studentPasswordSourceValidation =
+        validateStudentDefaultPasswordSource(normalizedMobileNumber);
+      if (!studentPasswordSourceValidation.ok) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: studentPasswordSourceValidation.message,
+          },
+          { status: 400 },
+        );
+      }
     }
     if (role === "student" && (!classId || !normalizedRollNumber)) {
       return NextResponse.json(
@@ -354,11 +383,13 @@ export async function PUT(
     const effectivePassword = resolveUserPasswordInput({
       role,
       rollNumber: normalizedRollNumber,
+      mobileNumber: normalizedMobileNumber,
       password,
     });
     const passwordValidation = validatePasswordInput({
       role,
       rollNumber: normalizedRollNumber,
+      mobileNumber: normalizedMobileNumber,
       password: effectivePassword,
     });
     if (!passwordValidation.ok) {
@@ -373,21 +404,25 @@ export async function PUT(
 
     if (explicitPasswordProvided && effectivePassword) {
       updateData.passwordHash = await bcrypt.hash(effectivePassword, 10);
-    } else if (role === "student" && normalizedRollNumber) {
+    } else if (role === "student") {
       const currentPasswordHash = String(userToUpdate?.passwordHash || "");
-      const previousRollNumber = normalizeRollNumber(userToUpdate?.rollNumber);
+      const nextDefaultStudentPassword =
+        getDefaultStudentPassword(normalizedMobileNumber);
+      const previousDefaultStudentPassword = getDefaultStudentPassword(
+        userToUpdate?.mobileNumber,
+      );
       const shouldRestoreMissingPassword = !currentPasswordHash;
       let shouldSyncDefaultPassword = false;
 
       if (
         currentPasswordHash &&
         String(userToUpdate?.role || "") === "student" &&
-        previousRollNumber &&
-        previousRollNumber !== normalizedRollNumber
+        previousDefaultStudentPassword &&
+        previousDefaultStudentPassword !== nextDefaultStudentPassword
       ) {
         try {
           shouldSyncDefaultPassword = await bcrypt.compare(
-            previousRollNumber,
+            previousDefaultStudentPassword,
             currentPasswordHash,
           );
         } catch {
@@ -395,8 +430,14 @@ export async function PUT(
         }
       }
 
-      if (shouldRestoreMissingPassword || shouldSyncDefaultPassword) {
-        updateData.passwordHash = await bcrypt.hash(normalizedRollNumber, 10);
+      if (
+        nextDefaultStudentPassword &&
+        (shouldRestoreMissingPassword || shouldSyncDefaultPassword)
+      ) {
+        updateData.passwordHash = await bcrypt.hash(
+          nextDefaultStudentPassword,
+          10,
+        );
       }
     }
 

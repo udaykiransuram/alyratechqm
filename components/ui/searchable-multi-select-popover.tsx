@@ -10,11 +10,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { type SearchableCommandOption } from "@/components/ui/searchable-command-select";
@@ -35,6 +34,9 @@ type SearchableMultiSelectPopoverProps = {
   closeOnSelect?: boolean;
   maxVisibleBadges?: number;
   defaultVisibleOptions?: number;
+  clearLabel?: string;
+  doneLabel?: string;
+  showDoneAction?: boolean;
   triggerClassName?: string;
   contentClassName?: string;
 };
@@ -48,6 +50,17 @@ type SearchableMultiSelectOptionRowProps = {
 
 function areStringArraysEqual(left: string[], right: string[]) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function handleBadgeRemoveKeyDown(
+  event: React.KeyboardEvent<HTMLSpanElement>,
+  onRemove: () => void,
+) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    event.stopPropagation();
+    onRemove();
+  }
 }
 
 const SearchableMultiSelectOptionRow = memo(function SearchableMultiSelectOptionRow({
@@ -70,11 +83,17 @@ const SearchableMultiSelectOptionRow = memo(function SearchableMultiSelectOption
       aria-selected={isSelected}
       disabled={disabled}
     >
-      <Checkbox
-        checked={isSelected}
-        className="mt-0.5 pointer-events-none"
+      <span
+        className={cn(
+          "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors",
+          isSelected
+            ? "border-primary bg-primary text-primary-foreground"
+            : "border-primary/50 bg-background text-transparent",
+        )}
         aria-hidden="true"
-      />
+      >
+        <Check className="h-3 w-3" />
+      </span>
       <div className="min-w-0 flex-1">
         <div className="truncate">{option.label}</div>
         {option.description ? (
@@ -101,6 +120,9 @@ export function SearchableMultiSelectPopover({
   closeOnSelect = false,
   maxVisibleBadges = 2,
   defaultVisibleOptions = 24,
+  clearLabel = "Clear",
+  doneLabel = "Done",
+  showDoneAction = true,
   triggerClassName,
   contentClassName,
 }: SearchableMultiSelectPopoverProps) {
@@ -214,6 +236,15 @@ export function SearchableMultiSelectPopover({
     }
   }, []);
 
+  const clearValues = useCallback(() => {
+    optimisticSelectedValuesRef.current = [];
+    setOptimisticSelectedValues([]);
+    startTransition(() => {
+      onSelectedValuesChangeRef.current([]);
+    });
+    setSearchValue("");
+  }, []);
+
   return (
     <Popover
       open={open}
@@ -251,17 +282,26 @@ export function SearchableMultiSelectPopover({
                   className="app-selection-badge whitespace-nowrap border-transparent"
                 >
                   {option.label}
-                  <button
-                    type="button"
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(event) => {
+                      event.preventDefault();
                       event.stopPropagation();
                       toggleValue(option.value);
                     }}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onKeyDown={(event) =>
+                      handleBadgeRemoveKeyDown(event, () => toggleValue(option.value))
+                    }
                     className="ml-1.5 rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     aria-label={`Remove ${option.label}`}
                   >
                     <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                  </button>
+                  </span>
                 </Badge>
               ))}
               {selectedOptions.length > maxVisibleBadges ? (
@@ -304,9 +344,12 @@ export function SearchableMultiSelectPopover({
           </div>
         ) : (
           <div
-            className="max-h-[320px] overflow-y-auto p-1.5"
+            className="app-scroll-area max-h-[320px] overflow-y-auto overscroll-contain p-1.5 pr-1"
             role="listbox"
             aria-multiselectable="true"
+            onWheelCapture={(event) => {
+              event.stopPropagation();
+            }}
           >
             {!hasSearchQuery && hiddenOptionCount > 0 ? (
               <div className="px-3 py-2 text-xs text-muted-foreground">
@@ -325,6 +368,39 @@ export function SearchableMultiSelectPopover({
             ))}
           </div>
         )}
+        <div className="app-selection-popover-footer">
+          <p className="app-selection-summary">
+            {optimisticSelectedValues.length === 0
+              ? "No filters selected"
+              : `${optimisticSelectedValues.length} selected`}
+          </p>
+          <div className="app-selection-popover-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="app-button-compact"
+              onClick={clearValues}
+              disabled={disabled || optimisticSelectedValues.length === 0}
+            >
+              {clearLabel}
+            </Button>
+            {showDoneAction ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="app-button-compact"
+                onClick={() => {
+                  setOpen(false);
+                  setSearchValue("");
+                }}
+              >
+                {doneLabel}
+              </Button>
+            ) : null}
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   );

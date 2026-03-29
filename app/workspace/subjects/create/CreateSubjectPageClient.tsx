@@ -140,6 +140,7 @@ export default function CreateSubjectPageClient({
   return (
     <PageShell width="narrow">
       <PageHero
+        variant="editor"
         eyebrow="Curriculum"
         title="Create Subject"
         description="Add a new subject with an optional code, short description, and linked tags so question authoring stays consistent."
@@ -147,7 +148,7 @@ export default function CreateSubjectPageClient({
           <Button
             type="button"
             variant="outline"
-            className="gap-2"
+            className="app-button-back"
             onClick={handleBackNavigation}
             disabled={isCreatingSubject}
           >
@@ -264,7 +265,7 @@ export default function CreateSubjectPageClient({
                 <Button
                   type="button"
                   variant="outline"
-                  className="sm:min-w-[140px]"
+                  className="app-button-back"
                   onClick={handleBackNavigation}
                   disabled={isCreatingSubject}
                 >
@@ -272,7 +273,7 @@ export default function CreateSubjectPageClient({
                 </Button>
                 <Button
                   type="button"
-                  className="sm:min-w-[160px]"
+                  className="app-button-page"
                   onClick={createSubject}
                   disabled={isCreatingSubject || !name.trim()}
                 >

@@ -20,14 +20,9 @@ import {
   normalizeEmail,
   normalizeRollNumber,
 } from "@/lib/user-credentials";
+import { getPublicSchoolOptionByKey } from "@/lib/server/public-school-data";
 import CompanyAdmin from "@/models/CompanyAdmin";
-import School from "@/models/School";
 
-const SCHOOL_NOT_FOUND_ERROR = "SchoolNotFound";
-const STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR = "StudentRollNumberNotFound";
-const STUDENT_DUPLICATE_ROLL_ERROR = "StudentDuplicateRollNumber";
-const STUDENT_SIGN_IN_FAILED_ERROR = "StudentSignInFailed";
-const STUDENT_PASSWORD_NOT_SET_ERROR = "StudentPasswordNotProvisioned";
 const STUDENT_ALREADY_SIGNED_IN_ERROR = "StudentAlreadySignedIn";
 const STUDENT_SIGN_IN_RATE_LIMITED_ERROR = "StudentSignInRateLimited";
 
@@ -102,11 +97,9 @@ export const authOptions: NextAuthOptions = {
         try {
           await connectDB();
           const schoolKey = String(credentials.schoolKey).trim().toLowerCase();
-          const school = await School.findOne({ key: schoolKey })
-            .select("key")
-            .lean();
+          const school = await getPublicSchoolOptionByKey(schoolKey);
           if (!school) {
-            throw new Error(SCHOOL_NOT_FOUND_ERROR);
+            return null;
           }
 
           const identifier = String(rawIdentifier).trim();
@@ -150,23 +143,13 @@ export const authOptions: NextAuthOptions = {
             );
 
             if (matchingStudents.length > 1) {
-              throw new Error(STUDENT_DUPLICATE_ROLL_ERROR);
+              return null;
             }
 
             user = matchingStudents[0] || null;
-            if (!user && isStudentIdentifier) {
-              throw new Error(STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR);
-            }
           }
 
           if (!user?.passwordHash) {
-            if (user?.role === "student" || isStudentIdentifier) {
-              throw new Error(
-                user?.role === "student"
-                  ? STUDENT_PASSWORD_NOT_SET_ERROR
-                  : STUDENT_SIGN_IN_FAILED_ERROR,
-              );
-            }
             return null;
           }
 
@@ -175,9 +158,6 @@ export const authOptions: NextAuthOptions = {
             user.passwordHash,
           );
           if (!isValid) {
-            if (user?.role === "student" || isStudentIdentifier) {
-              throw new Error(STUDENT_SIGN_IN_FAILED_ERROR);
-            }
             return null;
           }
 
@@ -265,17 +245,22 @@ export const authOptions: NextAuthOptions = {
             role: user.role as SchoolUserRole,
             schoolKey,
             studentSessionId,
+            studentClassId:
+              user.role === "student"
+                ? String(user.class?._id || user.class || "").trim() || undefined
+                : undefined,
+            studentAcademicSectionId:
+              user.role === "student"
+                ? String(
+                    user.academicSection?._id || user.academicSection || "",
+                  ).trim() || undefined
+                : undefined,
           };
         } catch (error) {
           console.error("Error in school user authorize:", error);
           if (
             error instanceof Error &&
             [
-              SCHOOL_NOT_FOUND_ERROR,
-              STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR,
-              STUDENT_DUPLICATE_ROLL_ERROR,
-              STUDENT_SIGN_IN_FAILED_ERROR,
-              STUDENT_PASSWORD_NOT_SET_ERROR,
               STUDENT_ALREADY_SIGNED_IN_ERROR,
               STUDENT_SIGN_IN_RATE_LIMITED_ERROR,
             ].includes(error.message)
@@ -304,6 +289,8 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role;
         token.schoolKey = user.schoolKey;
         token.studentSessionId = user.studentSessionId;
+        token.studentClassId = user.studentClassId;
+        token.studentAcademicSectionId = user.studentAcademicSectionId;
       }
       return token;
     },
@@ -320,6 +307,9 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role;
         session.user.schoolKey = token.schoolKey;
         session.user.studentSessionId = token.studentSessionId;
+        session.user.studentClassId = token.studentClassId;
+        session.user.studentAcademicSectionId =
+          token.studentAcademicSectionId;
       }
       return session;
     },

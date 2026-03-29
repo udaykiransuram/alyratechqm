@@ -33,8 +33,8 @@ export default function OptionTagModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="analytics-subsection">
-          <div className="flex flex-wrap gap-2">
+        <div className="analytics-dialog-panel">
+          <div className="analytics-dialog-stat-strip">
             <span className={`analytics-badge ${isCorrect ? 'analytics-badge-success' : 'analytics-badge-danger'}`}>
               {isCorrect ? 'Correct' : 'Incorrect'}
             </span>
@@ -44,9 +44,12 @@ export default function OptionTagModal({
           </div>
 
           {students.length > 0 ? (
-            <ul className="space-y-2 text-sm text-foreground">
+            <ul className="analytics-dialog-list text-sm text-foreground">
               {students.map((student, index) => (
-                <li key={`${student.rollNumber}-${student.name}-${index}`} className="analytics-order-item">
+                <li
+                  key={`${student.rollNumber}-${student.name}-${index}`}
+                  className="analytics-dialog-list-item"
+                >
                   <span className="font-medium">{student.name}</span>
                   <span className="text-muted-foreground">{student.rollNumber}</span>
                 </li>

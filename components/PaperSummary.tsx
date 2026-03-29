@@ -45,7 +45,7 @@ function formatDateTime(value: string | null | undefined) {
   return format(date, 'PPP p');
 }
 
-export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks, examDate, onlineEnabled, onlineStartsAt, onlineEndsAt }: {
+export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks, examDate, onlineEnabled, onlineStartsAt, onlineEndsAt, subjects }: {
   sections: Section[];
   totalPaperMarks: number;
   duration: number;
@@ -54,6 +54,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
   onlineEnabled: boolean;
   onlineStartsAt?: string | null;
   onlineEndsAt?: string | null;
+  subjects?: Array<{ _id: string; name: string }>;
 }) {
   const totalQuestions = sections.reduce((sum, section) => sum + section.questions.length, 0);
 
@@ -80,7 +81,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
   return (
     <Card className="app-surface overflow-hidden">
       <CardHeader className="app-section-header">
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex items-center gap-2">
           <CheckCircle className="h-4 w-4 text-primary" />
           Paper Summary
         </CardTitle>
@@ -138,6 +139,26 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
               </div>
             </div>
           ) : null}
+        </div>
+
+        <div className="space-y-3 border-t border-border/60 pt-4">
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <TagIcon className="h-4 w-4" />
+            Subject Mix
+          </h4>
+          {Array.isArray(subjects) && subjects.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {subjects.map((subject) => (
+                <Badge key={subject._id} variant="secondary" className="font-normal">
+                  {subject.name || subject._id}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Subjects will appear here once questions are added.
+            </p>
+          )}
         </div>
 
         <div className="space-y-3 border-t border-border/60 pt-4">

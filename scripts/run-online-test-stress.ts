@@ -14,6 +14,7 @@ type ParsedArgs = {
   paperId: string;
   studentsFile: string;
   autoSeed: boolean;
+  cleanupSeeded: boolean;
   seedStudents: number;
   concurrency: number;
   rounds: number;
@@ -24,6 +25,7 @@ type ParsedArgs = {
   submitEnabled: boolean;
   heartbeatEnabled: boolean;
   listFirstEnabled: boolean;
+  warmupEnabled: boolean;
   maxFailureRatePct: number;
   maxP95ListMs: number;
   maxP95StartMs: number;
@@ -41,6 +43,15 @@ type SeedMeta = {
   studentCount: number;
 };
 
+type StressInputs = {
+  schoolKey: string;
+  paperId: string;
+  studentsFile: string;
+  seeded: boolean;
+  seedMetaFile: string;
+  cleanupEligible: boolean;
+};
+
 function printHelp() {
   console.log(
     [
@@ -52,6 +63,7 @@ function printHelp() {
       "  --paper=<paperId>             Existing paper id to reuse instead of auto-seeding",
       "  --students=<jsonFile>         Existing student credential file to reuse",
       "  --auto-seed=<true|false>      Seed disposable data when inputs are missing (default: true)",
+      "  --cleanup-seeded=<true|false> Delete auto-generated seed data after the run (default: false)",
       "  --seed-students=<n>           Number of disposable students to seed (default: 100)",
       "  --concurrency=<n>             Concurrent student flows (default: 100)",
       "  --rounds=<n>                  Save rounds per student before submit (default: 3)",
@@ -62,6 +74,7 @@ function printHelp() {
       "  --submit=<true|false>         Submit attempts at the end of the flow (default: true)",
       "  --heartbeat=<true|false>      Send the student heartbeat during the flow (default: true)",
       "  --list-first=<true|false>     Hit /api/student/tests before detail/start (default: true)",
+      "  --warmup=<true|false>         Prewarm auth and test routes before measuring (default: true)",
       "  --max-failure-rate-pct=<n>    Max allowed failure rate percentage (default: 0.5)",
       "  --max-p95-list-ms=<ms>        Max allowed test.list p95 latency (default: 1200)",
       "  --max-p95-start-ms=<ms>       Max allowed test.start p95 latency (default: 1200)",
@@ -74,6 +87,7 @@ function printHelp() {
       "",
       "Notes:",
       "  - If --school, --paper, and --students are omitted, disposable stress data is seeded automatically.",
+      "  - --cleanup-seeded=true only auto-deletes data when the school key was auto-generated for the run.",
       "  - Loopback base URLs use a managed local Next production server by default; use --server-mode=dev for quicker smoke checks.",
       "  - If the requested loopback port is already in use, managed runs automatically move to the next free local port.",
       "  - This wrapper runs the load gate and exits non-zero when gate checks fail.",
@@ -149,6 +163,10 @@ function parseArgs(argv: string[]): ParsedArgs {
       argMap.get("auto-seed") || process.env.ONLINE_TEST_GATE_AUTO_SEED,
       true,
     ),
+    cleanupSeeded: parseBoolean(
+      argMap.get("cleanup-seeded") || process.env.ONLINE_TEST_GATE_CLEANUP_SEEDED,
+      false,
+    ),
     seedStudents: parsePositiveInt(
       argMap.get("seed-students") || process.env.ONLINE_TEST_GATE_SEED_STUDENTS,
       100,
@@ -192,6 +210,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     ),
     listFirstEnabled: parseBoolean(
       argMap.get("list-first") || process.env.ONLINE_TEST_GATE_LIST_FIRST,
+      true,
+    ),
+    warmupEnabled: parseBoolean(
+      argMap.get("warmup") || process.env.ONLINE_TEST_GATE_WARMUP,
       true,
     ),
     maxFailureRatePct: parseNumber(
@@ -278,7 +300,7 @@ function ensureManagedExamRuntimePoolMax(args: ParsedArgs, serverMode: string) {
   console.log(`Exam runtime pool max: ${process.env.EXAM_RUNTIME_POOL_MAX}`);
 }
 
-async function maybeSeed(args: ParsedArgs) {
+async function maybeSeed(args: ParsedArgs): Promise<StressInputs> {
   if (args.schoolKey && args.paperId && args.studentsFile) {
     return {
       schoolKey: args.schoolKey,
@@ -286,6 +308,7 @@ async function maybeSeed(args: ParsedArgs) {
       studentsFile: args.studentsFile,
       seeded: false,
       seedMetaFile: "",
+      cleanupEligible: false,
     };
   }
 
@@ -322,7 +345,25 @@ async function maybeSeed(args: ParsedArgs) {
     studentsFile: String(seededMeta.studentsFile).trim(),
     seeded: true,
     seedMetaFile: metaOut,
+    cleanupEligible: !args.schoolKey,
   };
+}
+
+function cleanupSeededData(seeded: StressInputs) {
+  if (!seeded.seeded || !seeded.seedMetaFile) {
+    return;
+  }
+
+  runCommand(
+    "npm",
+    [
+      "run",
+      "gate:student-tests:cleanup",
+      "--",
+      `--meta=${seeded.seedMetaFile}`,
+    ],
+    "Cleanup disposable online-exam stress data",
+  );
 }
 
 async function main() {
@@ -336,69 +377,104 @@ async function main() {
   await fs.mkdir(path.dirname(args.outFile), { recursive: true });
   await fs.mkdir(path.dirname(args.gateOutFile), { recursive: true });
 
-  const seeded = await maybeSeed(args);
-  const serverMode = resolveOnlineTestServerMode(args.baseUrl, args.serverMode);
-  const managedBaseUrl = await resolveManagedOnlineTestBaseUrl(
-    args.baseUrl,
-    serverMode,
-  );
-  ensureManagedSchoolUserAuthRateLimit(args, serverMode);
-  ensureManagedExamRuntimePoolMax(args, serverMode);
-  console.log(
-    `\n== Stress inputs ready ==\nSchool: ${seeded.schoolKey}\nPaper: ${seeded.paperId}\nStudents file: ${seeded.studentsFile}\nBase URL: ${managedBaseUrl}\nServer mode: ${serverMode}`,
-  );
-  const commandEnv = {
-    BASE_URL: managedBaseUrl,
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL || managedBaseUrl,
-    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || managedBaseUrl,
-  };
+  let seeded: StressInputs | null = null;
+  let runError: unknown = null;
 
-  await withOnlineTestServer(
-    {
-      baseUrl: managedBaseUrl,
-      mode: serverMode,
-    },
-    async () => {
-      runCommand(
-        "npm",
-        [
-          "run",
-          "gate:student-tests:load",
-          "--",
-          `--base=${managedBaseUrl}`,
-          `--school=${seeded.schoolKey}`,
-          `--paper=${seeded.paperId}`,
-          `--students=${seeded.studentsFile}`,
-          `--concurrency=${args.concurrency}`,
-          `--rounds=${args.rounds}`,
-          `--round-delay-ms=${args.roundDelayMs}`,
-          `--jitter-ms=${args.jitterMs}`,
-          `--timeout-ms=${args.timeoutMs}`,
-          `--sample-size=${args.sampleSize}`,
-          `--submit=${args.submitEnabled ? "true" : "false"}`,
-          `--heartbeat=${args.heartbeatEnabled ? "true" : "false"}`,
-          `--list-first=${args.listFirstEnabled ? "true" : "false"}`,
-          `--max-failure-rate-pct=${args.maxFailureRatePct}`,
-          `--max-p95-list-ms=${args.maxP95ListMs}`,
-          `--max-p95-start-ms=${args.maxP95StartMs}`,
-          `--max-p95-save-ms=${args.maxP95SaveMs}`,
-          `--max-p95-submit-ms=${args.maxP95SubmitMs}`,
-          `--out=${args.outFile}`,
-          `--gate-out=${args.gateOutFile}`,
-        ],
-        "Online test stress gate",
-        commandEnv,
-      );
-    },
-  );
+  try {
+    seeded = await maybeSeed(args);
+    const stressInputs = seeded;
+    const serverMode = resolveOnlineTestServerMode(args.baseUrl, args.serverMode);
+    const managedBaseUrl = await resolveManagedOnlineTestBaseUrl(
+      args.baseUrl,
+      serverMode,
+    );
+    ensureManagedSchoolUserAuthRateLimit(args, serverMode);
+    ensureManagedExamRuntimePoolMax(args, serverMode);
+    console.log(
+      `\n== Stress inputs ready ==\nSchool: ${stressInputs.schoolKey}\nPaper: ${stressInputs.paperId}\nStudents file: ${stressInputs.studentsFile}\nBase URL: ${managedBaseUrl}\nServer mode: ${serverMode}`,
+    );
+    const commandEnv = {
+      BASE_URL: managedBaseUrl,
+      NEXTAUTH_URL: process.env.NEXTAUTH_URL || managedBaseUrl,
+      NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || managedBaseUrl,
+    };
 
-  console.log(`\nStress summary: ${args.outFile}`);
-  console.log(`Gate report: ${args.gateOutFile}`);
-  if (seeded.seeded) {
-    console.log("- Disposable readiness data was auto-seeded for this run.");
-    if (seeded.seedMetaFile) {
-      console.log(`Seed metadata: ${seeded.seedMetaFile}`);
+    await withOnlineTestServer(
+      {
+        baseUrl: managedBaseUrl,
+        mode: serverMode,
+      },
+      async () => {
+        runCommand(
+          "npm",
+          [
+            "run",
+            "gate:student-tests:load",
+            "--",
+            `--base=${managedBaseUrl}`,
+            `--school=${stressInputs.schoolKey}`,
+            `--paper=${stressInputs.paperId}`,
+            `--students=${stressInputs.studentsFile}`,
+            `--concurrency=${args.concurrency}`,
+            `--rounds=${args.rounds}`,
+            `--round-delay-ms=${args.roundDelayMs}`,
+            `--jitter-ms=${args.jitterMs}`,
+            `--timeout-ms=${args.timeoutMs}`,
+            `--sample-size=${args.sampleSize}`,
+            `--submit=${args.submitEnabled ? "true" : "false"}`,
+            `--heartbeat=${args.heartbeatEnabled ? "true" : "false"}`,
+            `--list-first=${args.listFirstEnabled ? "true" : "false"}`,
+            `--warmup=${args.warmupEnabled ? "true" : "false"}`,
+            `--max-failure-rate-pct=${args.maxFailureRatePct}`,
+            `--max-p95-list-ms=${args.maxP95ListMs}`,
+            `--max-p95-start-ms=${args.maxP95StartMs}`,
+            `--max-p95-save-ms=${args.maxP95SaveMs}`,
+            `--max-p95-submit-ms=${args.maxP95SubmitMs}`,
+            `--out=${args.outFile}`,
+            `--gate-out=${args.gateOutFile}`,
+          ],
+          "Online test stress gate",
+          commandEnv,
+        );
+      },
+    );
+
+    console.log(`\nStress summary: ${args.outFile}`);
+    console.log(`Gate report: ${args.gateOutFile}`);
+    if (stressInputs.seeded) {
+      console.log("- Disposable readiness data was auto-seeded for this run.");
+      if (stressInputs.seedMetaFile) {
+        console.log(`Seed metadata: ${stressInputs.seedMetaFile}`);
+      }
     }
+  } catch (error) {
+    runError = error;
+  } finally {
+    if (args.cleanupSeeded && seeded?.seeded) {
+      if (seeded.cleanupEligible) {
+        try {
+          cleanupSeededData(seeded);
+        } catch (cleanupError) {
+          if (!runError) {
+            runError = cleanupError;
+          } else {
+            console.error(
+              cleanupError instanceof Error
+                ? cleanupError.message
+                : String(cleanupError),
+            );
+          }
+        }
+      } else {
+        console.log(
+          "Cleanup skipped because the seeded school key was provided explicitly. Use gate:student-tests:cleanup to remove it manually.",
+        );
+      }
+    }
+  }
+
+  if (runError) {
+    throw runError;
   }
 }
 

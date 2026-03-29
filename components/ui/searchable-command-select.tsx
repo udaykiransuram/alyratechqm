@@ -26,10 +26,15 @@ type SearchableCommandSelectProps = {
   value: string;
   options: SearchableCommandOption[];
   onValueChange: (value: string) => void;
+  onOpenChange?: (open: boolean) => void;
   placeholder: string;
   searchPlaceholder?: string;
   emptyText?: string;
   disabled?: boolean;
+  clearLabel?: string;
+  onClear?: () => void;
+  closeLabel?: string;
+  showCloseAction?: boolean;
   triggerClassName?: string;
   contentClassName?: string;
 };
@@ -38,16 +43,22 @@ export function SearchableCommandSelect({
   value,
   options,
   onValueChange,
+  onOpenChange,
   placeholder,
   searchPlaceholder = "Search...",
   emptyText = "No results found.",
   disabled = false,
+  clearLabel = "Clear",
+  onClear,
+  closeLabel = "Done",
+  showCloseAction = false,
   triggerClassName,
   contentClassName,
 }: SearchableCommandSelectProps) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const showFooterActions = Boolean(onClear) || showCloseAction;
 
   const selectedOption = useMemo(
     () => options.find((option) => option.value === value),
@@ -72,6 +83,7 @@ export function SearchableCommandSelect({
       open={open}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
+        onOpenChange?.(nextOpen);
         if (!nextOpen) {
           setSearchValue("");
         }
@@ -85,28 +97,36 @@ export function SearchableCommandSelect({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "h-11 w-full justify-between rounded-xl px-3.5 text-left font-normal",
+            "app-filter-select-trigger",
             triggerClassName,
           )}
         >
-          <span className="truncate">
+          <span
+            className={cn(
+              "truncate",
+              !selectedOption && "font-normal text-muted-foreground",
+            )}
+          >
             {selectedOption?.label || placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className={cn("w-[--radix-popover-trigger-width] p-0", contentClassName)}
+        className={cn(
+          "app-selection-popover w-[--radix-popover-trigger-width] p-0",
+          contentClassName,
+        )}
         align="start"
       >
-        <Command>
+        <Command className="flex min-h-0 flex-1 flex-col rounded-none bg-transparent">
           <CommandInput
             ref={searchInputRef}
             placeholder={searchPlaceholder}
             value={searchValue}
             onValueChange={setSearchValue}
           />
-          <CommandList>
+          <CommandList className="min-h-0 flex-1">
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
@@ -125,7 +145,7 @@ export function SearchableCommandSelect({
                     setOpen(false);
                     setSearchValue("");
                   }}
-                  className="cursor-pointer"
+                  className="cursor-pointer rounded-xl border border-transparent px-3 py-2.5 data-[selected=true]:border-primary/18 data-[selected=true]:bg-primary/5 data-[selected=true]:text-foreground"
                 >
                   <Check
                     className={cn(
@@ -136,7 +156,7 @@ export function SearchableCommandSelect({
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate">{option.label}</span>
                     {option.description ? (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-[12px] leading-5 text-muted-foreground">
                         {option.description}
                       </span>
                     ) : null}
@@ -146,6 +166,44 @@ export function SearchableCommandSelect({
             </CommandGroup>
           </CommandList>
         </Command>
+        {showFooterActions ? (
+          <div className="app-selection-popover-footer">
+            <p className="app-selection-summary">
+              {selectedOption?.label || placeholder}
+            </p>
+            <div className="app-selection-popover-actions">
+              {onClear ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="app-button-compact"
+                  onClick={() => {
+                    onClear();
+                    setSearchValue("");
+                  }}
+                  disabled={disabled}
+                >
+                  {clearLabel}
+                </Button>
+              ) : null}
+              {showCloseAction ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="app-button-compact"
+                  onClick={() => {
+                    setOpen(false);
+                    setSearchValue("");
+                  }}
+                >
+                  {closeLabel}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   );

@@ -7,6 +7,11 @@ import mongoose from 'mongoose';
 import { buildArchiveFilter, buildArchivedUpdate, resolveIncludeArchived } from '@/lib/archive';
 import { recordTenantAudit } from '@/lib/audit';
 import { requireTenantSession } from '@/lib/api-auth';
+import {
+  sanitizeQuestionForApiResponse,
+  sanitizeQuestionOptions,
+  sanitizeRichTextHtml,
+} from '@/lib/security/html-sanitize';
 
 // UPDATE a question by ID (supports all types)
 export async function PUT(
@@ -42,7 +47,11 @@ export async function PUT(
       matrixAnswers
     } = body;
 
-    if (!subject || !classId || !content || !marks || !type) {
+    const sanitizedContent = sanitizeRichTextHtml(content);
+    const sanitizedExplanation = sanitizeRichTextHtml(explanation);
+    const sanitizedOptions = sanitizeQuestionOptions(options);
+
+    if (!subject || !classId || !sanitizedContent || !marks || !type) {
       return NextResponse.json(
         { success: false, message: 'Missing required fields: subject, class, content, type, and marks are required.' },
         { status: 400 }
@@ -50,16 +59,27 @@ export async function PUT(
     }
 
     if (type === 'single' || type === 'multiple') {
-      if (!options || options.length < 2 || !Array.isArray(answerIndexes) || answerIndexes.length === 0) {
+      if (
+        !Array.isArray(options) ||
+        options.length < 2 ||
+        !Array.isArray(answerIndexes) ||
+        answerIndexes.length === 0
+      ) {
         return NextResponse.json(
           { success: false, message: 'Options and at least one correct answer are required for single/multiple choice questions.' },
           { status: 400 }
         );
       }
-      if (answerIndexes.some((idx: number) => idx < 0 || idx >= options.length)) {
+      if (answerIndexes.some((idx: number) => idx < 0 || idx >= sanitizedOptions.length)) {
         return NextResponse.json(
           { success: false, message: 'One or more selected answer indexes are invalid.' },
           { status: 400 }
+        );
+      }
+      if (sanitizedOptions.some((option: any) => !String(option?.content || '').trim())) {
+        return NextResponse.json(
+          { success: false, message: 'Question options cannot be empty.' },
+          { status: 400 },
         );
       }
     }
@@ -72,13 +92,13 @@ export async function PUT(
     question.subject = subject;
     question.class = classId;
     question.tags = tags;
-    question.content = content;
-    question.explanation = explanation;
+    question.content = sanitizedContent;
+    question.explanation = sanitizedExplanation;
     question.marks = marks;
     question.type = type;
 
     if (type === 'single' || type === 'multiple') {
-      question.options = options;
+      question.options = sanitizedOptions;
       question.answerIndexes = answerIndexes;
       question.matrixOptions = undefined;
       question.matrixAnswers = undefined;
@@ -101,7 +121,10 @@ export async function PUT(
       .populate('class', 'name')
       .populate({ path: 'tags', populate: { path: 'type', select: 'name' } });
 
-    return NextResponse.json({ success: true, question: updatedQuestion });
+    return NextResponse.json({
+      success: true,
+      question: sanitizeQuestionForApiResponse(updatedQuestion),
+    });
   } catch (error: any) {
     if (error?.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((err: any) => (err as any).message);
@@ -192,7 +215,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       matrixAnswers
     } = body;
 
-    if (!subject || !classId || !content || !marks || !type) {
+    const sanitizedContent = sanitizeRichTextHtml(content);
+    const sanitizedExplanation = sanitizeRichTextHtml(explanation);
+    const sanitizedOptions = sanitizeQuestionOptions(options);
+
+    if (!subject || !classId || !sanitizedContent || !marks || !type) {
       return NextResponse.json(
         { success: false, message: 'Missing required fields: subject, class, content, and marks are required.' },
         { status: 400 }
@@ -200,23 +227,40 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     let update: any = {
-      subject, class: classId, tags, content, explanation, marks, type
+      subject,
+      class: classId,
+      tags,
+      content: sanitizedContent,
+      explanation: sanitizedExplanation,
+      marks,
+      type,
     };
 
     if (type === 'single' || type === 'multiple') {
-      if (!options || options.length < 2 || !Array.isArray(answerIndexes) || answerIndexes.length === 0) {
+      if (
+        !Array.isArray(options) ||
+        options.length < 2 ||
+        !Array.isArray(answerIndexes) ||
+        answerIndexes.length === 0
+      ) {
         return NextResponse.json(
           { success: false, message: 'Options and at least one correct answer are required for single/multiple choice questions.' },
           { status: 400 }
         );
       }
-      if (answerIndexes.some((idx: number) => idx < 0 || idx >= options.length)) {
+      if (answerIndexes.some((idx: number) => idx < 0 || idx >= sanitizedOptions.length)) {
         return NextResponse.json(
           { success: false, message: 'One or more selected answer indexes are invalid.' },
           { status: 400 }
         );
       }
-      update.options = options;
+      if (sanitizedOptions.some((option: any) => !String(option?.content || '').trim())) {
+        return NextResponse.json(
+          { success: false, message: 'Question options cannot be empty.' },
+          { status: 400 },
+        );
+      }
+      update.options = sanitizedOptions;
       update.answerIndexes = answerIndexes;
       update.matrixOptions = undefined;
       update.matrixAnswers = undefined;
@@ -251,7 +295,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ success: false, message: 'Question not found.' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, question: updatedQuestion });
+    return NextResponse.json({
+      success: true,
+      question: sanitizeQuestionForApiResponse(updatedQuestion),
+    });
   } catch (error: any) {
     if (error?.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((err: any) => (err as any).message);
@@ -283,7 +330,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ success: false, message: 'Question not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, question });
+    return NextResponse.json({
+      success: true,
+      question: sanitizeQuestionForApiResponse(question),
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message || 'Server error' }, { status: 500 });
   }

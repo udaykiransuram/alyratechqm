@@ -2,16 +2,18 @@ import { getServerSession, type Session } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import type { AccountType, AppRole, SchoolUserRole } from "@/lib/auth-types";
+import { buildArchiveFilter } from "@/lib/archive";
+import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import {
   isRedisConfigured,
-  readStudentSession,
-  refreshStudentSessionIfMatch,
+  validateAndRefreshStudentSession,
 } from "@/lib/redis";
 import {
   isStudentSessionFresh,
   shouldRefreshStudentSessionHeartbeat,
 } from "@/lib/student-session";
+import CompanyAdmin from "@/models/CompanyAdmin";
 
 type RequireTenantSessionOptions = {
   allowRoles?: SchoolUserRole[];
@@ -40,6 +42,156 @@ type RequireCompanyAdminSessionSuccess = {
   ok: true;
   session: Session;
 };
+
+type StudentSessionDbSyncEntry = {
+  syncedAt: number;
+};
+
+type StudentSessionRedisValidationEntry = {
+  validatedAt: number;
+};
+
+const STUDENT_SESSION_REDIS_VALIDATION_CACHE_MS = Math.max(
+  500,
+  Number.parseInt(
+    String(process.env.STUDENT_SESSION_REDIS_VALIDATION_CACHE_MS || "1500"),
+    10,
+  ) || 1500,
+);
+
+function getStudentSessionDbSyncCache() {
+  const globalState = globalThis as typeof globalThis & {
+    __studentSessionDbSyncCache?: Map<string, StudentSessionDbSyncEntry>;
+  };
+
+  if (!globalState.__studentSessionDbSyncCache) {
+    globalState.__studentSessionDbSyncCache = new Map();
+  }
+
+  return globalState.__studentSessionDbSyncCache;
+}
+
+function getStudentSessionRedisValidationCache() {
+  const globalState = globalThis as typeof globalThis & {
+    __studentSessionRedisValidationCache?: Map<
+      string,
+      StudentSessionRedisValidationEntry
+    >;
+  };
+
+  if (!globalState.__studentSessionRedisValidationCache) {
+    globalState.__studentSessionRedisValidationCache = new Map();
+  }
+
+  return globalState.__studentSessionRedisValidationCache;
+}
+
+function buildStudentSessionDbSyncCacheKey(
+  schoolKey: string,
+  studentId: string,
+  studentSessionId: string,
+) {
+  return `${schoolKey}::${studentId}::${studentSessionId}`;
+}
+
+function getStudentSessionRedisValidationCacheKey(
+  schoolKey: string,
+  studentId: string,
+  studentSessionId: string,
+) {
+  return `${schoolKey}::${studentId}::${studentSessionId}`;
+}
+
+function shouldSyncRedisValidatedStudentSessionToDb(
+  schoolKey: string,
+  studentId: string,
+  studentSessionId: string,
+  now: Date,
+) {
+  const cache = getStudentSessionDbSyncCache();
+  const cacheKey = buildStudentSessionDbSyncCacheKey(
+    schoolKey,
+    studentId,
+    studentSessionId,
+  );
+  const existingEntry = cache.get(cacheKey);
+
+  if (
+    existingEntry &&
+    !shouldRefreshStudentSessionHeartbeat(existingEntry.syncedAt, now)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function markRedisValidatedStudentSessionDbSynced(
+  schoolKey: string,
+  studentId: string,
+  studentSessionId: string,
+  now: Date,
+) {
+  getStudentSessionDbSyncCache().set(
+    buildStudentSessionDbSyncCacheKey(
+      schoolKey,
+      studentId,
+      studentSessionId,
+    ),
+    { syncedAt: now.getTime() },
+  );
+}
+
+function hasRecentlyValidatedStudentSessionViaRedis(
+  schoolKey: string,
+  studentId: string,
+  studentSessionId: string,
+  now: Date,
+) {
+  const entry = getStudentSessionRedisValidationCache().get(
+    getStudentSessionRedisValidationCacheKey(
+      schoolKey,
+      studentId,
+      studentSessionId,
+    ),
+  );
+
+  if (!entry) {
+    return false;
+  }
+
+  return now.getTime() - entry.validatedAt < STUDENT_SESSION_REDIS_VALIDATION_CACHE_MS;
+}
+
+function markStudentSessionRecentlyValidatedViaRedis(
+  schoolKey: string,
+  studentId: string,
+  studentSessionId: string,
+  now: Date,
+) {
+  getStudentSessionRedisValidationCache().set(
+    getStudentSessionRedisValidationCacheKey(
+      schoolKey,
+      studentId,
+      studentSessionId,
+    ),
+    { validatedAt: now.getTime() },
+  );
+}
+
+function clearStudentSessionRecentRedisValidation(
+  schoolKey: string,
+  studentId: string,
+  studentSessionId: string,
+) {
+  getStudentSessionRedisValidationCache().delete(
+    getStudentSessionRedisValidationCacheKey(
+      schoolKey,
+      studentId,
+      studentSessionId,
+    ),
+  );
+}
 
 function extractRequestedSchoolKey(
   req: NextRequest,
@@ -72,50 +224,178 @@ function buildStudentSessionInvalidResponse() {
   );
 }
 
+function buildPrivilegedSessionInvalidResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      code: "SessionInvalidated",
+      message:
+        "Your access permissions changed. Please sign in again to continue.",
+    },
+    { status: 401 },
+  );
+}
+
+async function validatePrivilegedSchoolUserSession(
+  session: Session,
+  schoolKey: string,
+) {
+  try {
+    await connectDB();
+    const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
+    const user = await UserModel.findOne({
+      _id: session.user.id,
+      ...buildArchiveFilter(false),
+    })
+      .select("role")
+      .lean();
+
+    if (!user) {
+      return buildPrivilegedSessionInvalidResponse();
+    }
+
+    const persistedRole = String((user as { role?: unknown })?.role || "").trim();
+    if (!persistedRole || persistedRole !== String(session.user.role || "")) {
+      return buildPrivilegedSessionInvalidResponse();
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Failed to validate privileged school session:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Failed to validate active session permissions.",
+      },
+      { status: 500 },
+    );
+  }
+}
+
 async function validateStudentSession(session: Session, schoolKey: string) {
   const studentSessionId = String(session.user.studentSessionId || "").trim();
   if (!studentSessionId) {
     return buildStudentSessionInvalidResponse();
   }
 
+  const now = new Date();
+
   if (isRedisConfigured()) {
     try {
-      const activeStudentSessionId = await readStudentSession(
-        schoolKey,
-        session.user.id,
-      );
+      if (
+        hasRecentlyValidatedStudentSessionViaRedis(
+          schoolKey,
+          session.user.id,
+          studentSessionId,
+          now,
+        )
+      ) {
+        if (
+          shouldSyncRedisValidatedStudentSessionToDb(
+            schoolKey,
+            session.user.id,
+            studentSessionId,
+            now,
+          )
+        ) {
+          const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
+          await UserModel.updateOne(
+            {
+              _id: session.user.id,
+              role: "student",
+              activeStudentSessionId: studentSessionId,
+            },
+            {
+              $set: {
+                activeStudentSessionLastSeenAt: now,
+              },
+            },
+          )
+            .then(() => {
+              markRedisValidatedStudentSessionDbSynced(
+                schoolKey,
+                session.user.id,
+                studentSessionId,
+                now,
+              );
+            })
+            .catch(() => undefined);
+        }
 
-      if (activeStudentSessionId && activeStudentSessionId !== studentSessionId) {
-        return buildStudentSessionInvalidResponse();
+        return null;
       }
 
-      if (!activeStudentSessionId) {
-        throw new Error("Redis student session missing or unavailable.");
-      }
-
-      const refreshed = await refreshStudentSessionIfMatch(
+      const validationResult = await validateAndRefreshStudentSession(
         schoolKey,
         session.user.id,
         studentSessionId,
       );
 
-      if (refreshed === false) {
+      if (validationResult === "mismatch") {
+        clearStudentSessionRecentRedisValidation(
+          schoolKey,
+          session.user.id,
+          studentSessionId,
+        );
         return buildStudentSessionInvalidResponse();
       }
 
-      const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
-      await UserModel.updateOne(
-        {
-          _id: session.user.id,
-          role: "student",
-          activeStudentSessionId: studentSessionId,
-        },
-        {
-          $set: {
-            activeStudentSessionLastSeenAt: new Date(),
+      if (validationResult === "missing") {
+        clearStudentSessionRecentRedisValidation(
+          schoolKey,
+          session.user.id,
+          studentSessionId,
+        );
+        throw new Error("Redis student session missing or unavailable.");
+      }
+
+      if (validationResult !== "valid") {
+        clearStudentSessionRecentRedisValidation(
+          schoolKey,
+          session.user.id,
+          studentSessionId,
+        );
+        throw new Error("Redis student session validation unavailable.");
+      }
+
+      markStudentSessionRecentlyValidatedViaRedis(
+        schoolKey,
+        session.user.id,
+        studentSessionId,
+        now,
+      );
+
+      if (
+        shouldSyncRedisValidatedStudentSessionToDb(
+          schoolKey,
+          session.user.id,
+          studentSessionId,
+          now,
+        )
+      ) {
+        const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
+        await UserModel.updateOne(
+          {
+            _id: session.user.id,
+            role: "student",
+            activeStudentSessionId: studentSessionId,
           },
-        },
-      ).catch(() => undefined);
+          {
+            $set: {
+              activeStudentSessionLastSeenAt: now,
+            },
+          },
+        )
+          .then(() => {
+            markRedisValidatedStudentSessionDbSynced(
+              schoolKey,
+              session.user.id,
+              studentSessionId,
+              now,
+            );
+          })
+          .catch(() => undefined);
+      }
 
       return null;
     } catch (error) {
@@ -143,7 +423,6 @@ async function validateStudentSession(session: Session, schoolKey: string) {
       return buildStudentSessionInvalidResponse();
     }
 
-    const now = new Date();
     if (!isStudentSessionFresh(student.activeStudentSessionLastSeenAt, now)) {
       await UserModel.updateOne(
         {
@@ -293,6 +572,30 @@ export async function requireTenantSession(
     };
   }
 
+  if (session.user.role !== "student") {
+    if (!resolvedSchoolKey) {
+      return {
+        ok: false as const,
+        response: NextResponse.json(
+          {
+            success: false,
+            message: "Authenticated session is missing school context.",
+          },
+          { status: 403 },
+        ),
+      };
+    }
+
+    const invalidPrivilegedSessionResponse =
+      await validatePrivilegedSchoolUserSession(session, resolvedSchoolKey);
+    if (invalidPrivilegedSessionResponse) {
+      return {
+        ok: false as const,
+        response: invalidPrivilegedSessionResponse,
+      };
+    }
+  }
+
   const allowedRoles = resolvedOptions.allowRoles || [];
   if (allowedRoles.length > 0 && !allowedRoles.includes(session.user.role)) {
     return {
@@ -361,6 +664,35 @@ export async function requireCompanyAdminSession(
       response: NextResponse.json(
         { success: false, message: "Company admin authentication required." },
         { status: 403 },
+      ),
+    };
+  }
+
+  try {
+    await connectDB();
+    const companyAdmin = await CompanyAdmin.findOne({
+      _id: session.user.id,
+      isActive: true,
+    })
+      .select("_id")
+      .lean();
+
+    if (!companyAdmin) {
+      return {
+        ok: false as const,
+        response: buildPrivilegedSessionInvalidResponse(),
+      };
+    }
+  } catch (error) {
+    console.error("Failed to validate company admin session:", error);
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        {
+          success: false,
+          message: "Failed to validate active session permissions.",
+        },
+        { status: 500 },
       ),
     };
   }

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 import {
   buildWorkspaceListPageHref,
@@ -69,13 +70,14 @@ export default async function AdminsPage({
     page < pages ? buildWorkspaceListPageHref(ADMINS_BASE_PATH, page + 1) : null;
 
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+    <PageShell width="wide" padding="standard">
       <PageHero
+        variant="directory"
         eyebrow="People"
         title="Admins"
         description="Review school admin accounts and keep high-access users on a dedicated, predictable management path."
         actions={
-          <Button asChild>
+          <Button asChild className="app-button-page">
             <AppPrefetchLink
               href="/workspace/admins/create"
               prefetchOnMount
@@ -180,6 +182,6 @@ export default async function AdminsPage({
           ) : null}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

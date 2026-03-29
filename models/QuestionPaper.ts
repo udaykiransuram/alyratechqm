@@ -42,7 +42,8 @@ export interface IQuestionPaper extends Document {
   title: string;
   instructions?: string;
   class: Types.ObjectId;
-  subject: Types.ObjectId;
+  subject?: Types.ObjectId;
+  subjectIds?: Types.ObjectId[];
   duration: number;
   passingMarks: number;
   examDate: Date;
@@ -120,8 +121,15 @@ const QuestionPaperSchema = new Schema<IQuestionPaper>(
     subject: {
       type: Schema.Types.ObjectId,
       ref: "Subject",
-      required: true,
+      required: false,
+      default: undefined,
     },
+    subjectIds: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Subject",
+      },
+    ],
     duration: {
       type: Number,
       required: true,
@@ -176,6 +184,11 @@ QuestionPaperSchema.index(
   { name: "class_online_enabled_archived_lookup" },
 );
 
+QuestionPaperSchema.index(
+  { subjectIds: 1, isArchived: 1 },
+  { name: "subject_ids_archived_lookup" },
+);
+
 const modelRegistry = getModelRegistry();
 
 const existingQuestionPaperModel = modelRegistry.QuestionPaper as
@@ -190,6 +203,7 @@ if (
     !existingQuestionPaperModel.schema.path("onlineEnabled") ||
     !existingQuestionPaperModel.schema.path("onlineStartsAt") ||
     !existingQuestionPaperModel.schema.path("onlineEndsAt") ||
+    !existingQuestionPaperModel.schema.path("subjectIds") ||
     !existingQuestionPaperModel.schema.path("assignedAcademicSections") ||
     !hasArchiveFields(existingQuestionPaperModel))
 ) {

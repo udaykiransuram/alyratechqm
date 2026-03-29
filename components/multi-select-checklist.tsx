@@ -131,7 +131,7 @@ export default function MultiSelectChecklist({
         </div>
       )}
 
-      {helperText ? <p className="px-1 text-xs text-muted-foreground">{helperText}</p> : null}
+      {helperText ? <p className="app-field-note px-1">{helperText}</p> : null}
     </div>
   );
 }

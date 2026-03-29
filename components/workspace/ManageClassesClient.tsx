@@ -138,11 +138,12 @@ export default function ManageClassesClient({
   return (
     <PageShell width="wide" padding="relaxed">
       <PageHero
+        variant="directory"
         eyebrow="Academic Setup"
         title="Manage Classes"
         description="Review the class structure already configured for this school and move class creation into a dedicated setup page."
         actions={
-          <Button asChild>
+          <Button asChild className="app-button-page">
             <AppPrefetchLink href="/workspace/manage/classes/create" prefetchOnMount>
               Create Classes
             </AppPrefetchLink>
@@ -196,7 +197,7 @@ export default function ManageClassesClient({
               title="No classes yet"
               description="Open the dedicated create page to add your first class or import a class list in bulk."
               action={
-                <Button asChild>
+                <Button asChild className="app-button-page">
                   <AppPrefetchLink href="/workspace/manage/classes/create">
                     Go to Create Classes
                   </AppPrefetchLink>

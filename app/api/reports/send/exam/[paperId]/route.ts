@@ -2,10 +2,17 @@ import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
+import { syncExamRuntimeMongoProjectionsForPaperWithCooldown } from "@/lib/exam-runtime-sync-cache";
+import { resolvePaperSubjectIds } from "@/lib/question-paper/subjects";
+import {
+  isSectionInScope,
+  normalizeScopeId,
+  resolveTeacherPaperScope,
+} from "@/lib/question-paper/access";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 import { requireTenantSession } from "@/lib/api-auth";
 import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
+import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
 
 function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
@@ -102,7 +109,7 @@ export async function POST(
   ]);
 
   const paper = await QuestionPaperModel.findById(paperId)
-    .select("title class subject assignedAcademicSections")
+    .select("title class subject subjectIds assignedAcademicSections")
     .populate({ path: "class", model: ClassModel, select: "name" })
     .lean();
 
@@ -116,7 +123,41 @@ export async function POST(
   const paperObj: any = Array.isArray(paper) ? paper[0] : paper;
   const paperClassId = toIdString(paperObj.class);
   const paperClassName = String(paperObj?.class?.name || "");
-  const paperSubjectId = toIdString(paperObj.subject);
+  const paperSubjectIds = resolvePaperSubjectIds(paperObj);
+  const assignedPaperSectionIds = Array.isArray(paperObj?.assignedAcademicSections)
+    ? paperObj.assignedAcademicSections
+        .map((section: any) => normalizeScopeId(section))
+        .filter(Boolean)
+    : [];
+
+  let teacherScope: ReturnType<typeof resolveTeacherPaperScope> | null = null;
+  if (auth.session.user.role === "teacher") {
+    const scopedUser = await UserModel.findById(auth.session.user.id)
+      .select(
+        "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
+      )
+      .lean();
+    teacherScope = resolveTeacherPaperScope(
+      scopedUser,
+      normalizeScopeId(paperClassId),
+      paperSubjectIds,
+      assignedPaperSectionIds,
+    );
+    if (
+      !teacherScope.hasClassAccess ||
+      !teacherScope.hasSubjectAccess ||
+      !teacherScope.hasSectionAccess
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "You do not have access to dispatch reports for this paper.",
+        },
+        { status: 403 },
+      );
+    }
+  }
 
   if (!paperClassId || !mongoose.Types.ObjectId.isValid(paperClassId)) {
     return NextResponse.json(
@@ -125,7 +166,11 @@ export async function POST(
     );
   }
 
-  await syncExamRuntimeMongoProjectionsForPaper(schoolKey, paperId).catch(
+  await syncExamRuntimeMongoProjectionsForPaperWithCooldown(
+    schoolKey,
+    paperId,
+    { minIntervalMs: 60_000 },
+  ).catch(
     (error) => {
       console.error(
         "Failed to sync exam runtime attempts into Mongo projections before report dispatch:",
@@ -136,10 +181,9 @@ export async function POST(
   );
 
   const paperClassObjectId = new mongoose.Types.ObjectId(paperClassId);
-  const paperSubjectObjectId =
-    paperSubjectId && mongoose.Types.ObjectId.isValid(paperSubjectId)
-      ? new mongoose.Types.ObjectId(paperSubjectId)
-      : null;
+  const paperSubjectObjectIds = paperSubjectIds
+    .filter((subjectId) => mongoose.Types.ObjectId.isValid(subjectId))
+    .map((subjectId) => new mongoose.Types.ObjectId(subjectId));
 
   const responseQuery: Record<string, any> = { paper: paperId };
   let academicSectionName = "";
@@ -167,6 +211,19 @@ export async function POST(
         { status: 400 },
       );
     }
+    if (
+      teacherScope &&
+      !isSectionInScope(academicSectionId, teacherScope.allowedSectionIds)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "You do not have access to dispatch reports for the selected section.",
+        },
+        { status: 403 },
+      );
+    }
     academicSectionName = selectedAcademicSectionDoc.name || "";
     const matchingStudentIds = await UserModel.find({
       role: "student",
@@ -176,6 +233,20 @@ export async function POST(
       .lean();
     responseQuery.student = {
       $in: matchingStudentIds.map((student: any) => student._id),
+    };
+  } else if (teacherScope && teacherScope.allowedSectionIds !== null) {
+    const scopedStudents = await UserModel.find({
+      role: "student",
+      academicSection: {
+        $in: teacherScope.allowedSectionIds
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+          .map((id) => new mongoose.Types.ObjectId(id)),
+      },
+    })
+      .select("_id")
+      .lean();
+    responseQuery.student = {
+      $in: scopedStudents.map((student: any) => student._id),
     };
   }
 
@@ -197,7 +268,7 @@ export async function POST(
   let studentAlreadyQueued = 0;
   const studentFailures: string[] = [];
   const queuedJobIds = new Set<string>();
-  const baseUrl = new URL(req.url).origin;
+  const baseUrl = getTrustedInternalOrigin();
 
   for (const response of responses as any[]) {
     try {
@@ -258,6 +329,12 @@ export async function POST(
       .lean();
   }
 
+  if (teacherScope && teacherScope.allowedSectionIds !== null) {
+    paperSectionDocs = paperSectionDocs.filter((sectionDoc) =>
+      isSectionInScope(toIdString(sectionDoc?._id), teacherScope!.allowedSectionIds),
+    );
+  }
+
   const recipientQuery: Record<string, any> = {
     role: { $in: ["teacher", "admin"] },
     mobileNumber: { $exists: true, $ne: "" },
@@ -268,9 +345,12 @@ export async function POST(
     ],
   };
 
-  if (paperSubjectObjectId) {
+  if (paperSubjectObjectIds.length > 0) {
     recipientQuery.$and.push({
-      $or: [{ hasAllSubjects: true }, { subjectIds: paperSubjectObjectId }],
+      $or: [
+        { hasAllSubjects: true },
+        { subjectIds: { $in: paperSubjectObjectIds } },
+      ],
     });
   }
 
@@ -279,6 +359,17 @@ export async function POST(
       $or: [
         { hasAllSections: true },
         { academicSectionIds: new mongoose.Types.ObjectId(academicSectionId) },
+      ],
+    });
+  }
+  if (teacherScope && teacherScope.allowedSectionIds !== null) {
+    const allowedSectionObjectIds = teacherScope.allowedSectionIds
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+    recipientQuery.$and.push({
+      $or: [
+        { hasAllSections: true },
+        { academicSectionIds: { $in: allowedSectionObjectIds } },
       ],
     });
   }
@@ -312,8 +403,10 @@ export async function POST(
       if (hasExplicitSectionAccess(recipient, academicSectionId)) {
         scopes = [selectedAcademicSectionDoc];
       }
-    } else if (paperSectionDocs.length === 0 || recipient?.hasAllSections) {
+    } else if (paperSectionDocs.length === 0) {
       scopes = [null];
+    } else if (recipient?.hasAllSections) {
+      scopes = [...paperSectionDocs];
     } else {
       const allowedSectionIds = new Set(
         Array.isArray(recipient?.academicSectionIds)
@@ -398,7 +491,7 @@ export async function POST(
   if (queuedJobIds.size > 0) {
     try {
       workerResult = await runReportDispatchWorker({
-        origin: req.nextUrl.origin,
+        origin: getTrustedInternalOrigin(),
         schoolKey,
         jobIds: Array.from(queuedJobIds),
       });

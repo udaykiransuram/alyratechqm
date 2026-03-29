@@ -1,0 +1,398 @@
+/// <reference types="@playwright/test" />
+import { expect, test, type Page, type Route } from "@playwright/test";
+
+import { navigateToAppRoute } from "./helpers/navigation";
+import { setStudentSession } from "./helpers/session";
+
+type StudentAttempt = {
+  _id: string;
+  paper: string;
+  student: string;
+  status: "in_progress" | "submitted" | "auto_submitted";
+  startedAt: string;
+  submittedAt: string | null;
+  lastSavedAt: string | null;
+  totalMarksAwarded: number;
+  sectionAnswers: Array<{
+    sectionName: string;
+    answers: Array<{
+      question: string;
+      selectedOptions?: number[];
+      answerText?: string;
+      matrixSelections?: number[][];
+    }>;
+  }>;
+};
+
+type StudentPaper = {
+  _id: string;
+  title: string;
+  instructions: string;
+  duration: number;
+  passingMarks: number;
+  totalMarks: number;
+  sections: Array<{
+    name: string;
+    description?: string;
+    marks: number;
+    questions: Array<{
+      question: {
+        _id: string;
+        content: string;
+        type: string;
+        options?: Array<{ content: string }>;
+      };
+      marks: number;
+      negativeMarks: number;
+    }>;
+  }>;
+};
+
+function json(body: unknown, status = 200) {
+  return {
+    status,
+    contentType: "application/json",
+    body: JSON.stringify(body),
+  };
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildPaper(): StudentPaper {
+  return {
+    _id: "paper-1",
+    title: "Science Objective Test",
+    instructions: "Choose the correct option.",
+    duration: 30,
+    passingMarks: 4,
+    totalMarks: 6,
+    sections: [
+      {
+        name: "Section A",
+        description: "Answer all questions.",
+        marks: 6,
+        questions: [
+          {
+            question: {
+              _id: "q1",
+              content: "<p>2 + 2 = ?</p>",
+              type: "single",
+              options: [
+                { content: "<p>4</p>" },
+                { content: "<p>5</p>" },
+              ],
+            },
+            marks: 3,
+            negativeMarks: 0,
+          },
+          {
+            question: {
+              _id: "q2",
+              content: "<p>3 + 3 = ?</p>",
+              type: "single",
+              options: [
+                { content: "<p>6</p>" },
+                { content: "<p>7</p>" },
+              ],
+            },
+            marks: 3,
+            negativeMarks: 0,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function buildAttempt(overrides: Partial<StudentAttempt> = {}): StudentAttempt {
+  return {
+    _id: "attempt-1",
+    paper: "paper-1",
+    student: "student-1",
+    status: "in_progress",
+    startedAt: "2026-03-20T09:00:00.000Z",
+    submittedAt: null,
+    lastSavedAt: "2026-03-20T09:00:00.000Z",
+    totalMarksAwarded: 0,
+    sectionAnswers: [],
+    ...overrides,
+  };
+}
+
+function buildListResponse(paper: StudentPaper, attempt: StudentAttempt) {
+  return {
+    success: true,
+    tests: [
+      {
+        _id: paper._id,
+        title: paper.title,
+        duration: paper.duration,
+        passingMarks: paper.passingMarks,
+        totalMarks: paper.totalMarks,
+        examDate: "2026-03-20T09:00:00.000Z",
+        onlineStartsAt: "2026-03-20T09:00:00.000Z",
+        onlineEndsAt: "2026-03-20T10:00:00.000Z",
+        class: {
+          _id: "class-x",
+          name: "Class X",
+        },
+        subject: {
+          _id: "subject-sci",
+          name: "Science",
+        },
+        status: attempt.status === "in_progress" ? "in_progress" : attempt.status,
+        remainingTimeMs: attempt.status === "in_progress" ? 25 * 60 * 1000 : 0,
+        requiresManualReview: false,
+        attempt: {
+          submittedAt: attempt.submittedAt,
+          status: attempt.status,
+          totalMarksAwarded: attempt.totalMarksAwarded,
+        },
+      },
+    ],
+  };
+}
+
+async function routeRunnerApis(
+  page: Page,
+  params: {
+    paper: StudentPaper;
+    getAttempt: () => StudentAttempt;
+    onSave?: (route: Route, body: any) => Promise<void>;
+    onSubmit?: (route: Route, body: any) => Promise<void>;
+  },
+) {
+  await page.route("**/api/student/tests**", async (route: Route) => {
+    const url = new URL(route.request().url());
+    const pathname = url.pathname;
+    const method = route.request().method();
+    const attempt = params.getAttempt();
+
+    if (pathname === "/api/student/tests" && method === "GET") {
+      await route.fulfill(json(buildListResponse(params.paper, attempt)));
+      return;
+    }
+
+    if (pathname === `/api/student/tests/${params.paper._id}` && method === "GET") {
+      await route.fulfill(
+        json({
+          success: true,
+          paper: params.paper,
+          attempt,
+          status: attempt.status,
+          remainingTimeMs: attempt.status === "in_progress" ? 25 * 60 * 1000 : 0,
+          deadlineAt:
+            attempt.status === "in_progress"
+              ? "2026-03-20T09:30:00.000Z"
+              : attempt.submittedAt,
+        }),
+      );
+      return;
+    }
+
+    if (
+      pathname === `/api/student/tests/${params.paper._id}/attempt` &&
+      method === "PATCH" &&
+      params.onSave
+    ) {
+      await params.onSave(route, route.request().postDataJSON());
+      return;
+    }
+
+    if (
+      pathname === `/api/student/tests/${params.paper._id}/submit` &&
+      method === "POST" &&
+      params.onSubmit
+    ) {
+      await params.onSubmit(route, route.request().postDataJSON());
+      return;
+    }
+
+    await route.fallback();
+  });
+}
+
+test.describe("Student test UI resilience (network mocked) @desktop", () => {
+  test("shows clear saving feedback while a slow save is in flight", async ({ page }) => {
+    await setStudentSession(page);
+
+    const paper = buildPaper();
+    let attempt = buildAttempt();
+    const savePayloads: unknown[] = [];
+
+    await routeRunnerApis(page, {
+      paper,
+      getAttempt: () => attempt,
+      onSave: async (route, body) => {
+        savePayloads.push(body);
+        await delay(1200);
+        attempt = {
+          ...attempt,
+          lastSavedAt: "2026-03-20T09:05:00.000Z",
+          sectionAnswers: Array.isArray(body?.sectionAnswers)
+            ? body.sectionAnswers
+            : [],
+        };
+        await route.fulfill(
+          json({
+            success: true,
+            attempt,
+            status: attempt.status,
+            remainingTimeMs: 24 * 60 * 1000,
+            deadlineAt: "2026-03-20T09:30:00.000Z",
+          }),
+        );
+      },
+    });
+
+    await navigateToAppRoute(page, "/student/tests/paper-1");
+
+    await page
+      .locator("label.app-exam-option")
+      .filter({ has: page.locator('input[aria-label="Option A"]') })
+      .click();
+    await page.getByRole("button", { name: "Save Progress" }).click();
+
+    await expect(page.getByText(/Status Saving\.\.\./)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save Progress" })).toBeDisabled();
+    await expect.poll(() => savePayloads.length).toBe(1);
+    expect(savePayloads[0]).toMatchObject({
+      sectionAnswers: [
+        {
+          sectionName: "Section A",
+          answers: [{ question: "q1", selectedOptions: [0] }],
+        },
+      ],
+    });
+    expect(savePayloads[0]).toHaveProperty("baseLastSavedAt");
+
+    await expect(page.getByText(/Status Saved /)).toBeVisible();
+  });
+
+  test("retries a transient submit failure and still returns the student to the tests dashboard", async ({
+    page,
+  }) => {
+    test.slow();
+    await setStudentSession(page);
+
+    const paper = buildPaper();
+    let attempt = buildAttempt();
+    let submitCount = 0;
+
+    await routeRunnerApis(page, {
+      paper,
+      getAttempt: () => attempt,
+      onSubmit: async (route, body) => {
+        submitCount += 1;
+
+        if (submitCount === 1) {
+          await route.fulfill(
+            json(
+              {
+                success: false,
+                message: "We couldn't submit your test.",
+                code: "EXAM_RUNTIME_UNAVAILABLE",
+                retryable: true,
+                httpStatus: 503,
+              },
+              503,
+            ),
+          );
+          return;
+        }
+
+        attempt = {
+          ...attempt,
+          status: "submitted",
+          submittedAt: "2026-03-20T09:12:00.000Z",
+          lastSavedAt: "2026-03-20T09:12:00.000Z",
+          totalMarksAwarded: 6,
+          sectionAnswers: Array.isArray(body?.sectionAnswers)
+            ? body.sectionAnswers
+            : [],
+        };
+        await route.fulfill(
+          json({
+            success: true,
+            attempt,
+            status: attempt.status,
+          }),
+        );
+      },
+    });
+
+    await navigateToAppRoute(page, "/student/tests/paper-1");
+
+    await page
+      .locator("label.app-exam-option")
+      .filter({ has: page.locator('input[aria-label="Option A"]') })
+      .click();
+    await page.getByRole("button", { name: "Submit Test" }).click();
+    await page.getByRole("button", { name: "Confirm Submit" }).click();
+
+    await expect.poll(() => submitCount).toBe(1);
+    await expect(
+      page.getByText(
+        "Submission is pending because your connection is unstable. Keep this tab open and we will continue retrying automatically.",
+      ),
+    ).toBeVisible();
+
+    await expect.poll(() => submitCount, { timeout: 10_000 }).toBe(2);
+    await expect(page).toHaveURL(/\/student\/tests\?submitted=1/);
+    await expect(page.getByText("Test submitted.")).toBeVisible();
+  });
+
+  test("redirects back to sign-in when the student session expires during save", async ({
+    page,
+  }) => {
+    await setStudentSession(page);
+
+    const paper = buildPaper();
+    let attempt = buildAttempt();
+
+    await page.route("**/api/auth/csrf", async (route) => {
+      await route.fulfill(json({ csrfToken: "test-csrf-token" }));
+    });
+    await page.route("**/api/auth/signout**", async (route) => {
+      await route.fulfill(
+        json({
+          url: "http://127.0.0.1:3001/auth/signin",
+        }),
+      );
+    });
+
+    await routeRunnerApis(page, {
+      paper,
+      getAttempt: () => attempt,
+      onSave: async (route) => {
+        await route.fulfill(
+          json(
+            {
+              success: false,
+              message: "This student session is no longer active. Please sign in again.",
+              code: "StudentSessionExpired",
+              retryable: false,
+              httpStatus: 401,
+            },
+            401,
+          ),
+        );
+      },
+    });
+
+    await navigateToAppRoute(page, "/student/tests/paper-1");
+
+    await page
+      .locator("label.app-exam-option")
+      .filter({ has: page.locator('input[aria-label="Option A"]') })
+      .click();
+    await page.getByRole("button", { name: "Save Progress" }).click();
+
+    await expect(page).toHaveURL(/\/auth\/signin\?/);
+    await expect(page).toHaveURL(/error=StudentSessionExpired/);
+    await expect(page).toHaveURL(/signedOut=1/);
+    await expect(page).toHaveURL(/callbackUrl=/);
+  });
+});

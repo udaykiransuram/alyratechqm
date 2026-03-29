@@ -1,11 +1,19 @@
 // app/api/convert/route.ts
 import * as XLSX from "xlsx";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireTenantSession } from "@/lib/api-auth";
 // Note: saveAs (file-saver) is a browser-only API and is not required when running in Node.js.
 // The browser download line in generateWordDoc is already commented out, so we omit importing file-saver here.
 
 export const runtime = "nodejs";
+const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_SHEET_MIME_TYPES = new Set([
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-excel.sheet.macroEnabled.12",
+  "text/csv",
+]);
 
 type Question = {
   subject: string;
@@ -27,11 +35,30 @@ type ConvertResponse = {
   answerKeyHtml: string;
 };
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    const auth = await requireTenantSession(req, {
+      allowRoles: ["admin", "teacher"],
+    });
+    if (!auth.ok) return auth.response;
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     if (!file) return json400({ error: "file is required (FormData key: 'file')" });
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      return json400({ error: "File exceeds the 10MB upload limit." });
+    }
+
+    const fileType = String(file.type || "").toLowerCase();
+    const lowerName = String(file.name || "").toLowerCase();
+    const isAllowedByName =
+      lowerName.endsWith(".xlsx") ||
+      lowerName.endsWith(".xls") ||
+      lowerName.endsWith(".xlsm") ||
+      lowerName.endsWith(".csv");
+    if (!ALLOWED_SHEET_MIME_TYPES.has(fileType) && !isAllowedByName) {
+      return json400({ error: "Only Excel/CSV files are supported." });
+    }
 
     // --- Parse XLSX ---
     const ab = await file.arrayBuffer();

@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  SearchableCommandSelect,
+  type SearchableCommandOption,
+} from '@/components/ui/searchable-command-select';
 import { fetchApiJson, resolveClientSchoolKey } from '@/lib/client/api';
 import { cn } from '@/lib/utils';
 
@@ -133,55 +136,81 @@ export function MetadataSelector({
       return null;
     }
   };
+  const classSelectOptions = React.useMemo<SearchableCommandOption[]>(
+    () => [
+      ...(allowAllClassOption
+        ? [
+            {
+              value: 'all',
+              label: allClassLabel,
+              description: 'Browse across every class.',
+            },
+          ]
+        : []),
+      ...classes.map((classItem) => ({
+        value: classItem._id,
+        label: classItem.name,
+      })),
+    ],
+    [allowAllClassOption, allClassLabel, classes],
+  );
+  const subjectSelectOptions = React.useMemo<SearchableCommandOption[]>(
+    () => [
+      ...(allowAllSubjectOption
+        ? [
+            {
+              value: 'all',
+              label: allSubjectLabel,
+              description: 'Include every subject in the current scope.',
+            },
+          ]
+        : []),
+      ...subjects.map((subjectItem) => ({
+        value: subjectItem._id,
+        label: subjectItem.name,
+      })),
+    ],
+    [allowAllSubjectOption, allSubjectLabel, subjects],
+  );
 
   const fields = (
     <>
       <div className="app-field-group">
         <Label className="app-field-label">Class</Label>
-        <Select value={classId} onValueChange={setClassId} disabled={disableClassSubject}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select a class" />
-          </SelectTrigger>
-          <SelectContent>
-            {allowAllClassOption ? (
-              <SelectItem value="all">{allClassLabel}</SelectItem>
-            ) : null}
-            {classes.map((c) => (
-              <SelectItem key={c._id} value={c._id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableCommandSelect
+          value={classId}
+          options={classSelectOptions}
+          onValueChange={setClassId}
+          disabled={disableClassSubject}
+          placeholder={allowAllClassOption ? allClassLabel : 'Select a class'}
+          searchPlaceholder="Search classes..."
+          emptyText="No classes found."
+          onClear={allowAllClassOption ? () => setClassId('all') : undefined}
+          showCloseAction
+        />
       </div>
 
       <div className="app-field-group">
         <Label className="app-field-label">Subject</Label>
-        <Select value={subjectId} onValueChange={setSubjectId} disabled={disableClassSubject}>
-          <SelectTrigger>
-            <SelectValue
-              placeholder={
-                subjectsLoading
-                  ? 'Loading subjects...'
-                  : allowAllSubjectOption
-                    ? allSubjectLabel
-                    : !classId
-                    ? 'Select a class first'
-                    : 'Select a subject'
-              }
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {allowAllSubjectOption ? (
-              <SelectItem value="all">{allSubjectLabel}</SelectItem>
-            ) : null}
-            {subjects.map((sub) => (
-              <SelectItem key={sub._id} value={sub._id}>
-                {sub.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableCommandSelect
+          value={subjectId}
+          options={subjectSelectOptions}
+          onValueChange={setSubjectId}
+          disabled={disableClassSubject}
+          placeholder={
+            subjectsLoading
+              ? 'Loading subjects...'
+              : allowAllSubjectOption
+                ? allSubjectLabel
+                : !classId
+                  ? 'Select a class first'
+                  : 'Select a subject'
+          }
+          searchPlaceholder="Search subjects..."
+          emptyText="No subjects found."
+          onClear={allowAllSubjectOption ? () => setSubjectId('all') : undefined}
+          showCloseAction
+        />
       </div>
 
       <div className="app-field-group">
@@ -213,7 +242,7 @@ export function MetadataSelector({
   return (
     <Card className="app-surface overflow-hidden shadow-none">
       <CardHeader className="app-section-header">
-        <CardTitle className="text-base">{title}</CardTitle>
+        <CardTitle>{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>
       <CardContent className={cn('app-section-body space-y-4', contentClassName)}>{fields}</CardContent>

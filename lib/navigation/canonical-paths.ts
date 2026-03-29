@@ -1,4 +1,5 @@
 const PUBLIC_PATH_PREFIXES = [
+  "/platform-home",
   "/about",
   "/benefits",
   "/register",

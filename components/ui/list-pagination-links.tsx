@@ -75,7 +75,7 @@ export default function ListPaginationLinks({
       <div className="flex flex-wrap items-center gap-2">
         {previousHref ? (
           <Button asChild variant="outline" size="sm" className="app-button-compact">
-            <AppPrefetchLink href={previousHref} prefetchOnMount>
+            <AppPrefetchLink href={previousHref} prefetchOnMount scroll={false}>
               <ChevronLeft className="h-4 w-4" />
               Prev
             </AppPrefetchLink>
@@ -95,7 +95,7 @@ export default function ListPaginationLinks({
 
         {nextHref ? (
           <Button asChild variant="outline" size="sm" className="app-button-compact">
-            <AppPrefetchLink href={nextHref} prefetchOnMount>
+            <AppPrefetchLink href={nextHref} prefetchOnMount scroll={false}>
               Next
               <ChevronRight className="h-4 w-4" />
             </AppPrefetchLink>

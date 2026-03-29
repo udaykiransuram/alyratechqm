@@ -1,6 +1,7 @@
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import QuestionEditorClient from "@/components/workspace/QuestionEditorClient";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/button";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { getWorkspaceQuestionById } from "@/lib/server/workspace-assessment-data";
@@ -51,8 +52,9 @@ export default async function EditQuestionPage({
 
   if (!question) {
     return (
-      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+      <PageShell width="wide" padding="standard">
         <PageHero
+          variant="editor"
           eyebrow="Question Bank"
           title="Edit Question"
           description="The requested question could not be loaded."
@@ -63,7 +65,7 @@ export default async function EditQuestionPage({
           }
         />
         <div className="app-empty-state">Question not found.</div>
-      </div>
+      </PageShell>
     );
   }
 

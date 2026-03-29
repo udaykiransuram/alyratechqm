@@ -34,7 +34,6 @@ export default function StudentPortalNav() {
           <AppPrefetchLink
             key={link.href}
             href={link.href}
-            prefetchOnMount
             className={cn(
               "app-segmented-link min-w-[7.5rem] items-center text-center",
               active && "app-segmented-link-active",

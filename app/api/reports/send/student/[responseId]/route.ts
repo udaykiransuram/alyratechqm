@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import { resolveExamRuntimeMongoResponseId } from "@/lib/exam-runtime";
+import { resolveExamRuntimeMongoResponseIdWithCooldown } from "@/lib/exam-runtime-sync-cache";
 import ReportDispatchJob from "../../../../../../models/ReportDispatchJob";
 import { hydrateResponsesWithStudents } from "@/lib/analytics/hydrateResponses";
 import { requireTenantSession } from "@/lib/api-auth";
 import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
+import { resolvePaperSubjectIds } from "@/lib/question-paper/subjects";
+import {
+  isSectionInScope,
+  normalizeScopeId,
+  resolveTeacherPaperScope,
+} from "@/lib/question-paper/access";
+import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
 
 function normalizeMobileNumber(input: string): string {
   const digits = String(input || "").replace(/\D/g, "");
@@ -44,7 +51,7 @@ export async function POST(
   const shouldTriggerWorker =
     req.nextUrl.searchParams.get("triggerWorker") !== "0";
   const resolvedResponseId =
-    (await resolveExamRuntimeMongoResponseId(
+    (await resolveExamRuntimeMongoResponseIdWithCooldown(
       schoolKey,
       String(responseId || ""),
     )) || String(responseId || "");
@@ -83,7 +90,7 @@ export async function POST(
     "AcademicSection",
   ]);
   const rawResponse = await QPRModel.findById(resolvedResponseId)
-    .populate("paper", "title")
+    .populate("paper", "title class subject subjectIds assignedAcademicSections")
     .lean();
 
   if (!rawResponse || Array.isArray(rawResponse)) {
@@ -109,6 +116,67 @@ export async function POST(
   }
 
   const student: any = response.student;
+  if (auth.session.user.role === "teacher") {
+    const scopedUser = await UserModel.findById(auth.session.user.id)
+      .select(
+        "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
+      )
+      .lean();
+    const paperObj: any = (rawResponse as any)?.paper || {};
+    const assignedSectionIds = Array.isArray(paperObj?.assignedAcademicSections)
+      ? paperObj.assignedAcademicSections
+          .map((section: any) => normalizeScopeId(section))
+          .filter(Boolean)
+      : [];
+    const teacherScope = resolveTeacherPaperScope(
+      scopedUser,
+      normalizeScopeId(paperObj?.class),
+      resolvePaperSubjectIds(paperObj),
+      assignedSectionIds,
+    );
+
+    if (
+      !teacherScope.hasClassAccess ||
+      !teacherScope.hasSubjectAccess ||
+      !teacherScope.hasSectionAccess
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You do not have access to dispatch reports for this paper.",
+        },
+        { status: 403 },
+      );
+    }
+
+    const studentSectionId = normalizeScopeId(
+      student?.academicSection?._id || student?.academicSection,
+    );
+    if (!studentSectionId && !teacherScope.hasAllSections) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Teacher-scoped dispatch requires the student to belong to an assigned section.",
+        },
+        { status: 403 },
+      );
+    }
+    if (
+      studentSectionId &&
+      !isSectionInScope(studentSectionId, teacherScope.allowedSectionIds)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "You do not have access to dispatch reports for this student's section.",
+        },
+        { status: 403 },
+      );
+    }
+  }
+
   const normalizedMobile = normalizeMobileNumber(student?.mobileNumber || "");
   if (!normalizedMobile) {
     return NextResponse.json(
@@ -135,7 +203,7 @@ export async function POST(
     if (shouldTriggerWorker && existingQueued.status === "queued") {
       try {
         await runReportDispatchWorker({
-          origin: req.nextUrl.origin,
+          origin: getTrustedInternalOrigin(),
           schoolKey,
           jobIds: [String(existingQueued._id)],
         });
@@ -184,7 +252,7 @@ export async function POST(
   if (shouldTriggerWorker) {
     try {
       await runReportDispatchWorker({
-        origin: req.nextUrl.origin,
+        origin: getTrustedInternalOrigin(),
         schoolKey,
         jobIds: [String(job._id)],
       });

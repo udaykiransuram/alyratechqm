@@ -59,7 +59,6 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
       onlineEndsAt: "",
       sections,
       classId: paper.class?._id ?? "",
-      subjectId: paper.subject?._id ?? "",
       instructions: paper.instructions ?? "",
       duration: paper.duration ?? 60,
       passingMarks: paper.passingMarks ?? 0,
@@ -173,8 +172,8 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
             "/api/tags/with-subjects",
           ]}
         >
-          <Button variant="secondary">
-            <Pencil className="mr-2 h-4 w-4" />
+          <Button variant="secondary" className="app-button-inline">
+            <Pencil className="h-4 w-4" />
             Edit
           </Button>
         </AppPrefetchLink>
@@ -182,18 +181,22 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
           variant="outline"
           onMouseEnter={prefetchQuestionPaperForm}
           onFocus={prefetchQuestionPaperForm}
-          onClick={() => {
+          onClick={(event) => {
             const copyPayload = buildCopyPayload("");
             sessionStorage.setItem("questionPaperCopy", JSON.stringify(copyPayload));
-            announceNavigationStart(createPaperHref);
+            announceNavigationStart(
+              createPaperHref,
+              event.currentTarget,
+            );
             router.push(createPaperHref);
           }}
+          className="app-button-inline"
         >
-          <Copy className="mr-2 h-4 w-4" />
+          <Copy className="h-4 w-4" />
           Make a Copy
         </Button>
-        <Button variant="outline" onClick={() => setShowModal(true)}>
-          <Copy className="mr-2 h-4 w-4" />
+        <Button variant="outline" className="app-button-inline" onClick={() => setShowModal(true)}>
+          <Copy className="h-4 w-4" />
           Copy Multiple
         </Button>
       </div>

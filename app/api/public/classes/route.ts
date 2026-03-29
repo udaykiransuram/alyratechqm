@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getPublicClassOptions } from "@/lib/server/public-registration-data";
+import { getPublicSchoolOptionByKey } from "@/lib/server/public-school-data";
+import {
+  buildPublicRegistrationScopeValue,
+  getPublicRegistrationScopeCookieName,
+} from "@/lib/security/registration-security";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -16,12 +22,36 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const classes = await getPublicClassOptions(schoolKey);
+    if (isMockedE2ETestMode()) {
+      return NextResponse.json({
+        success: true,
+        classes: [],
+      });
+    }
 
-    return NextResponse.json({
+    const school = await getPublicSchoolOptionByKey(schoolKey);
+    if (!school) {
+      return NextResponse.json(
+        { success: false, message: "Unknown school." },
+        { status: 404 },
+      );
+    }
+
+    const classes = await getPublicClassOptions(schoolKey);
+    const response = NextResponse.json({
       success: true,
       classes,
     });
+    response.cookies.set({
+      name: getPublicRegistrationScopeCookieName(),
+      value: buildPublicRegistrationScopeValue(schoolKey),
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/api/public",
+      maxAge: 15 * 60,
+    });
+    return response;
   } catch (error: unknown) {
     return NextResponse.json(
       {

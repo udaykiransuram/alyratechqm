@@ -1,23 +1,30 @@
-export const metadata = {
-  title: "Solutions | Alyra Tech",
-  description: "Explore Alyra Tech solutions for diagnostics, ERP, alumni engagement, and OMR-based academic intelligence.",
-};
+import Link from "next/link";
+import { unstable_cache } from "next/cache";
+import { CheckIcon } from "@heroicons/react/20/solid";
 
 import { InnerHero } from "@/components/InnerHero";
-import { Reveal, Stagger } from "@/components/Reveal";
 import { LottieAnimation } from "@/components/LottieAnimation";
 import { ProductSolutions } from "@/components/ProductSolutions";
-import Link from 'next/link';
-import { CheckIcon } from '@heroicons/react/20/solid';
-import { connectDB } from '@/lib/db';
-import PricingPlan from '@/models/PricingPlan';
-import SiteStats from '@/models/SiteStats';
-import Testimonial from '@/models/Testimonial';
-import FAQ from '@/models/FAQ';
+import { PublicFaqStack } from "@/components/public/PublicFaqStack";
+import { PublicFinalCta } from "@/components/public/PublicFinalCta";
+import { PublicSectionIntro } from "@/components/public/PublicSectionIntro";
+import { PublicStatsGrid } from "@/components/public/PublicStatsGrid";
+import { PublicTestimonialsGrid } from "@/components/public/PublicTestimonialsGrid";
+import { connectDB } from "@/lib/db";
+import { resolvePublicPageData } from "@/lib/server/public-page-data";
+import FAQ from "@/models/FAQ";
+import PricingPlan from "@/models/PricingPlan";
+import SiteStats from "@/models/SiteStats";
+import Testimonial from "@/models/Testimonial";
 
-export const revalidate = 60; // re-fetch from DB every 60s
+export const metadata = {
+  title: "Solutions | Alyra Tech",
+  description:
+    "Explore Alyra Tech solutions for diagnostics, ERP, alumni engagement, and OMR-based academic intelligence.",
+};
 
-/* ── Types and fallbacks when DB is empty / unreachable ── */
+export const revalidate = 60;
+
 interface Tier {
   name: string;
   id: string;
@@ -29,244 +36,312 @@ interface Tier {
   mostPopular: boolean;
   studentLimit: number;
 }
-const DEFAULT_TRUST: { key: string; label: string; value: string; icon?: string }[] = [
-  { key: 'schools', label: 'Schools Onboarded', value: '500+', icon: '🏫' },
-  { key: 'students', label: 'Students Diagnosed', value: '50K+', icon: '👨‍🎓' },
-  { key: 'renewalRate', label: 'Renewal Rate', value: '98%', icon: '🔄' },
+
+type TrustStat = {
+  key: string;
+  label: string;
+  value: string;
+  icon?: string;
+};
+
+interface ProductTestimonial {
+  quote: string;
+  author: string;
+  role: string;
+  rating: number;
+}
+
+interface FAQItem {
+  question: string;
+  answer: string;
+}
+
+const DEFAULT_TRUST: TrustStat[] = [
+  { key: "schools", label: "Schools Onboarded", value: "500+", icon: "🏫" },
+  { key: "students", label: "Students Diagnosed", value: "50K+", icon: "👨‍🎓" },
+  { key: "renewalRate", label: "Renewal Rate", value: "98%", icon: "🔄" },
 ];
 
-interface ProductTestimonial { quote: string; author: string; role: string; rating: number }
-interface FAQItem { question: string; answer: string }
-const DEFAULT_PRODUCT_TESTIMONIALS: ProductTestimonial[] = [];
+const PRODUCT_PAGE_FALLBACK = {
+  tiers: [] as Tier[],
+  trustStats: DEFAULT_TRUST,
+  testimonials: [] as ProductTestimonial[],
+  faqs: [] as FAQItem[],
+};
 
-function fmtPrice(price: number, currency = 'INR') {
-  if (price === 0) return 'Custom';
-  return (currency === 'INR' ? '₹' : currency + ' ') + price.toLocaleString('en-IN');
-}
-function fmtPeriod(bp: string) {
-  return bp === 'monthly' ? '/month' : bp === 'yearly' ? '/year' : '';
+function fmtPrice(price: number, currency = "INR") {
+  if (price === 0) return "Custom";
+  return `${currency === "INR" ? "₹" : `${currency} `}${price.toLocaleString("en-IN")}`;
 }
 
-async function getProductPageData() {
-  try {
-    const work = (async () => {
-      await connectDB();
-            const [plans, statsDoc, testimonials, faqDocs]: [any[], any, any[], any[]] = await Promise.all([
-        PricingPlan.find({ isActive: true }).sort({ displayOrder: 1 }).lean(),
-        SiteStats.findOne({ section: 'homepage' }).lean(),
-        Testimonial.find({ section: 'product', isActive: true }).sort({ displayOrder: 1 }).lean(),
-        FAQ.find({ page: 'product', isActive: true }).sort({ displayOrder: 1 }).lean(),
-      ]);
-      const tiers = plans.length
-        ? plans.map((p: any) => ({
-            name: p.name, id: `tier-${p._id}`, href: '/contact',
-            priceDisplay: fmtPrice(p.price, p.currency),
-            periodLabel: fmtPeriod(p.billingPeriod),
-            description: p.description, features: p.features ?? [], mostPopular: !!p.isPopular,
-            studentLimit: p.studentLimit || 0,
-          }))
-        : [];
-      const trustStats: { key: string; label: string; value: string; icon?: string }[] =
-        (statsDoc?.stats ?? []).length
-          ? (statsDoc.stats as any[]).map((s: any) => ({ key: s.key, label: s.label, value: String(s.value), icon: s.icon }))
+function fmtPeriod(billingPeriod: string) {
+  return billingPeriod === "monthly"
+    ? "/month"
+    : billingPeriod === "yearly"
+      ? "/year"
+      : "";
+}
+
+function getStatsColumns(length: number): 2 | 3 | 4 {
+  if (length === 3) return 3;
+  if (length <= 2) return 2;
+  return 4;
+}
+
+const getProductPageData = unstable_cache(
+  async () => {
+    return resolvePublicPageData(
+      async () => {
+        await connectDB();
+
+        const [plans, statsDoc, testimonials, faqDocs]: [any[], any, any[], any[]] =
+          await Promise.all([
+            PricingPlan.find({ isActive: true }).sort({ displayOrder: 1 }).lean(),
+            SiteStats.findOne({ section: "homepage" }).lean(),
+            Testimonial.find({ section: "product", isActive: true })
+              .sort({ displayOrder: 1 })
+              .lean(),
+            FAQ.find({ page: "product", isActive: true })
+              .sort({ displayOrder: 1 })
+              .lean(),
+          ]);
+
+        const tiers: Tier[] = plans.length
+          ? plans.map((plan: any) => ({
+              name: plan.name,
+              id: `tier-${plan._id}`,
+              href: "/contact",
+              priceDisplay: fmtPrice(plan.price, plan.currency),
+              periodLabel: fmtPeriod(plan.billingPeriod),
+              description: plan.description,
+              features: plan.features ?? [],
+              mostPopular: Boolean(plan.isPopular),
+              studentLimit: plan.studentLimit || 0,
+            }))
+          : [];
+
+        const trustStats: TrustStat[] = (statsDoc?.stats ?? []).length
+          ? (statsDoc.stats as any[]).map((stat: any) => ({
+              key: stat.key,
+              label: stat.label,
+              value: String(stat.value),
+              icon: stat.icon,
+            }))
           : DEFAULT_TRUST;
 
-      const productTestimonials: ProductTestimonial[] = testimonials.length
-        ? testimonials.map((t: any) => ({
-            quote: t.quote,
-            author: t.author,
-            role: [t.role, t.school, t.location].filter(Boolean).join(', '),
-            rating: t.rating ?? 5,
-          }))
-        : DEFAULT_PRODUCT_TESTIMONIALS;
-      return {
-        tiers,
-        trustStats,
-        testimonials: productTestimonials,
-        faqs: faqDocs.map((f: any) => ({ question: f.question, answer: f.answer })) as FAQItem[], 
-      };
-    })();
-    return await work;
-  } catch {
-    return { tiers: [], trustStats: DEFAULT_TRUST, testimonials: DEFAULT_PRODUCT_TESTIMONIALS, faqs: [] };
-  }
-}
+        const productTestimonials: ProductTestimonial[] = testimonials.length
+          ? testimonials.map((testimonial: any) => ({
+              quote: testimonial.quote,
+              author: testimonial.author,
+              role: [testimonial.role, testimonial.school, testimonial.location]
+                .filter(Boolean)
+                .join(", "),
+              rating: testimonial.rating ?? 5,
+            }))
+          : [];
+
+        return {
+          tiers,
+          trustStats,
+          testimonials: productTestimonials,
+          faqs: faqDocs.map((faq: any) => ({
+            question: faq.question,
+            answer: faq.answer,
+          })) as FAQItem[],
+        };
+      },
+      PRODUCT_PAGE_FALLBACK,
+      2000,
+    );
+  },
+  ["public-product-page-data"],
+  { revalidate: 60 },
+);
 
 export default async function ProductPage() {
-  const { tiers, trustStats, testimonials: productTestimonials, faqs } = await getProductPageData();
+  const {
+    tiers,
+    trustStats,
+    testimonials: productTestimonials,
+    faqs,
+  } = await getProductPageData();
 
   return (
-    <main className="bg-slate-50/50 min-h-screen">
-      <InnerHero 
-        title="Everything You Need" 
-        subtitle="One process, endless possibilities for your institution."
+    <main className="public-page">
+      <InnerHero
+        title="Everything your school needs to operate, diagnose, and grow"
+        subtitle="Alyra Tech brings diagnostics, school operations, report delivery, and academic intelligence into one premium system designed for real school teams."
         pillText="Solutions"
+        variant="flagship"
         lottieRight="/animations/online-learning-platform.lottie"
         lottieLeft="/animations/growth-chart.lottie"
-      />
+      >
+        <Link href="/contact" className="public-button-primary">
+          Book a demo
+        </Link>
+        <Link href="/talent-test" className="public-button-secondary">
+          Explore talent test
+        </Link>
+      </InnerHero>
 
-      {/* Solutions - Dynamic Animated Cards */}
       <ProductSolutions />
 
-      {/* Pricing Section (render only when backend has active plans) */}
-      {tiers.length > 0 && (
-      <section className="mx-auto max-w-7xl px-6 py-24 lg:px-8 relative border-t border-slate-200/60 mt-20">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-gradient-to-r from-indigo-100/20 to-emerald-100/20 rounded-full blur-[100px] pointer-events-none" />
-        
-        <div className="text-center max-w-2xl mx-auto mb-16 relative z-10">
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Transparent Pricing</h2>
-          <p className="mt-4 text-lg text-slate-600">Choose the perfect plan for your institution&apos;s size and ambitions.</p>
-        </div>
+      {tiers.length > 0 ? (
+        <section className="public-section public-section-divider">
+          <div className="public-shell">
+            <PublicSectionIntro
+              eyebrow="Pricing"
+              title="Transparent plans for institutions that want clarity early"
+              description="Choose a starting point, run a pilot, and expand only when the academic and operational value is obvious."
+            />
 
-        <Stagger className="grid max-w-lg grid-cols-1 gap-8 mx-auto lg:max-w-none lg:grid-cols-3 relative z-10">
-          {tiers.map((tier) => (
-            <div
-              key={tier.id}
-              className={`relative flex flex-col justify-between rounded-3xl p-8 transition-all duration-300 ${
-                tier.mostPopular
-                  ? 'bg-white ring-2 ring-emerald-500 shadow-2xl lg:scale-105 z-10'
-                  : 'bg-white/60 backdrop-blur-sm ring-1 ring-slate-200 shadow-sm hover:shadow-lg hover:bg-white hover:-translate-y-1'
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between gap-x-4">
-                  <h3
-                    id={tier.id}
-                    className={`text-lg font-semibold leading-8 ${
-                      tier.mostPopular ? 'text-emerald-700' : 'text-slate-900'
-                    }`}
+            <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {tiers.map((tier) => (
+                <article
+                  key={tier.id}
+                  className={
+                    tier.mostPopular
+                      ? "public-panel relative flex h-full flex-col justify-between p-7 md:p-8"
+                      : "public-card relative flex h-full flex-col justify-between p-7 md:p-8"
+                  }
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h3 className="text-xl font-semibold tracking-[-0.03em] text-[hsl(var(--public-ink))]">
+                        {tier.name}
+                      </h3>
+                      {tier.mostPopular ? (
+                        <span className="public-eyebrow border-[hsl(var(--public-accent))/0.18] bg-[hsl(var(--public-accent))/0.1] px-3 py-1 text-[10px] text-[hsl(var(--public-accent))]">
+                          Most Popular
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <p className="mt-4 text-sm leading-7 text-[hsl(var(--public-muted))]">
+                      {tier.description}
+                    </p>
+
+                    <div className="mt-7 flex items-end gap-2">
+                      <div className="text-4xl font-semibold tracking-[-0.05em] text-[hsl(var(--public-ink))]">
+                        {tier.priceDisplay}
+                      </div>
+                      {tier.periodLabel ? (
+                        <div className="pb-1 text-sm font-medium text-[hsl(var(--public-muted))]">
+                          {tier.periodLabel}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <ul className="mt-8 space-y-3 text-sm leading-7 text-[hsl(var(--public-ink-soft))]">
+                      {tier.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-3">
+                          <CheckIcon className="mt-0.5 h-5 w-5 flex-none text-[hsl(var(--public-accent))]" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                      {tier.studentLimit > 0 ? (
+                        <li className="flex items-start gap-3 font-medium text-[hsl(var(--public-ink))]">
+                          <CheckIcon className="mt-0.5 h-5 w-5 flex-none text-[hsl(var(--public-accent))]" />
+                          <span>
+                            Up to {tier.studentLimit.toLocaleString()} students
+                          </span>
+                        </li>
+                      ) : null}
+                    </ul>
+                  </div>
+
+                  <Link
+                    href={tier.href}
+                    className={`mt-8 ${tier.mostPopular ? "public-button-primary" : "public-button-secondary"}`}
                   >
-                    {tier.name}
-                  </h3>
-                  {tier.mostPopular && (
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold leading-5 text-emerald-600 ring-1 ring-inset ring-emerald-200">
-                      Most Popular
-                    </span>
-                  )}
-                </div>
-                <p className="mt-4 text-sm leading-6 text-slate-600">{tier.description}</p>
-                <p className="mt-6 flex items-baseline gap-x-1">
-                  <span className="text-4xl font-bold tracking-tight text-slate-900">{tier.priceDisplay}</span>
-                  {tier.periodLabel && <span className="text-sm font-semibold leading-6 text-slate-500">{tier.periodLabel}</span>}
-                </p>
-                <ul role="list" className="mt-8 space-y-3 text-sm leading-6 text-slate-600">
-                  {tier.features.map((feature: string) => (
-                    <li key={feature} className="flex gap-x-3">
-                      <CheckIcon className="h-6 w-5 flex-none text-emerald-500" aria-hidden="true" />
-                      {feature}
-                    </li>
-                  ))}
-                  {tier.studentLimit > 0 && (
-                    <li className="flex gap-x-3 font-medium text-slate-700">
-                      <CheckIcon className="h-6 w-5 flex-none text-emerald-500" aria-hidden="true" />
-                      Up to {tier.studentLimit.toLocaleString()} Students
-                    </li>
-                  )}
-                </ul>
-              </div>
-              <Link
-                href={tier.href}
-                className={`mt-8 block rounded-xl px-3 py-3 text-center text-sm font-semibold leading-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 transition-all duration-300 ${
-                  tier.mostPopular
-                    ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-500 focus-visible:outline-emerald-600'
-                    : 'bg-slate-50 text-slate-900 ring-1 ring-inset ring-slate-200 hover:bg-slate-100 hover:ring-slate-300'
-                }`}
-              >
-                Get started
-              </Link>
+                    Get started
+                  </Link>
+                </article>
+              ))}
             </div>
-          ))}
-        </Stagger>
-      </section>
-      )}
+          </div>
+        </section>
+      ) : null}
 
-      {/* Trust Band */}
-      <section className="bg-slate-900 py-20 text-white">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <Reveal>
-            <div className="text-center mb-12">
-              <h3 className="text-3xl md:text-4xl font-bold tracking-tight">Trusted by India&apos;s Best Schools</h3>
-              <p className="mt-3 text-slate-400 text-lg">Powering academic growth in 15+ states across the country.</p>
-            </div>
-          </Reveal>
-          <Stagger className={`grid grid-cols-2 ${trustStats.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-8 text-center`}>
-            {trustStats.map((stat) => (
-              <div key={stat.key} className="py-4">
-                {stat.icon && <div className="text-2xl md:text-3xl mb-2">{stat.icon}</div>}
-                <div className="text-4xl md:text-5xl font-black text-white mb-2">{stat.value}</div>
-                <div className="text-emerald-400 font-mono text-xs md:text-sm tracking-wider">{stat.label.toUpperCase()}</div>
-              </div>
-            ))}
-          </Stagger>
+      <section className="public-section">
+        <div className="public-shell">
+          <div className="public-band-dark p-8 md:p-12 lg:p-14">
+            <PublicSectionIntro
+              eyebrow="Trust"
+              title="Trusted by schools that need better academic visibility"
+              description="Alyra Tech is built for principals and academic leaders who want deeper evidence, cleaner operations, and faster action after every test cycle."
+              className="max-w-2xl"
+              align="left"
+              titleClassName="!text-white"
+              descriptionClassName="!text-white/78"
+            />
+
+            <PublicStatsGrid
+              items={trustStats.map((stat) => ({
+                icon: stat.icon ? <span>{stat.icon}</span> : undefined,
+                value: stat.value,
+                label: stat.label,
+              }))}
+              columns={getStatsColumns(trustStats.length)}
+              tone="dark"
+              className="mt-10"
+            />
+          </div>
         </div>
       </section>
 
-      {/* Product Testimonials */}
-      {productTestimonials.length > 0 && (
-        <section className="mx-auto max-w-7xl px-6 py-20 lg:px-8">
-          <Reveal>
-            <div className="text-center mb-12">
-              <h3 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">What Our Clients Say</h3>
-              <p className="mt-3 text-lg text-slate-600">Hear from schools already using Alyra Tech.</p>
-            </div>
-          </Reveal>
-          <Stagger className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {productTestimonials.map((t, i) => (
-              <div key={i} className="bg-white p-6 md:p-8 rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg transition-shadow duration-300">
-                <div className="mb-4 flex gap-1">
-                  {[...Array(t.rating)].map((_, j) => (
-                    <span key={j} className="text-lg text-amber-500">⭐</span>
-                  ))}
-                </div>
-                <p className="italic text-slate-600 leading-relaxed">&quot;{t.quote}&quot;</p>
-                <div className="mt-5 pt-4 border-t border-slate-100">
-                  <p className="font-bold text-slate-900">{t.author}</p>
-                  <p className="text-sm text-slate-500">{t.role}</p>
-                </div>
-              </div>
-            ))}
-          </Stagger>
-        </section>
-      )}
-
-      {/* FAQ Section */}
-      {faqs.length > 0 && (
-        <section className="mx-auto max-w-4xl px-6 py-20 lg:px-8">
-          <Reveal>
-            <h3 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 text-center mb-12">Frequently Asked Questions</h3>
-          </Reveal>
-          <Stagger className="space-y-6">
-            {faqs.map((faq, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
-                <h4 className="text-lg font-bold text-slate-900">{faq.question}</h4>
-                <p className="mt-3 text-slate-600 leading-relaxed">{faq.answer}</p>
-              </div>
-            ))}
-          </Stagger>
-        </section>
-      )}
-
-      {/* Bottom CTA */}
-      <section className="mx-auto max-w-7xl px-6 py-24 lg:px-8">
-        <div className="rounded-[2rem] md:rounded-[2.5rem] bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 p-6 sm:p-10 lg:p-16 text-center text-white relative overflow-hidden">
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none"></div>
-          <div className="mx-auto max-w-xs mb-6">
-            <LottieAnimation src="/animations/seo-team-isometric.lottie" className="w-full h-[200px]" />
+      {productTestimonials.length > 0 ? (
+        <section className="public-section">
+          <div className="public-shell">
+            <PublicSectionIntro
+              eyebrow="Testimonials"
+              title="What school teams say after rollout"
+              description="The value shows up in faster decisions, clearer teaching plans, and reports that people actually use."
+            />
+            <PublicTestimonialsGrid
+              items={productTestimonials.map((testimonial) => ({
+                quote: testimonial.quote,
+                author: testimonial.author,
+                role: testimonial.role,
+                rating: testimonial.rating,
+              }))}
+              className="mt-12"
+            />
           </div>
-          <Reveal>
-            <h3 className="relative z-10 text-3xl md:text-4xl font-bold mb-4">Ready to modernize your institution?</h3>
-            <p className="relative z-10 text-lg text-white/80 max-w-xl mx-auto mb-8">
-              Start with a pilot. No long-term contracts, no risk — just results.
-            </p>
-            <div className="relative z-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/contact" className="rounded-full bg-white px-8 py-4 text-lg font-semibold text-teal-700 shadow-xl transition hover:shadow-2xl hover:opacity-95">
-                Book a Demo
-              </Link>
-              <Link href="/talent-test" className="rounded-full border-2 border-white px-8 py-4 text-lg font-semibold text-white transition hover:bg-white/10">
-                Try the Talent Test
-              </Link>
-            </div>
-          </Reveal>
+        </section>
+      ) : null}
+
+      {faqs.length > 0 ? (
+        <section className="public-section">
+          <div className="public-shell-narrow">
+            <PublicSectionIntro
+              eyebrow="FAQ"
+              title="Questions teams usually ask before they start"
+              description="The first conversation is usually about rollout, reports, and what changes for the school team. Here are the common answers."
+            />
+            <PublicFaqStack items={faqs} className="mt-12" />
+          </div>
+        </section>
+      ) : null}
+
+      <section className="public-section pt-0">
+        <div className="public-shell">
+          <PublicFinalCta
+            eyebrow="Ready to Start"
+            title="See how Alyra Tech can fit your school before you commit."
+            description="Run a pilot, review the diagnostic depth, and decide from real outcomes instead of a sales deck."
+            primaryAction={{ href: "/contact", label: "Book a demo" }}
+            secondaryAction={{
+              href: "/talent-test",
+              label: "Try the talent test",
+            }}
+            visual={
+              <LottieAnimation
+                src="/animations/seo-team-isometric.lottie"
+                className="h-[220px] w-full max-w-sm"
+              />
+            }
+          />
         </div>
       </section>
     </main>

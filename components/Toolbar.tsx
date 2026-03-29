@@ -4,7 +4,7 @@ import type { Editor } from '@tiptap/core';
 import {
   Bold, Italic, Underline, Strikethrough, List, ListOrdered,
   Heading1, Heading2, Link as LinkIcon, Quote, Minus, Image as ImageIcon,
-  Undo, Redo, Sigma
+  Undo, Redo, Sigma, Upload
 } from 'lucide-react';
 import { Toggle } from '@/components/ui/toggle';
 
@@ -12,10 +12,11 @@ type Props = {
   editor: Editor | null;
   onSetLink: () => void;
   onAddImage: () => void;
+  onUploadImage: () => void;
   onOpenMathModal: () => void;
 };
 
-export function Toolbar({ editor, onSetLink, onAddImage, onOpenMathModal }: Props) {
+export function Toolbar({ editor, onSetLink, onAddImage, onUploadImage, onOpenMathModal }: Props) {
   if (!editor) {
     return null;
   }
@@ -104,10 +105,17 @@ export function Toolbar({ editor, onSetLink, onAddImage, onOpenMathModal }: Prop
       </Toggle>
       <Toggle
         size="sm"
-        aria-label="Image"
+        aria-label="Image URL"
         onClick={onAddImage}
       >
         <ImageIcon className="h-4 w-4" />
+      </Toggle>
+      <Toggle
+        size="sm"
+        aria-label="Upload image"
+        onClick={onUploadImage}
+      >
+        <Upload className="h-4 w-4" />
       </Toggle>
       <Toggle
         size="sm"

@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const auth = await requireTenantSession(req, {
-    allowRoles: ["admin", "teacher"],
+    allowRoles: ["admin"],
   });
   if (!auth.ok) {
     return auth.response;

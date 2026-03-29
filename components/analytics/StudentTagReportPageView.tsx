@@ -1,59 +1,32 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import React, { useEffect, useState, useRef } from "react";
 import LoadingState from "@/components/analytics/LoadingState";
 import ErrorState from "@/components/analytics/ErrorState";
 import ReportHeader from "@/components/analytics/ReportHeader";
 import StatsTable from "@/components/analytics/StatsTable";
+import ComparisonInsightsCard from "@/components/analytics/insights/ComparisonInsightsCard";
+import FailInsightsCard from "@/components/analytics/insights/FailInsightsCard";
 import {
-  sortStatsRows,
-  getConsolidatedStudentList,
+  AnalyticsChartView,
+  AnalyticsExportControls,
+  AnalyticsOptionTagModal,
+  AnalyticsQuestionListModal,
+  AnalyticsStudentTagReportSetupControls,
+} from "@/components/analytics/report-client-lazy";
+import {
   computeInsightsForLastTag,
   buildStudentAreaMetrics,
 } from "@/components/analytics/helpers";
 import { Button } from "@/components/ui/button";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { ArrowLeft } from "lucide-react";
+import { reconcileAnalyticsGroupBy } from "@/lib/analytics/group-by";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
+import type { StudentTagReportPageBootstrap } from "@/lib/analytics/student-tag-report-page";
 
 const REPORT_CACHE_TTL_MS = 15_000;
 const REPORT_SETUP_CACHE_TTL_MS = 60_000;
-
-const ChartView = dynamic(() => import("@/components/analytics/ChartView"), {
-  ssr: false,
-  loading: () => (
-    <div className="analytics-card analytics-card-body">
-      <p className="text-sm text-muted-foreground">Loading charts...</p>
-    </div>
-  ),
-});
-
-const AnalyticsExportControls = dynamic(
-  () => import("@/components/analytics/AnalyticsExportControls"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-9 w-full rounded-xl border border-border/60 bg-muted/30 sm:w-56" />
-    ),
-  },
-);
-
-const QuestionListModal = dynamic(
-  () => import("@/components/analytics/QuestionListModal"),
-  {
-    ssr: false,
-    loading: () => null,
-  },
-);
-
-const OptionTagModal = dynamic(
-  () => import("@/components/analytics/OptionTagModal"),
-  {
-    ssr: false,
-    loading: () => null,
-  },
-);
 
 type ReportFilterOption = {
   value: string;
@@ -64,35 +37,49 @@ type StudentTagReportPageProps = {
   params: { responseId: string };
   portalMode?: "admin" | "student";
   defaultBackHref?: string;
+  initialBootstrap?: StudentTagReportPageBootstrap | null;
 };
+
+function reconcileGroupBy(
+  current: string[],
+  fields: { value: string; label: string }[],
+  options?: {
+    requiredFieldValues?: string[];
+  },
+) {
+  return reconcileAnalyticsGroupBy(current, fields, options);
+}
 
 export function StudentTagReportPageView({
   params,
   portalMode = "admin",
   defaultBackHref,
+  initialBootstrap = null,
 }: StudentTagReportPageProps) {
   const isStudentPortal = portalMode === "student";
   const fallbackBackHref = defaultBackHref || (isStudentPortal ? "/student/account" : "/workspace/students");
   const { navigateBack } = useBackNavigation(fallbackBackHref);
-  const [stats, setStats] = useState<any>({});
-  const [student, setStudent] = useState<string>("");
-  const [rollNumber, setRollNumber] = useState<string>("");
-  const [paper, setPaper] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<any>(initialBootstrap?.stats || {});
+  const [student, setStudent] = useState<string>(initialBootstrap?.student || "");
+  const [rollNumber, setRollNumber] = useState<string>(initialBootstrap?.rollNumber || "");
+  const [paper, setPaper] = useState<string>(initialBootstrap?.paper || "");
+  const [loading, setLoading] = useState(!initialBootstrap);
+  const [error, setError] = useState<string | null>(initialBootstrap?.error || null);
 
   const [groupFields, setGroupFields] = useState<
     { value: string; label: string }[]
-  >([]);
-  const [groupBy, setGroupBy] = useState<string[]>([]);
+  >(initialBootstrap?.groupFields || []);
+  const [groupBy, setGroupBy] = useState<string[]>(initialBootstrap?.groupBy || []);
   const [classLevel, setClassLevel] = useState(false);
-  const [classOptions, setClassOptions] = useState<ReportFilterOption[]>([]);
+  const [classOptions, setClassOptions] = useState<ReportFilterOption[]>(
+    initialBootstrap?.classOptions || [],
+  );
   const [subjectOptions, setSubjectOptions] = useState<ReportFilterOption[]>(
-    [],
+    initialBootstrap?.subjectOptions || [],
   );
   const [academicSectionOptions, setAcademicSectionOptions] = useState<
     ReportFilterOption[]
-  >([]);
+  >(initialBootstrap?.academicSectionOptions || []);
   const [selectedClassId, setSelectedClassId] = useState("all");
   const [selectedSubjectId, setSelectedSubjectId] = useState("all");
   const [selectedAcademicSectionId, setSelectedAcademicSectionId] =
@@ -132,21 +119,17 @@ export function StudentTagReportPageView({
   const [showOptionTagsColumn, setShowOptionTagsColumn] =
     useState<boolean>(false);
   const [view, setView] = useState<"table" | "charts">("table");
-  const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
+  const [hasFetchedOnce, setHasFetchedOnce] = useState(
+    Boolean(initialBootstrap && !initialBootstrap.error && initialBootstrap.groupBy.length > 0),
+  );
   const [showControls, setShowControls] = useState(false);
 
   const tableRef = useRef<HTMLDivElement>(null);
 
   // For student vs class comparison
-  const [classStatsCompare, setClassStatsCompare] = useState<any>({});
-  // Pagination state: comparison table (student vs class)
-  const [cmpPage, setCmpPage] = useState(1);
-  const [cmpPageSize, setCmpPageSize] = useState(12);
-  const [cmpShowAll, setCmpShowAll] = useState(false);
-  // Pagination state: fallback/class-only insights table
-  const [insPage, setInsPage] = useState(1);
-  const [insPageSize, setInsPageSize] = useState(12);
-  const [insShowAll, setInsShowAll] = useState(false);
+  const [classStatsCompare, setClassStatsCompare] = useState<any>(
+    initialBootstrap?.classStatsCompare || {},
+  );
 
   // Derived insights for panel (student vs class level)
   const insights = React.useMemo(() => {
@@ -317,31 +300,204 @@ export function StudentTagReportPageView({
     selectedClassId !== "all" ||
     selectedSubjectId !== "all" ||
     selectedAcademicSectionId !== "all";
+  const searchableClassOptions = React.useMemo(
+    () => [
+      {
+        value: "all",
+        label: "All classes",
+        description: "Review report data across every class.",
+      },
+      ...classOptions,
+    ],
+    [classOptions],
+  );
+  const searchableSubjectOptions = React.useMemo(
+    () => [
+      {
+        value: "all",
+        label: "All subjects",
+        description: "Keep the report scoped to every subject.",
+      },
+      ...subjectOptions,
+    ],
+    [subjectOptions],
+  );
+  const searchableAcademicSectionOptions = React.useMemo(
+    () => [
+      {
+        value: "all",
+        label: "All sections",
+        description: "Review every academic section together.",
+      },
+      ...academicSectionOptions,
+    ],
+    [academicSectionOptions],
+  );
+
+  const activeClassLabel =
+    selectedClassId !== "all"
+      ? classOptions.find((option) => option.value === selectedClassId)?.label ||
+        "Filtered class"
+      : "All classes";
+  const activeSubjectLabel =
+    selectedSubjectId !== "all"
+      ? subjectOptions.find((option) => option.value === selectedSubjectId)
+          ?.label || "Filtered subject"
+      : "All subjects";
+  const activeAcademicSectionLabel =
+    selectedAcademicSectionId !== "all"
+      ? academicSectionOptions.find(
+          (option) => option.value === selectedAcademicSectionId,
+        )?.label || "Filtered section"
+      : "All class sections";
 
   const activeFiltersLabel =
     [
-      selectedClassId !== "all"
-        ? `Class: ${
-            classOptions.find((option) => option.value === selectedClassId)
-              ?.label || "Filtered class"
-          }`
-        : null,
-      selectedSubjectId !== "all"
-        ? `Subject: ${
-            subjectOptions.find((option) => option.value === selectedSubjectId)
-              ?.label || "Filtered subject"
-          }`
-        : null,
+      selectedClassId !== "all" ? `Class: ${activeClassLabel}` : null,
+      selectedSubjectId !== "all" ? `Subject: ${activeSubjectLabel}` : null,
       selectedAcademicSectionId !== "all"
-        ? `Section: ${
-            academicSectionOptions.find(
-              (option) => option.value === selectedAcademicSectionId,
-            )?.label || "Filtered section"
-          }`
+        ? `Section: ${activeAcademicSectionLabel}`
         : null,
     ]
       .filter(Boolean)
       .join(" • ") || "All questions and sections";
+
+  const headerSummaryBadges = [
+    activeModeLabel,
+    groupingPreviewLabel,
+    activeFiltersLabel,
+  ];
+  const outputTitle = view === "table" ? "Grouped Analytics" : "Chart View";
+  const outputNote =
+    view === "table"
+      ? "Switch views, keep sort context visible, and export the current report from one place."
+      : "Scan the same grouped data visually without leaving the report.";
+  const outputMetaLabel =
+    view === "table" ? activeSortLabel : groupingPreviewLabel;
+
+  const loadReportSetup = React.useCallback(
+    async (overrides?: {
+      schoolKey?: string;
+      classId?: string;
+      subjectId?: string;
+    }) => {
+      const resolvedSchoolKey =
+        overrides?.schoolKey || schoolKey || resolveClientSchoolKey();
+
+      if (!resolvedSchoolKey) {
+        throw new Error("Please select a school in the navbar to load analytics.");
+      }
+
+      const searchParams = new URLSearchParams();
+      searchParams.set("groupFields", "1");
+      const resolvedClassId = overrides?.classId ?? selectedClassId;
+      const resolvedSubjectId = overrides?.subjectId ?? selectedSubjectId;
+      if (resolvedClassId && resolvedClassId !== "all") {
+        searchParams.set("classId", resolvedClassId);
+      }
+      if (resolvedSubjectId && resolvedSubjectId !== "all") {
+        searchParams.set("subjectId", resolvedSubjectId);
+      }
+
+      const data = await fetchApiJson<any>(
+        `/api/analytics/student-tag-report/${params.responseId}?${searchParams.toString()}`,
+        {
+          cache: "no-store",
+          schoolKey: resolvedSchoolKey,
+          fallbackMessage: "Failed to load report setup.",
+          clientCacheTtlMs: REPORT_SETUP_CACHE_TTL_MS,
+          preferClientCache: true,
+        },
+      );
+
+      const nextFields = Array.isArray(data?.fields) ? data.fields : [];
+      const nextClassOptions = Array.isArray(data?.filters?.classes)
+        ? data.filters.classes
+        : [];
+      const nextSubjectOptions = Array.isArray(data?.filters?.subjects)
+        ? data.filters.subjects
+        : [];
+      const nextAcademicSectionOptions = Array.isArray(
+        data?.filters?.academicSections,
+      )
+        ? data.filters.academicSections
+        : [];
+
+      if (nextFields.length === 0) {
+        throw new Error("No analytics fields are available for this response yet.");
+      }
+
+      const baseGroupBy =
+        resolvedSubjectId === "all" && nextSubjectOptions.length > 1
+          ? []
+          : groupBy;
+      const nextGroupBy = reconcileGroupBy(baseGroupBy, nextFields, {
+        requiredFieldValues:
+          resolvedSubjectId === "all" && nextSubjectOptions.length > 1
+            ? ["subject"]
+            : [],
+      });
+      setGroupFields(nextFields);
+      setClassOptions(nextClassOptions);
+      setSubjectOptions(nextSubjectOptions);
+      setAcademicSectionOptions(nextAcademicSectionOptions);
+      setSelectedClassId((currentValue) =>
+        currentValue !== "all" &&
+        !nextClassOptions.some(
+          (option: ReportFilterOption) => option.value === currentValue,
+        )
+          ? "all"
+          : currentValue,
+      );
+      setSelectedSubjectId((currentValue) =>
+        currentValue !== "all" &&
+        !nextSubjectOptions.some(
+          (option: ReportFilterOption) => option.value === currentValue,
+        )
+          ? "all"
+          : currentValue,
+      );
+      setSelectedAcademicSectionId((currentValue) =>
+        currentValue !== "all" &&
+        !nextAcademicSectionOptions.some(
+          (option: ReportFilterOption) => option.value === currentValue,
+        )
+          ? "all"
+          : currentValue,
+      );
+      setGroupBy(nextGroupBy);
+
+      return {
+        nextGroupBy,
+      };
+    },
+    [groupBy, params.responseId, schoolKey, selectedClassId, selectedSubjectId],
+  );
+
+  useEffect(() => {
+    if (!initialBootstrap) {
+      return;
+    }
+
+    setStats(initialBootstrap.stats || {});
+    setStudent(initialBootstrap.student || "");
+    setRollNumber(initialBootstrap.rollNumber || "");
+    setPaper(initialBootstrap.paper || "");
+    setError(initialBootstrap.error || null);
+    setLoading(false);
+    setGroupFields(initialBootstrap.groupFields || []);
+    setGroupBy(initialBootstrap.groupBy || []);
+    setClassOptions(initialBootstrap.classOptions || []);
+    setSubjectOptions(initialBootstrap.subjectOptions || []);
+    setAcademicSectionOptions(initialBootstrap.academicSectionOptions || []);
+    setSelectedClassId("all");
+    setSelectedSubjectId("all");
+    setSelectedAcademicSectionId("all");
+    setClassStatsCompare(initialBootstrap.classStatsCompare || {});
+    setHasFetchedOnce(
+      !initialBootstrap.error && initialBootstrap.groupBy.length > 0,
+    );
+  }, [initialBootstrap, params.responseId]);
 
   useEffect(() => {
     if (isStudentPortal && classLevel) {
@@ -350,17 +506,26 @@ export function StudentTagReportPageView({
   }, [classLevel, isStudentPortal]);
 
   useEffect(() => {
+    const sk = resolveClientSchoolKey();
+    setSchoolKey(sk);
+
+    if (initialBootstrap) {
+      setLoading(false);
+      return;
+    }
+
     void (async () => {
-      const sk = resolveClientSchoolKey();
-      setSchoolKey(sk);
       if (!sk) {
         setLoading(false);
         setError("Please select a school in the navbar to load analytics.");
         return;
       }
       try {
+        const searchParams = new URLSearchParams();
+        searchParams.set("groupFields", "1");
+
         const data = await fetchApiJson<any>(
-          `/api/analytics/student-tag-report/${params.responseId}?groupFields=1`,
+          `/api/analytics/student-tag-report/${params.responseId}?${searchParams.toString()}`,
           {
             cache: "no-store",
             schoolKey: sk,
@@ -369,36 +534,34 @@ export function StudentTagReportPageView({
             preferClientCache: true,
           },
         );
-        setGroupFields(Array.isArray(data?.fields) ? data.fields : []);
-        setClassOptions(
-          Array.isArray(data?.filters?.classes) ? data.filters.classes : [],
-        );
-        setSubjectOptions(
-          Array.isArray(data?.filters?.subjects) ? data.filters.subjects : [],
-        );
-        setAcademicSectionOptions(
-          Array.isArray(data?.filters?.academicSections)
-            ? data.filters.academicSections
-            : [],
-        );
-        if (
-          Array.isArray(data?.fields) &&
-          data.fields.some((f: any) => f.value === "section")
-        ) {
-          const sectionIdx = data.fields.findIndex(
-            (f: any) => f.value === "section",
-          );
-          const selected = [
-            data.fields[sectionIdx]?.value,
-            data.fields[sectionIdx + 1]?.value,
-            data.fields[sectionIdx + 2]?.value,
-          ].filter(Boolean);
-          setGroupBy(selected);
-        } else if (Array.isArray(data?.fields) && data.fields.length) {
-          setGroupBy(data.fields.slice(0, 3).map((f: any) => f.value));
-        } else {
+
+        const nextFields = Array.isArray(data?.fields) ? data.fields : [];
+        const nextClassOptions = Array.isArray(data?.filters?.classes)
+          ? data.filters.classes
+          : [];
+        const nextSubjectOptions = Array.isArray(data?.filters?.subjects)
+          ? data.filters.subjects
+          : [];
+        const nextAcademicSectionOptions = Array.isArray(
+          data?.filters?.academicSections,
+        )
+          ? data.filters.academicSections
+          : [];
+
+        if (nextFields.length === 0) {
           throw new Error("No analytics fields are available for this response yet.");
         }
+
+        setGroupFields(nextFields);
+        setClassOptions(nextClassOptions);
+        setSubjectOptions(nextSubjectOptions);
+        setAcademicSectionOptions(nextAcademicSectionOptions);
+        setGroupBy(
+          reconcileGroupBy([], nextFields, {
+            requiredFieldValues:
+              nextSubjectOptions.length > 1 ? ["subject"] : [],
+          }),
+        );
       } catch (e: any) {
         console.error("[student-tag-report] failed to load groupFields", e);
         setGroupFields([]);
@@ -409,23 +572,7 @@ export function StudentTagReportPageView({
         setError(e?.message || "Failed to load report setup.");
       }
     })();
-  }, [params.responseId]);
-
-  // Fetch analytics only after groupBy is set for the first time
-  useEffect(() => {
-    // Only fetch if groupBy is set and we haven't fetched yet
-    if (groupBy.length && !hasFetchedOnce) {
-      fetchAnalytics();
-      setHasFetchedOnce(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupBy, hasFetchedOnce]);
-
-  // Reset pagination on key changes
-  useEffect(() => {
-    setCmpPage(1);
-    setInsPage(1);
-  }, [groupBy, classLevel, selectedClassId, selectedSubjectId, selectedAcademicSectionId]);
+  }, [initialBootstrap, params.responseId]);
 
   const handleOpenModal = (
     title: string,
@@ -452,93 +599,189 @@ export function StudentTagReportPageView({
 
   const handleCloseOptionTagModal = () => setOptionTagModal(null);
 
-  const fetchAnalytics = async (overrides?: {
-    classId?: string;
-    subjectId?: string;
-    academicSectionId?: string;
-  }) => {
-    setLoading(true);
-    setError(null);
-    const resolvedClassId = overrides?.classId ?? selectedClassId;
-    const resolvedSubjectId = overrides?.subjectId ?? selectedSubjectId;
-    const resolvedAcademicSectionId =
-      overrides?.academicSectionId ?? selectedAcademicSectionId;
-    const searchParams = new URLSearchParams();
-    searchParams.set("json", "1");
-    if (groupBy.length) searchParams.set("groupBy", groupBy.join(","));
-    if (classLevel) searchParams.set("classLevel", "1");
-    if (resolvedClassId !== "all") searchParams.set("classId", resolvedClassId);
-    if (resolvedSubjectId !== "all") {
-      searchParams.set("subjectId", resolvedSubjectId);
-    }
-    if (classLevel && resolvedAcademicSectionId !== "all") {
-      searchParams.set("academicSectionId", resolvedAcademicSectionId);
-    }
-    const sk = schoolKey || resolveClientSchoolKey();
-    if (!sk) {
-      setLoading(false);
-      setError("Please select a school in the navbar to load analytics.");
-      return;
-    }
-
-    try {
-      const data = await fetchApiJson<any>(
-        `/api/analytics/student-tag-report/${params.responseId}?${searchParams.toString()}`,
+  const fetchAnalytics = React.useCallback(
+    async (overrides?: {
+      classId?: string;
+      subjectId?: string;
+      academicSectionId?: string;
+      groupBy?: string[];
+    }) => {
+      setLoading(true);
+      setError(null);
+      const resolvedClassId = overrides?.classId ?? selectedClassId;
+      const resolvedSubjectId = overrides?.subjectId ?? selectedSubjectId;
+      const resolvedAcademicSectionId =
+        overrides?.academicSectionId ?? selectedAcademicSectionId;
+      const resolvedGroupBy = overrides?.groupBy ?? groupBy;
+      const normalizedGroupBy = reconcileGroupBy(
+        resolvedGroupBy,
+        groupFields,
         {
-          cache: "no-store",
-          schoolKey: sk,
-          fallbackMessage: "Failed to fetch tag report.",
-          clientCacheTtlMs: REPORT_CACHE_TTL_MS,
-          preferClientCache: true,
+          requiredFieldValues:
+            resolvedSubjectId === "all" && subjectOptions.length > 1
+              ? ["subject"]
+              : [],
         },
       );
-      setStats(data.stats || {});
-      setStudent(data.student || "");
-      setRollNumber(data.rollNumber || "");
-      setPaper(data.paper || "");
-    } catch (fetchError: any) {
-      setError(fetchError?.message || "An unexpected network error occurred.");
-    } finally {
-      setLoading(false);
-    }
-
-    if (isStudentPortal) {
-      setClassStatsCompare({});
-      return;
-    }
-
-    try {
-      const classParams = new URLSearchParams();
-      classParams.set("json", "1");
-      if (groupBy.length) classParams.set("groupBy", groupBy.join(","));
-      classParams.set("classLevel", "1");
+      const searchParams = new URLSearchParams();
+      searchParams.set("json", "1");
+      if (normalizedGroupBy.length) {
+        searchParams.set("groupBy", normalizedGroupBy.join(","));
+      }
+      if (classLevel) searchParams.set("classLevel", "1");
       if (resolvedClassId !== "all") {
-        classParams.set("classId", resolvedClassId);
+        searchParams.set("classId", resolvedClassId);
       }
       if (resolvedSubjectId !== "all") {
-        classParams.set("subjectId", resolvedSubjectId);
+        searchParams.set("subjectId", resolvedSubjectId);
       }
-      if (resolvedAcademicSectionId !== "all") {
-        classParams.set("academicSectionId", resolvedAcademicSectionId);
+      if (classLevel && resolvedAcademicSectionId !== "all") {
+        searchParams.set("academicSectionId", resolvedAcademicSectionId);
       }
-      const compareData = await fetchApiJson<any>(
-        `/api/analytics/student-tag-report/${params.responseId}?${classParams.toString()}`,
-        {
-          cache: "no-store",
-          schoolKey: sk,
-          fallbackMessage: "Failed to load class comparison.",
-          clientCacheTtlMs: REPORT_CACHE_TTL_MS,
-          preferClientCache: true,
-        },
-      );
-      setClassStatsCompare(compareData.stats || {});
-    } catch {
-      setClassStatsCompare({});
+      const sk = schoolKey || resolveClientSchoolKey();
+      if (!sk) {
+        setLoading(false);
+        setError("Please select a school in the navbar to load analytics.");
+        return;
+      }
+
+      if (normalizedGroupBy.join(",") !== resolvedGroupBy.join(",")) {
+        setGroupBy(normalizedGroupBy);
+      }
+
+      let reportData: any = null;
+      try {
+        const data = await fetchApiJson<any>(
+          `/api/analytics/student-tag-report/${params.responseId}?${searchParams.toString()}`,
+          {
+            cache: "no-store",
+            schoolKey: sk,
+            fallbackMessage: "Failed to fetch tag report.",
+            clientCacheTtlMs: REPORT_CACHE_TTL_MS,
+            preferClientCache: true,
+          },
+        );
+        reportData = data;
+        setStats(data.stats || {});
+        setStudent(data.student || "");
+        setRollNumber(data.rollNumber || "");
+        setPaper(data.paper || "");
+      } catch (fetchError: any) {
+        setError(
+          fetchError?.message || "An unexpected network error occurred.",
+        );
+      } finally {
+        setLoading(false);
+      }
+
+      if (isStudentPortal) {
+        setClassStatsCompare({});
+        return;
+      }
+
+      if (classLevel && reportData?.stats) {
+        setClassStatsCompare(reportData.stats || {});
+        return;
+      }
+
+      try {
+        const classParams = new URLSearchParams();
+        classParams.set("json", "1");
+        if (normalizedGroupBy.length) {
+          classParams.set("groupBy", normalizedGroupBy.join(","));
+        }
+        classParams.set("classLevel", "1");
+        if (resolvedClassId !== "all") {
+          classParams.set("classId", resolvedClassId);
+        }
+        if (resolvedSubjectId !== "all") {
+          classParams.set("subjectId", resolvedSubjectId);
+        }
+        if (resolvedAcademicSectionId !== "all") {
+          classParams.set("academicSectionId", resolvedAcademicSectionId);
+        }
+        const compareData = await fetchApiJson<any>(
+          `/api/analytics/student-tag-report/${params.responseId}?${classParams.toString()}`,
+          {
+            cache: "no-store",
+            schoolKey: sk,
+            fallbackMessage: "Failed to load class comparison.",
+            clientCacheTtlMs: REPORT_CACHE_TTL_MS,
+            preferClientCache: true,
+          },
+        );
+        setClassStatsCompare(compareData.stats || {});
+      } catch {
+        setClassStatsCompare({});
+      }
+    },
+    [
+      classLevel,
+      groupBy,
+      groupFields,
+      isStudentPortal,
+      params.responseId,
+      schoolKey,
+      selectedAcademicSectionId,
+      selectedClassId,
+      selectedSubjectId,
+      subjectOptions.length,
+    ],
+  );
+
+  // Fetch analytics only after groupBy is set for the first time.
+  useEffect(() => {
+    if (groupBy.length && !hasFetchedOnce) {
+      void fetchAnalytics();
+      setHasFetchedOnce(true);
     }
-  };
+  }, [fetchAnalytics, groupBy, hasFetchedOnce]);
+
+  const handleApplyFilters = React.useCallback(async () => {
+    try {
+      const { nextGroupBy } = await loadReportSetup({
+        classId: selectedClassId,
+        subjectId: selectedSubjectId,
+      });
+      await fetchAnalytics({
+        classId: selectedClassId,
+        subjectId: selectedSubjectId,
+        academicSectionId: selectedAcademicSectionId,
+        groupBy: nextGroupBy,
+      });
+    } catch (setupError: any) {
+      setError(setupError?.message || "Failed to load report setup.");
+    }
+  }, [
+    fetchAnalytics,
+    loadReportSetup,
+    selectedClassId,
+    selectedSubjectId,
+    selectedAcademicSectionId,
+  ]);
+
+  const handleClearFilters = React.useCallback(async () => {
+    setSelectedClassId("all");
+    setSelectedSubjectId("all");
+    setSelectedAcademicSectionId("all");
+    try {
+      const { nextGroupBy } = await loadReportSetup({
+        classId: "all",
+        subjectId: "all",
+      });
+      await fetchAnalytics({
+        classId: "all",
+        subjectId: "all",
+        academicSectionId: "all",
+        groupBy: nextGroupBy,
+      });
+    } catch (setupError: any) {
+      setError(setupError?.message || "Failed to load report setup.");
+    }
+  }, [fetchAnalytics, loadReportSetup]);
 
   const backAction = (
-    <Button variant="outline" onClick={navigateBack} className="gap-2">
+    <Button variant="outline" onClick={navigateBack} className="app-button-back">
       <ArrowLeft className="h-4 w-4" />
       {isStudentPortal ? "Back to Account" : "Back"}
     </Button>
@@ -549,740 +792,200 @@ export function StudentTagReportPageView({
 
   return (
     <div className="analytics-page">
-      <div className="w-full space-y-4 px-4 sm:space-y-5 sm:px-5 lg:px-6">
+      <div className="analytics-page-shell">
         <ReportHeader
           student={student}
           rollNumber={rollNumber}
           paper={paper}
           variant={classLevel ? "class" : "student"}
           actions={backAction}
+          summaryBadges={headerSummaryBadges}
         />
-        <div className="analytics-card overflow-hidden">
-          <div className="analytics-card-header">
-            <div className="analytics-toolbar-row gap-4">
-              <div className="analytics-toolbar-copy">
-                <h2 className="analytics-card-title">Report Controls</h2>
-                <p className="analytics-card-description">
-                  Align setup, grouping, and filters before reviewing the
-                  student report.
-                </p>
-              </div>
-              <div className="analytics-toolbar-meta">
+        <div className="analytics-card analytics-card-body">
+          <div className="analytics-setup-bar">
+            <div className="analytics-toolbar-copy">
+              <h2 className="analytics-card-title">Setup</h2>
+              <p className="analytics-card-description">
+                Keep mode, scope, grouping, and visible columns aligned before
+                you review the report.
+              </p>
+            </div>
+            <div className="analytics-setup-actions">
+              <button
+                type="button"
+                onClick={() => setShowControls((value) => !value)}
+                aria-expanded={showControls}
+                className="analytics-action-button-secondary w-full sm:w-auto"
+              >
+                {showControls ? "Hide setup" : "Edit setup"}
+              </button>
+              <button
+                type="button"
+                onClick={() => fetchAnalytics()}
+                disabled={loading}
+                className="analytics-action-button-primary w-full sm:w-auto"
+              >
+                {loading
+                  ? "Refreshing report..."
+                  : classLevel
+                    ? "Refresh class report"
+                    : "Refresh student report"}
+              </button>
+            </div>
+          </div>
+
+          <div className="analytics-setup-summary-strip">
+            <div className="analytics-setup-summary-item">
+              <p className="analytics-setup-summary-item-label">Report mode</p>
+              <div className="analytics-setup-summary-item-value">
                 <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                  {groupingPreviewLabel}
+                  {activeModeLabel}
+                </span>
+                <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                  {activeViewLabel}
+                </span>
+              </div>
+            </div>
+            <div className="analytics-setup-summary-item">
+              <p className="analytics-setup-summary-item-label">
+                Visible metrics
+              </p>
+              <div className="analytics-setup-summary-item-value">
+                <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                  {visibleColumnsLabel}
+                </span>
+              </div>
+            </div>
+            <div className="analytics-setup-summary-item">
+              <p className="analytics-setup-summary-item-label">
+                Current scope
+              </p>
+              <div className="analytics-setup-summary-item-value">
+                <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                  {activeFiltersLabel}
                 </span>
               </div>
             </div>
           </div>
-          <div className="space-y-3 p-3 sm:p-4">
-            <div className="analytics-toolbar">
-              <div className="analytics-setup-bar">
-                <div className="analytics-toolbar-copy">
-                  <p className="analytics-toolbar-title">Quick setup</p>
-                  <p className="analytics-toolbar-note">
-                    Review the active mode, visible metrics, and current
-                    question scope before refreshing the report.
-                  </p>
-                </div>
-                <div className="analytics-setup-actions">
-                  <button
-                    type="button"
-                    onClick={() => setShowControls((value) => !value)}
-                    aria-expanded={showControls}
-                    className="analytics-action-button-secondary w-full sm:w-auto"
-                  >
-                    {showControls ? "Hide setup" : "Setup"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fetchAnalytics()}
-                    disabled={loading}
-                    className="analytics-action-button-primary w-full sm:w-auto"
-                  >
-                    {loading
-                      ? "Refreshing report..."
-                      : classLevel
-                        ? "Refresh class report"
-                        : "Refresh student report"}
-                  </button>
-                </div>
-              </div>
-              <div className="analytics-setup-grid">
-                <div className="analytics-setup-summary-grid">
-                  <div className="analytics-setup-summary-card">
-                    <p className="analytics-setup-summary-label">
-                      Report mode
-                    </p>
-                    <div className="analytics-setup-summary-value">
-                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                        {activeModeLabel}
-                      </span>
-                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                        {activeViewLabel}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="analytics-setup-summary-card">
-                    <p className="analytics-setup-summary-label">
-                      Visible metrics
-                    </p>
-                    <div className="analytics-setup-summary-value">
-                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                        {visibleColumnsLabel}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="analytics-setup-summary-card">
-                    <p className="analytics-setup-summary-label">
-                      Current scope
-                    </p>
-                    <div className="analytics-setup-summary-value">
-                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                        {activeFiltersLabel}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="analytics-setup-toggle-grid">
-                  <label className="analytics-setup-toggle-card analytics-checkbox-card-split">
-                    <span className="analytics-checkbox-card-copy">
-                      <span className="analytics-checkbox-card-label">
-                        Show tags column
-                      </span>
-                      <span className="analytics-checkbox-card-note">
-                        Keep grouped tag labels visible beside each metric row.
-                      </span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={showTagsColumn}
-                      onChange={() => setShowTagsColumn((value) => !value)}
-                      className="analytics-inline-check shrink-0"
-                    />
-                  </label>
-                  <label className="analytics-setup-toggle-card analytics-checkbox-card-split">
-                    <span className="analytics-checkbox-card-copy">
-                      <span className="analytics-checkbox-card-label">
-                        Show option tags column
-                      </span>
-                      <span className="analytics-checkbox-card-note">
-                        Expose option-level tag groupings when reviewing table
-                        details.
-                      </span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={showOptionTagsColumn}
-                      onChange={() =>
-                        setShowOptionTagsColumn((value) => !value)
-                      }
-                      className="analytics-inline-check shrink-0"
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
 
-            {showControls ? (
-              <div className="analytics-controls-grid">
-                <div className="analytics-control-stack">
-                  {!isStudentPortal ? (
-                    <div className="analytics-control-panel">
-                      <div className="analytics-control-panel-header">
-                        <p className="analytics-control-panel-title">
-                          Analysis Mode
-                        </p>
-                      </div>
-                      <div className="analytics-mode-grid">
-                        <button
-                          type="button"
-                          onClick={() => setClassLevel(false)}
-                          className={`analytics-mode-card ${
-                            !classLevel ? "analytics-mode-card-active" : ""
-                          }`}
-                        >
-                          <p className="text-sm font-semibold text-foreground">
-                            Single student
-                          </p>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setClassLevel(true)}
-                          className={`analytics-mode-card ${
-                            classLevel ? "analytics-mode-card-active" : ""
-                          }`}
-                        >
-                          <p className="text-sm font-semibold text-foreground">
-                            Class level
-                          </p>
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="analytics-control-panel">
-                    <div className="analytics-control-panel-header">
-                      <p className="analytics-control-panel-title">
-                        Report filters
-                      </p>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      <div className="app-field-group">
-                        <label className="app-field-label">Class filter</label>
-                        <select
-                          className="analytics-select w-full"
-                          value={selectedClassId}
-                          onChange={(event) =>
-                            setSelectedClassId(event.target.value)
-                          }
-                        >
-                          <option value="all">All classes</option>
-                          {classOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="app-field-group">
-                        <label className="app-field-label">
-                          Subject filter
-                        </label>
-                        <select
-                          className="analytics-select w-full"
-                          value={selectedSubjectId}
-                          onChange={(event) =>
-                            setSelectedSubjectId(event.target.value)
-                          }
-                        >
-                          <option value="all">All subjects</option>
-                          {subjectOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="app-field-group">
-                        <label className="app-field-label">
-                          Academic section filter
-                        </label>
-                        <select
-                          className="analytics-select w-full"
-                          value={selectedAcademicSectionId}
-                          onChange={(event) =>
-                            setSelectedAcademicSectionId(event.target.value)
-                          }
-                        >
-                          <option value="all">All sections</option>
-                          {academicSectionOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="analytics-toolbar-chip">
-                        {selectedClassId === "all"
-                          ? "All classes"
-                          : `Class: ${
-                              classOptions.find(
-                                (option) => option.value === selectedClassId,
-                              )?.label || "Filtered class"
-                            }`}
-                      </span>
-                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                        {selectedSubjectId === "all"
-                          ? "All subjects"
-                          : `Subject: ${
-                              subjectOptions.find(
-                                (option) => option.value === selectedSubjectId,
-                              )?.label || "Filtered subject"
-                            }`}
-                      </span>
-                      <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                        {selectedAcademicSectionId === "all"
-                          ? "All sections"
-                          : `Section: ${
-                              academicSectionOptions.find(
-                                (option) =>
-                                  option.value === selectedAcademicSectionId,
-                              )?.label || "Filtered section"
-                            }`}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => fetchAnalytics()}
-                        disabled={loading}
-                        className="analytics-action-button-secondary"
-                      >
-                        {loading ? "Applying..." : "Apply question filters"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedClassId("all");
-                          setSelectedSubjectId("all");
-                          setSelectedAcademicSectionId("all");
-                          fetchAnalytics({
-                            classId: "all",
-                            subjectId: "all",
-                            academicSectionId: "all",
-                          });
-                        }}
-                        disabled={loading || !hasActiveFilters}
-                        className="analytics-action-button-secondary"
-                      >
-                        Clear filters
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="analytics-control-panel">
-                  <div className="analytics-control-panel-header">
-                    <p className="analytics-control-panel-title">
-                      Group By (in order)
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {groupFields.map((field) => (
-                      <div key={field.value}>
-                        <input
-                          type="checkbox"
-                          id={`field-${field.value}`}
-                          checked={groupBy.includes(field.value)}
-                          onChange={() =>
-                            setGroupBy((prev) =>
-                              prev.includes(field.value)
-                                ? prev.filter((f) => f !== field.value)
-                                : [...prev, field.value],
-                            )
-                          }
-                          className="hidden peer"
-                        />
-                        <label
-                          htmlFor={`field-${field.value}`}
-                          className="analytics-filter-chip peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground"
-                        >
-                          {field.label}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  {groupBy.length > 0 ? (
-                    <ul className="space-y-2">
-                      {groupBy.map((fieldValue, idx) => {
-                        const field = groupFields.find(
-                          (f) => f.value === fieldValue,
-                        );
-                        if (!field) return null;
-                        return (
-                          <li
-                            key={field.value}
-                            className="analytics-order-item"
-                          >
-                            <span className="font-medium text-foreground">
-                              {idx + 1}. {field.label}
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                className="analytics-action-button-icon"
-                                disabled={idx === 0}
-                                onClick={() => {
-                                  setGroupBy((prev) => {
-                                    const arr = [...prev];
-                                    [arr[idx - 1], arr[idx]] = [
-                                      arr[idx],
-                                      arr[idx - 1],
-                                    ];
-                                    return arr;
-                                  });
-                                }}
-                                title="Move up"
-                              >
-                                ▲
-                              </button>
-                              <button
-                                type="button"
-                                className="analytics-action-button-icon"
-                                disabled={idx === groupBy.length - 1}
-                                onClick={() => {
-                                  setGroupBy((prev) => {
-                                    const arr = [...prev];
-                                    [arr[idx], arr[idx + 1]] = [
-                                      arr[idx + 1],
-                                      arr[idx],
-                                    ];
-                                    return arr;
-                                  });
-                                }}
-                                title="Move down"
-                              >
-                                ▼
-                              </button>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : (
-                    <div className="app-empty-state py-6">
-                      Select at least one field to define the report grouping.
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : null}
+          <div className="analytics-setup-toggle-row">
+            <label className="analytics-setup-toggle-compact">
+              <span className="analytics-setup-toggle-compact-copy">
+                <span className="analytics-setup-toggle-compact-label">
+                  Tags column
+                </span>
+                <span className="analytics-setup-toggle-compact-note">
+                  Keep grouped tag labels visible beside each metric row.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={showTagsColumn}
+                onChange={() => setShowTagsColumn((value) => !value)}
+                className="analytics-inline-check shrink-0"
+              />
+            </label>
+            <label className="analytics-setup-toggle-compact">
+              <span className="analytics-setup-toggle-compact-copy">
+                <span className="analytics-setup-toggle-compact-label">
+                  Option tags column
+                </span>
+                <span className="analytics-setup-toggle-compact-note">
+                  Show option-level tag groupings when you need deeper review.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={showOptionTagsColumn}
+                onChange={() =>
+                  setShowOptionTagsColumn((value) => !value)
+                }
+                className="analytics-inline-check shrink-0"
+              />
+            </label>
           </div>
+
+          {showControls ? (
+            <AnalyticsStudentTagReportSetupControls
+              isStudentPortal={isStudentPortal}
+              classLevel={classLevel}
+              loading={loading}
+              hasActiveFilters={hasActiveFilters}
+              searchableClassOptions={searchableClassOptions}
+              searchableAcademicSectionOptions={searchableAcademicSectionOptions}
+              searchableSubjectOptions={searchableSubjectOptions}
+              selectedClassId={selectedClassId}
+              selectedAcademicSectionId={selectedAcademicSectionId}
+              selectedSubjectId={selectedSubjectId}
+              activeClassLabel={activeClassLabel}
+              activeAcademicSectionLabel={activeAcademicSectionLabel}
+              activeSubjectLabel={activeSubjectLabel}
+              groupFields={groupFields}
+              groupBy={groupBy}
+              setClassLevel={setClassLevel}
+              setSelectedClassId={setSelectedClassId}
+              setSelectedAcademicSectionId={setSelectedAcademicSectionId}
+              setSelectedSubjectId={setSelectedSubjectId}
+              setGroupBy={setGroupBy}
+              onApplyFilters={handleApplyFilters}
+              onClearFilters={handleClearFilters}
+            />
+          ) : null}
         </div>
 
-        {!isStudentPortal && !classLevel && compareRows.length > 0 && (
-          <div className="analytics-card analytics-card-body border-l-4 border-[hsl(var(--accent-blue))]">
-            <div className="analytics-toolbar">
-              <div className="analytics-toolbar-row">
-                <div className="analytics-toolbar-copy">
-                  <h2 className="analytics-card-title">
-                    Insights (Student • {lastLabel})
-                  </h2>
-                </div>
-                <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    Based on {lastLabel}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="analytics-table-wrap">
-              {(() => {
-                const total = compareRows.length;
-                const maxPage = Math.max(1, Math.ceil(total / cmpPageSize));
-                const safePage = Math.min(cmpPage, maxPage);
-                const start = (safePage - 1) * cmpPageSize;
-                const end = Math.min(total, start + cmpPageSize);
-                const visible = cmpShowAll
-                  ? compareRows
-                  : compareRows.slice(start, end);
-                const rangeLabel = cmpShowAll
-                  ? `Showing all ${total}`
-                  : `Showing ${total === 0 ? 0 : start + 1}–${end} of ${total}`;
-                return (
-                  <>
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-muted/30">
-                        <tr>
-                          <th className="analytics-th">{lastLabel}</th>
-                          <th className="analytics-th-center">
-                            Student Correct (%)
-                          </th>
-                          <th className="analytics-th-center">
-                            Class Correct (%)
-                          </th>
-                          <th className="analytics-th-center">Gap (%)</th>
-                          <th className="analytics-th">Category</th>
-                          <th className="analytics-th">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visible.map((r) => {
-                          const gapClass =
-                            r.gap == null
-                              ? "text-muted-foreground"
-                              : r.gap > 0
-                                ? "text-emerald-600"
-                                : r.gap < 0
-                                  ? "text-rose-600"
-                                  : "text-foreground";
-                          return (
-                            <tr key={r.tag} className="analytics-row">
-                              <td className="analytics-td">{r.tag}</td>
-                              <td className="analytics-td-center">
-                                {r.studentCorrect?.toFixed(2)}
-                              </td>
-                              <td className="analytics-td-center">
-                                {r.classCorrect == null
-                                  ? "-"
-                                  : r.classCorrect.toFixed(2)}
-                              </td>
-                              <td
-                                className={`analytics-td-center font-medium ${gapClass}`}
-                              >
-                                {r.gap == null ? "-" : r.gap.toFixed(2)}
-                              </td>
-                              <td className="analytics-td">{r.category}</td>
-                              <td className="analytics-td">{r.action}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    <div className="border-t border-border/60 bg-muted/20 p-4">
-                      <div className="analytics-toolbar-row">
-                        <div className="analytics-toolbar-actions">
-                          <label className="analytics-checkbox-card">
-                            <input
-                              type="checkbox"
-                              className="analytics-inline-check"
-                              checked={cmpShowAll}
-                              onChange={() => {
-                                setCmpShowAll((v) => !v);
-                                setCmpPage(1);
-                              }}
-                            />
-                            <span>Show all rows</span>
-                          </label>
-                          {!cmpShowAll && total > 0 && (
-                            <label className="analytics-checkbox-card">
-                              <span className="text-muted-foreground">
-                                Rows per page
-                              </span>
-                              <select
-                                className="analytics-select-compact"
-                                value={cmpPageSize}
-                                onChange={(e) => {
-                                  setCmpPageSize(Number(e.target.value));
-                                  setCmpPage(1);
-                                }}
-                              >
-                                {[10, 12, 25, 50].map((n) => (
-                                  <option key={n} value={n}>
-                                    {n}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          )}
-                        </div>
-                        <div className="analytics-toolbar-actions">
-                          <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                            {rangeLabel}
-                          </span>
-                          {!cmpShowAll && total > cmpPageSize && (
-                            <>
-                              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                                Page {safePage} of {maxPage}
-                              </span>
-                              <button
-                                type="button"
-                                className="analytics-pagination-button"
-                                onClick={() =>
-                                  setCmpPage((p) => Math.max(1, p - 1))
-                                }
-                                disabled={safePage <= 1}
-                              >
-                                Previous
-                              </button>
-                              <button
-                                type="button"
-                                className="analytics-pagination-button"
-                                onClick={() =>
-                                  setCmpPage((p) => Math.min(maxPage, p + 1))
-                                }
-                                disabled={safePage >= maxPage}
-                              >
-                                Next
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        )}
+        {!isStudentPortal && !classLevel ? (
+          <ComparisonInsightsCard
+            title={`Insights (Student • ${lastLabel})`}
+            lastLabel={lastLabel}
+            rows={compareRows}
+          />
+        ) : null}
 
-        {((classLevel && insights && insights.length > 0) ||
-          (!classLevel &&
-            compareRows.length === 0 &&
-            insights &&
-            insights.length > 0)) && (
-          <div className="analytics-card analytics-card-body border-l-4 border-rose-400">
-            <div className="analytics-toolbar">
-              <div className="analytics-toolbar-row">
-                <div className="analytics-toolbar-copy">
-                  <h2 className="analytics-card-title">
-                    Insights ({classLevel ? "Class" : "Student"} • {lastLabel})
-                  </h2>
-                </div>
-                <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    Based on {lastLabel}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="analytics-table-wrap">
-              {(() => {
-                const total = insights.length;
-                const maxPage = Math.max(1, Math.ceil(total / insPageSize));
-                const safePage = Math.min(insPage, maxPage);
-                const start = (safePage - 1) * insPageSize;
-                const end = Math.min(total, start + insPageSize);
-                const visible = insShowAll
-                  ? insights
-                  : insights.slice(start, end);
-                const rangeLabel = insShowAll
-                  ? `Showing all ${total}`
-                  : `Showing ${total === 0 ? 0 : start + 1}–${end} of ${total}`;
-                return (
-                  <>
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-muted/30">
-                        <tr>
-                          <th className="analytics-th">{lastLabel}</th>
-                          <th className="analytics-th-center">Fail (%)</th>
-                          <th className="analytics-th">Category</th>
-                          <th className="analytics-th">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visible.map((i) => (
-                          <tr key={i.tag} className="analytics-row">
-                            <td className="analytics-td">{i.tag}</td>
-                            <td className="analytics-td-center font-medium text-rose-600">
-                              {i.failPct}
-                            </td>
-                            <td className="analytics-td">{i.category}</td>
-                            <td className="analytics-td">{i.action}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div className="border-t border-border/60 bg-muted/20 p-4">
-                      <div className="analytics-toolbar-row">
-                        <div className="analytics-toolbar-actions">
-                          <label className="analytics-checkbox-card">
-                            <input
-                              type="checkbox"
-                              className="analytics-inline-check"
-                              checked={insShowAll}
-                              onChange={() => {
-                                setInsShowAll((v) => !v);
-                                setInsPage(1);
-                              }}
-                            />
-                            <span>Show all rows</span>
-                          </label>
-                          {!insShowAll && total > 0 && (
-                            <label className="analytics-checkbox-card">
-                              <span className="text-muted-foreground">
-                                Rows per page
-                              </span>
-                              <select
-                                className="analytics-select-compact"
-                                value={insPageSize}
-                                onChange={(e) => {
-                                  setInsPageSize(Number(e.target.value));
-                                  setInsPage(1);
-                                }}
-                              >
-                                {[10, 12, 25, 50].map((n) => (
-                                  <option key={n} value={n}>
-                                    {n}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          )}
-                        </div>
-                        <div className="analytics-toolbar-actions">
-                          <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                            {rangeLabel}
-                          </span>
-                          {!insShowAll && total > insPageSize && (
-                            <>
-                              <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                                Page {safePage} of {maxPage}
-                              </span>
-                              <button
-                                type="button"
-                                className="analytics-pagination-button"
-                                onClick={() =>
-                                  setInsPage((p) => Math.max(1, p - 1))
-                                }
-                                disabled={safePage <= 1}
-                              >
-                                Previous
-                              </button>
-                              <button
-                                type="button"
-                                className="analytics-pagination-button"
-                                onClick={() =>
-                                  setInsPage((p) => Math.min(maxPage, p + 1))
-                                }
-                                disabled={safePage >= maxPage}
-                              >
-                                Next
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        )}
+        {classLevel || compareRows.length === 0 ? (
+          <FailInsightsCard
+            title={`Insights (${classLevel ? "Class" : "Student"} • ${lastLabel})`}
+            lastLabel={lastLabel}
+            rows={insights}
+          />
+        ) : null}
 
-        <div className="analytics-toolbar">
-          <div className="analytics-toolbar-row">
+        <div className="analytics-output-bar">
+          <div className="analytics-output-primary">
             <div className="analytics-toolbar-copy">
-              <p className="analytics-toolbar-title">Report view</p>
+              <h2 className="analytics-card-title">{outputTitle}</h2>
+              <p className="analytics-card-description">{outputNote}</p>
             </div>
-            <div className="analytics-toolbar-meta">
+            <div className="analytics-toggle mx-0">
+              <button
+                onClick={() => setView("table")}
+                className={`analytics-view-toggle-button ${
+                  view === "table"
+                    ? "analytics-view-toggle-button-active"
+                    : "hover:bg-background/70"
+                }`}
+              >
+                Table
+              </button>
+              <button
+                onClick={() => setView("charts")}
+                className={`analytics-view-toggle-button ${
+                  view === "charts"
+                    ? "analytics-view-toggle-button-active"
+                    : "hover:bg-background/70"
+                }`}
+              >
+                Charts
+              </button>
+            </div>
+          </div>
+          <div className="analytics-output-actions">
+            <div className="analytics-output-action-row">
               <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                {activeSortLabel}
+                {outputMetaLabel}
               </span>
             </div>
-          </div>
-          <div className="analytics-toggle">
-            <button
-              onClick={() => setView("table")}
-              className={`analytics-view-toggle-button ${
-                view === "table"
-                  ? "analytics-view-toggle-button-active"
-                  : "hover:bg-background/70"
-              }`}
-            >
-              Table
-            </button>
-            <button
-              onClick={() => setView("charts")}
-              className={`analytics-view-toggle-button ${
-                view === "charts"
-                  ? "analytics-view-toggle-button-active"
-                  : "hover:bg-background/70"
-              }`}
-            >
-              Charts
-            </button>
-          </div>
-        </div>
-        {view === "table" ? (
-          <div className="analytics-table-shell">
-            <div className="border-b border-border/60 bg-muted/20 p-4 sm:p-5">
-              <div className="analytics-toolbar-row gap-4">
-                <div className="analytics-toolbar-copy">
-                  <h2 className="analytics-card-title">Grouped Analytics</h2>
-                </div>
-                <div className="analytics-toolbar-meta">
-                  <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-                    {activeSortLabel}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div className="analytics-toolbar-actions" />
+            {view === "table" ? (
+              <div className="analytics-output-action-row">
                 <AnalyticsExportControls
                   stats={stats}
                   groupBy={groupBy}
@@ -1295,7 +998,11 @@ export function StudentTagReportPageView({
                   rollNumber={rollNumber}
                 />
               </div>
-            </div>
+            ) : null}
+          </div>
+        </div>
+        {view === "table" ? (
+          <div className="analytics-table-shell">
             {Object.keys(stats).length === 0 ? (
               <div className="app-empty-state m-6">
                 No tag data found for the selected criteria.
@@ -1309,65 +1016,92 @@ export function StudentTagReportPageView({
                       {showTagsColumn && (
                         <th className="analytics-th-center">Tags</th>
                       )}
-                      <th
-                        className="analytics-th-center cursor-pointer select-none text-emerald-700"
-                        onClick={() =>
-                          setSortConfig({
-                            key: "correct",
-                            direction:
-                              sortConfig.key === "correct" &&
-                              sortConfig.direction === "asc"
-                                ? "desc"
-                                : "asc",
-                          })
-                        }
-                      >
-                        Correct{" "}
-                        {sortConfig.key === "correct"
-                          ? sortConfig.direction === "asc"
-                            ? "▲"
-                            : "▼"
-                          : ""}
+                      <th className="analytics-th-center text-emerald-700">
+                        <button
+                          type="button"
+                          className={`analytics-sort-button ${
+                            sortConfig.key === "correct"
+                              ? "analytics-sort-button-active"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            setSortConfig({
+                              key: "correct",
+                              direction:
+                                sortConfig.key === "correct" &&
+                                sortConfig.direction === "asc"
+                                  ? "desc"
+                                  : "asc",
+                            })
+                          }
+                        >
+                          <span>Correct</span>
+                          <span className="analytics-sort-indicator" aria-hidden="true">
+                            {sortConfig.key === "correct"
+                              ? sortConfig.direction === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "↕"}
+                          </span>
+                        </button>
                       </th>
-                      <th
-                        className="analytics-th-center cursor-pointer select-none text-rose-700"
-                        onClick={() =>
-                          setSortConfig({
-                            key: "incorrect",
-                            direction:
-                              sortConfig.key === "incorrect" &&
-                              sortConfig.direction === "asc"
-                                ? "desc"
-                                : "asc",
-                          })
-                        }
-                      >
-                        Incorrect{" "}
-                        {sortConfig.key === "incorrect"
-                          ? sortConfig.direction === "asc"
-                            ? "▲"
-                            : "▼"
-                          : ""}
+                      <th className="analytics-th-center text-rose-700">
+                        <button
+                          type="button"
+                          className={`analytics-sort-button ${
+                            sortConfig.key === "incorrect"
+                              ? "analytics-sort-button-active"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            setSortConfig({
+                              key: "incorrect",
+                              direction:
+                                sortConfig.key === "incorrect" &&
+                                sortConfig.direction === "asc"
+                                  ? "desc"
+                                  : "asc",
+                            })
+                          }
+                        >
+                          <span>Incorrect</span>
+                          <span className="analytics-sort-indicator" aria-hidden="true">
+                            {sortConfig.key === "incorrect"
+                              ? sortConfig.direction === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "↕"}
+                          </span>
+                        </button>
                       </th>
-                      <th
-                        className="analytics-th-center cursor-pointer select-none text-amber-700"
-                        onClick={() =>
-                          setSortConfig({
-                            key: "unattempted",
-                            direction:
-                              sortConfig.key === "unattempted" &&
-                              sortConfig.direction === "asc"
-                                ? "desc"
-                                : "asc",
-                          })
-                        }
-                      >
-                        Unattempted{" "}
-                        {sortConfig.key === "unattempted"
-                          ? sortConfig.direction === "asc"
-                            ? "▲"
-                            : "▼"
-                          : ""}
+                      <th className="analytics-th-center text-amber-700">
+                        <button
+                          type="button"
+                          className={`analytics-sort-button ${
+                            sortConfig.key === "unattempted"
+                              ? "analytics-sort-button-active"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            setSortConfig({
+                              key: "unattempted",
+                              direction:
+                                sortConfig.key === "unattempted" &&
+                                sortConfig.direction === "asc"
+                                  ? "desc"
+                                  : "asc",
+                            })
+                          }
+                        >
+                          <span>Unattempted</span>
+                          <span className="analytics-sort-indicator" aria-hidden="true">
+                            {sortConfig.key === "unattempted"
+                              ? sortConfig.direction === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "↕"}
+                          </span>
+                        </button>
                       </th>
                       {showOptionTagsColumn && (
                         <th className="analytics-th-center">
@@ -1408,7 +1142,7 @@ export function StudentTagReportPageView({
             )}
           </div>
         ) : (
-          <ChartView
+          <AnalyticsChartView
             stats={stats}
             groupBy={groupBy}
             groupFields={groupFields}
@@ -1418,21 +1152,25 @@ export function StudentTagReportPageView({
             rollNumber={rollNumber}
           />
         )}
-        <QuestionListModal
-          isOpen={modalData.isOpen}
-          onClose={handleCloseModal}
-          title={modalData.title}
-          questionIds={modalData.questionIds}
-          groupNode={modalData.groupNode}
-        />
-        <OptionTagModal
-          isOpen={!!optionTagModal}
-          onClose={handleCloseOptionTagModal}
-          option={optionTagModal?.option || ""}
-          tag={optionTagModal?.tag || ""}
-          isCorrect={optionTagModal?.isCorrect || false}
-          students={optionTagModal?.students || []}
-        />
+        {modalData.isOpen ? (
+          <AnalyticsQuestionListModal
+            isOpen={modalData.isOpen}
+            onClose={handleCloseModal}
+            title={modalData.title}
+            questionIds={modalData.questionIds}
+            groupNode={modalData.groupNode}
+          />
+        ) : null}
+        {optionTagModal?.isOpen ? (
+          <AnalyticsOptionTagModal
+            isOpen={!!optionTagModal}
+            onClose={handleCloseOptionTagModal}
+            option={optionTagModal?.option || ""}
+            tag={optionTagModal?.tag || ""}
+            isCorrect={optionTagModal?.isCorrect || false}
+            students={optionTagModal?.students || []}
+          />
+        ) : null}
       </div>
     </div>
   );

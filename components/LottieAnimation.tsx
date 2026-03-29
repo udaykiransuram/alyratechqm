@@ -2,15 +2,9 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 
-const DOT_LOTTIE_WASM_URL = "/wasm/dotlottie-player.wasm";
-
 // Lazy-load the heavy Lottie player on the client to reduce initial JS
 const DotLottieReact = dynamic(
-  async () => {
-    const dotLottieModule = await import("@lottiefiles/dotlottie-react");
-    dotLottieModule.setWasmUrl(DOT_LOTTIE_WASM_URL);
-    return dotLottieModule.DotLottieReact;
-  },
+  () => import("@lottiefiles/dotlottie-react").then((m) => m.DotLottieReact),
   {
     ssr: false,
     // Show a lightweight placeholder while the chunk loads; avoids layout shifts
@@ -53,10 +47,6 @@ export function LottieAnimation({
 
   useEffect(() => {
     if (!containerRef.current || isVisible) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setIsVisible(true);
-      return;
-    }
     const el = containerRef.current;
     const io = new IntersectionObserver(
       (entries) => {

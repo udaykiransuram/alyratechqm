@@ -26,7 +26,9 @@ interface AnalyticsExportControlsProps {
   rollNumber?: string;
   benchmarkData?: any;
   paperId?: string;
+  classId?: string;
   academicSectionId?: string;
+  subjectId?: string;
   selectedTags?: { type: string; value: string }[];
   benchmarkViewSettings?: BenchmarkViewSettings;
 }
@@ -43,7 +45,9 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
   rollNumber,
   benchmarkData,
   paperId,
+  classId,
   academicSectionId,
+  subjectId,
   selectedTags = [],
   benchmarkViewSettings,
 }) => {
@@ -51,13 +55,6 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
     () => !!stats && Object.keys(stats).length > 0,
     [stats],
   );
-
-  const exportModeLabel =
-    mode === "student" ? "Student exports" : "Class exports";
-  const exportGroupingLabel =
-    groupBy.length > 0
-      ? `${groupBy.length} grouping levels`
-      : "No grouping selected";
 
   function getFilenameFromDisposition(headerValue: string | null) {
     if (!headerValue) return "analytics_report.xlsx";
@@ -92,8 +89,14 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
   async function handleDownloadExcel() {
     if (mode === "class" && paperId) {
       const searchParams = new URLSearchParams();
+      if (classId && classId !== "all") {
+        searchParams.set("classId", classId);
+      }
       if (academicSectionId && academicSectionId !== "all") {
         searchParams.set("academicSectionId", academicSectionId);
+      }
+      if (subjectId && subjectId !== "all") {
+        searchParams.set("subjectId", subjectId);
       }
       if (groupBy.length > 0) {
         searchParams.set("groupBy", groupBy.join(","));
@@ -934,72 +937,61 @@ const AnalyticsExportControls: React.FC<AnalyticsExportControlsProps> = ({
   }
 
   return (
-    <div className="w-full xl:max-w-[40rem]">
-      <div className="analytics-toolbar">
-        <div className="analytics-toolbar-row analytics-toolbar-row-start">
-          <div className="analytics-toolbar-copy">
-            <p className="analytics-toolbar-title">Export current report</p>
-          </div>
-          <div className="analytics-toolbar-meta analytics-toolbar-meta-start">
-            <span className="analytics-toolbar-chip">{exportModeLabel}</span>
-            <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-              {exportGroupingLabel}
-            </span>
-          </div>
-        </div>
-        <div className="analytics-toolbar-actions analytics-toolbar-actions-grid">
-          <Button
-            onClick={handleDownloadTableImage}
-            variant="outline"
-            size="default"
-            disabled={!hasData}
-            className="h-10 w-full justify-center rounded-xl px-4 text-sm sm:min-w-[9.5rem]"
-          >
-            Table image
-          </Button>
-          <Button
-            onClick={handleDownloadExcel}
-            variant="outline"
-            size="default"
-            disabled={!hasData}
-            className="h-10 w-full justify-center rounded-xl px-4 text-sm sm:min-w-[9.5rem]"
-          >
-            Excel workbook
-          </Button>
-          {mode === "class" ? (
-            <Button
-              onClick={handleDownloadBenchmarkPdf}
-              variant="outline"
-              size="default"
-              disabled={!benchmarkData?.baseline}
-              className="h-10 w-full justify-center rounded-xl px-4 text-sm sm:min-w-[9.5rem]"
-            >
-              Benchmark PDF
-            </Button>
-          ) : null}
-          {mode === "student" ? (
-            <Button
-              onClick={handleDownloadRemedials}
-              variant="outline"
-              size="default"
-              disabled={!hasData}
-              className="h-10 w-full justify-center rounded-xl px-4 text-sm sm:min-w-[10rem]"
-            >
-              Remedial PDF
-            </Button>
-          ) : (
-            <Button
-              onClick={handleDownloadRemedials}
-              variant="outline"
-              size="default"
-              disabled={!hasData}
-              className="h-10 w-full justify-center rounded-xl px-4 text-sm sm:min-w-[10rem]"
-            >
-              Remedial ZIP
-            </Button>
-          )}
-        </div>
-      </div>
+    <div
+      className="analytics-export-actions"
+      role="group"
+      aria-label="Export current report"
+    >
+      <Button
+        onClick={handleDownloadTableImage}
+        variant="outline"
+        size="default"
+        disabled={!hasData}
+        className="analytics-export-button"
+      >
+        Table image
+      </Button>
+      <Button
+        onClick={handleDownloadExcel}
+        variant="outline"
+        size="default"
+        disabled={!hasData}
+        className="analytics-export-button"
+      >
+        Excel workbook
+      </Button>
+      {mode === "class" ? (
+        <Button
+          onClick={handleDownloadBenchmarkPdf}
+          variant="outline"
+          size="default"
+          disabled={!benchmarkData?.baseline}
+          className="analytics-export-button"
+        >
+          Benchmark PDF
+        </Button>
+      ) : null}
+      {mode === "student" ? (
+        <Button
+          onClick={handleDownloadRemedials}
+          variant="outline"
+          size="default"
+          disabled={!hasData}
+          className="analytics-export-button"
+        >
+          Remedial PDF
+        </Button>
+      ) : (
+        <Button
+          onClick={handleDownloadRemedials}
+          variant="outline"
+          size="default"
+          disabled={!hasData}
+          className="analytics-export-button"
+        >
+          Remedial ZIP
+        </Button>
+      )}
     </div>
   );
 };

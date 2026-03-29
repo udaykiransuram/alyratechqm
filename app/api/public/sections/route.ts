@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getPublicSectionOptions } from "@/lib/server/public-registration-data";
+import { getPublicSchoolOptionByKey } from "@/lib/server/public-school-data";
+import {
+  getPublicRegistrationScopeCookieName,
+  verifyPublicRegistrationScopeValue,
+} from "@/lib/security/registration-security";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +28,24 @@ export async function GET(req: NextRequest) {
       success: true,
       sections: [],
     });
+  }
+
+  const school = await getPublicSchoolOptionByKey(schoolKey);
+  if (!school) {
+    return NextResponse.json(
+      { success: false, message: "Unknown school." },
+      { status: 404 },
+    );
+  }
+
+  const scopeCookie = req.cookies
+    .get(getPublicRegistrationScopeCookieName())
+    ?.value;
+  if (!verifyPublicRegistrationScopeValue(schoolKey, scopeCookie || "")) {
+    return NextResponse.json(
+      { success: false, message: "Registration scope expired. Reload classes." },
+      { status: 403 },
+    );
   }
 
   if (!classId || !mongoose.Types.ObjectId.isValid(classId)) {

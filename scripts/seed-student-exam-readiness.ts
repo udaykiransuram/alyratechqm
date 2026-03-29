@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 
 import { connectDB } from "@/lib/db";
 import { getTenantDb, getTenantModels } from "@/lib/db-tenant";
+import { syncExamPaperSnapshotForPaperId } from "@/lib/exam-runtime";
 import School from "@/models/School";
 
 type ParsedArgs = {
@@ -223,6 +224,8 @@ async function seedReadinessData(args: ParsedArgs) {
     ],
     createdBy: adminUser._id,
   });
+
+  await syncExamPaperSnapshotForPaperId(args.schoolKey, String(paper._id));
 
   const studentDocs = [];
   for (let index = 1; index <= args.studentCount; index += 1) {

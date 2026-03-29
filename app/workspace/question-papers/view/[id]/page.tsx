@@ -1,19 +1,32 @@
+import dynamicComponent from "next/dynamic";
 import { ArrowLeft } from "lucide-react";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { PaperSummary } from "@/components/PaperSummary";
-import { PrintEditToolbar } from "@/components/PrintEditToolbar";
-import { QuestionPaperToolbar } from "@/components/QuestionPaperToolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import QuestionItemClient from "@/components/QuestionItemClient";
+import { QuestionPaperReadOnlyQuestionCard } from "@/components/workspace/question-paper-view/QuestionPaperReadOnlyQuestionCard";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { getWorkspaceQuestionPaperById } from "@/lib/server/workspace-assessment-data";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
 export const dynamic = "force-dynamic";
+
+const PrintEditToolbar = dynamicComponent(
+  () =>
+    import("@/components/PrintEditToolbar").then((module) => ({
+      default: module.PrintEditToolbar,
+    })),
+);
+const QuestionPaperToolbar = dynamicComponent(
+  () =>
+    import("@/components/QuestionPaperToolbar").then((module) => ({
+      default: module.QuestionPaperToolbar,
+    })),
+);
 
 type ViewQuestionPaperPageProps = {
   params: Promise<{ id: string }>;
@@ -38,26 +51,28 @@ export default async function ViewQuestionPaperPage({
 
   if (!paper) {
     return (
-      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+      <PageShell width="wide" padding="standard">
         <PageHero
+          variant="editor"
           eyebrow="Assessments"
           title="Question Paper"
           description="The requested paper could not be loaded."
           actions={
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="app-button-back">
               <AppPrefetchLink href={backHref}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
+                <ArrowLeft className="h-4 w-4" />
                 Back to Papers
               </AppPrefetchLink>
             </Button>
           }
         />
         <div className="app-empty-state">Question paper not found.</div>
-      </div>
+      </PageShell>
     );
   }
 
   const paperSections = Array.isArray(paper.sections) ? paper.sections : [];
+  const paperSubjects = Array.isArray(paper.subjects) ? paper.subjects : [];
   const assignedAcademicSectionNames = (
     Array.isArray(paper.assignedAcademicSections)
       ? paper.assignedAcademicSections
@@ -87,16 +102,17 @@ export default async function ViewQuestionPaperPage({
   });
 
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+    <PageShell width="wide" padding="standard">
       <PageHero
+        variant="editor"
         eyebrow="Assessments"
         title={paper.title || "Question Paper"}
         description="Review paper details, sections, question composition, and scoring rules from one consistent assessment workspace."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="app-button-back">
               <AppPrefetchLink href={backHref}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
+                <ArrowLeft className="h-4 w-4" />
                 Back
               </AppPrefetchLink>
             </Button>
@@ -108,9 +124,15 @@ export default async function ViewQuestionPaperPage({
             <span className="app-meta-chip">
               {paper.class?.name || "No class assigned"}
             </span>
-            <span className="app-meta-chip">
-              {paper.subject?.name || "No subject assigned"}
-            </span>
+            {paperSubjects.length > 0 ? (
+              paperSubjects.map((subject: any) => (
+                <span key={subject._id || subject.name} className="app-meta-chip">
+                  {subject.name || subject._id}
+                </span>
+              ))
+            ) : (
+              <span className="app-meta-chip">No subject assigned</span>
+            )}
           </>
         }
         stats={[
@@ -169,8 +191,15 @@ export default async function ViewQuestionPaperPage({
                   <div className="app-detail-value">{paper.class?.name || "-"}</div>
                 </div>
                 <div className="app-detail-item">
-                  <p className="app-detail-label">Subject</p>
-                  <div className="app-detail-value">{paper.subject?.name || "-"}</div>
+                  <p className="app-detail-label">Subjects</p>
+                  <div className="app-detail-value">
+                    {paperSubjects.length > 0
+                      ? paperSubjects
+                          .map((subject: any) => subject?.name || subject?._id || "")
+                          .filter(Boolean)
+                          .join(", ")
+                      : "-"}
+                  </div>
                 </div>
                 <div className="app-detail-item">
                   <p className="app-detail-label">Duration</p>
@@ -264,48 +293,38 @@ export default async function ViewQuestionPaperPage({
                             : null;
 
                         return (
-                          <div
-                            key={question?._id || `${sectionIndex}-${questionIndex}`}
-                            className="rounded-2xl border border-border/60 bg-muted/10 p-3"
-                          >
-                            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <p className="text-sm font-semibold text-foreground">
-                                Question {questionIndex + 1}
-                              </p>
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline">{item?.marks ?? 0} Marks</Badge>
-                                {(item?.negativeMarks ?? 0) > 0 ? (
-                                  <Badge variant="destructive">
-                                    {item.negativeMarks} Negative
-                                  </Badge>
-                                ) : null}
-                              </div>
+                          question ? (
+                            <QuestionPaperReadOnlyQuestionCard
+                              key={question?._id || `${sectionIndex}-${questionIndex}`}
+                              questionNumber={questionIndex + 1}
+                              marks={Number(item?.marks ?? 0)}
+                              negativeMarks={Number(item?.negativeMarks ?? 0)}
+                              question={{
+                                ...question,
+                                content:
+                                  typeof question.content === "string"
+                                    ? question.content
+                                    : "",
+                                tags: Array.isArray(question.tags)
+                                  ? question.tags
+                                  : [],
+                                options: Array.isArray(question.options)
+                                  ? question.options
+                                  : [],
+                                answerIndexes: Array.isArray(question.answerIndexes)
+                                  ? question.answerIndexes
+                                  : [],
+                                createdAt: question.createdAt || "",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              key={`${sectionIndex}-${questionIndex}`}
+                              className="app-empty-state py-4"
+                            >
+                              This question record is missing or no longer available.
                             </div>
-
-                            {question ? (
-                              <QuestionItemClient
-                                compact
-                                question={{
-                                  ...question,
-                                  tags: Array.isArray(question.tags) ? question.tags : [],
-                                  options: Array.isArray(question.options)
-                                    ? question.options
-                                    : [],
-                                  answerIndexes: Array.isArray(question.answerIndexes)
-                                    ? question.answerIndexes
-                                    : [],
-                                }}
-                                readOnly
-                                classes={[]}
-                                subjects={[]}
-                                allTags={[]}
-                              />
-                            ) : (
-                              <div className="app-empty-state py-4">
-                                This question record is missing or no longer available.
-                              </div>
-                            )}
-                          </div>
+                          )
                         );
                       })
                     )}
@@ -326,9 +345,10 @@ export default async function ViewQuestionPaperPage({
             onlineEnabled={Boolean(paper.onlineEnabled)}
             onlineStartsAt={paper.onlineStartsAt ?? null}
             onlineEndsAt={paper.onlineEndsAt ?? null}
+            subjects={paperSubjects}
           />
         </aside>
       </div>
-    </div>
+    </PageShell>
   );
 }

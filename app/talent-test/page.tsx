@@ -1,12 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
+import { unstable_cache } from 'next/cache';
 import { Reveal, Stagger } from '@/components/Reveal';
+import { PublicFaqStack } from '@/components/public/PublicFaqStack';
+import { PublicFinalCta } from '@/components/public/PublicFinalCta';
+import { PublicSectionIntro } from '@/components/public/PublicSectionIntro';
+import { PublicTestimonialsGrid } from '@/components/public/PublicTestimonialsGrid';
 import { connectDB } from '@/lib/db';
 import TalentTestConfig from '@/models/TalentTestConfig';
 import Testimonial from '@/models/Testimonial';
 import SiteStats from '@/models/SiteStats';
 import FAQ from '@/models/FAQ';
+import { resolvePublicPageData } from "@/lib/server/public-page-data";
 
 export const revalidate = 60;
 
@@ -111,54 +117,57 @@ const DEFAULT_HERO_STATS: HeroStat[] = [
   { value: '20+', label: 'States Covered' },
 ];
 
-async function getTalentTestData() {
-  try {
-    const work = (async () => {
-      await connectDB();
-            const [config, testimonials, statsDoc, faqDocs]: [any, any[], any, any[]] = await Promise.all([
-        TalentTestConfig.findOne().lean(),
-        Testimonial.find({ section: 'homepage', isActive: true }).sort({ displayOrder: 1 }).lean(),
-        SiteStats.findOne({ section: 'homepage' }).lean(),
-        FAQ.find({ page: 'talent-test', isActive: true }).sort({ displayOrder: 1 }).lean(),
-      ]);
+const getTalentTestData = unstable_cache(
+  async () => {
+    return resolvePublicPageData(
+      async () => {
+        await connectDB();
+        const [config, testimonials, statsDoc, faqDocs]: [any, any[], any, any[]] = await Promise.all([
+          TalentTestConfig.findOne().lean(),
+          Testimonial.find({ section: 'homepage', isActive: true }).sort({ displayOrder: 1 }).lean(),
+          SiteStats.findOne({ section: 'homepage' }).lean(),
+          FAQ.find({ page: 'talent-test', isActive: true }).sort({ displayOrder: 1 }).lean(),
+        ]);
 
-            const heroStats: HeroStat[] = (statsDoc?.stats ?? []).length
-        ? (statsDoc.stats as any[]).map((s: any) => ({ value: String(s.value), label: s.label || s.key }))
-        : DEFAULT_HERO_STATS;
+        const heroStats: HeroStat[] = (statsDoc?.stats ?? []).length
+          ? (statsDoc.stats as any[]).map((s: any) => ({ value: String(s.value), label: s.label || s.key }))
+          : DEFAULT_HERO_STATS;
 
-      return {
-        name: config?.name ?? 'Precision Baseline Assessment',
-        description: config?.description ?? 'Comprehensive diagnostic test to identify student strengths and areas for improvement',
-        price: typeof config?.price === 'number' ? config.price : undefined,
-        currency: config?.currency ?? undefined,
-        duration: config?.duration ?? '45 minutes',
-        subjects: config?.subjects ?? ['Mathematics', 'Science', 'English'],
-        features: config?.features ?? ['Detailed diagnostic report', 'Personalized learning recommendations', 'Subject-wise performance analysis', 'Instant results delivery via email'],
-        isActive: config?.isActive ?? true,
-        registrationsOpen: config?.registrationsOpen ?? undefined,
-        registrationDeadline: config?.registrationDeadline ?? undefined,
-        testWindowStart: config?.testWindowStart ?? undefined,
-        testWindowEnd: config?.testWindowEnd ?? undefined,
-        resultsDate: config?.resultsDate ?? undefined,
-        heroStats,
-        testimonials: testimonials.length
-          ? testimonials.map((t: any) => ({  
-              name: t.author,
-              role: [t.role, t.school, t.location].filter(Boolean).join(', '),
-              quote: t.quote,
-              rating: t.rating ?? 5,
-            }))
-          : DEFAULT_TESTIMONIALS,
-        faqs: faqDocs.length
-          ? faqDocs.map((f: any) => ({ question: f.question, answer: f.answer })) 
-          : DEFAULT_FAQS,
-      };
-    })();
-    return await work;
-  } catch {
-    return getDefaults();
-  }
-}
+        return {
+          name: config?.name ?? 'Precision Baseline Assessment',
+          description: config?.description ?? 'Comprehensive diagnostic test to identify student strengths and areas for improvement',
+          price: typeof config?.price === 'number' ? config.price : undefined,
+          currency: config?.currency ?? undefined,
+          duration: config?.duration ?? '45 minutes',
+          subjects: config?.subjects ?? ['Mathematics', 'Science', 'English'],
+          features: config?.features ?? ['Detailed diagnostic report', 'Personalized learning recommendations', 'Subject-wise performance analysis', 'Instant results delivery via email'],
+          isActive: config?.isActive ?? true,
+          registrationsOpen: config?.registrationsOpen ?? undefined,
+          registrationDeadline: config?.registrationDeadline ?? undefined,
+          testWindowStart: config?.testWindowStart ?? undefined,
+          testWindowEnd: config?.testWindowEnd ?? undefined,
+          resultsDate: config?.resultsDate ?? undefined,
+          heroStats,
+          testimonials: testimonials.length
+            ? testimonials.map((t: any) => ({
+                name: t.author,
+                role: [t.role, t.school, t.location].filter(Boolean).join(', '),
+                quote: t.quote,
+                rating: t.rating ?? 5,
+              }))
+            : DEFAULT_TESTIMONIALS,
+          faqs: faqDocs.length
+            ? faqDocs.map((f: any) => ({ question: f.question, answer: f.answer }))
+            : DEFAULT_FAQS,
+        };
+      },
+      getDefaults(),
+      2000,
+    );
+  },
+  ['public-talent-test-page-data'],
+  { revalidate: 60 },
+);
 
 function getDefaults() {
   return {
@@ -282,12 +291,12 @@ export default async function TalentTestLandingPage() {
       {/* Test Details from Admin Config */}
       <section className="px-4 py-16">
         <div className="mx-auto max-w-5xl">
-          <Reveal>
-            <div className="text-center mb-10">
-              <h2 className="text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">{name}</h2>
-              <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">{description}</p>
-            </div>
-          </Reveal>
+          <PublicSectionIntro
+            eyebrow="Assessment Details"
+            title={name}
+            description={description}
+            compact
+          />
           <Stagger className="grid gap-6 md:grid-cols-3">
             <div className="public-flow-stat-card">
               <div className="text-3xl mb-2">⏱️</div>
@@ -330,12 +339,11 @@ export default async function TalentTestLandingPage() {
 
       {/* What Makes This Unique */}
       <section id="features" className="mx-auto max-w-7xl px-4 py-20">
-        <Reveal>
-          <h2 className="text-center text-3xl md:text-4xl font-extrabold">What Makes Our Talent Test Unique?</h2>
-          <p className="mx-auto mt-4 max-w-3xl text-center text-lg text-muted-foreground">
-            This isn&apos;t just another exam. It&apos;s a comprehensive diagnostic tool that reveals how your child thinks, learns, and solves problems.
-          </p>
-        </Reveal>
+        <PublicSectionIntro
+          eyebrow="Why It Feels Different"
+          title="What makes our talent test different from a normal exam?"
+          description="This is not just another score sheet. It is a diagnostic layer that shows how a student thinks, where they break down, and what should happen next."
+        />
         <Stagger className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {uniqueFeatures.map((item, idx) => (
             <div key={idx} className={`public-flow-card border-l-4 p-8 transition hover:shadow-xl ${item.border}`}>
@@ -350,12 +358,11 @@ export default async function TalentTestLandingPage() {
       {/* Core Benefits */}
       <section className="px-4 py-20">
         <div className="mx-auto max-w-7xl">
-          <Reveal>
-            <h2 className="text-center text-3xl md:text-4xl font-extrabold">Core Benefits</h2>
-            <p className="mx-auto mt-4 max-w-3xl text-center text-lg text-muted-foreground">
-              More than just a test score — get actionable insights that drive real improvement.
-            </p>
-          </Reveal>
+          <PublicSectionIntro
+            eyebrow="Core Benefits"
+            title="More than just a test score"
+            description="Families get actionable insight, not a one-line verdict. Schools get a better signal on how students are actually learning."
+          />
           <Stagger className="mt-12 grid gap-8 md:grid-cols-3">
             {benefits.map((benefit, index) => (
               <div key={index} className="public-flow-card p-8 transition hover:shadow-xl">
@@ -474,12 +481,11 @@ export default async function TalentTestLandingPage() {
       {keyDates.length > 0 && (
         <section className="px-4 py-20">
           <div className="mx-auto max-w-7xl">
-            <Reveal>
-              <h2 className="text-center text-3xl md:text-4xl font-extrabold">Key Dates</h2>
-              <p className="mx-auto mt-4 max-w-3xl text-center text-lg text-muted-foreground">
-                Stay updated with the schedule configured by the organizer.
-              </p>
-            </Reveal>
+            <PublicSectionIntro
+              eyebrow="Key Dates"
+              title="Stay aligned with the live test schedule"
+              description="These dates come from the active organizer configuration so families know exactly what window they are planning around."
+            />
             <Stagger className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
               {keyDates.map((item, index) => (
                 <div key={index} className="public-flow-card-soft border-t-4 border-teal-500 p-8">
@@ -495,44 +501,37 @@ export default async function TalentTestLandingPage() {
 
       {/* Testimonials */}
       <section className="mx-auto max-w-7xl px-4 py-20">
-        <Reveal>
-          <h2 className="text-center text-3xl md:text-4xl font-extrabold">What Students & Parents Say</h2>
-          <p className="mx-auto mt-4 max-w-3xl text-center text-lg text-muted-foreground">
-            Real experiences from families who&apos;ve taken the Talent Test.
-          </p>
-        </Reveal>
-        <Stagger className="mt-12 grid gap-8 md:grid-cols-3">
-          {testimonials.map((testimonial, index) => (
-            <div key={index} className="public-flow-card p-8">
-              <div className="mb-4 flex gap-1">
-                {[...Array(testimonial.rating)].map((_, i) => (
-                  <span key={i} className="text-2xl text-amber-500">⭐</span>
-                ))}
-              </div>
-              <p className="italic text-muted-foreground">&quot;{testimonial.quote}&quot;</p>
-              <div className="mt-6 border-t border-border/70 pt-4">
-                <p className="font-bold">{testimonial.name}</p>
-                <p className="text-sm text-muted-foreground">{testimonial.role}</p>
-              </div>
-            </div>
-          ))}
-        </Stagger>
+        <PublicSectionIntro
+          eyebrow="Testimonials"
+          title="What students and parents say after the report arrives"
+          description="The biggest difference families mention is clarity. They finally understand where improvement should start."
+        />
+        <PublicTestimonialsGrid
+          items={testimonials.map((testimonial) => ({
+            quote: testimonial.quote,
+            author: testimonial.name,
+            role: testimonial.role,
+            rating: testimonial.rating,
+          }))}
+          className="mt-12"
+        />
       </section>
 
       {/* FAQ Section */}
       <section className="px-4 py-20">
         <div className="mx-auto max-w-4xl">
-          <Reveal>
-            <h2 className="text-center text-3xl md:text-4xl font-extrabold">Frequently Asked Questions</h2>
-          </Reveal>
-          <Stagger className="mt-12 space-y-6">
-            {faqs.map((faq, index) => (
-              <div key={index} className="public-flow-card">
-                <h3 className="text-xl font-bold text-foreground">{faq.question}</h3>
-                <p className="mt-3 text-muted-foreground">{faq.answer.replace('{{PRICE}}', priceLabel || 'the set fee')}</p>
-              </div>
-            ))}
-          </Stagger>
+          <PublicSectionIntro
+            eyebrow="FAQ"
+            title="Questions families usually ask before registering"
+            description="The practical details matter: who can take the test, what happens after payment, and when the reports arrive."
+          />
+          <PublicFaqStack
+            className="mt-12"
+            items={faqs.map((faq) => ({
+              question: faq.question,
+              answer: faq.answer.replace('{{PRICE}}', priceLabel || 'the set fee'),
+            }))}
+          />
         </div>
       </section>
 
@@ -589,61 +588,40 @@ export default async function TalentTestLandingPage() {
 
       {/* Final CTA */}
       <section className="mx-auto max-w-7xl px-4 py-24">
-        <div className="public-flow-cta">
-          <div className="mx-auto max-w-3xl text-center">
-            <Reveal>
-              <h2 className="text-3xl font-bold md:text-5xl">Ready to Discover Your Child&apos;s True Potential?</h2>
-            </Reveal>
-            <Reveal delay={0.08}>
-              <p className="mt-6 text-xl opacity-95">
-                Join 50,000+ students who&apos;ve already experienced the power of precision diagnostics. 
-                {priceLabel ? (
-                  <>For just {priceLabel}, get comprehensive insights that traditional exams can&apos;t provide.</>
-                ) : (
-                  <>Get comprehensive insights that traditional exams can&apos;t provide.</>
-                )}
-              </p>
-            </Reveal>
-            <Reveal delay={0.16}>
-              <div className="mt-10 flex flex-wrap justify-center gap-4">
-                <Link 
-                  href={isActive ? '/register' : '#'}
-                  className={`rounded-full px-10 py-4 text-xl font-semibold shadow-xl transition ${isActive ? 'bg-white text-teal-700 hover:shadow-2xl hover:opacity-95' : 'bg-white/60 text-teal-700/50 cursor-not-allowed'}`}
-                  aria-disabled={!isActive}
-                >
-                  {isActive ? (priceLabel ? `Enroll Now — ${priceLabel} Only` : 'Enroll Now') : 'Registrations Closed'}
-                </Link>
-                <Link 
-                  href="/product" 
-                  className="rounded-full border-2 border-white px-10 py-4 text-xl font-semibold text-white transition hover:bg-white/10"
-                >
-                  See Full Product Suite
-                </Link>
+        <PublicFinalCta
+          eyebrow="Ready to Register?"
+          title="Discover your child&apos;s true learning pattern, not just one more score."
+          description={
+            priceLabel
+              ? `Join thousands of students who have already used precision diagnostics. Register for ${priceLabel} and receive insight traditional exams cannot surface.`
+              : "Join thousands of students who have already used precision diagnostics and receive insight traditional exams cannot surface."
+          }
+          primaryAction={{
+            href: isActive ? '/register' : '/contact',
+            label: isActive
+              ? priceLabel
+                ? `Enroll now for ${priceLabel}`
+                : 'Enroll now'
+              : 'Ask about the next window',
+          }}
+          secondaryAction={{ href: '/product', label: 'See full product suite' }}
+          supplemental={
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-white/12 bg-white/8 p-4">
+                <div className="text-base font-semibold text-white">Instant confirmation</div>
+                <p className="mt-1 text-sm text-white/74">Hall ticket and registration confirmation delivered immediately after payment.</p>
               </div>
-            </Reveal>
-            <Reveal delay={0.24}>
-              <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div className="rounded-xl bg-white/10 p-4 backdrop-blur-sm">
-                  <div className="text-2xl font-bold">✅ Instant Confirmation</div>
-                  <p className="mt-1 text-sm opacity-90">Hall ticket via WhatsApp immediately after payment</p>
-                </div>
-                <div className="rounded-xl bg-white/10 p-4 backdrop-blur-sm">
-                  <div className="text-2xl font-bold">🏠 Test from Home</div>
-                  <p className="mt-1 text-sm opacity-90">Online proctored test during Sept 1-7 window</p>
-                </div>
-                <div className="rounded-xl bg-white/10 p-4 backdrop-blur-sm">
-                  <div className="text-2xl font-bold">📊 Detailed Report</div>
-                  <p className="mt-1 text-sm opacity-90">Complete diagnostic analysis within 2 weeks</p>
-                </div>
+              <div className="rounded-2xl border border-white/12 bg-white/8 p-4">
+                <div className="text-base font-semibold text-white">Online from home</div>
+                <p className="mt-1 text-sm text-white/74">Students can take the assessment from home during the active test window.</p>
               </div>
-            </Reveal>
-            <Reveal delay={0.32}>
-              <p className="mt-8 text-sm opacity-80">
-                💬 Questions? Call <strong>+91-98765-43210</strong> or WhatsApp for instant support
-              </p>
-            </Reveal>
-          </div>
-        </div>
+              <div className="rounded-2xl border border-white/12 bg-white/8 p-4">
+                <div className="text-base font-semibold text-white">Detailed report</div>
+                <p className="mt-1 text-sm text-white/74">Families receive a deeper analysis than standard exam reporting can provide.</p>
+              </div>
+            </div>
+          }
+        />
       </section>
     </div>
   );

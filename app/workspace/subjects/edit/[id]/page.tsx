@@ -238,6 +238,7 @@ export default function EditSubjectPage() {
     return (
       <PageShell width="narrow">
         <PageHero
+          variant="editor"
           eyebrow="Curriculum"
           title="Edit Subject"
           description="We couldn’t load the subject details for editing."
@@ -245,7 +246,7 @@ export default function EditSubjectPage() {
             <Button
               type="button"
               variant="outline"
-              className="gap-2"
+              className="app-button-back"
               onClick={navigateBack}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -260,10 +261,10 @@ export default function EditSubjectPage() {
           description={fetchError}
           action={
             <>
-              <Button type="button" variant="outline" onClick={navigateBack}>
+              <Button type="button" variant="outline" className="app-button-back" onClick={navigateBack}>
                 Go Back to Subjects
               </Button>
-              <Button type="button" onClick={fetchSubjectDetailsAndAllTags}>
+              <Button type="button" className="app-button-filter" onClick={fetchSubjectDetailsAndAllTags}>
                 Try Again
               </Button>
             </>
@@ -276,6 +277,7 @@ export default function EditSubjectPage() {
   return (
     <PageShell width="narrow">
       <PageHero
+        variant="editor"
         eyebrow="Curriculum"
         title="Edit Subject"
         description="Update the subject details and keep related tags organized across your question and paper setup."
@@ -283,7 +285,7 @@ export default function EditSubjectPage() {
           <Button
             type="button"
             variant="outline"
-            className="gap-2"
+            className="app-button-back"
             onClick={navigateBack}
             disabled={isSaving}
           >

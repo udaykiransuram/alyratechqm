@@ -1,13 +1,34 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 
+import BulkUploadPanel from "@/components/workspace/BulkUploadPanel";
+import WorkspaceCreateGuideCard from "@/components/workspace/WorkspaceCreateGuideCard";
+import WorkspaceCreateShell from "@/components/workspace/WorkspaceCreateShell";
 import { Button } from "@/components/ui/button";
-import PageHero from "@/components/layout/PageHero";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import FeedbackNotice, {
+  type FeedbackNoticeVariant,
+} from "@/components/ui/feedback-notice";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
+import {
+  downloadCsvTemplate,
+  parseUploadFile,
+} from "@/lib/client/bulk-upload";
+import {
+  buildWorkspaceUserBulkRows,
+  WORKSPACE_USER_BULK_TEMPLATES,
+} from "@/lib/client/workspace-user-bulk";
 import type {
   WorkspaceAcademicSectionItem,
   WorkspaceClassItem,
@@ -29,6 +50,7 @@ export default function CreateStudentPageClient({
   initialMessage = null,
 }: CreateStudentPageClientProps) {
   const { navigateBack } = useBackNavigation("/workspace/students");
+  const [currentSchoolKey, setCurrentSchoolKey] = useState("");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -39,31 +61,66 @@ export default function CreateStudentPageClient({
     enrolledAt: "",
   });
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(initialMessage);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    message: string;
+    variant: FeedbackNoticeVariant;
+  } | null>(
+    initialMessage
+      ? {
+          message: initialMessage,
+          variant: "error",
+        }
+      : null,
+  );
+  const [bulkFeedback, setBulkFeedback] = useState<{
+    message: string;
+    variant: FeedbackNoticeVariant;
+  } | null>(null);
 
   const filteredSections = useMemo(
     () => initialSections.filter((section) => getSectionClassId(section) === form.class),
     [form.class, initialSections],
   );
 
-  const handleChange = (
-    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     setForm((currentForm) => ({
       ...currentForm,
       [name]: value,
-      ...(name === "class" ? { academicSection: "" } : {}),
     }));
+  };
+
+  const handleClassChange = (value: string) => {
+    setForm((currentForm) => ({
+      ...currentForm,
+      class: value,
+      academicSection: "",
+    }));
+  };
+
+  const resetForm = () => {
+    setForm({
+      name: "",
+      email: "",
+      mobileNumber: "",
+      class: "",
+      academicSection: "",
+      rollNumber: "",
+      enrolledAt: "",
+    });
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
-    setMessage(null);
+    setFeedback(null);
 
     try {
+      if (!form.class || !form.academicSection || !form.rollNumber.trim()) {
+        throw new Error("Class, section, and roll number are required.");
+      }
+
       const schoolKey = resolveClientSchoolKey();
       if (!schoolKey) {
         throw new Error("Please select a school in the navbar first.");
@@ -83,122 +140,45 @@ export default function CreateStudentPageClient({
           enrolledAt: form.enrolledAt ? new Date(form.enrolledAt) : undefined,
         }),
         schoolKey,
-        fallbackMessage: "Error creating student",
+        fallbackMessage: "We couldn't create the student account.",
       });
 
-      setMessage(data.existed ? "Student already exists." : "Student created!");
-      setForm({
-        name: "",
-        email: "",
-        mobileNumber: "",
-        class: "",
-        academicSection: "",
-        rollNumber: "",
-        enrolledAt: "",
+      setFeedback({
+        message: data.existed ? "Student already exists." : "Student created.",
+        variant: data.existed ? "warning" : "success",
       });
+      resetForm();
     } catch (error: any) {
-      setMessage(error?.message || "Error creating student");
+      setFeedback({
+        message: error?.message || "We couldn't create the student account.",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const resolveClassIdByName = (className: string) => {
-    const found = initialClasses.find(
-      (classItem) =>
-        classItem.name.trim().toLowerCase() === className.trim().toLowerCase(),
-    );
-    return found?._id || "";
-  };
-
-  const resolveAcademicSectionId = (classId: string, sectionName: string) => {
-    if (!classId || !sectionName) return "";
-    const found = initialSections.find(
-      (section) =>
-        getSectionClassId(section) === classId &&
-        section.name.trim().toLowerCase() === sectionName.trim().toLowerCase(),
-    );
-    return found?._id || "";
-  };
-
-  const handleBulkUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBulkUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
     setBulkLoading(true);
-    setMessage(null);
-
-    let rawRows: any[] = [];
-    if (file.name.endsWith(".csv")) {
-      const text = await file.text();
-      const lines = text.split("\n").filter(Boolean);
-      const [header, ...rows] = lines;
-      const columns = header.split(",").map((item) => item.trim());
-      rawRows = rows.map((row) => {
-        const values = row.split(",").map((item) => item.trim());
-        const nextRow: any = {};
-        columns.forEach((column, index) => {
-          nextRow[column.toLowerCase()] = values[index] || "";
-        });
-        return nextRow;
-      });
-    } else if (file.name.endsWith(".xlsx")) {
-      const XLSX = await import("xlsx");
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const json = XLSX.utils.sheet_to_json(sheet);
-      rawRows = json.map((row: any) => {
-        const nextRow: any = {};
-        Object.keys(row).forEach((key) => {
-          nextRow[key.toLowerCase()] = row[key];
-        });
-        return nextRow;
-      });
-    } else {
-      setBulkLoading(false);
-      setMessage("Unsupported file type. Please upload a CSV or Excel (.xlsx) file.");
-      return;
-    }
-
-    const invalidRows: string[] = [];
-    const students = rawRows
-      .map((row: any) => {
-        const className = String(row.class || row.classname || "").trim();
-        const sectionName = String(
-          row.section || row.academicsection || row.sectionname || "",
-        ).trim();
-        const classId = className ? resolveClassIdByName(className) : "";
-        const academicSectionId = sectionName
-          ? resolveAcademicSectionId(classId, sectionName)
-          : "";
-
-        if (!classId || !academicSectionId) {
-          invalidRows.push(
-            [row.name || "Unknown", className || "?", sectionName || "?"].join(" / "),
-          );
-        }
-
-        return {
-          ...row,
-          role: "student",
-          class: classId,
-          academicSection: academicSectionId,
-          enrolledAt:
-            row.enrolledat || row.enrolledAt
-              ? new Date(row.enrolledat || row.enrolledAt)
-              : undefined,
-        };
-      })
-      .filter((student) => student.class && student.academicSection);
-
-    if (invalidRows.length > 0) {
-      setMessage(
-        `Some rows were skipped due to invalid class/section pairs: ${invalidRows.join(", ")}`,
-      );
-    }
+    setBulkFeedback(null);
 
     try {
+      const rows = await parseUploadFile(file);
+      const { users, skippedRows } = buildWorkspaceUserBulkRows({
+        role: "student",
+        rows,
+        classes: initialClasses,
+        sections: initialSections,
+        subjects: [],
+      });
+
+      if (users.length === 0) {
+        throw new Error(skippedRows[0] || "No valid student rows were found in the uploaded file.");
+      }
+
       const schoolKey = resolveClientSchoolKey();
       if (!schoolKey) {
         throw new Error("Please select a school in the navbar first.");
@@ -207,247 +187,289 @@ export default function CreateStudentPageClient({
       const data = await fetchApiJson<any>("/api/users/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ students }),
+        body: JSON.stringify({ users }),
         schoolKey,
-        fallbackMessage: "Bulk upload failed.",
+        fallbackMessage: "We couldn't complete the bulk upload.",
       });
 
-      const failed = (data.results || []).filter((result: any) => !result.success);
-      const succeeded = (data.results || []).filter(
-        (result: any) => result.success && !result.existed,
-      );
-      const existed = (data.results || []).filter((result: any) => result.existed);
-      setMessage(
-        `Bulk upload complete. Created: ${succeeded.length}, Existing: ${existed.length}, Failed: ${failed.length}.`,
-      );
+      const results = Array.isArray(data.results) ? data.results : [];
+      const failed = results.filter((result: any) => !result.success);
+      const created = results.filter((result: any) => result.success && !result.existed);
+      const existing = results.filter((result: any) => result.existed);
+
+      setBulkFeedback({
+        message: [
+          "Bulk upload complete.",
+          `Created: ${created.length}.`,
+          `Existing: ${existing.length}.`,
+          `Failed after upload: ${failed.length}.`,
+          skippedRows.length ? `Skipped before upload: ${skippedRows.length}.` : null,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        variant:
+          failed.length > 0 || skippedRows.length > 0
+            ? created.length > 0 || existing.length > 0
+              ? "warning"
+              : "error"
+            : "success",
+      });
     } catch (error: any) {
-      setMessage(error?.message || "Bulk upload failed.");
+      setBulkFeedback({
+        message: error?.message || "We couldn't complete the bulk upload.",
+        variant: "error",
+      });
     } finally {
+      event.target.value = "";
       setBulkLoading(false);
     }
   };
 
-  const messageClassName =
-    message?.toLowerCase().includes("error") ||
-    message?.toLowerCase().includes("failed") ||
-    message?.toLowerCase().includes("invalid")
-      ? "app-feedback app-feedback-error"
-      : "app-feedback app-feedback-success";
+  const downloadTemplate = () => {
+    const template = WORKSPACE_USER_BULK_TEMPLATES.student;
+    downloadCsvTemplate(template.filename, template.headers, template.sampleRows);
+  };
+
+  useEffect(() => {
+    setCurrentSchoolKey(resolveClientSchoolKey());
+  }, []);
 
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <PageHero
-        eyebrow="People"
-        title="Create Student"
-        description="Add one student at a time or import a class list with the same credential and placement rules used by the student test portal."
-        actions={
-          <Button type="button" variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Students
-          </Button>
-        }
-        meta={
-          <>
-            <span className="app-meta-chip">Roll number username</span>
-            <span className="app-meta-chip">Default password = roll number</span>
-          </>
-        }
-        stats={[
-          {
-            label: "Classes loaded",
-            value: String(initialClasses.length),
-            meta: "Available class placements in the current school.",
-          },
-          {
-            label: "Sections loaded",
-            value: String(initialSections.length),
-            meta: "Sections available for class-based student assignment.",
-          },
-          {
-            label: "Bulk import",
-            value: bulkLoading ? "Uploading" : "Ready",
-            meta: "CSV and Excel imports are supported here.",
-          },
-          {
-            label: "Credential model",
-            value: "Roll number default",
-            meta: "Students start with the roll number as both username and default password.",
-          },
-        ]}
-      />
+    <WorkspaceCreateShell
+      eyebrow="People"
+      title="Create Student"
+      description="Add one student with clear sign-in and placement details, or import a full class list once the academic structure is ready."
+      backLabel="Back to Students"
+      onBack={navigateBack}
+      badges={
+        <>
+          <span className="app-meta-chip">
+            {currentSchoolKey ? `School: ${currentSchoolKey}` : "No school selected"}
+          </span>
+          <span className="app-meta-chip">Roll number login</span>
+          <span className="app-meta-chip">Section required</span>
+          <span className="app-meta-chip">{`${initialSections.length} sections loaded`}</span>
+        </>
+      }
+      aside={
+        <>
+          <WorkspaceCreateGuideCard
+            title="Quick rules"
+            description="Set up the student so sign-in works immediately and the school placement is unmistakable."
+            items={[
+              {
+                title: "Roll number becomes login",
+                note: "The roll number is the username, and the first password is the saved phone-number digits exactly as stored.",
+              },
+              {
+                title: "Pick class before section",
+                note: "Sections are filtered by the selected class so placement stays accurate.",
+              },
+              {
+                title: "Use bulk upload for full lists",
+                note: "CSV and Excel imports work best once classes and sections already exist.",
+              },
+            ]}
+          />
 
-      {message ? <div className={messageClassName}>{message}</div> : null}
+          <BulkUploadPanel
+            id="student-bulk-upload"
+            title="Bulk upload students"
+            description="Import a student list with class, section, roll number, and contact details for the active school."
+            inputId="bulk-upload-students"
+            onFileChange={handleBulkUpload}
+            onDownloadTemplate={downloadTemplate}
+            templateLabel="Download Student Template"
+            loading={bulkLoading}
+            loadingLabel="Uploading students..."
+            disabled={initialClasses.length === 0}
+            feedback={bulkFeedback}
+            tips={WORKSPACE_USER_BULK_TEMPLATES.student.tips}
+          />
+        </>
+      }
+    >
+      {feedback ? (
+        <FeedbackNotice variant={feedback.variant}>{feedback.message}</FeedbackNotice>
+      ) : null}
 
-      <div className="app-editor-grid">
-        <div className="app-editor-main">
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <CardTitle>Student Profile</CardTitle>
-            </CardHeader>
-            <CardContent className="app-section-body">
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="app-section">
-                  <div className="app-form-section-heading">
-                    <p className="app-form-section-title">Identity and contact</p>
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="name">
-                      Name
-                    </label>
-                    <input
-                      id="name"
-                      name="name"
-                      placeholder="Enter student name"
-                      value={form.name}
-                      onChange={handleChange}
-                      required
-                      className="app-form-input"
-                    />
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="app-field-group">
-                      <label className="app-field-label" htmlFor="email">
-                        Email (Optional)
-                      </label>
-                      <input
-                        id="email"
-                        name="email"
-                        placeholder="Enter email"
-                        value={form.email}
-                        onChange={handleChange}
-                        type="email"
-                        className="app-form-input"
-                      />
-                    </div>
-                    <div className="app-field-group">
-                      <label className="app-field-label" htmlFor="mobileNumber">
-                        Parent Mobile Number
-                      </label>
-                      <input
-                        id="mobileNumber"
-                        name="mobileNumber"
-                        placeholder="Enter WhatsApp number"
-                        value={form.mobileNumber}
-                        onChange={handleChange}
-                        className="app-form-input"
-                      />
-                    </div>
-                  </div>
-                </div>
+      <Card className="app-surface overflow-hidden">
+        <CardHeader className="app-section-header space-y-4">
+          <div className="space-y-2.5">
+            <CardTitle>Create Student Account</CardTitle>
+            <p className="app-form-section-copy">
+              Start with identity and family contact details, then lock the student into the right class, section, and roll number.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="app-section-body">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="app-section space-y-4">
+              <div className="app-form-section-heading">
+                <p className="app-form-section-title">Identity and contact</p>
+                <p className="app-form-section-copy">
+                  Keep contact details clean so reports and parent communication stay reliable.
+                </p>
+              </div>
 
-                <div className="app-section">
-                  <div className="app-form-section-heading">
-                    <p className="app-form-section-title">Credentials</p>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Student usernames and initial passwords are set to the roll number.
-                    Students can change their own password later from the student account page.
+              <div className="app-field-group">
+                <Label htmlFor="student-name">Student name</Label>
+                <Input
+                  id="student-name"
+                  name="name"
+                  placeholder="Enter student name"
+                  value={form.name}
+                  onChange={handleInputChange}
+                  required
+                />
+                <p className="app-field-note">
+                  Use the student&apos;s full school name so attendance, reports, and analytics stay consistent.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="app-field-group">
+                  <Label htmlFor="student-email">Email</Label>
+                  <Input
+                    id="student-email"
+                    name="email"
+                    type="email"
+                    placeholder="Optional email address"
+                    value={form.email}
+                    onChange={handleInputChange}
+                  />
+                  <p className="app-field-note">
+                    Optional for most students, but useful when the account needs a cleaner long-term contact record.
                   </p>
                 </div>
 
-                <div className="app-section">
-                  <div className="app-form-section-heading">
-                    <p className="app-form-section-title">School placement</p>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <div className="app-field-group">
-                      <label className="app-field-label" htmlFor="class">
-                        Class
-                      </label>
-                      <select
-                        id="class"
-                        name="class"
-                        value={form.class}
-                        onChange={handleChange}
-                        required
-                        className="app-form-input"
-                      >
-                        <option value="">Select Class</option>
-                        {initialClasses.map((classItem) => (
-                          <option key={classItem._id} value={classItem._id}>
-                            {classItem.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="app-field-group">
-                      <label className="app-field-label" htmlFor="academicSection">
-                        Section
-                      </label>
-                      <select
-                        id="academicSection"
-                        name="academicSection"
-                        value={form.academicSection}
-                        onChange={handleChange}
-                        required
-                        disabled={!form.class}
-                        className="app-form-input"
-                      >
-                        <option value="">Select Section</option>
-                        {filteredSections.map((section) => (
-                          <option key={section._id} value={section._id}>
-                            {section.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="app-field-group">
-                      <label className="app-field-label" htmlFor="rollNumber">
-                        Roll Number / Username
-                      </label>
-                      <input
-                        id="rollNumber"
-                        name="rollNumber"
-                        placeholder="Enter roll number"
-                        value={form.rollNumber}
-                        onChange={handleChange}
-                        required
-                        className="app-form-input"
-                      />
-                    </div>
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="enrolledAt">
-                      Enrollment Date
-                    </label>
-                    <input
-                      id="enrolledAt"
-                      name="enrolledAt"
-                      value={form.enrolledAt}
-                      onChange={handleChange}
-                      type="date"
-                      className="app-form-input"
-                    />
-                  </div>
+                <div className="app-field-group">
+                  <Label htmlFor="student-mobile">Parent phone</Label>
+                  <Input
+                    id="student-mobile"
+                    name="mobileNumber"
+                    placeholder="Parent or guardian phone"
+                    value={form.mobileNumber}
+                    onChange={handleInputChange}
+                  />
+                  <p className="app-field-note">
+                    Best number for report delivery, parent contact, and follow-up around tests.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="app-section space-y-4">
+              <div className="app-form-section-heading">
+                <p className="app-form-section-title">Login setup</p>
+                <p className="app-form-section-copy">
+                  The roll number is the one field students and staff will notice most during sign-in support.
+                </p>
+              </div>
+
+              <div className="app-form-callout">
+                <p className="font-semibold text-foreground">Student sign-in</p>
+                <p className="mt-1.5">
+                  Students use the school key plus their roll number to sign in. The first password is the saved phone-number digits exactly as stored, including country code digits if they were saved.
+                </p>
+              </div>
+            </div>
+
+            <div className="app-section space-y-4">
+              <div className="app-form-section-heading">
+                <p className="app-form-section-title">School placement</p>
+                <p className="app-form-section-copy">
+                  These fields control class grouping, section assignment, and student-test eligibility.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="app-field-group">
+                  <Label htmlFor="student-class">Class</Label>
+                  <Select value={form.class} onValueChange={handleClassChange}>
+                    <SelectTrigger id="student-class">
+                      <SelectValue placeholder="Select class" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {initialClasses.map((classItem) => (
+                        <SelectItem key={classItem._id} value={classItem._id}>
+                          {classItem.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="app-field-note">
+                    Choose class first. It controls section options and where the student appears everywhere else.
+                  </p>
                 </div>
 
-                <button type="submit" disabled={loading} className="app-button-primary w-full">
-                  {loading ? "Creating..." : "Create Student"}
-                </button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+                <div className="app-field-group">
+                  <Label htmlFor="student-roll-number">Roll number</Label>
+                  <Input
+                    id="student-roll-number"
+                    name="rollNumber"
+                    placeholder="Enter roll number"
+                    value={form.rollNumber}
+                    onChange={handleInputChange}
+                    required
+                  />
+                  <p className="app-field-note">
+                    Most important placement field. This becomes the student&apos;s username. If sign-in support is needed later, admins can reset the password from the student detail page.
+                  </p>
+                </div>
 
-        <div className="app-editor-aside">
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <CardTitle>Bulk Upload Students</CardTitle>
-            </CardHeader>
-            <CardContent className="app-section-body space-y-4">
-              <input
-                type="file"
-                accept=".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                onChange={handleBulkUpload}
-                disabled={bulkLoading}
-                className="app-form-file"
-              />
+                <div className="app-field-group">
+                  <Label htmlFor="student-section">Section</Label>
+                  <Select
+                    value={form.academicSection}
+                    onValueChange={(value) =>
+                      setForm((currentForm) => ({
+                        ...currentForm,
+                        academicSection: value,
+                      }))
+                    }
+                    disabled={!form.class}
+                  >
+                    <SelectTrigger id="student-section">
+                      <SelectValue
+                        placeholder={form.class ? "Select section" : "Choose class first"}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredSections.map((section) => (
+                        <SelectItem key={section._id} value={section._id}>
+                          {section.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="app-field-note">
+                    Required for this flow. Sections are filtered by the chosen class so placement stays accurate.
+                  </p>
+                </div>
 
-              {bulkLoading ? <p className="app-page-subtitle">Uploading...</p> : null}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
+                <div className="app-field-group">
+                  <Label htmlFor="student-enrolled-at">Enrollment date</Label>
+                  <Input
+                    id="student-enrolled-at"
+                    name="enrolledAt"
+                    type="date"
+                    value={form.enrolledAt}
+                    onChange={handleInputChange}
+                  />
+                  <p className="app-field-note">
+                    Useful for backfilling legacy data or recording mid-year admissions.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <Button type="submit" size="xl" className="w-full" disabled={loading}>
+              {loading ? "Creating..." : "Create Student Account"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </WorkspaceCreateShell>
   );
 }

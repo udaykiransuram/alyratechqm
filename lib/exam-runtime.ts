@@ -3,8 +3,8 @@ import { buildArchiveFilter } from "@/lib/archive";
 import { getTenantModels } from "@/lib/db-tenant";
 import {
   getStudentTestModels,
+  loadOnlinePaperAssignmentsForClass,
   loadOnlinePaperById,
-  loadOnlinePapersForClass,
   loadStudentUser,
 } from "@/lib/student-test-server";
 import {
@@ -15,12 +15,16 @@ import {
   deriveStudentTestStatus,
   getPaperWindowEnd,
   getPaperWindowStart,
+  isStudentResultReleasedForPaper,
   isStudentEligibleForPaper,
   paperRequiresManualReview,
   paperSupportsOnlineDelivery,
   sanitizePaperForStudent,
+  sanitizeSerializedAttemptForStudentDelivery,
+  summarizeSanitizedPaperForStudent,
   serializeStudentAttempt,
 } from "@/lib/student-tests";
+import { resolvePaperSubjectIds } from "@/lib/question-paper/subjects";
 import {
   cacheExamSnapshotPayload,
   claimExamAttemptLock,
@@ -88,7 +92,7 @@ export class ExamRuntimeError extends Error {
   }
 }
 
-type ExamPaperSnapshot = {
+type ExamPaperSnapshotSummary = {
   id: string;
   schoolKey: string;
   mongoPaperId: string;
@@ -96,6 +100,7 @@ type ExamPaperSnapshot = {
   status: ExamSnapshotStatus;
   classId: string;
   subjectId: string;
+  subjectIds: string[];
   assignedSectionIds: string[];
   title: string;
   instructions: string;
@@ -106,10 +111,17 @@ type ExamPaperSnapshot = {
   onlineStartsAt: string | null;
   onlineEndsAt: string | null;
   requiresManualReview: boolean;
-  paperJson: any;
-  gradingJson: any;
+  paperSummaryJson: any;
   createdAt: string | null;
   updatedAt: string | null;
+};
+
+type ExamPaperSnapshotForGrading = ExamPaperSnapshotSummary & {
+  gradingJson: any;
+};
+
+type ExamPaperSnapshot = ExamPaperSnapshotForGrading & {
+  paperJson: any;
 };
 
 type ExamAttempt = {
@@ -147,6 +159,11 @@ type ResolvedAttemptBundle = {
   mongoResponseId?: string;
 };
 
+type StudentEligibilityContext = {
+  classId?: string | null;
+  academicSectionId?: string | null;
+};
+
 type RuntimeSnapshotPayload = {
   paperJson: any;
   gradingJson: any;
@@ -155,6 +172,7 @@ type RuntimeSnapshotPayload = {
 type PreparedExamPaperSnapshotPayload = {
   classId: string;
   subjectId: string;
+  subjectIds: string[];
   assignedSectionIds: string[];
   title: string;
   instructions: string;
@@ -165,6 +183,7 @@ type PreparedExamPaperSnapshotPayload = {
   onlineStartsAt: unknown;
   onlineEndsAt: unknown;
   requiresManualReview: boolean;
+  paperSummaryJson: any;
   paperJson: any;
   gradingJson: any;
 };
@@ -180,6 +199,7 @@ const SNAPSHOT_METADATA_COLUMNS = `
   status,
   class_id,
   subject_id,
+  subject_ids,
   assigned_section_ids,
   title,
   instructions,
@@ -194,8 +214,18 @@ const SNAPSHOT_METADATA_COLUMNS = `
   updated_at
 `;
 
-const SNAPSHOT_FULL_COLUMNS = `
+const SNAPSHOT_SUMMARY_COLUMNS = `
   ${SNAPSHOT_METADATA_COLUMNS},
+  paper_summary_json
+`;
+
+const SNAPSHOT_GRADING_COLUMNS = `
+  ${SNAPSHOT_SUMMARY_COLUMNS},
+  grading_json
+`;
+
+const SNAPSHOT_FULL_COLUMNS = `
+  ${SNAPSHOT_SUMMARY_COLUMNS},
   paper_json,
   grading_json
 `;
@@ -324,6 +354,7 @@ const EXAM_RUNTIME_SCHEMA_STATEMENTS = [
       status TEXT NOT NULL CHECK (status IN ('active', 'superseded', 'disabled')),
       class_id TEXT NOT NULL,
       subject_id TEXT NOT NULL,
+      subject_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
       assigned_section_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
       title TEXT NOT NULL,
       instructions TEXT NOT NULL DEFAULT '',
@@ -334,12 +365,21 @@ const EXAM_RUNTIME_SCHEMA_STATEMENTS = [
       online_starts_at TIMESTAMPTZ NULL,
       online_ends_at TIMESTAMPTZ NULL,
       requires_manual_review BOOLEAN NOT NULL DEFAULT FALSE,
+      paper_summary_json JSONB NULL,
       paper_json JSONB NOT NULL,
       grading_json JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (school_key, mongo_paper_id, snapshot_version)
     )
+  `,
+  `
+    ALTER TABLE exam_paper_snapshots
+    ADD COLUMN IF NOT EXISTS subject_ids JSONB NOT NULL DEFAULT '[]'::jsonb
+  `,
+  `
+    ALTER TABLE exam_paper_snapshots
+    ADD COLUMN IF NOT EXISTS paper_summary_json JSONB NULL
   `,
   `
     CREATE UNIQUE INDEX IF NOT EXISTS exam_paper_snapshots_active_unique
@@ -349,6 +389,10 @@ const EXAM_RUNTIME_SCHEMA_STATEMENTS = [
   `
     CREATE INDEX IF NOT EXISTS exam_paper_snapshots_lookup
     ON exam_paper_snapshots (school_key, mongo_paper_id, status, snapshot_version DESC)
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS exam_paper_snapshots_class_lookup
+    ON exam_paper_snapshots (school_key, class_id, status)
   `,
   `
     CREATE TABLE IF NOT EXISTS exam_attempts (
@@ -495,6 +539,25 @@ function isDefined<T>(value: T | null | undefined): value is T {
   return value !== null && typeof value !== "undefined";
 }
 
+function getStudentClassId(value: any) {
+  return String(value?.classId || value?.class?._id || value?.class || "").trim();
+}
+
+function getStudentAcademicSectionId(value: any) {
+  return String(
+    value?.academicSectionId ||
+      value?.academicSection?._id ||
+      value?.academicSection ||
+      "",
+  ).trim();
+}
+
+function hasStudentEligibilityContext(
+  value: StudentEligibilityContext | null | undefined,
+): value is StudentEligibilityContext & { classId: string } {
+  return Boolean(getStudentClassId(value));
+}
+
 function normalizeDateValue(value: unknown) {
   if (!value) {
     return null;
@@ -616,12 +679,57 @@ function getExamSnapshotByIdCacheKey(snapshotId: string) {
   return createExamRuntimeCacheKey("snapshot-by-id", snapshotId);
 }
 
+function getExamSnapshotSummaryByIdCacheKey(snapshotId: string) {
+  return createExamRuntimeCacheKey("snapshot-summary-by-id", snapshotId);
+}
+
+function getExamSnapshotForGradingByIdCacheKey(snapshotId: string) {
+  return createExamRuntimeCacheKey("snapshot-grading-by-id", snapshotId);
+}
+
 function getActiveExamSnapshotCacheKey(schoolKey: string, paperId: string) {
   return createExamRuntimeCacheKey("active-snapshot", schoolKey, paperId);
 }
 
+function getActiveExamSnapshotSummaryCacheKey(schoolKey: string, paperId: string) {
+  return createExamRuntimeCacheKey("active-snapshot-summary", schoolKey, paperId);
+}
+
+function getClassExamSnapshotsCacheKey(schoolKey: string, classId: string) {
+  return createExamRuntimeCacheKey("class-snapshots", schoolKey, classId);
+}
+
 function getEnsureActiveExamSnapshotCacheKey(schoolKey: string, paperId: string) {
   return createExamRuntimeCacheKey("ensure-active-snapshot", schoolKey, paperId);
+}
+
+function cacheExamSnapshotSummaryInMemory(snapshot: ExamPaperSnapshotSummary) {
+  setCachedExamRuntimeResource(
+    getExamSnapshotSummaryByIdCacheKey(snapshot.id),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    snapshot,
+  );
+  if (snapshot.status === "active") {
+    setCachedExamRuntimeResource(
+      getActiveExamSnapshotSummaryCacheKey(
+        snapshot.schoolKey,
+        snapshot.mongoPaperId,
+      ),
+      EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+      snapshot,
+    );
+  }
+}
+
+function cacheExamSnapshotForGradingInMemory(
+  snapshot: ExamPaperSnapshotForGrading,
+) {
+  setCachedExamRuntimeResource(
+    getExamSnapshotForGradingByIdCacheKey(snapshot.id),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    snapshot,
+  );
+  cacheExamSnapshotSummaryInMemory(snapshot);
 }
 
 function cacheExamSnapshotInMemory(snapshot: ExamPaperSnapshot) {
@@ -630,11 +738,14 @@ function cacheExamSnapshotInMemory(snapshot: ExamPaperSnapshot) {
     EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
     snapshot,
   );
-  setCachedExamRuntimeResource(
-    getActiveExamSnapshotCacheKey(snapshot.schoolKey, snapshot.mongoPaperId),
-    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
-    snapshot,
-  );
+  if (snapshot.status === "active") {
+    setCachedExamRuntimeResource(
+      getActiveExamSnapshotCacheKey(snapshot.schoolKey, snapshot.mongoPaperId),
+      EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+      snapshot,
+    );
+  }
+  cacheExamSnapshotForGradingInMemory(snapshot);
 }
 
 function clearCachedActiveExamSnapshot(schoolKey: string, paperId: string) {
@@ -642,8 +753,36 @@ function clearCachedActiveExamSnapshot(schoolKey: string, paperId: string) {
     getActiveExamSnapshotCacheKey(schoolKey, paperId),
   );
   deleteCachedExamRuntimeResource(
+    getActiveExamSnapshotSummaryCacheKey(schoolKey, paperId),
+  );
+  deleteCachedExamRuntimeResource(
     getEnsureActiveExamSnapshotCacheKey(schoolKey, paperId),
   );
+}
+
+function clearCachedClassExamSnapshots(schoolKey: string, classId: string) {
+  const normalizedClassId = String(classId || "").trim();
+  if (!normalizedClassId) {
+    return;
+  }
+
+  deleteCachedExamRuntimeResource(
+    getClassExamSnapshotsCacheKey(schoolKey, normalizedClassId),
+  );
+}
+
+function clearCachedExamRuntimeResourcesForSchool(schoolKey: string) {
+  const normalizedSchoolKey = String(schoolKey || "").trim();
+  if (!normalizedSchoolKey) {
+    return;
+  }
+
+  const cache = getExamRuntimeResourceCache();
+  for (const cacheKey of Array.from(cache.keys())) {
+    if (cacheKey.includes(`::${normalizedSchoolKey}::`)) {
+      cache.delete(cacheKey);
+    }
+  }
 }
 
 async function loadExamRuntimePool() {
@@ -764,6 +903,10 @@ function mapSnapshotMetadataRow(row: any) {
     status: String(row?.status || "disabled") as ExamSnapshotStatus,
     classId: String(row?.class_id || ""),
     subjectId: String(row?.subject_id || ""),
+    subjectIds: parseJsonValue<string[]>(
+      row?.subject_ids,
+      row?.subject_id ? [String(row.subject_id)] : [],
+    ),
     assignedSectionIds: parseJsonValue<string[]>(
       row?.assigned_section_ids,
       [],
@@ -777,17 +920,82 @@ function mapSnapshotMetadataRow(row: any) {
     onlineStartsAt: normalizeDateValue(row?.online_starts_at),
     onlineEndsAt: normalizeDateValue(row?.online_ends_at),
     requiresManualReview: Boolean(row?.requires_manual_review),
+    paperSummaryJson: parseJsonValue<any>(row?.paper_summary_json, null),
     createdAt: normalizeDateValue(row?.created_at),
     updatedAt: normalizeDateValue(row?.updated_at),
+  } satisfies ExamPaperSnapshotSummary;
+}
+
+function mapSnapshotGradingRow(row: any): ExamPaperSnapshotForGrading {
+  return {
+    ...mapSnapshotMetadataRow(row),
+    gradingJson: parseJsonValue<any>(row?.grading_json, null),
   };
 }
 
 function mapSnapshotFullRow(row: any): ExamPaperSnapshot {
   return {
-    ...mapSnapshotMetadataRow(row),
+    ...mapSnapshotGradingRow(row),
     paperJson: parseJsonValue<any>(row?.paper_json, null),
-    gradingJson: parseJsonValue<any>(row?.grading_json, null),
   };
+}
+
+function buildSnapshotPaperSummary(
+  snapshot: ExamPaperSnapshotSummary | ExamPaperSnapshotForGrading | ExamPaperSnapshot,
+) {
+  if (snapshot.paperSummaryJson) {
+    return snapshot.paperSummaryJson;
+  }
+
+  if ("paperJson" in snapshot && snapshot.paperJson) {
+    return summarizeSanitizedPaperForStudent(snapshot.paperJson);
+  }
+
+  return {
+    _id: snapshot.mongoPaperId,
+    title: snapshot.title,
+    duration: snapshot.durationMinutes,
+    passingMarks: snapshot.passingMarks,
+    totalMarks: snapshot.totalMarks,
+    examDate: snapshot.examDate,
+    onlineEnabled: true,
+    onlineStartsAt: snapshot.onlineStartsAt,
+    onlineEndsAt: snapshot.onlineEndsAt,
+    class: snapshot.classId
+      ? {
+          _id: snapshot.classId,
+          name: "",
+        }
+      : null,
+    subject: snapshot.subjectId
+      ? {
+          _id: snapshot.subjectId,
+          name: "",
+        }
+      : null,
+    subjects: Array.isArray(snapshot.subjectIds)
+      ? snapshot.subjectIds.map((subjectId) => ({
+          _id: String(subjectId || "").trim(),
+          name: "",
+        }))
+      : [],
+    assignedAcademicSections: Array.isArray(snapshot.assignedSectionIds)
+      ? snapshot.assignedSectionIds.map((sectionId) => ({
+          _id: String(sectionId || "").trim(),
+          name: "",
+          class: null,
+        }))
+      : [],
+  };
+}
+
+function shouldAutoSubmitAttempt(attempt: ExamAttempt | null, now = new Date()) {
+  if (!attempt || attempt.status !== "in_progress" || !attempt.deadlineAt) {
+    return false;
+  }
+
+  const deadlineMs = new Date(attempt.deadlineAt).getTime();
+  return Number.isFinite(deadlineMs) && now.getTime() > deadlineMs;
 }
 
 function mapAttemptRow(row: any): ExamAttempt {
@@ -898,7 +1106,7 @@ async function getExamSnapshotById(snapshotId: string) {
     async () => {
       const result = await queryExamRuntime(
         `
-          SELECT ${SNAPSHOT_METADATA_COLUMNS}
+          SELECT ${SNAPSHOT_SUMMARY_COLUMNS}
           FROM exam_paper_snapshots
           WHERE id = $1
           LIMIT 1
@@ -916,6 +1124,70 @@ async function getExamSnapshotById(snapshotId: string) {
   );
 }
 
+async function getExamSnapshotSummaryById(snapshotId: string) {
+  const normalizedSnapshotId = String(snapshotId || "").trim();
+  if (!UUID_PATTERN.test(normalizedSnapshotId)) {
+    return null;
+  }
+
+  return getCachedExamRuntimeResource(
+    getExamSnapshotSummaryByIdCacheKey(normalizedSnapshotId),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    async () => {
+      const result = await queryExamRuntime(
+        `
+          SELECT ${SNAPSHOT_SUMMARY_COLUMNS}
+          FROM exam_paper_snapshots
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [normalizedSnapshotId],
+      );
+
+      const row = result.rows[0];
+      if (!row) {
+        return null;
+      }
+
+      const snapshot = mapSnapshotMetadataRow(row);
+      cacheExamSnapshotSummaryInMemory(snapshot);
+      return snapshot;
+    },
+  );
+}
+
+async function getExamSnapshotForGradingById(snapshotId: string) {
+  const normalizedSnapshotId = String(snapshotId || "").trim();
+  if (!UUID_PATTERN.test(normalizedSnapshotId)) {
+    return null;
+  }
+
+  return getCachedExamRuntimeResource(
+    getExamSnapshotForGradingByIdCacheKey(normalizedSnapshotId),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    async () => {
+      const result = await queryExamRuntime(
+        `
+          SELECT ${SNAPSHOT_GRADING_COLUMNS}
+          FROM exam_paper_snapshots
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [normalizedSnapshotId],
+      );
+
+      const row = result.rows[0];
+      if (!row) {
+        return null;
+      }
+
+      const snapshot = mapSnapshotGradingRow(row);
+      cacheExamSnapshotForGradingInMemory(snapshot);
+      return snapshot;
+    },
+  );
+}
+
 async function getExamSnapshotsByIds(snapshotIds: string[]) {
   const normalizedIds = Array.from(
     new Set(snapshotIds.map((value) => String(value || "").trim()).filter(Boolean)),
@@ -926,7 +1198,7 @@ async function getExamSnapshotsByIds(snapshotIds: string[]) {
 
   const result = await queryExamRuntime(
     `
-      SELECT ${SNAPSHOT_METADATA_COLUMNS}
+      SELECT ${SNAPSHOT_SUMMARY_COLUMNS}
       FROM exam_paper_snapshots
       WHERE id = ANY($1::uuid[])
     `,
@@ -939,6 +1211,31 @@ async function getExamSnapshotsByIds(snapshotIds: string[]) {
 
   snapshots.forEach((snapshot) => {
     cacheExamSnapshotInMemory(snapshot);
+  });
+
+  return snapshots;
+}
+
+async function getExamSnapshotSummariesByIds(snapshotIds: string[]) {
+  const normalizedIds = Array.from(
+    new Set(snapshotIds.map((value) => String(value || "").trim()).filter(Boolean)),
+  );
+  if (normalizedIds.length === 0) {
+    return [];
+  }
+
+  const result = await queryExamRuntime(
+    `
+      SELECT ${SNAPSHOT_SUMMARY_COLUMNS}
+      FROM exam_paper_snapshots
+      WHERE id = ANY($1::uuid[])
+    `,
+    [normalizedIds],
+  );
+
+  const snapshots = result.rows.map((row) => mapSnapshotMetadataRow(row));
+  snapshots.forEach((snapshot) => {
+    cacheExamSnapshotSummaryInMemory(snapshot);
   });
 
   return snapshots;
@@ -959,7 +1256,7 @@ async function getActiveExamSnapshotByPaperId(
     async () => {
       const result = await queryExamRuntime(
         `
-          SELECT ${SNAPSHOT_METADATA_COLUMNS}
+          SELECT ${SNAPSHOT_SUMMARY_COLUMNS}
           FROM exam_paper_snapshots
           WHERE school_key = $1
             AND mongo_paper_id = $2
@@ -976,6 +1273,77 @@ async function getActiveExamSnapshotByPaperId(
       }
 
       return hydrateSnapshotMetadataRow(row);
+    },
+  );
+}
+
+async function getActiveExamSnapshotSummaryByPaperId(
+  schoolKey: string,
+  paperId: string,
+) {
+  const normalizedPaperId = String(paperId || "").trim();
+  if (!normalizedPaperId) {
+    return null;
+  }
+
+  return getCachedExamRuntimeResource(
+    getActiveExamSnapshotSummaryCacheKey(schoolKey, normalizedPaperId),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    async () => {
+      const result = await queryExamRuntime(
+        `
+          SELECT ${SNAPSHOT_SUMMARY_COLUMNS}
+          FROM exam_paper_snapshots
+          WHERE school_key = $1
+            AND mongo_paper_id = $2
+            AND status = 'active'
+          ORDER BY snapshot_version DESC
+          LIMIT 1
+        `,
+        [schoolKey, normalizedPaperId],
+      );
+
+      const row = result.rows[0];
+      if (!row) {
+        return null;
+      }
+
+      const snapshot = mapSnapshotMetadataRow(row);
+      cacheExamSnapshotSummaryInMemory(snapshot);
+      return snapshot;
+    },
+  );
+}
+
+async function listActiveExamSnapshotsForClassId(
+  schoolKey: string,
+  classId: string,
+) {
+  const normalizedClassId = String(classId || "").trim();
+  if (!normalizedClassId) {
+    return [];
+  }
+
+  return getCachedExamRuntimeResource(
+    getClassExamSnapshotsCacheKey(schoolKey, normalizedClassId),
+    EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS,
+    async () => {
+      const result = await queryExamRuntime(
+        `
+          SELECT ${SNAPSHOT_SUMMARY_COLUMNS}
+          FROM exam_paper_snapshots
+          WHERE school_key = $1
+            AND class_id = $2
+            AND status = 'active'
+        `,
+        [schoolKey, normalizedClassId],
+      );
+
+      const snapshots = result.rows.map((row) => mapSnapshotMetadataRow(row));
+      snapshots.forEach((snapshot) => {
+        cacheExamSnapshotSummaryInMemory(snapshot);
+      });
+      return snapshots;
     },
   );
 }
@@ -1059,6 +1427,86 @@ async function getExamAttemptByPaperId(
   return row ? mapAttemptRow(row) : null;
 }
 
+async function insertOrReuseExamAttempt(
+  client: ExamRuntimeClient,
+  params: {
+    schoolKey: string;
+    snapshotId: string;
+    paperId: string;
+    studentId: string;
+    startedAt: string;
+    deadlineAt: string | null;
+    manualReviewRequired: boolean;
+  },
+) {
+  const result = await client.query(
+    `
+      WITH inserted AS (
+        INSERT INTO exam_attempts (
+          id,
+          school_key,
+          snapshot_id,
+          mongo_paper_id,
+          student_id,
+          status,
+          started_at,
+          deadline_at,
+          last_saved_at,
+          total_marks_awarded,
+          manual_review_required,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          'in_progress',
+          $6,
+          $7,
+          $6,
+          0,
+          $8,
+          NOW(),
+          NOW()
+        )
+        ON CONFLICT (school_key, mongo_paper_id, student_id)
+        DO NOTHING
+        RETURNING ${ATTEMPT_COLUMNS}
+      )
+      SELECT *
+      FROM inserted
+      UNION ALL
+      SELECT ${ATTEMPT_COLUMNS}
+      FROM exam_attempts
+      WHERE school_key = $2
+        AND mongo_paper_id = $4
+        AND student_id = $5
+        AND NOT EXISTS (SELECT 1 FROM inserted)
+      LIMIT 1
+    `,
+    [
+      crypto.randomUUID(),
+      params.schoolKey,
+      params.snapshotId,
+      params.paperId,
+      params.studentId,
+      params.startedAt,
+      params.deadlineAt,
+      params.manualReviewRequired,
+    ],
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error("Failed to create or load the exam attempt.");
+  }
+
+  return mapAttemptRow(row);
+}
+
 async function getExamAttemptById(attemptId: string) {
   const normalizedId = String(attemptId || "").trim();
   if (!UUID_PATTERN.test(normalizedId)) {
@@ -1122,7 +1570,27 @@ function buildAnswerRowsByAttemptId(answerRows: ExamAnswerRow[]) {
   return rowsByAttemptId;
 }
 
+const questionPositionLookupCache = new WeakMap<
+  object,
+  Map<
+    string,
+    {
+      sectionName: string;
+      sectionIndex: number;
+      questionIndex: number;
+      questionId: string;
+    }
+  >
+>();
+
 function buildQuestionPositionLookup(paper: any) {
+  if (paper && typeof paper === "object") {
+    const cachedLookup = questionPositionLookupCache.get(paper);
+    if (cachedLookup) {
+      return cachedLookup;
+    }
+  }
+
   const lookup = new Map<
     string,
     {
@@ -1155,6 +1623,10 @@ function buildQuestionPositionLookup(paper: any) {
       );
     },
   );
+
+  if (paper && typeof paper === "object") {
+    questionPositionLookupCache.set(paper, lookup);
+  }
 
   return lookup;
 }
@@ -1284,6 +1756,38 @@ function flattenSectionAnswersForStorage(
     });
 }
 
+function hydratePersistedAnswerRows(
+  attemptId: string,
+  rows: Array<{
+    questionId: string;
+    sectionIndex: number;
+    questionIndex: number;
+    selectedOptions: number[] | null;
+    matrixSelections: number[][] | null;
+    answerText: string | null;
+    marksAwarded: number | null;
+  }>,
+  updatedAt?: string | null,
+) {
+  return rows.map((row) => ({
+    attemptId,
+    questionId: row.questionId,
+    sectionIndex: row.sectionIndex,
+    questionIndex: row.questionIndex,
+    selectedOptions: Array.isArray(row.selectedOptions)
+      ? [...row.selectedOptions]
+      : null,
+    matrixSelections: Array.isArray(row.matrixSelections)
+      ? row.matrixSelections.map((selection) =>
+          Array.isArray(selection) ? [...selection] : [],
+        )
+      : null,
+    answerText: row.answerText,
+    marksAwarded: row.marksAwarded,
+    updatedAt: updatedAt || null,
+  })) satisfies ExamAnswerRow[];
+}
+
 function serializeRuntimeAttempt(
   attempt: ExamAttempt,
   paper: any,
@@ -1317,6 +1821,31 @@ function serializeRuntimeAttempt(
       sectionAnswers: Array.isArray(options?.sectionAnswers)
         ? options.sectionAnswers
         : buildStoredSectionAnswers(paper, answerRows),
+    }),
+    runtimeAttemptId: attempt.id,
+    mongoResponseId: responseId || undefined,
+  };
+}
+
+function serializeRuntimeAttemptSummary(
+  attempt: ExamAttempt,
+  options?: {
+    responseId?: string;
+  },
+) {
+  const responseId = String(options?.responseId || "").trim();
+
+  return {
+    ...serializeStudentAttempt({
+      _id: responseId || attempt.id,
+      paper: attempt.mongoPaperId,
+      student: attempt.studentId,
+      startedAt: attempt.startedAt,
+      submittedAt: attempt.submittedAt,
+      status: attempt.status,
+      lastSavedAt: attempt.lastSavedAt,
+      totalMarksAwarded: attempt.totalMarksAwarded,
+      sectionAnswers: [],
     }),
     runtimeAttemptId: attempt.id,
     mongoResponseId: responseId || undefined,
@@ -1387,29 +1916,17 @@ async function replaceAttemptAnswerRows(
     marksAwarded: number | null;
   }>,
 ) {
-  const questionIds = rows.map((row) => row.questionId);
-
-  if (questionIds.length === 0) {
+  if (rows.length === 0) {
     await client.query("DELETE FROM exam_answers WHERE attempt_id = $1", [
       attemptId,
     ]);
     return;
   }
 
-  await client.query(
-    `
-      DELETE FROM exam_answers
-      WHERE attempt_id = $1
-        AND NOT (question_id = ANY($2::text[]))
-    `,
-    [attemptId, questionIds],
-  );
-
-  const values: Array<string | number | number[] | null> = [];
+  const values: Array<string | number | number[] | null> = [attemptId];
   const tuples = rows.map((row, index) => {
-    const offset = index * 8;
+    const offset = 2 + index * 7;
     values.push(
-      attemptId,
       row.questionId,
       row.sectionIndex,
       row.questionIndex,
@@ -1420,20 +1937,40 @@ async function replaceAttemptAnswerRows(
     );
 
     return `(
-      $${offset + 1},
-      $${offset + 2},
-      $${offset + 3},
-      $${offset + 4},
-      $${offset + 5},
-      $${offset + 6}::jsonb,
-      $${offset + 7},
-      $${offset + 8},
-      NOW()
+      $1::uuid,
+      $${offset}::text,
+      $${offset + 1}::integer,
+      $${offset + 2}::integer,
+      $${offset + 3}::integer[],
+      $${offset + 4}::jsonb,
+      $${offset + 5}::text,
+      $${offset + 6}::numeric
     )`;
   });
 
   await client.query(
     `
+      WITH input_rows (
+        attempt_id,
+        question_id,
+        section_index,
+        question_index,
+        selected_options,
+        matrix_selections,
+        answer_text,
+        marks_awarded
+      ) AS (
+        VALUES ${tuples.join(",\n")}
+      ),
+      deleted AS (
+        DELETE FROM exam_answers existing
+        WHERE existing.attempt_id = $1::uuid
+          AND NOT EXISTS (
+            SELECT 1
+            FROM input_rows incoming
+            WHERE incoming.question_id = existing.question_id
+          )
+      )
       INSERT INTO exam_answers (
         attempt_id,
         question_id,
@@ -1445,7 +1982,17 @@ async function replaceAttemptAnswerRows(
         marks_awarded,
         updated_at
       )
-      VALUES ${tuples.join(",\n")}
+      SELECT
+        attempt_id,
+        question_id,
+        section_index,
+        question_index,
+        selected_options,
+        matrix_selections,
+        answer_text,
+        marks_awarded,
+        NOW()
+      FROM input_rows
       ON CONFLICT (attempt_id, question_id)
       DO UPDATE SET
         section_index = EXCLUDED.section_index,
@@ -1455,6 +2002,12 @@ async function replaceAttemptAnswerRows(
         answer_text = EXCLUDED.answer_text,
         marks_awarded = EXCLUDED.marks_awarded,
         updated_at = NOW()
+      WHERE exam_answers.section_index IS DISTINCT FROM EXCLUDED.section_index
+         OR exam_answers.question_index IS DISTINCT FROM EXCLUDED.question_index
+         OR exam_answers.selected_options IS DISTINCT FROM EXCLUDED.selected_options
+         OR exam_answers.matrix_selections IS DISTINCT FROM EXCLUDED.matrix_selections
+         OR exam_answers.answer_text IS DISTINCT FROM EXCLUDED.answer_text
+         OR exam_answers.marks_awarded IS DISTINCT FROM EXCLUDED.marks_awarded
     `,
     values,
   );
@@ -1483,10 +2036,11 @@ async function loadSnapshotSourcePaper(schoolKey: string, paperId: string) {
     ...buildArchiveFilter(false),
   })
     .select(
-      "title instructions class subject duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections",
+      "title instructions class subject subjectIds duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections",
     )
     .populate({ path: "class", model: ClassModel, select: "name" })
     .populate({ path: "subject", model: SubjectModel, select: "name" })
+    .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
     .populate({
       path: "assignedAcademicSections",
       model: AcademicSectionModel,
@@ -1496,7 +2050,8 @@ async function loadSnapshotSourcePaper(schoolKey: string, paperId: string) {
     .populate({
       path: "sections.questions.question",
       model: QuestionModel,
-      select: "content options type answerIndexes matrixOptions matrixAnswers",
+      select: "content options type answerIndexes matrixOptions matrixAnswers subject",
+      populate: { path: "subject", model: SubjectModel, select: "name" },
     })
     .lean();
 }
@@ -1504,11 +2059,13 @@ async function loadSnapshotSourcePaper(schoolKey: string, paperId: string) {
 function buildPreparedExamPaperSnapshotPayload(
   sourcePaper: any,
 ): PreparedExamPaperSnapshotPayload {
+  const resolvedSubjectIds = resolvePaperSubjectIds(sourcePaper);
+  const sanitizedPaper = toSerializableValue(sanitizePaperForStudent(sourcePaper));
+
   return {
     classId: String(sourcePaper?.class?._id || sourcePaper?.class || "").trim(),
-    subjectId: String(
-      sourcePaper?.subject?._id || sourcePaper?.subject || "",
-    ).trim(),
+    subjectId: String(resolvedSubjectIds[0] || "").trim(),
+    subjectIds: resolvedSubjectIds,
     assignedSectionIds: Array.isArray(sourcePaper?.assignedAcademicSections)
       ? sourcePaper.assignedAcademicSections
           .map((section: any) => String(section?._id || section || "").trim())
@@ -1523,7 +2080,10 @@ function buildPreparedExamPaperSnapshotPayload(
     onlineStartsAt: sourcePaper?.onlineStartsAt || null,
     onlineEndsAt: sourcePaper?.onlineEndsAt || null,
     requiresManualReview: paperRequiresManualReview(sourcePaper),
-    paperJson: toSerializableValue(sanitizePaperForStudent(sourcePaper)),
+    paperSummaryJson: toSerializableValue(
+      summarizeSanitizedPaperForStudent(sanitizedPaper),
+    ),
+    paperJson: sanitizedPaper,
     gradingJson: toSerializableValue(sourcePaper),
   };
 }
@@ -1581,6 +2141,7 @@ async function insertExamPaperSnapshot(
         status,
         class_id,
         subject_id,
+        subject_ids,
         assigned_section_ids,
         title,
         instructions,
@@ -1591,6 +2152,7 @@ async function insertExamPaperSnapshot(
         online_starts_at,
         online_ends_at,
         requires_manual_review,
+        paper_summary_json,
         paper_json,
         grading_json,
         created_at,
@@ -1605,7 +2167,7 @@ async function insertExamPaperSnapshot(
         $5,
         $6,
         $7::jsonb,
-        $8,
+        $8::jsonb,
         $9,
         $10,
         $11,
@@ -1614,8 +2176,10 @@ async function insertExamPaperSnapshot(
         $14,
         $15,
         $16,
-        $17::jsonb,
+        $17,
         $18::jsonb,
+        $19::jsonb,
+        $20::jsonb,
         NOW(),
         NOW()
       )
@@ -1628,6 +2192,7 @@ async function insertExamPaperSnapshot(
       snapshotVersion,
       payload.classId,
       payload.subjectId,
+      JSON.stringify(payload.subjectIds),
       JSON.stringify(payload.assignedSectionIds),
       payload.title,
       payload.instructions,
@@ -1638,6 +2203,7 @@ async function insertExamPaperSnapshot(
       payload.onlineStartsAt,
       payload.onlineEndsAt,
       payload.requiresManualReview,
+      JSON.stringify(payload.paperSummaryJson),
       JSON.stringify(payload.paperJson),
       JSON.stringify(payload.gradingJson),
     ],
@@ -1647,6 +2213,7 @@ async function insertExamPaperSnapshot(
 }
 
 async function cacheExamSnapshot(snapshot: ExamPaperSnapshot) {
+  clearCachedClassExamSnapshots(snapshot.schoolKey, snapshot.classId);
   cacheExamSnapshotInMemory(snapshot);
   await cacheExamSnapshotPayload(
     snapshot.schoolKey,
@@ -1667,7 +2234,7 @@ export async function disableExamPaperSnapshotsForPaperId(
     return false;
   }
 
-  await queryExamRuntime(
+  const result = await queryExamRuntime<{ class_id: string }>(
     `
       UPDATE exam_paper_snapshots
       SET status = 'disabled',
@@ -1675,11 +2242,15 @@ export async function disableExamPaperSnapshotsForPaperId(
       WHERE school_key = $1
         AND mongo_paper_id = $2
         AND status = 'active'
+      RETURNING class_id
     `,
     [schoolKey, paperId],
   );
 
   clearCachedActiveExamSnapshot(schoolKey, paperId);
+  result.rows.forEach((row) => {
+    clearCachedClassExamSnapshots(schoolKey, row?.class_id);
+  });
   return true;
 }
 
@@ -1697,7 +2268,11 @@ export async function syncExamPaperSnapshotForPaperId(
     return null;
   }
 
+  const previousSnapshot = await getActiveExamSnapshotByPaperId(schoolKey, paperId);
   clearCachedActiveExamSnapshot(schoolKey, paperId);
+  if (previousSnapshot?.classId) {
+    clearCachedClassExamSnapshots(schoolKey, previousSnapshot.classId);
+  }
   const snapshotPayload = buildPreparedExamPaperSnapshotPayload(sourcePaper);
 
   const insertedSnapshot = await withExamRuntimeTransaction(async (client) => {
@@ -1708,6 +2283,95 @@ export async function syncExamPaperSnapshotForPaperId(
   await cacheExamSnapshot(insertedSnapshot);
 
   return insertedSnapshot;
+}
+
+export async function deleteExamRuntimeDataForSchool(schoolKey: string) {
+  const normalizedSchoolKey = String(schoolKey || "")
+    .trim()
+    .toLowerCase();
+  if (!normalizedSchoolKey) {
+    return {
+      schoolKey: normalizedSchoolKey,
+      runtimeEnabled: false,
+      deletedAttempts: 0,
+      deletedSnapshots: 0,
+    };
+  }
+
+  if (!(await isExamRuntimeEnabled())) {
+    clearCachedExamRuntimeResourcesForSchool(normalizedSchoolKey);
+    return {
+      schoolKey: normalizedSchoolKey,
+      runtimeEnabled: false,
+      deletedAttempts: 0,
+      deletedSnapshots: 0,
+    };
+  }
+
+  const snapshots = await queryExamRuntime<{
+    id: string;
+    class_id: string;
+    mongo_paper_id: string;
+  }>(
+    `
+      SELECT id, class_id, mongo_paper_id
+      FROM exam_paper_snapshots
+      WHERE school_key = $1
+    `,
+    [normalizedSchoolKey],
+  );
+
+  const deleted = await withExamRuntimeTransaction(async (client) => {
+    const attemptsResult = await client.query(
+      `
+        DELETE FROM exam_attempts
+        WHERE school_key = $1
+      `,
+      [normalizedSchoolKey],
+    );
+
+    const snapshotsResult = await client.query(
+      `
+        DELETE FROM exam_paper_snapshots
+        WHERE school_key = $1
+      `,
+      [normalizedSchoolKey],
+    );
+
+    return {
+      deletedAttempts: attemptsResult.rowCount ?? 0,
+      deletedSnapshots: snapshotsResult.rowCount ?? 0,
+    };
+  });
+
+  snapshots.rows.forEach((snapshot) => {
+    const snapshotId = String(snapshot?.id || "").trim();
+    const classId = String(snapshot?.class_id || "").trim();
+    const paperId = String(snapshot?.mongo_paper_id || "").trim();
+
+    if (snapshotId) {
+      deleteCachedExamRuntimeResource(getExamSnapshotByIdCacheKey(snapshotId));
+      deleteCachedExamRuntimeResource(
+        getExamSnapshotSummaryByIdCacheKey(snapshotId),
+      );
+      deleteCachedExamRuntimeResource(
+        getExamSnapshotForGradingByIdCacheKey(snapshotId),
+      );
+    }
+    if (paperId) {
+      clearCachedActiveExamSnapshot(normalizedSchoolKey, paperId);
+    }
+    if (classId) {
+      clearCachedClassExamSnapshots(normalizedSchoolKey, classId);
+    }
+  });
+  clearCachedExamRuntimeResourcesForSchool(normalizedSchoolKey);
+
+  return {
+    schoolKey: normalizedSchoolKey,
+    runtimeEnabled: true,
+    ...deleted,
+  };
 }
 
 async function ensureActiveExamSnapshotForPaperId(
@@ -1800,7 +2464,7 @@ async function getAttemptAnswerBundle(
 async function upsertMongoAttemptProjection(params: {
   schoolKey: string;
   attempt: ExamAttempt;
-  snapshot: ExamPaperSnapshot;
+  snapshot: ExamPaperSnapshotForGrading;
   answerRows: ExamAnswerRow[];
   sectionAnswers?: Array<{
     sectionName: string;
@@ -1819,7 +2483,7 @@ async function upsertMongoAttemptProjection(params: {
 
   const sectionAnswers = Array.isArray(params.sectionAnswers)
     ? params.sectionAnswers
-    : buildStoredSectionAnswers(params.snapshot.paperJson, params.answerRows);
+    : buildStoredSectionAnswers(params.snapshot.gradingJson, params.answerRows);
 
   const projection = await QuestionPaperResponseModel.findOneAndUpdate(
     {
@@ -2023,13 +2687,13 @@ export async function resolveExamRuntimeMongoResponseId(
 async function finalizeAttemptFromRows(params: {
   schoolKey: string;
   attempt: ExamAttempt;
-  snapshot: ExamPaperSnapshot;
+  snapshot: ExamPaperSnapshotForGrading;
   answerRows: ExamAnswerRow[];
   submittedAt: Date;
   autoSubmitted?: boolean;
 }): Promise<ResolvedAttemptBundle> {
   const normalized = validateStudentSectionAnswers(
-    buildStoredSectionAnswers(params.snapshot.paperJson, params.answerRows),
+    buildStoredSectionAnswers(params.snapshot.gradingJson, params.answerRows),
     params.snapshot.gradingJson,
     { allowEmpty: true },
   );
@@ -2041,6 +2705,11 @@ async function finalizeAttemptFromRows(params: {
   const storedRows = flattenSectionAnswersForStorage(
     graded.sectionAnswers,
     params.snapshot.gradingJson,
+  );
+  const persistedRows = hydratePersistedAnswerRows(
+    params.attempt.id,
+    storedRows,
+    params.submittedAt.toISOString(),
   );
 
   const nextAttempt = await withExamRuntimeTransaction(async (client) => {
@@ -2087,31 +2756,43 @@ async function finalizeAttemptFromRows(params: {
     });
   }
 
-  const resolvedRows = await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]);
+  const resolvedRows = nextAttempt
+    ? persistedRows
+    : await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]);
+  let projectionId: string | undefined;
 
-  const mongoResponseId = await upsertMongoAttemptProjection({
-    schoolKey: params.schoolKey,
-    attempt: resolvedAttempt,
-    snapshot: params.snapshot,
-    answerRows: resolvedRows,
-    sectionAnswers: graded.sectionAnswers,
-  });
+  try {
+    projectionId = await upsertMongoAttemptProjection({
+      schoolKey: params.schoolKey,
+      attempt: resolvedAttempt,
+      snapshot: params.snapshot,
+      answerRows: resolvedRows,
+      sectionAnswers: graded.sectionAnswers,
+    });
+  } catch (error) {
+    console.error(
+      "Failed to project auto-submitted runtime attempt into Mongo:",
+      error,
+    );
+  }
 
   return {
     attempt: resolvedAttempt,
     answerRows: resolvedRows,
-    mongoResponseId,
+    mongoResponseId: projectionId,
   };
 }
 
 async function autoSubmitExpiredAttemptIfNeeded(params: {
   schoolKey: string;
   attempt: ExamAttempt;
-  snapshot: ExamPaperSnapshot;
+  snapshot: ExamPaperSnapshotForGrading;
   answerRows?: ExamAnswerRow[];
   now?: Date;
+  includeAnswerRows?: boolean;
 }): Promise<ResolvedAttemptBundle> {
   const now = params.now || new Date();
+  const includeAnswerRows = params.includeAnswerRows !== false;
   const deadlineMs = params.attempt.deadlineAt
     ? new Date(params.attempt.deadlineAt).getTime()
     : NaN;
@@ -2121,9 +2802,10 @@ async function autoSubmitExpiredAttemptIfNeeded(params: {
     !Number.isFinite(deadlineMs) ||
     now.getTime() <= deadlineMs
   ) {
-    const answerRows =
-      params.answerRows ||
-      (await listExamAnswerRowsByAttemptIds([params.attempt.id]));
+    const answerRows = includeAnswerRows
+      ? params.answerRows ||
+        (await listExamAnswerRowsByAttemptIds([params.attempt.id]))
+      : [];
 
     return {
       attempt: params.attempt,
@@ -2149,7 +2831,14 @@ async function withAttemptLock<T>(
   paperId: string,
   studentId: string,
   handler: () => Promise<T>,
+  options?: {
+    enabled?: boolean;
+  },
 ) {
+  if (options?.enabled === false) {
+    return handler();
+  }
+
   const lockToken = crypto.randomUUID();
   const claimed = await claimExamAttemptLock(
     schoolKey,
@@ -2184,8 +2873,12 @@ function buildPaperListItem(
   attempt: ExamAttempt | null,
   serializedAttempt: any,
   now: Date,
+  options?: {
+    requiresManualReview?: boolean;
+  },
 ) {
   const paperForStatus = paper || {};
+  const resultReleased = isStudentResultReleasedForPaper(paperForStatus, now);
   const status = deriveStudentTestStatus(
     paperForStatus,
     buildAttemptStateForStatus(attempt),
@@ -2203,13 +2896,24 @@ function buildPaperListItem(
     onlineEndsAt: paperForStatus?.onlineEndsAt || null,
     class: paperForStatus?.class || null,
     subject: paperForStatus?.subject || null,
+    subjects: Array.isArray(paperForStatus?.subjects)
+      ? paperForStatus.subjects
+      : [],
     assignedAcademicSections: Array.isArray(paperForStatus?.assignedAcademicSections)
       ? paperForStatus.assignedAcademicSections
       : [],
-    requiresManualReview: paperRequiresManualReview(paperForStatus),
+    requiresManualReview:
+      typeof options?.requiresManualReview === "boolean"
+        ? options.requiresManualReview
+        : paperRequiresManualReview(paperForStatus),
+    resultReleased,
     status,
     remainingTimeMs: getAttemptRemainingTimeMs(attempt, now),
-    attempt: serializedAttempt,
+    attempt: sanitizeSerializedAttemptForStudentDelivery(
+      serializedAttempt,
+      paperForStatus,
+      now,
+    ),
   };
 }
 
@@ -2225,8 +2929,11 @@ function didAttemptStateChange(
   );
 }
 
-function isStudentEligibleForSnapshot(snapshot: ExamPaperSnapshot, student: any) {
-  const studentClassId = String(student?.class?._id || student?.class || "").trim();
+function isStudentEligibleForSnapshot(
+  snapshot: ExamPaperSnapshotSummary,
+  student: any,
+) {
+  const studentClassId = getStudentClassId(student);
   if (!studentClassId || studentClassId !== snapshot.classId) {
     return false;
   }
@@ -2244,24 +2951,35 @@ function isStudentEligibleForSnapshot(snapshot: ExamPaperSnapshot, student: any)
     return true;
   }
 
-  const studentSectionId = String(
-    student?.academicSection?._id || student?.academicSection || "",
-  ).trim();
+  const studentSectionId = getStudentAcademicSectionId(student);
   return Boolean(studentSectionId && assignedSectionIds.has(studentSectionId));
 }
 
 export async function listStudentExamRuntimeTests(
   schoolKey: string,
   studentId: string,
+  studentContext?: StudentEligibilityContext,
 ) {
-  const models = await getStudentTestModels(schoolKey);
-  const { User: UserModel } = models;
   const now = new Date();
+  let modelsPromise: Promise<Awaited<ReturnType<typeof getStudentTestModels>>> | null =
+    null;
+  const getModels = () => {
+    if (!modelsPromise) {
+      modelsPromise = getStudentTestModels(schoolKey);
+    }
+    return modelsPromise;
+  };
 
-  const student = await loadStudentUser(UserModel, studentId, {
-    schoolKey,
-    useCache: true,
-  });
+  const student = hasStudentEligibilityContext(studentContext)
+    ? studentContext
+    : await (async () => {
+        const models = await getModels();
+        const { User: UserModel } = models;
+        return loadStudentUser(UserModel, studentId, {
+          schoolKey,
+          useCache: true,
+        });
+      })();
   if (!student) {
     throwExamRuntimeError({
       message: "Student profile not found.",
@@ -2271,134 +2989,154 @@ export async function listStudentExamRuntimeTests(
     });
   }
 
-  const studentClassId = String(student.class?._id || student.class || "").trim();
-  const [currentPapers, attempts] = await Promise.all([
+  const studentClassId = getStudentClassId(student);
+  const [activeSnapshotsForClass, attempts] = await Promise.all([
     studentClassId
-      ? loadOnlinePapersForClass(models, schoolKey, studentClassId)
+      ? listActiveExamSnapshotsForClassId(schoolKey, studentClassId)
       : Promise.resolve([]),
     listExamAttemptsForStudent(schoolKey, studentId),
   ]);
-  const eligibleCurrentPapers = currentPapers.filter(
-    (paper: any) =>
-      paperSupportsOnlineDelivery(paper) &&
-      isStudentEligibleForPaper(paper, student),
+
+  const eligibleCurrentSnapshotsByPaperId = new Map<
+    string,
+    ExamPaperSnapshotSummary | ExamPaperSnapshot
+  >();
+  activeSnapshotsForClass.forEach((snapshot) => {
+    const paperId = String(snapshot.mongoPaperId || "").trim();
+    if (!paperId || !isStudentEligibleForSnapshot(snapshot, student)) {
+      return;
+    }
+
+    eligibleCurrentSnapshotsByPaperId.set(paperId, snapshot);
+  });
+
+  let missingEligiblePaperIds: string[] = [];
+
+  if (studentClassId && activeSnapshotsForClass.length === 0) {
+    const models = await getModels();
+    const eligiblePaperCandidates = await loadOnlinePaperAssignmentsForClass(
+      models,
+      schoolKey,
+      studentClassId,
+    );
+
+    missingEligiblePaperIds = Array.from(
+      new Set<string>(
+        eligiblePaperCandidates
+          .filter((paper: any) => isStudentEligibleForPaper(paper, student))
+          .map((paper: any) => String(paper?._id || "").trim())
+          .filter(
+            (paperId: string) =>
+              Boolean(paperId) && !eligibleCurrentSnapshotsByPaperId.has(paperId),
+          ),
+      ),
+    );
+  }
+
+  if (missingEligiblePaperIds.length > 0) {
+    const ensuredSnapshots = await Promise.all(
+      missingEligiblePaperIds.map((paperId) =>
+        ensureActiveExamSnapshotForPaperId(schoolKey, paperId),
+      ),
+    );
+
+    ensuredSnapshots.forEach((snapshot) => {
+      const paperId = String(snapshot?.mongoPaperId || "").trim();
+      if (!paperId || !snapshot || !isStudentEligibleForSnapshot(snapshot, student)) {
+        return;
+      }
+
+      eligibleCurrentSnapshotsByPaperId.set(paperId, snapshot);
+    });
+  }
+
+  const eligibleCurrentSnapshots = Array.from(
+    eligibleCurrentSnapshotsByPaperId.values(),
   );
 
-  const snapshotsById = new Map(
-    (
-      await getExamSnapshotsByIds(attempts.map((attempt) => attempt.snapshotId))
-    ).map((snapshot) => [snapshot.id, snapshot]),
+  const snapshotsById = new Map<
+    string,
+    ExamPaperSnapshotSummary | ExamPaperSnapshotForGrading | ExamPaperSnapshot
+  >(
+    eligibleCurrentSnapshots.map((snapshot) => [snapshot.id, snapshot]),
   );
-  const initialAnswerRowsByAttemptId = buildAnswerRowsByAttemptId(
-    attempts.length > 0
-      ? await listExamAnswerRowsByAttemptIds(attempts.map((attempt) => attempt.id))
-      : [],
-  );
+  const missingAttemptSnapshotIds = attempts
+    .map((attempt) => attempt.snapshotId)
+    .filter((snapshotId) => !snapshotsById.has(snapshotId));
+  if (missingAttemptSnapshotIds.length > 0) {
+    const attemptSnapshots = await getExamSnapshotSummariesByIds(
+      missingAttemptSnapshotIds,
+    );
+    attemptSnapshots.forEach((snapshot) => {
+      snapshotsById.set(snapshot.id, snapshot);
+    });
+  }
 
-  const attemptRowsById = new Map<string, ExamAnswerRow[]>();
-  const mongoProjectionIdByKey = new Map<string, string>();
   let attemptsChanged = false;
+  const nextAttempts: ExamAttempt[] = [];
 
   for (const attempt of attempts) {
     const snapshot = snapshotsById.get(attempt.snapshotId) || null;
     if (!snapshot) {
+      nextAttempts.push(attempt);
       continue;
     }
 
-    const answerRows = initialAnswerRowsByAttemptId.get(attempt.id) || [];
+    if (!shouldAutoSubmitAttempt(attempt, now)) {
+      nextAttempts.push(attempt);
+      continue;
+    }
+
+    const gradingSnapshot = await getExamSnapshotForGradingById(snapshot.id);
+    if (!gradingSnapshot) {
+      nextAttempts.push(attempt);
+      continue;
+    }
+
     const nextAttemptBundle = await autoSubmitExpiredAttemptIfNeeded({
       schoolKey,
       attempt,
-      snapshot,
-      answerRows,
+      snapshot: gradingSnapshot,
       now,
+      includeAnswerRows: false,
     });
-    attemptRowsById.set(nextAttemptBundle.attempt.id, nextAttemptBundle.answerRows);
-    snapshotsById.set(snapshot.id, snapshot);
+    nextAttempts.push(nextAttemptBundle.attempt);
+    snapshotsById.set(gradingSnapshot.id, gradingSnapshot);
     if (didAttemptStateChange(attempt, nextAttemptBundle.attempt)) {
       attemptsChanged = true;
-    }
-    if (nextAttemptBundle.mongoResponseId) {
-      attemptsChanged = true;
-      mongoProjectionIdByKey.set(
-        buildMongoAttemptProjectionKey(
-          nextAttemptBundle.attempt.mongoPaperId,
-          nextAttemptBundle.attempt.studentId,
-        ),
-        nextAttemptBundle.mongoResponseId,
-      );
     }
   }
 
   const refreshedAttempts = attemptsChanged
     ? await listExamAttemptsForStudent(schoolKey, studentId)
-    : attempts;
-  if (refreshedAttempts.length > 0) {
-    const existingProjectionIds = await loadMongoAttemptProjectionIdMap(
-      schoolKey,
-      refreshedAttempts,
-    );
-    existingProjectionIds.forEach((value, key) => {
-      mongoProjectionIdByKey.set(key, value);
-    });
-  }
+    : nextAttempts;
   const refreshedAttemptsByPaperId = new Map(
     refreshedAttempts.map((attempt) => [attempt.mongoPaperId, attempt]),
   );
 
   const testsByPaperId = new Map<string, any>();
 
-  for (const paper of eligibleCurrentPapers) {
-    const paperId = String(paper?._id || "").trim();
+  for (const snapshot of eligibleCurrentSnapshots) {
+    const paperId = String(snapshot.mongoPaperId || "").trim();
     if (!paperId) {
       continue;
     }
 
     const attempt = refreshedAttemptsByPaperId.get(paperId) || null;
-    const snapshot = attempt
-      ? snapshotsById.get(attempt.snapshotId) ||
-        (await ensureActiveExamSnapshotForPaperId(schoolKey, paperId))
+    const attemptSnapshot = attempt
+      ? snapshotsById.get(attempt.snapshotId) || null
       : null;
-    const answerRows = attempt ? attemptRowsById.get(attempt.id) || [] : [];
-    const mongoResponseId =
-      attempt && snapshot
-        ? mongoProjectionIdByKey.get(
-            buildMongoAttemptProjectionKey(
-              attempt.mongoPaperId,
-              attempt.studentId,
-            ),
-          ) ||
-          (await upsertMongoAttemptProjection({
-            schoolKey,
-            attempt,
-            snapshot,
-            answerRows,
-          }))
-        : undefined;
-    const serializedAttempt =
-      attempt && snapshot
-        ? serializeRuntimeAttempt(attempt, snapshot.paperJson, answerRows, {
-            responseId: mongoResponseId,
-          })
-        : attempt
-          ? serializeRuntimeAttempt(
-              attempt,
-              sanitizePaperForStudent(paper),
-              answerRows,
-              { responseId: mongoResponseId },
-            )
-        : null;
+    const paperForList = buildSnapshotPaperSummary(attemptSnapshot || snapshot);
+    const serializedAttempt = attempt
+      ? serializeRuntimeAttemptSummary(attempt)
+      : null;
 
     testsByPaperId.set(
       paperId,
-      buildPaperListItem(
-        attempt && snapshot
-          ? snapshot.paperJson
-          : sanitizePaperForStudent(paper),
-        attempt,
-        serializedAttempt,
-        now,
-      ),
+      buildPaperListItem(paperForList, attempt, serializedAttempt, now, {
+        requiresManualReview:
+          attemptSnapshot?.requiresManualReview ?? snapshot.requiresManualReview,
+      }),
     );
   }
 
@@ -2412,29 +3150,16 @@ export async function listStudentExamRuntimeTests(
       continue;
     }
 
-    const answerRows = attemptRowsById.get(attempt.id) || [];
-    const mongoResponseId =
-      mongoProjectionIdByKey.get(
-        buildMongoAttemptProjectionKey(
-          attempt.mongoPaperId,
-          attempt.studentId,
-        ),
-      ) ||
-      (await upsertMongoAttemptProjection({
-        schoolKey,
-        attempt,
-        snapshot,
-        answerRows,
-      }));
     testsByPaperId.set(
       attempt.mongoPaperId,
       buildPaperListItem(
-        snapshot.paperJson,
+        buildSnapshotPaperSummary(snapshot),
         attempt,
-        serializeRuntimeAttempt(attempt, snapshot.paperJson, answerRows, {
-          responseId: mongoResponseId,
-        }),
+        serializeRuntimeAttemptSummary(attempt),
         now,
+        {
+          requiresManualReview: snapshot.requiresManualReview,
+        },
       ),
     );
   }
@@ -2460,10 +3185,17 @@ export async function getStudentExamRuntimeDetail(
   schoolKey: string,
   studentId: string,
   paperId: string,
+  studentContext?: StudentEligibilityContext,
 ) {
   const now = new Date();
-  const models = await getStudentTestModels(schoolKey);
-  const { User: UserModel } = models;
+  let modelsPromise: Promise<Awaited<ReturnType<typeof getStudentTestModels>>> | null =
+    null;
+  const getModels = () => {
+    if (!modelsPromise) {
+      modelsPromise = getStudentTestModels(schoolKey);
+    }
+    return modelsPromise;
+  };
 
   let attempt = await getExamAttemptByPaperId(schoolKey, studentId, paperId);
   if (attempt) {
@@ -2485,10 +3217,17 @@ export async function getStudentExamRuntimeDetail(
     });
     attempt = current.attempt;
 
+    const serializedAttempt = sanitizeSerializedAttemptForStudentDelivery(
+      serializeRuntimeAttempt(attempt, snapshot.paperJson, current.answerRows),
+      snapshot.paperJson,
+      now,
+    );
+
     return {
       success: true,
       paper: snapshot.paperJson,
-      attempt: serializeRuntimeAttempt(attempt, snapshot.paperJson, current.answerRows),
+      attempt: serializedAttempt,
+      resultReleased: isStudentResultReleasedForPaper(snapshot.paperJson, now),
       status: deriveStudentTestStatus(
         snapshot.paperJson,
         buildAttemptStateForStatus(attempt),
@@ -2500,10 +3239,16 @@ export async function getStudentExamRuntimeDetail(
   }
 
   const [student, snapshot] = await Promise.all([
-    loadStudentUser(UserModel, studentId, {
-      schoolKey,
-      useCache: true,
-    }),
+    hasStudentEligibilityContext(studentContext)
+      ? Promise.resolve(studentContext)
+      : (async () => {
+          const models = await getModels();
+          const { User: UserModel } = models;
+          return loadStudentUser(UserModel, studentId, {
+            schoolKey,
+            useCache: true,
+          });
+        })(),
     ensureActiveExamSnapshotForPaperId(schoolKey, paperId),
   ]);
   if (!student) {
@@ -2525,16 +3270,28 @@ export async function getStudentExamRuntimeDetail(
       });
     }
 
+    const windowStart = getPaperWindowStart(snapshot.paperJson);
+    if (windowStart && now.getTime() < windowStart.getTime()) {
+      throwExamRuntimeError({
+        message: "This online test is not open yet.",
+        code: "ONLINE_TEST_NOT_OPEN_YET",
+        httpStatus: 403,
+        retryable: false,
+      });
+    }
+
     return {
       success: true,
       paper: snapshot.paperJson,
       attempt: null,
+      resultReleased: isStudentResultReleasedForPaper(snapshot.paperJson, now),
       status: deriveStudentTestStatus(snapshot.paperJson, null, now),
       remainingTimeMs: null,
       deadlineAt: null,
     };
   }
 
+  const models = await getModels();
   const paper = await loadOnlinePaperById(models, schoolKey, paperId);
   if (!paper) {
     throwExamRuntimeError({
@@ -2564,10 +3321,21 @@ export async function getStudentExamRuntimeDetail(
     });
   }
 
+  const windowStart = getPaperWindowStart(paper);
+  if (windowStart && now.getTime() < windowStart.getTime()) {
+    throwExamRuntimeError({
+      message: "This online test is not open yet.",
+      code: "ONLINE_TEST_NOT_OPEN_YET",
+      httpStatus: 403,
+      retryable: false,
+    });
+  }
+
   return {
     success: true,
     paper: sanitizePaperForStudent(paper),
     attempt: null,
+    resultReleased: isStudentResultReleasedForPaper(paper, now),
     status: deriveStudentTestStatus(paper, null, now),
     remainingTimeMs: null,
     deadlineAt: null,
@@ -2578,13 +3346,14 @@ export async function startStudentExamRuntimeAttempt(
   schoolKey: string,
   studentId: string,
   paperId: string,
+  studentContext?: StudentEligibilityContext,
 ) {
   return withAttemptLock(schoolKey, paperId, studentId, async () => {
     const now = new Date();
     let attempt = await getExamAttemptByPaperId(schoolKey, studentId, paperId);
 
     if (attempt) {
-      const snapshot = await getExamSnapshotById(attempt.snapshotId);
+      const snapshot = await getExamSnapshotForGradingById(attempt.snapshotId);
       if (!snapshot) {
         throwExamRuntimeError({
           message: "Online test snapshot not found.",
@@ -2594,19 +3363,36 @@ export async function startStudentExamRuntimeAttempt(
         });
       }
 
-      const current = await autoSubmitExpiredAttemptIfNeeded({
-        schoolKey,
-        attempt,
-        snapshot,
-        now,
-      });
+      const current = shouldAutoSubmitAttempt(attempt, now)
+        ? await autoSubmitExpiredAttemptIfNeeded({
+            schoolKey,
+            attempt,
+            snapshot,
+            now,
+          })
+        : {
+            attempt,
+            answerRows: await listExamAnswerRowsByAttemptIds([attempt.id]),
+            mongoResponseId: undefined,
+          };
       attempt = current.attempt;
+      const paperSummary = buildSnapshotPaperSummary(snapshot);
+      const serializedAttempt = sanitizeSerializedAttemptForStudentDelivery(
+        serializeRuntimeAttempt(
+          attempt,
+          snapshot.gradingJson,
+          current.answerRows,
+        ),
+        paperSummary,
+        now,
+      );
 
       return {
         success: true,
-        attempt: serializeRuntimeAttempt(attempt, snapshot.paperJson, current.answerRows),
+        attempt: serializedAttempt,
+        resultReleased: isStudentResultReleasedForPaper(paperSummary, now),
         status: deriveStudentTestStatus(
-          snapshot.paperJson,
+          paperSummary,
           buildAttemptStateForStatus(attempt),
           now,
         ),
@@ -2615,14 +3401,27 @@ export async function startStudentExamRuntimeAttempt(
       };
     }
 
-    const models = await getStudentTestModels(schoolKey);
-    const { User: UserModel } = models;
+    let modelsPromise: Promise<Awaited<ReturnType<typeof getStudentTestModels>>> | null =
+      null;
+    const getModels = () => {
+      if (!modelsPromise) {
+        modelsPromise = getStudentTestModels(schoolKey);
+      }
+      return modelsPromise;
+    };
+
     const [student, existingSnapshot] = await Promise.all([
-      loadStudentUser(UserModel, studentId, {
-        schoolKey,
-        useCache: true,
-      }),
-      ensureActiveExamSnapshotForPaperId(schoolKey, paperId),
+      hasStudentEligibilityContext(studentContext)
+        ? Promise.resolve(studentContext)
+        : (async () => {
+            const models = await getModels();
+            const { User: UserModel } = models;
+            return loadStudentUser(UserModel, studentId, {
+              schoolKey,
+              useCache: true,
+            });
+          })(),
+      getActiveExamSnapshotSummaryByPaperId(schoolKey, paperId),
     ]);
     if (!student) {
       throwExamRuntimeError({
@@ -2643,8 +3442,10 @@ export async function startStudentExamRuntimeAttempt(
         });
       }
 
-      const windowStart = getPaperWindowStart(existingSnapshot);
-      const windowEnd = getPaperWindowEnd(existingSnapshot);
+      const existingSnapshotPaperSummary =
+        buildSnapshotPaperSummary(existingSnapshot);
+      const windowStart = getPaperWindowStart(existingSnapshotPaperSummary);
+      const windowEnd = getPaperWindowEnd(existingSnapshotPaperSummary);
 
       if (windowStart && now.getTime() < windowStart.getTime()) {
         throwExamRuntimeError({
@@ -2665,92 +3466,48 @@ export async function startStudentExamRuntimeAttempt(
       }
 
       attempt = await withExamRuntimeTransaction(async (client) => {
-        const deadlineMs = getPaperWindowEnd(existingSnapshot.paperJson)
+        const deadlineMs = getPaperWindowEnd(existingSnapshotPaperSummary)
           ? Math.min(
-              new Date(existingSnapshot.paperJson.onlineEndsAt).getTime(),
+              new Date(existingSnapshotPaperSummary.onlineEndsAt).getTime(),
               now.getTime() +
-                Number(existingSnapshot.paperJson.duration || 0) * 60_000,
+                Number(existingSnapshotPaperSummary.duration || 0) * 60_000,
             )
           : now.getTime() +
-            Number(existingSnapshot.paperJson.duration || 0) * 60_000;
+            Number(existingSnapshotPaperSummary.duration || 0) * 60_000;
 
-        const result = await client.query(
-          `
-            INSERT INTO exam_attempts (
-              id,
-              school_key,
-              snapshot_id,
-              mongo_paper_id,
-              student_id,
-              status,
-              started_at,
-              deadline_at,
-              last_saved_at,
-              total_marks_awarded,
-              manual_review_required,
-              created_at,
-              updated_at
-            )
-            VALUES (
-              $1,
-              $2,
-              $3,
-              $4,
-              $5,
-              'in_progress',
-              $6,
-              $7,
-              $6,
-              0,
-              $8,
-              NOW(),
-              NOW()
-            )
-            ON CONFLICT (school_key, mongo_paper_id, student_id)
-            DO NOTHING
-            RETURNING ${ATTEMPT_COLUMNS}
-          `,
-          [
-            crypto.randomUUID(),
-            schoolKey,
-            existingSnapshot.id,
-            paperId,
-            studentId,
-            now.toISOString(),
-            Number.isFinite(deadlineMs)
-              ? new Date(deadlineMs).toISOString()
-              : null,
-            existingSnapshot.requiresManualReview,
-          ],
-        );
-
-        const insertedRow = result.rows[0];
-        if (insertedRow) {
-          return mapAttemptRow(insertedRow);
-        }
-
-        const existingResult = await client.query(
-          `
-            SELECT ${ATTEMPT_COLUMNS}
-            FROM exam_attempts
-            WHERE school_key = $1
-              AND mongo_paper_id = $2
-              AND student_id = $3
-            LIMIT 1
-          `,
-          [schoolKey, paperId, studentId],
-        );
-
-        return mapAttemptRow(existingResult.rows[0]);
+        return insertOrReuseExamAttempt(client, {
+          schoolKey,
+          snapshotId: existingSnapshot.id,
+          paperId,
+          studentId,
+          startedAt: now.toISOString(),
+          deadlineAt: Number.isFinite(deadlineMs)
+            ? new Date(deadlineMs).toISOString()
+            : null,
+          manualReviewRequired: existingSnapshot.requiresManualReview,
+        });
       });
 
       return {
         success: true,
-        attempt: serializeRuntimeAttempt(attempt, existingSnapshot.paperJson, [], {
-          sectionAnswers: [],
-        }),
+        attempt: sanitizeSerializedAttemptForStudentDelivery(
+          serializeRuntimeAttempt(
+            attempt,
+            existingSnapshotPaperSummary,
+            [],
+            {
+              sectionAnswers: [],
+            },
+          ),
+          existingSnapshotPaperSummary,
+          now,
+        ),
+        resultReleased: isStudentResultReleasedForPaper(
+          existingSnapshotPaperSummary,
+          now,
+        ),
         status: deriveStudentTestStatus(
-          existingSnapshot.paperJson,
+          existingSnapshotPaperSummary,
           buildAttemptStateForStatus(attempt),
           now,
         ),
@@ -2759,6 +3516,7 @@ export async function startStudentExamRuntimeAttempt(
       };
     }
 
+    const models = await getModels();
     const paper = await loadOnlinePaperById(models, schoolKey, paperId);
     if (!paper) {
       throwExamRuntimeError({
@@ -2819,96 +3577,47 @@ export async function startStudentExamRuntimeAttempt(
       });
     }
 
-    const deadlineMs = getPaperWindowEnd(snapshot.paperJson)
+    const snapshotPaperSummary = buildSnapshotPaperSummary(snapshot);
+    const deadlineMs = getPaperWindowEnd(snapshotPaperSummary)
       ? Math.min(
-          new Date(snapshot.paperJson.onlineEndsAt).getTime(),
-          now.getTime() + Number(snapshot.paperJson.duration || 0) * 60_000,
+          new Date(snapshotPaperSummary.onlineEndsAt).getTime(),
+          now.getTime() + Number(snapshotPaperSummary.duration || 0) * 60_000,
         )
-      : now.getTime() + Number(snapshot.paperJson.duration || 0) * 60_000;
+      : now.getTime() + Number(snapshotPaperSummary.duration || 0) * 60_000;
 
-    attempt = await withExamRuntimeTransaction(async (client) => {
-      const result = await client.query(
-        `
-          INSERT INTO exam_attempts (
-            id,
-            school_key,
-            snapshot_id,
-            mongo_paper_id,
-            student_id,
-            status,
-            started_at,
-            deadline_at,
-            last_saved_at,
-            total_marks_awarded,
-            manual_review_required,
-            created_at,
-            updated_at
-          )
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            'in_progress',
-            $6,
-            $7,
-            $6,
-            0,
-            $8,
-            NOW(),
-            NOW()
-          )
-          ON CONFLICT (school_key, mongo_paper_id, student_id)
-          DO NOTHING
-          RETURNING ${ATTEMPT_COLUMNS}
-        `,
-        [
-          crypto.randomUUID(),
-          schoolKey,
-          snapshot.id,
-          paperId,
-          studentId,
-          now.toISOString(),
-          Number.isFinite(deadlineMs) ? new Date(deadlineMs).toISOString() : null,
-          snapshot.requiresManualReview,
-        ],
-      );
-
-      const insertedRow = result.rows[0];
-      if (insertedRow) {
-        return mapAttemptRow(insertedRow);
-      }
-
-      const existingResult = await client.query(
-        `
-          SELECT ${ATTEMPT_COLUMNS}
-          FROM exam_attempts
-          WHERE school_key = $1
-            AND mongo_paper_id = $2
-            AND student_id = $3
-          LIMIT 1
-        `,
-        [schoolKey, paperId, studentId],
-      );
-
-      return mapAttemptRow(existingResult.rows[0]);
-    });
+    attempt = await withExamRuntimeTransaction(async (client) =>
+      insertOrReuseExamAttempt(client, {
+        schoolKey,
+        snapshotId: snapshot.id,
+        paperId,
+        studentId,
+        startedAt: now.toISOString(),
+        deadlineAt: Number.isFinite(deadlineMs)
+          ? new Date(deadlineMs).toISOString()
+          : null,
+        manualReviewRequired: snapshot.requiresManualReview,
+      }),
+    );
 
     return {
       success: true,
-      attempt: serializeRuntimeAttempt(attempt, snapshot.paperJson, [], {
-        sectionAnswers: [],
-      }),
+      attempt: sanitizeSerializedAttemptForStudentDelivery(
+        serializeRuntimeAttempt(attempt, snapshotPaperSummary, [], {
+          sectionAnswers: [],
+        }),
+        snapshotPaperSummary,
+        now,
+      ),
+      resultReleased: isStudentResultReleasedForPaper(snapshotPaperSummary, now),
       status: deriveStudentTestStatus(
-        snapshot.paperJson,
+        snapshotPaperSummary,
         buildAttemptStateForStatus(attempt),
         now,
       ),
       remainingTimeMs: getAttemptRemainingTimeMs(attempt, now),
       deadlineAt: attempt.deadlineAt,
     };
-  });
+  }, { enabled: false });
 }
 
 export async function saveStudentExamRuntimeAttempt(params: {
@@ -2954,7 +3663,7 @@ export async function saveStudentExamRuntimeAttempt(params: {
         });
       }
 
-      const snapshot = await getExamSnapshotById(attempt.snapshotId);
+      const snapshot = await getExamSnapshotForGradingById(attempt.snapshotId);
       if (!snapshot) {
         throwExamRuntimeError({
           message: "Online test snapshot not found.",
@@ -2963,26 +3672,47 @@ export async function saveStudentExamRuntimeAttempt(params: {
           retryable: false,
         });
       }
+      const paperSummary = buildSnapshotPaperSummary(snapshot);
+      const serializeStoredAttempt = (
+        resolvedAttempt: ExamAttempt,
+        answerRows: ExamAnswerRow[],
+      ) =>
+        serializeRuntimeAttempt(
+          resolvedAttempt,
+          paperSummary,
+          answerRows,
+          {
+            sectionAnswers: buildStoredSectionAnswers(
+              snapshot.gradingJson,
+              answerRows,
+            ) as any,
+          },
+        );
 
       const current = await autoSubmitExpiredAttemptIfNeeded({
         schoolKey: params.schoolKey,
         attempt,
         snapshot,
         now,
+        includeAnswerRows: false,
       });
       attempt = current.attempt;
 
       if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
+        const submittedAnswerRows =
+          current.answerRows.length > 0
+            ? current.answerRows
+            : await listExamAnswerRowsByAttemptIds([attempt.id]);
         throwExamRuntimeError({
           message: "This attempt has already been submitted.",
           code: "ATTEMPT_ALREADY_SUBMITTED",
           httpStatus: 409,
           retryable: false,
           details: {
-            attempt: serializeRuntimeAttempt(
-              attempt,
-              snapshot.paperJson,
-              current.answerRows,
+            attempt: sanitizeSerializedAttemptForStudentDelivery(
+              serializeStoredAttempt(attempt, submittedAnswerRows),
+              paperSummary,
+              now,
             ),
             serverLastSavedAt: attempt.lastSavedAt,
           },
@@ -3017,7 +3747,7 @@ export async function saveStudentExamRuntimeAttempt(params: {
             ? current.answerRows
             : await listExamAnswerRowsByAttemptIds([attempt.id]);
         const serverSectionAnswers = buildStoredSectionAnswers(
-          snapshot.paperJson,
+          snapshot.gradingJson,
           storedAnswerRows,
         );
         const incomingSignature = buildRuntimeSectionAnswersSignature(
@@ -3037,11 +3767,15 @@ export async function saveStudentExamRuntimeAttempt(params: {
             httpStatus: 409,
             retryable: false,
             details: {
-              attempt: serializeRuntimeAttempt(
-                attempt,
-                snapshot.paperJson,
-                storedAnswerRows,
-                { sectionAnswers: serverSectionAnswers as any },
+              attempt: sanitizeSerializedAttemptForStudentDelivery(
+                serializeRuntimeAttempt(
+                  attempt,
+                  paperSummary,
+                  storedAnswerRows,
+                  { sectionAnswers: serverSectionAnswers as any },
+                ),
+                paperSummary,
+                now,
               ),
               serverLastSavedAt: attempt.lastSavedAt,
             },
@@ -3084,10 +3818,13 @@ export async function saveStudentExamRuntimeAttempt(params: {
           (resolvedAttempt.status === "submitted" ||
             resolvedAttempt.status === "auto_submitted")
             ? {
-                attempt: serializeRuntimeAttempt(
-                  resolvedAttempt,
-                  snapshot.paperJson,
-                  await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]),
+                attempt: sanitizeSerializedAttemptForStudentDelivery(
+                  serializeStoredAttempt(
+                    resolvedAttempt,
+                    await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]),
+                  ),
+                  paperSummary,
+                  now,
                 ),
                 serverLastSavedAt: resolvedAttempt.lastSavedAt,
               }
@@ -3103,11 +3840,16 @@ export async function saveStudentExamRuntimeAttempt(params: {
 
       return {
         success: true,
-        attempt: serializeRuntimeAttempt(nextAttempt, snapshot.paperJson, [], {
-          sectionAnswers: normalized.sectionAnswers,
-        }),
+        attempt: sanitizeSerializedAttemptForStudentDelivery(
+          serializeRuntimeAttempt(nextAttempt, paperSummary, [], {
+            sectionAnswers: normalized.sectionAnswers,
+          }),
+          paperSummary,
+          now,
+        ),
+        resultReleased: isStudentResultReleasedForPaper(paperSummary, now),
         status: deriveStudentTestStatus(
-          snapshot.paperJson,
+          paperSummary,
           buildAttemptStateForStatus(nextAttempt),
           now,
         ),
@@ -3146,7 +3888,7 @@ export async function submitStudentExamRuntimeAttempt(params: {
         });
       }
 
-      const snapshot = await getExamSnapshotById(attempt.snapshotId);
+      const snapshot = await getExamSnapshotForGradingById(attempt.snapshotId);
       if (!snapshot) {
         throwExamRuntimeError({
           message: "Online test snapshot not found.",
@@ -3155,37 +3897,76 @@ export async function submitStudentExamRuntimeAttempt(params: {
           retryable: false,
         });
       }
+      const paperSummary = buildSnapshotPaperSummary(snapshot);
+      const serializeStoredAttempt = (
+        resolvedAttempt: ExamAttempt,
+        answerRows: ExamAnswerRow[],
+      ) =>
+        serializeRuntimeAttempt(
+          resolvedAttempt,
+          paperSummary,
+          answerRows,
+          {
+            sectionAnswers: buildStoredSectionAnswers(
+              snapshot.gradingJson,
+              answerRows,
+            ) as any,
+          },
+        );
 
+      const attemptId = attempt.id;
       let existingAnswerRows: ExamAnswerRow[] | null = null;
       const loadExistingAnswerRows = async () => {
         if (existingAnswerRows !== null) {
           return existingAnswerRows;
         }
 
-        existingAnswerRows = await listExamAnswerRowsByAttemptIds([attempt.id]);
+        existingAnswerRows = await listExamAnswerRowsByAttemptIds([attemptId]);
         return existingAnswerRows;
       };
 
       if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
         const storedAnswerRows = await loadExistingAnswerRows();
-        await upsertMongoAttemptProjection({
+        return {
+          success: true,
+          attempt: sanitizeSerializedAttemptForStudentDelivery(
+            serializeStoredAttempt(attempt, storedAnswerRows),
+            paperSummary,
+            now,
+          ),
+          resultReleased: isStudentResultReleasedForPaper(paperSummary, now),
+          status: attempt.status,
+        };
+      }
+
+      if (shouldAutoSubmitAttempt(attempt, now)) {
+        const current = await autoSubmitExpiredAttemptIfNeeded({
           schoolKey: params.schoolKey,
           attempt,
           snapshot,
-          answerRows: storedAnswerRows,
+          now,
         });
+        attempt = current.attempt;
+        existingAnswerRows = current.answerRows;
 
-        return {
-          success: true,
-          attempt: serializeRuntimeAttempt(attempt, snapshot.paperJson, storedAnswerRows),
-          status: attempt.status,
-        };
+        if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
+          return {
+            success: true,
+            attempt: sanitizeSerializedAttemptForStudentDelivery(
+              serializeStoredAttempt(attempt, current.answerRows),
+              paperSummary,
+              now,
+            ),
+            resultReleased: isStudentResultReleasedForPaper(paperSummary, now),
+            status: attempt.status,
+          };
+        }
       }
 
       const normalized = validateStudentSectionAnswers(
         params.sectionAnswers ??
           buildStoredSectionAnswers(
-            snapshot.paperJson,
+            snapshot.gradingJson,
             await loadExistingAnswerRows(),
           ),
         snapshot.gradingJson,
@@ -3211,7 +3992,7 @@ export async function submitStudentExamRuntimeAttempt(params: {
       ) {
         const storedAnswerRows = await loadExistingAnswerRows();
         const serverSectionAnswers = buildStoredSectionAnswers(
-          snapshot.paperJson,
+          snapshot.gradingJson,
           storedAnswerRows,
         );
         const incomingSignature = buildRuntimeSectionAnswersSignature(
@@ -3231,25 +4012,21 @@ export async function submitStudentExamRuntimeAttempt(params: {
             httpStatus: 409,
             retryable: false,
             details: {
-              attempt: serializeRuntimeAttempt(
-                attempt,
-                snapshot.paperJson,
-                storedAnswerRows,
-                { sectionAnswers: serverSectionAnswers as any },
+              attempt: sanitizeSerializedAttemptForStudentDelivery(
+                serializeRuntimeAttempt(
+                  attempt,
+                  paperSummary,
+                  storedAnswerRows,
+                  { sectionAnswers: serverSectionAnswers as any },
+                ),
+                paperSummary,
+                now,
               ),
               serverLastSavedAt: attempt.lastSavedAt,
             },
           });
         }
       }
-
-      const autoSubmitted =
-        attempt.deadlineAt !== null &&
-        new Date(attempt.deadlineAt).getTime() < now.getTime();
-      const submittedAt =
-        autoSubmitted && attempt.deadlineAt
-          ? new Date(attempt.deadlineAt)
-          : now;
 
       const graded = gradeObjectiveSectionAnswers(
         normalized.sectionAnswers,
@@ -3258,6 +4035,11 @@ export async function submitStudentExamRuntimeAttempt(params: {
       const storedRows = flattenSectionAnswersForStorage(
         graded.sectionAnswers,
         snapshot.gradingJson,
+      );
+      const persistedRows = hydratePersistedAnswerRows(
+        attempt.id,
+        storedRows,
+        now.toISOString(),
       );
 
       const nextAttempt = await withExamRuntimeTransaction(async (client) => {
@@ -3277,8 +4059,8 @@ export async function submitStudentExamRuntimeAttempt(params: {
           `,
           [
             attempt!.id,
-            autoSubmitted ? "auto_submitted" : "submitted",
-            submittedAt.toISOString(),
+            "submitted",
+            now.toISOString(),
             graded.totalMarksAwarded,
           ],
         );
@@ -3304,28 +4086,43 @@ export async function submitStudentExamRuntimeAttempt(params: {
         });
       }
 
-      const resolvedAnswerRows = await listExamAnswerRowsByAttemptIds([
-        resolvedAttempt.id,
-      ]);
-      await upsertMongoAttemptProjection({
-        schoolKey: params.schoolKey,
-        attempt: resolvedAttempt,
-        snapshot,
-        answerRows: resolvedAnswerRows,
-        sectionAnswers: graded.sectionAnswers,
-      });
+      const resolvedAnswerRows = nextAttempt
+        ? persistedRows
+        : await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]);
+      let projectionId: string | undefined;
+
+      try {
+        projectionId = await upsertMongoAttemptProjection({
+          schoolKey: params.schoolKey,
+          attempt: resolvedAttempt,
+          snapshot,
+          answerRows: resolvedAnswerRows,
+          sectionAnswers: graded.sectionAnswers,
+        });
+      } catch (error) {
+        console.error(
+          "Failed to project submitted runtime attempt into Mongo:",
+          error,
+        );
+      }
 
       return {
         success: true,
-        attempt: serializeRuntimeAttempt(
-          resolvedAttempt,
-          snapshot.paperJson,
-          resolvedAnswerRows,
-          {
-            sectionAnswers: graded.sectionAnswers,
-          },
+        attempt: sanitizeSerializedAttemptForStudentDelivery(
+          serializeRuntimeAttempt(
+            resolvedAttempt,
+            paperSummary,
+            resolvedAnswerRows,
+            {
+              sectionAnswers: graded.sectionAnswers,
+            },
+          ),
+          paperSummary,
+          now,
         ),
+        resultReleased: isStudentResultReleasedForPaper(paperSummary, now),
         status: resolvedAttempt.status,
+        mongoResponseId: projectionId,
       };
     },
   );

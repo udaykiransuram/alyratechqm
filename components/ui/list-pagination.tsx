@@ -9,7 +9,7 @@ type ListPaginationProps = {
   totalItems: number;
   pageSize: number;
   itemLabel: string;
-  onPageChange: (page: number) => void;
+  onPageChange: (page: number, options?: { preserveScroll?: boolean }) => void;
   className?: string;
   hideWhenSinglePage?: boolean;
   disabled?: boolean;
@@ -76,7 +76,7 @@ export default function ListPagination({
           size="sm"
           className="app-button-compact"
           disabled={disabled || safePage <= 1}
-          onClick={() => onPageChange(safePage - 1)}
+          onClick={() => onPageChange(safePage - 1, { preserveScroll: true })}
         >
           <ChevronLeft className="h-4 w-4" />
           Prev
@@ -87,7 +87,7 @@ export default function ListPagination({
           size="sm"
           className="app-button-compact"
           disabled={disabled || safePage >= safeTotalPages}
-          onClick={() => onPageChange(safePage + 1)}
+          onClick={() => onPageChange(safePage + 1, { preserveScroll: true })}
         >
           Next
           <ChevronRight className="h-4 w-4" />

@@ -70,7 +70,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireTenantSession(req, {
-    allowRoles: ["admin", "teacher"],
+    allowRoles: ["admin"],
   });
   if (!auth.ok) {
     return auth.response;
@@ -176,7 +176,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireTenantSession(req, {
-    allowRoles: ["admin", "teacher"],
+    allowRoles: ["admin"],
   });
   if (!auth.ok) {
     return auth.response;

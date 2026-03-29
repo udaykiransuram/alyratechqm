@@ -6,6 +6,8 @@ import IndexingClient from './IndexingClient';
 import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { isProductionAdminMaintenanceEnabled } from '@/lib/ops-runtime';
+import { connectDB } from '@/lib/db';
+import School from '@/models/School';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +26,12 @@ export default async function IndexingPage() {
     redirect('/company/schools');
   }
 
+  await connectDB();
+  const schools = await School.find({})
+    .sort({ displayName: 1 })
+    .select('key displayName')
+    .lean();
+
   return (
     <Suspense
       fallback={
@@ -41,7 +49,12 @@ export default async function IndexingPage() {
         </div>
       }
     >
-      <IndexingClient />
+      <IndexingClient
+        initialSchoolOptions={(schools || []).map((school: any) => ({
+          key: String(school?.key || ''),
+          displayName: String(school?.displayName || ''),
+        }))}
+      />
     </Suspense>
   );
 }

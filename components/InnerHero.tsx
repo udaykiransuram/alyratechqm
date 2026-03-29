@@ -2,6 +2,8 @@
 
 import React from "react";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
+
+import { cn } from "@/lib/utils";
 import { LottieAnimation } from "./LottieAnimation";
 
 interface InnerHeroProps {
@@ -9,6 +11,7 @@ interface InnerHeroProps {
   subtitle: string;
   pillText?: string;
   children?: React.ReactNode;
+  variant?: "flagship" | "story" | "conversion";
   /** Optional WhatsApp link to show a simple icon in the hero header */
   whatsappHref?: string;
   /** Lottie animation floating on the right */
@@ -17,14 +20,53 @@ interface InnerHeroProps {
   lottieLeft?: string;
 }
 
-export const InnerHero = ({ title, subtitle, pillText, children, whatsappHref, lottieRight, lottieLeft }: InnerHeroProps) => {
+const heroVariantClasses = {
+  flagship: {
+    shell: "pt-16 pb-18 sm:pt-20 sm:pb-24",
+    content: "max-w-4xl",
+    title: "text-5xl sm:text-7xl",
+    subtitle: "mx-auto max-w-3xl",
+    actions: "mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-4",
+  },
+  story: {
+    shell: "pt-16 pb-20 sm:pt-20 sm:pb-24",
+    content: "max-w-3xl",
+    title: "text-5xl sm:text-7xl",
+    subtitle: "mx-auto max-w-2xl",
+    actions: "mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-4",
+  },
+  conversion: {
+    shell: "pt-16 pb-16 sm:pt-20 sm:pb-20",
+    content: "max-w-2xl",
+    title: "text-4xl sm:text-6xl",
+    subtitle: "mx-auto max-w-xl",
+    actions: "mt-8 flex flex-wrap items-center justify-center gap-3",
+  },
+} as const;
+
+export const InnerHero = ({
+  title,
+  subtitle,
+  pillText,
+  children,
+  variant = "story",
+  whatsappHref,
+  lottieRight,
+  lottieLeft,
+}: InnerHeroProps) => {
   const { scrollY } = useScroll();
   const prefersReduced = useReducedMotion();
   const y1 = useTransform(scrollY, [0, 500], [0, 200]);
   const y2 = useTransform(scrollY, [0, 500], [0, -150]);
+  const variantClasses = heroVariantClasses[variant];
 
   return (
-    <div className="relative w-full bg-gradient-to-b from-teal-300 via-teal-250 to-teal-200 pt-16 pb-20 sm:pt-20 sm:pb-28 overflow-x-clip">
+    <div
+      className={cn(
+        "relative w-full overflow-x-clip bg-gradient-to-b from-teal-300 via-teal-250 to-teal-200",
+        variantClasses.shell,
+      )}
+    >
       {whatsappHref && (
         <a
           href={whatsappHref}
@@ -88,13 +130,13 @@ export const InnerHero = ({ title, subtitle, pillText, children, whatsappHref, l
       )}
 
       <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="mx-auto max-w-3xl text-center">
+        <div className={cn("mx-auto text-center", variantClasses.content)}>
           {pillText && (
             <motion.div 
               initial={prefersReduced ? undefined : { opacity: 0, scale: 0.9 }}
               animate={prefersReduced ? undefined : { opacity: 1, scale: 1 }}
               transition={prefersReduced ? undefined : { duration: 0.5 }}
-              className="mb-8 inline-flex items-center rounded-full border border-teal-200/60 bg-white/60 px-3 py-1 text-sm font-medium text-teal-700 backdrop-blur-sm shadow-sm"
+              className="mb-8 inline-flex items-center rounded-full border border-white/65 bg-white/72 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[hsl(var(--public-ink-soft))] shadow-sm backdrop-blur-sm"
             >
               <span className="flex h-2 w-2 mr-2">
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
@@ -107,7 +149,10 @@ export const InnerHero = ({ title, subtitle, pillText, children, whatsappHref, l
             initial={prefersReduced ? undefined : { opacity: 0, y: 20 }}
             animate={prefersReduced ? undefined : { opacity: 1, y: 0 }}
             transition={prefersReduced ? undefined : { duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-            className="text-balance text-5xl font-semibold tracking-tight text-slate-900 sm:text-7xl"
+            className={cn(
+              "text-balance font-semibold tracking-tight text-slate-900",
+              variantClasses.title,
+            )}
           >
             {title}
           </motion.h1>
@@ -116,7 +161,10 @@ export const InnerHero = ({ title, subtitle, pillText, children, whatsappHref, l
             initial={prefersReduced ? undefined : { opacity: 0, y: 20 }}
             animate={prefersReduced ? undefined : { opacity: 1, y: 0 }}
             transition={prefersReduced ? undefined : { duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-6 text-lg leading-8 text-slate-700 text-balance"
+            className={cn(
+              "mt-6 text-balance text-lg leading-8 text-slate-700",
+              variantClasses.subtitle,
+            )}
           >
             {subtitle}
           </motion.p>
@@ -126,7 +174,7 @@ export const InnerHero = ({ title, subtitle, pillText, children, whatsappHref, l
                initial={prefersReduced ? undefined : { opacity: 0, y: 20 }}
                animate={prefersReduced ? undefined : { opacity: 1, y: 0 }}
                transition={prefersReduced ? undefined : { duration: 0.8, delay: 0.2 }}
-               className="mt-10 flex items-center justify-center gap-x-6"
+               className={variantClasses.actions}
             >
               {children}
             </motion.div>

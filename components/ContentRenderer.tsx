@@ -1,16 +1,20 @@
-'use client';
+"use client";
 
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from "react";
 import katex from 'katex';
 // Make sure the KaTeX CSS is imported to style the math correctly.
 import 'katex/dist/katex.min.css';
+import { sanitizeRichTextHtml } from "@/lib/security/html-sanitize";
 
 interface ContentRendererProps {
   htmlContent: string;
 }
 
-export function ContentRenderer({ htmlContent }: ContentRendererProps) {
+export const ContentRenderer = memo(function ContentRenderer({
+  htmlContent,
+}: ContentRendererProps) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const sanitizedHtml = sanitizeRichTextHtml(htmlContent);
 
   // This useEffect hook will run after the component renders its HTML.
   // It will then find and process any math elements.
@@ -35,22 +39,19 @@ export function ContentRenderer({ htmlContent }: ContentRendererProps) {
               displayMode: displayMode,
             });
           } catch (error) {
-            console.error('KaTeX rendering error:', error);
+            console.error("KaTeX rendering error:", error);
             span.textContent = `[Math Error]`;
           }
         }
       });
     }
-  }); // By having no dependency array, this runs after every render.
+  }, [sanitizedHtml]);
 
   return (
     <div
-      // The key forces React to re-mount the component when content changes,
-      // ensuring a clean slate for the useEffect to run on.
-      key={htmlContent}
       ref={contentRef}
-      dangerouslySetInnerHTML={{ __html: htmlContent }}
-      className="prose dark:prose-invert max-w-none"
+      dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+      className="content-renderer prose dark:prose-invert max-w-none"
     />
   );
-}
+});

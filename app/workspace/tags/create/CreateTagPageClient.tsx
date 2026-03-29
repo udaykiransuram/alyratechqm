@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ArrowLeft, PlusCircle } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { CreateTagTypeModal } from "@/components/CreateTagTypeModal";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
@@ -234,8 +235,9 @@ export default function CreateTagPageClient({
         }}
       />
 
-      <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+      <PageShell width="wide" padding="standard">
         <PageHero
+          variant="editor"
           eyebrow="Curriculum"
           title="Create Tag"
           description="Define a reusable tag, choose its type, and optionally connect it to existing subjects right away."
@@ -245,7 +247,7 @@ export default function CreateTagPageClient({
               variant="outline"
               onClick={navigateBack}
               disabled={isCreatingTag}
-              className="gap-2"
+              className="app-button-back"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to Tags
@@ -368,15 +370,17 @@ export default function CreateTagPageClient({
                     type="button"
                     onClick={navigateBack}
                     variant="outline"
+                    className="app-button-back"
                     disabled={isCreatingTag}
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={handleCreateAndAssignTag}
+                    className="app-button-page"
                     disabled={isCreatingTag || !newTagName.trim() || !selectedTagTypeId}
                   >
-                    {isCreatingTag ? <div className="mr-2"><Spinner /></div> : null}
+                    {isCreatingTag ? <Spinner /> : null}
                     Create Tag
                   </Button>
                 </div>
@@ -384,7 +388,7 @@ export default function CreateTagPageClient({
             </Card>
           </div>
         </div>
-      </div>
+      </PageShell>
     </>
   );
 }

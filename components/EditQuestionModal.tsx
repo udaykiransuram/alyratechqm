@@ -322,8 +322,13 @@ export function EditQuestionModal({
                         </Button>
                       </div>
                     ))}
-                    <Button variant="outline" type="button" onClick={handleAddOption} className="w-full sm:w-auto">
-                      <PlusCircle className="mr-2 h-4 w-4" />
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={handleAddOption}
+                      className="app-button-inline w-full sm:w-auto"
+                    >
+                      <PlusCircle className="h-4 w-4" />
                       Add Option
                     </Button>
                   </CardContent>

@@ -8,6 +8,18 @@ import {
 
 type RateLimitStore = Map<string, number[]>;
 
+function generateCspNonce() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary);
+}
+
 function resolvePositiveIntegerEnv(name: string, fallback: number) {
   const parsed = Number(process.env[name] || "");
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -173,7 +185,60 @@ function buildRateLimitResponse(retryAfterSeconds: number) {
   });
 }
 
-function applyResponseHeaders(res: NextResponse, path: string) {
+function buildContentSecurityPolicy(path: string, nonce: string) {
+  if (path.startsWith("/api/analytics/")) {
+    return null;
+  }
+
+  const isDev = process.env.NODE_ENV !== "production";
+  const scriptSources = isDev
+    ? [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "'wasm-unsafe-eval'",
+        "blob:",
+        "https://sdk.cashfree.com",
+      ].join(" ")
+    : [
+        "'self'",
+        `'nonce-${nonce}'`,
+        "'strict-dynamic'",
+        "'wasm-unsafe-eval'",
+        "https://sdk.cashfree.com",
+      ].join(" ");
+  const connectSources = [
+    "'self'",
+    isDev ? "ws:" : "",
+    isDev ? "wss:" : "",
+    "https://api.cashfree.com",
+    "https://sandbox.cashfree.com",
+    "https://payments.cashfree.com",
+    "https://payments-test.cashfree.com",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSources}`,
+    "script-src-attr 'none'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob: https://videos.pexels.com",
+    "worker-src 'self' blob:",
+    `connect-src ${connectSources}`,
+    "frame-src 'self' https://sdk.cashfree.com https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+function applyResponseHeaders(
+  res: NextResponse,
+  cspHeader: string | null,
+) {
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set(
@@ -182,28 +247,8 @@ function applyResponseHeaders(res: NextResponse, path: string) {
   );
   res.headers.set("Referrer-Policy", "no-referrer");
 
-  if (!path.startsWith("/api/analytics/")) {
-    const isDev = process.env.NODE_ENV !== "production";
-    const scriptSrc = isDev
-      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://sdk.cashfree.com"
-      : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://sdk.cashfree.com";
-    const connectSrc = isDev
-      ? "connect-src 'self' ws: wss: https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com"
-      : "connect-src 'self' https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com";
-    const csp = [
-      "default-src 'self'",
-      scriptSrc,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "media-src 'self' blob: https://videos.pexels.com",
-      "worker-src 'self' blob:",
-      connectSrc,
-      "frame-src 'self' https://sdk.cashfree.com https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "frame-ancestors 'none'",
-    ].join("; ");
-    res.headers.set("Content-Security-Policy", csp);
+  if (cspHeader) {
+    res.headers.set("Content-Security-Policy", cspHeader);
   }
 
   return res;
@@ -211,6 +256,7 @@ function applyResponseHeaders(res: NextResponse, path: string) {
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname || "";
+  const isDev = process.env.NODE_ENV !== "production";
   const isApiRoute = path.startsWith("/api/");
   const isAuthRoute = isSchoolSignInRoute(path) || isCompanySignInRoute(path);
   const isPublicRoute = isPublicPage(path);
@@ -327,6 +373,13 @@ export async function middleware(req: NextRequest) {
   if (schoolKey) {
     headers.set("X-School-Key", schoolKey);
   }
+  const shouldApplyCsp = !isApiRoute && !isStaticAsset;
+  const cspNonce = shouldApplyCsp && !isDev ? generateCspNonce() : null;
+  const cspHeader = cspNonce ? buildContentSecurityPolicy(path, cspNonce) : null;
+  if (cspHeader) {
+    headers.set("Content-Security-Policy", cspHeader);
+    headers.set("x-nonce", cspNonce || "");
+  }
   // Simple in-memory rate limiter for analytics APIs (best-effort; not durable across serverless instances)
   try {
     const requestIp = getClientIp(req);
@@ -362,7 +415,7 @@ export async function middleware(req: NextRequest) {
   } catch {}
   return applyResponseHeaders(
     NextResponse.next({ request: { headers } }),
-    path,
+    cspHeader,
   );
 }
 

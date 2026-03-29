@@ -12,7 +12,8 @@ export interface IRegistration extends Document {
   classLevel?: string;
   sectionId?: string;
   sectionName?: string;
-  aadhar?: string;
+  aadharHash?: string;
+  aadharLast4?: string;
   careerAspiration?: string;
   rollNumber?: string;
   amount?: number;
@@ -22,6 +23,10 @@ export interface IRegistration extends Document {
   hallTicket?: string;
   hallTicketWhatsappSent?: boolean;
   reportWhatsappSent?: boolean;
+  paidAt?: Date;
+  cashfreePaymentId?: string;
+  processedWebhookEventIds?: string[];
+  successLookupTokenHash?: string;
 }
 
 const RegistrationSchema: Schema<IRegistration> = new Schema(
@@ -35,16 +40,21 @@ const RegistrationSchema: Schema<IRegistration> = new Schema(
     classLevel: String,
     sectionId: String,
     sectionName: String,
-    aadhar: String,
+    aadharHash: String,
+    aadharLast4: String,
     careerAspiration: String,
     rollNumber: String,
     amount: Number,
     currency: String,
-    orderId: String,
+    orderId: { type: String, index: true },
     status: { type: String, default: "pending" },
     hallTicket: String,
     hallTicketWhatsappSent: { type: Boolean, default: false },
     reportWhatsappSent: { type: Boolean, default: false },
+    paidAt: Date,
+    cashfreePaymentId: String,
+    processedWebhookEventIds: { type: [String], default: [] },
+    successLookupTokenHash: String,
   },
   { timestamps: true },
 );

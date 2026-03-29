@@ -887,7 +887,7 @@ function ExcelStudentResponseUploadPageContent() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" onClick={navigateBack} className="gap-2">
+                <Button variant="outline" onClick={navigateBack} className="app-button-back">
                   <ArrowLeft className="h-4 w-4" />
                   Back
                 </Button>
@@ -1325,7 +1325,7 @@ function ExcelUploadPageFallback() {
           title="Student response bulk upload"
           description="Preparing the upload workspace, workbook validation, and recent history."
           actions={
-            <Button variant="outline" onClick={navigateBack} className="gap-2">
+            <Button variant="outline" onClick={navigateBack} className="app-button-back">
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>

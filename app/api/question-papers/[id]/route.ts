@@ -14,7 +14,13 @@ import {
   disableExamPaperSnapshotsForPaperId,
   syncExamPaperSnapshotForPaperId,
 } from "@/lib/exam-runtime";
+import {
+  buildStoredPaperSubjectFields,
+  derivePaperSubjectIdsFromQuestions,
+  serializePaperSubjects,
+} from "@/lib/question-paper/subjects";
 import { isOnlineQuestionType } from "@/lib/question-paper/grading";
+import { resolveTeacherPaperScope } from "@/lib/question-paper/access";
 
 function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
@@ -40,6 +46,14 @@ function normalizeDate(value: unknown) {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
+function toIdString(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "object" && value !== null && "_id" in (value as any)) {
+    return String((value as any)._id || "").trim();
+  }
+  return String(value || "").trim();
+}
+
 async function validateQuestionSelection(
   QuestionModel: any,
   sections: any[],
@@ -59,7 +73,7 @@ async function validateQuestionSelection(
     _id: { $in: questionIds },
     ...buildArchiveFilter(false),
   })
-    .select("_id type")
+    .select("_id type subject")
     .lean();
 
   if (questions.length !== questionIds.length) {
@@ -95,7 +109,10 @@ async function validateQuestionSelection(
     }
   }
 
-  return { ok: true } as const;
+  return {
+    ok: true,
+    subjectIds: derivePaperSubjectIdsFromQuestions(questions),
+  } as const;
 }
 
 async function validateAssignedAcademicSections(
@@ -170,6 +187,7 @@ export async function GET(
     })
       .populate({ path: "class", model: ClassModel })
       .populate({ path: "subject", model: SubjectModel })
+      .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
       .populate({
         path: "assignedAcademicSections",
         model: AcademicSectionModel,
@@ -186,14 +204,30 @@ export async function GET(
     await paper.populate({
       path: "sections.questions.question",
       model: QuestionModel,
-      populate: {
-        path: "tags",
-        model: Tag,
-        populate: { path: "type", model: TagType, select: "name" },
-      },
+      select: "subject class tags content answerIndexes options type matrixOptions matrixAnswers",
+      populate: [
+        {
+          path: "tags",
+          model: Tag,
+          populate: { path: "type", model: TagType, select: "name" },
+        },
+        { path: "subject", model: SubjectModel, select: "name" },
+        { path: "class", model: ClassModel, select: "name" },
+      ],
     });
 
-    return NextResponse.json({ success: true, paper }, { status: 200 });
+    const paperObject = paper?.toObject?.() ?? paper;
+
+    return NextResponse.json(
+      {
+        success: true,
+        paper: {
+          ...paperObject,
+          ...serializePaperSubjects(paperObject),
+        },
+      },
+      { status: 200 },
+    );
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message || "Server error." },
@@ -219,17 +253,18 @@ export async function PUT(
       QuestionPaper: QPModel,
       AcademicSection: AcademicSectionModel,
       Question: QuestionModel,
+      User: UserModel,
     } = await getTenantModels(schoolKey, [
       "QuestionPaper",
       "AcademicSection",
       "Question",
+      "User",
     ]);
 
     const data = await req.json();
     const {
       title,
       class: classId,
-      subject,
       duration,
       passingMarks,
       examDate,
@@ -252,7 +287,6 @@ export async function PUT(
     if (
       !title ||
       !classId ||
-      !subject ||
       !sections ||
       !Array.isArray(sections) ||
       sections.length === 0 ||
@@ -341,10 +375,94 @@ export async function PUT(
       return questionValidation.response;
     }
 
+    const subjectFields = buildStoredPaperSubjectFields(
+      questionValidation.subjectIds,
+    );
+
+    if (auth.session.user.role === "teacher") {
+      const scopedUser = await UserModel.findById(auth.session.user.id)
+        .select(
+          "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
+        )
+        .lean();
+
+      const teacherScope = resolveTeacherPaperScope(
+        scopedUser,
+        toIdString(classId),
+        subjectFields.subjectIds,
+        assignmentValidation.ids,
+      );
+
+      if (
+        !teacherScope.hasClassAccess ||
+        !teacherScope.hasSubjectAccess ||
+        !teacherScope.hasSectionAccess
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "You can only update papers inside your assigned class, subject, and section scope.",
+          },
+          { status: 403 },
+        );
+      }
+
+      if (
+        teacherScope.allowedSectionIds !== null &&
+        assignmentValidation.ids.length === 0
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Teachers with section-scoped access must assign at least one section to a question paper.",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (teacherScope.allowedSectionIds !== null) {
+        const outOfScopeSections = assignmentValidation.ids.filter(
+          (sectionId) => !teacherScope.allowedSectionIds!.includes(sectionId),
+        );
+        if (outOfScopeSections.length > 0) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "One or more assigned sections are outside your access scope.",
+            },
+            { status: 403 },
+          );
+        }
+      }
+
+      if (!Boolean(scopedUser?.hasAllSubjects)) {
+        const scopedSubjectIds = Array.isArray(scopedUser?.subjectIds)
+          ? scopedUser.subjectIds.map((subjectId: any) => toIdString(subjectId))
+          : [];
+        const outOfScopeSubjects = subjectFields.subjectIds.filter(
+          (subjectId) => !scopedSubjectIds.includes(subjectId),
+        );
+        if (outOfScopeSubjects.length > 0) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "One or more question subjects are outside your access scope.",
+            },
+            { status: 403 },
+          );
+        }
+      }
+    }
+
     const updated = await QPModel.findOneAndUpdate(
       { _id: id, ...buildArchiveFilter(false) },
       {
         ...data,
+        ...subjectFields,
         onlineEnabled,
         onlineStartsAt,
         onlineEndsAt,
@@ -385,7 +503,15 @@ export async function PUT(
       ).catch(() => undefined);
     }
 
-    return NextResponse.json({ success: true, paper: updated });
+    const updatedObject = updated?.toObject?.() ?? updated;
+
+    return NextResponse.json({
+      success: true,
+      paper: {
+        ...updatedObject,
+        ...serializePaperSubjects(updatedObject),
+      },
+    });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message },

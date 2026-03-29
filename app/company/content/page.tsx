@@ -7,6 +7,7 @@ import {
   CircleHelp,
   Mail,
   MessageSquareQuote,
+  Palette,
   PhoneCall,
   Sparkles,
   WalletCards,
@@ -19,6 +20,14 @@ export const metadata: Metadata = {
 };
 
 const contentCards = [
+  {
+    href: "/company/content/theme",
+    title: "Theme Studio",
+    description:
+      "Preview public-site styles, switch palettes, and tune the homepage shell before opening the live site.",
+    icon: Palette,
+    tag: "Design system",
+  },
   {
     href: "/company/content/stats",
     title: "Site Stats",

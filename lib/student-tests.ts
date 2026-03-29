@@ -5,9 +5,132 @@ import {
   isOnlineQuestionType,
   validateStudentSectionAnswers,
 } from "@/lib/question-paper/grading";
+import { serializePaperSubjects } from "@/lib/question-paper/subjects";
 
 function normalizeId(value: unknown) {
   return String(value || "").trim();
+}
+
+type PaperDeliveryCapabilities = {
+  supportsOnlineDelivery: boolean;
+  requiresManualReview: boolean;
+};
+
+const paperQuestionLookupCache = new WeakMap<
+  object,
+  ReturnType<typeof buildPaperQuestionLookup>
+>();
+const paperDeliveryCapabilitiesCache = new WeakMap<
+  object,
+  PaperDeliveryCapabilities
+>();
+
+function getCachedPaperQuestionLookup(paper: any) {
+  if (!paper || typeof paper !== "object") {
+    return buildPaperQuestionLookup(paper);
+  }
+
+  const cachedLookup = paperQuestionLookupCache.get(paper);
+  if (cachedLookup) {
+    return cachedLookup;
+  }
+
+  const lookup = buildPaperQuestionLookup(paper);
+  paperQuestionLookupCache.set(paper, lookup);
+  return lookup;
+}
+
+function getPaperDeliveryCapabilities(paper: any): PaperDeliveryCapabilities {
+  if (!paper || typeof paper !== "object") {
+    const lookup = buildPaperQuestionLookup(paper);
+    if (lookup.size === 0) {
+      return {
+        supportsOnlineDelivery: false,
+        requiresManualReview: false,
+      };
+    }
+
+    let supportsOnlineDelivery = true;
+    let requiresManualReview = false;
+    for (const spec of lookup.values()) {
+      if (!isOnlineQuestionType(spec.type)) {
+        supportsOnlineDelivery = false;
+      } else if (
+        spec.type === "matrix-match" &&
+        (spec.matrixRowCount <= 0 || spec.matrixColumnIndexes.size <= 0)
+      ) {
+        supportsOnlineDelivery = false;
+      }
+
+      if (spec.type === "descriptive") {
+        requiresManualReview = true;
+      }
+    }
+
+    return {
+      supportsOnlineDelivery,
+      requiresManualReview,
+    };
+  }
+
+  const cachedCapabilities = paperDeliveryCapabilitiesCache.get(paper);
+  if (cachedCapabilities) {
+    return cachedCapabilities;
+  }
+
+  const lookup = getCachedPaperQuestionLookup(paper);
+  if (lookup.size === 0) {
+    const emptyCapabilities = {
+      supportsOnlineDelivery: false,
+      requiresManualReview: false,
+    };
+    paperDeliveryCapabilitiesCache.set(paper, emptyCapabilities);
+    return emptyCapabilities;
+  }
+
+  let supportsOnlineDelivery = true;
+  let requiresManualReview = false;
+  for (const spec of lookup.values()) {
+    if (!isOnlineQuestionType(spec.type)) {
+      supportsOnlineDelivery = false;
+    } else if (
+      spec.type === "matrix-match" &&
+      (spec.matrixRowCount <= 0 || spec.matrixColumnIndexes.size <= 0)
+    ) {
+      supportsOnlineDelivery = false;
+    }
+
+    if (spec.type === "descriptive") {
+      requiresManualReview = true;
+    }
+  }
+
+  const capabilities = {
+    supportsOnlineDelivery,
+    requiresManualReview,
+  };
+  paperDeliveryCapabilitiesCache.set(paper, capabilities);
+  return capabilities;
+}
+
+export function buildStudentPlacementSnapshot(studentLike: any) {
+  const classId = normalizeId(
+    studentLike?.studentClassId ||
+      studentLike?.classId ||
+      studentLike?.class?._id ||
+      studentLike?.class,
+  );
+  const academicSectionId = normalizeId(
+    studentLike?.studentAcademicSectionId ||
+      studentLike?.academicSectionId ||
+      studentLike?.academicSection?._id ||
+      studentLike?.academicSection,
+  );
+
+  return {
+    classId,
+    academicSectionId,
+  };
 }
 
 function parseDate(value: unknown) {
@@ -22,6 +145,14 @@ export function getPaperWindowStart(paper: any) {
 
 export function getPaperWindowEnd(paper: any) {
   return parseDate(paper?.onlineEndsAt);
+}
+
+export function isStudentResultReleasedForPaper(paper: any, now = new Date()) {
+  const windowEnd = getPaperWindowEnd(paper);
+  if (!windowEnd) {
+    return true;
+  }
+  return now.getTime() >= windowEnd.getTime();
 }
 
 export function getAttemptDeadlineMs(paper: any, attempt: any) {
@@ -41,29 +172,17 @@ export function getAttemptDeadlineMs(paper: any, attempt: any) {
 }
 
 export function paperSupportsOnlineDelivery(paper: any) {
-  const lookup = buildPaperQuestionLookup(paper);
-  if (lookup.size === 0) return false;
-
-  return Array.from(lookup.values()).every((spec) => {
-    if (!isOnlineQuestionType(spec.type)) return false;
-
-    if (spec.type === "matrix-match") {
-      return spec.matrixRowCount > 0 && spec.matrixColumnIndexes.size > 0;
-    }
-
-    return true;
-  });
+  return getPaperDeliveryCapabilities(paper).supportsOnlineDelivery;
 }
 
 export function paperRequiresManualReview(paper: any) {
-  const lookup = buildPaperQuestionLookup(paper);
-  if (lookup.size === 0) return false;
-
-  return Array.from(lookup.values()).some((spec) => spec.type === "descriptive");
+  return getPaperDeliveryCapabilities(paper).requiresManualReview;
 }
 
 export function isStudentEligibleForPaper(paper: any, student: any) {
-  const studentClassId = normalizeId(student?.class?._id || student?.class);
+  const studentClassId = normalizeId(
+    student?.classId || student?.class?._id || student?.class,
+  );
   const paperClassId = normalizeId(paper?.class?._id || paper?.class);
   if (!studentClassId || !paperClassId || studentClassId !== paperClassId) {
     return false;
@@ -83,7 +202,9 @@ export function isStudentEligibleForPaper(paper: any, student: any) {
   }
 
   const studentAcademicSectionId = normalizeId(
-    student?.academicSection?._id || student?.academicSection,
+    student?.academicSectionId ||
+      student?.academicSection?._id ||
+      student?.academicSection,
   );
   return Boolean(
     studentAcademicSectionId &&
@@ -92,6 +213,8 @@ export function isStudentEligibleForPaper(paper: any, student: any) {
 }
 
 export function sanitizePaperForStudent(paper: any) {
+  const paperSubjects = serializePaperSubjects(paper);
+
   return {
     _id: String(paper?._id || ""),
     title: String(paper?.title || ""),
@@ -109,12 +232,7 @@ export function sanitizePaperForStudent(paper: any) {
           name: String(paper.class?.name || ""),
         }
       : null,
-    subject: paper?.subject
-      ? {
-          _id: normalizeId(paper.subject?._id || paper.subject),
-          name: String(paper.subject?.name || ""),
-        }
-      : null,
+    ...paperSubjects,
     assignedAcademicSections: Array.isArray(paper?.assignedAcademicSections)
       ? paper.assignedAcademicSections.map((section: any) => ({
           _id: normalizeId(section?._id || section),
@@ -144,6 +262,12 @@ export function sanitizePaperForStudent(paper: any) {
                 _id: normalizeId(question?._id || question),
                 content: String(question?.content || ""),
                 type: String(question?.type || ""),
+                subject: question?.subject
+                  ? {
+                      _id: normalizeId(question.subject?._id || question.subject),
+                      name: String(question.subject?.name || ""),
+                    }
+                  : null,
                 options: Array.isArray(question?.options)
                   ? question.options.map((option: any) => ({
                       content: String(option?.content || ""),
@@ -167,6 +291,51 @@ export function sanitizePaperForStudent(paper: any) {
         ),
       }),
     ),
+  };
+}
+
+export function summarizeSanitizedPaperForStudent(paper: any) {
+  const explicitSubjects = Array.isArray(paper?.subjects) ? paper.subjects : [];
+
+  return {
+    _id: String(paper?._id || ""),
+    title: String(paper?.title || ""),
+    duration: Number(paper?.duration || 0),
+    passingMarks: Number(paper?.passingMarks || 0),
+    totalMarks: Number(paper?.totalMarks || 0),
+    examDate: paper?.examDate || null,
+    onlineEnabled: Boolean(paper?.onlineEnabled),
+    onlineStartsAt: paper?.onlineStartsAt || null,
+    onlineEndsAt: paper?.onlineEndsAt || null,
+    class: paper?.class
+      ? {
+          _id: normalizeId(paper.class?._id || paper.class),
+          name: String(paper.class?.name || ""),
+        }
+      : null,
+    subject: paper?.subject
+      ? {
+          _id: normalizeId(paper.subject?._id || paper.subject),
+          name: String(paper.subject?.name || ""),
+        }
+      : null,
+    subjects: explicitSubjects.map((subject: any) => ({
+      _id: normalizeId(subject?._id || subject),
+      name: String(subject?.name || ""),
+    })),
+    assignedAcademicSections: Array.isArray(paper?.assignedAcademicSections)
+      ? paper.assignedAcademicSections.map((section: any) => ({
+          _id: normalizeId(section?._id || section),
+          name: String(section?.name || ""),
+          class:
+            section?.class
+              ? {
+                  _id: normalizeId(section.class?._id || section.class),
+                  name: String(section.class?.name || ""),
+                }
+              : null,
+        }))
+      : [],
   };
 }
 
@@ -208,6 +377,27 @@ export function getRemainingTimeMs(paper: any, attempt: any, now = new Date()) {
   return Math.max(0, deadlineMs - now.getTime());
 }
 
+export function shouldAutoSubmitAttempt(
+  attempt: any,
+  paper: any,
+  now = new Date(),
+) {
+  if (!attempt) {
+    return false;
+  }
+
+  if (
+    attempt?.status === "submitted" ||
+    attempt?.status === "auto_submitted" ||
+    attempt?.submittedAt
+  ) {
+    return false;
+  }
+
+  const deadlineMs = getAttemptDeadlineMs(paper, attempt);
+  return deadlineMs !== null && now.getTime() > deadlineMs;
+}
+
 export function serializeStudentAttempt(attempt: any) {
   if (!attempt) return null;
 
@@ -227,6 +417,57 @@ export function serializeStudentAttempt(attempt: any) {
       ? attempt.sectionAnswers
       : [],
   };
+}
+
+function redactScoringFromSectionAnswers(sectionAnswers: any) {
+  if (!Array.isArray(sectionAnswers)) {
+    return [];
+  }
+
+  return sectionAnswers.map((section: any) => ({
+    ...section,
+    answers: Array.isArray(section?.answers)
+      ? section.answers.map((answer: any) => {
+          const { marksAwarded: _marksAwarded, ...safeAnswer } = answer || {};
+          return safeAnswer;
+        })
+      : [],
+  }));
+}
+
+export function redactScoringFromSerializedAttempt(attempt: any) {
+  if (!attempt) return null;
+
+  return {
+    ...attempt,
+    totalMarksAwarded: null,
+    sectionAnswers: redactScoringFromSectionAnswers(attempt.sectionAnswers),
+  };
+}
+
+export function sanitizeSerializedAttemptForStudentDelivery(
+  attempt: any,
+  paper: any,
+  now = new Date(),
+) {
+  if (!attempt) return null;
+  if (isStudentResultReleasedForPaper(paper, now)) {
+    return attempt;
+  }
+  return redactScoringFromSerializedAttempt(attempt);
+}
+
+export function sanitizeAttemptForStudentDelivery(
+  attempt: any,
+  paper: any,
+  now = new Date(),
+) {
+  const serializedAttempt = serializeStudentAttempt(attempt);
+  return sanitizeSerializedAttemptForStudentDelivery(
+    serializedAttempt,
+    paper,
+    now,
+  );
 }
 
 export function buildSectionAnswersSignature(sectionAnswers: any, paper?: any) {
@@ -383,14 +624,11 @@ export async function autoSubmitExpiredAttemptIfNeeded({
   QuestionPaperResponseModel?: any;
 }) {
   if (!attempt) return null;
-  if (attempt?.status === "submitted" || attempt?.status === "auto_submitted") {
+  if (!shouldAutoSubmitAttempt(attempt, paper, now)) {
     return attempt;
   }
-
   const deadlineMs = getAttemptDeadlineMs(paper, attempt);
-  if (deadlineMs === null || now.getTime() <= deadlineMs) {
-    return attempt;
-  }
+  if (deadlineMs === null) return attempt;
 
   const normalized = validateStudentSectionAnswers(
     attempt?.sectionAnswers || [],
@@ -407,4 +645,72 @@ export async function autoSubmitExpiredAttemptIfNeeded({
     submittedAt: new Date(deadlineMs),
     QuestionPaperResponseModel,
   });
+}
+
+async function runTasksInBatches<T>(
+  tasks: T[],
+  maxConcurrency: number,
+  handler: (task: T) => Promise<void>,
+) {
+  const safeBatchSize = Math.max(1, Math.floor(maxConcurrency));
+  for (let index = 0; index < tasks.length; index += safeBatchSize) {
+    const batch = tasks.slice(index, index + safeBatchSize);
+    await Promise.all(batch.map((task) => handler(task)));
+  }
+}
+
+export async function autoSubmitExpiredAttemptsForPapers({
+  attemptsByPaperId,
+  papers,
+  now = new Date(),
+  QuestionPaperResponseModel,
+  maxConcurrency = 6,
+}: {
+  attemptsByPaperId: Map<string, any>;
+  papers: any[];
+  now?: Date;
+  QuestionPaperResponseModel?: any;
+  maxConcurrency?: number;
+}) {
+  if (!attemptsByPaperId.size || !Array.isArray(papers) || papers.length === 0) {
+    return attemptsByPaperId;
+  }
+
+  const attemptsToAutoSubmit = papers
+    .map((paper) => {
+      const paperId = normalizeId(paper?._id || paper);
+      if (!paperId) return null;
+
+      const attempt = attemptsByPaperId.get(paperId);
+      if (!attempt || !shouldAutoSubmitAttempt(attempt, paper, now)) {
+        return null;
+      }
+
+      return { paperId, paper, attempt };
+    })
+    .filter(Boolean) as Array<{
+    paperId: string;
+    paper: any;
+    attempt: any;
+  }>;
+
+  if (attemptsToAutoSubmit.length === 0) {
+    return attemptsByPaperId;
+  }
+
+  await runTasksInBatches(
+    attemptsToAutoSubmit,
+    Math.min(maxConcurrency, attemptsToAutoSubmit.length),
+    async ({ paperId, paper, attempt }) => {
+      const nextAttempt = await autoSubmitExpiredAttemptIfNeeded({
+        attempt,
+        paper,
+        now,
+        QuestionPaperResponseModel,
+      });
+      attemptsByPaperId.set(paperId, nextAttempt || null);
+    },
+  );
+
+  return attemptsByPaperId;
 }

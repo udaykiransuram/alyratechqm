@@ -62,7 +62,7 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     ],
     tips: [
       "Use class and section names exactly as they appear in the workspace.",
-      "Students sign in with the roll number. If no password is supplied, the roll number becomes the default password.",
+      "Students sign in with the roll number. If no password is supplied, saved phone-number digits become the default password exactly as stored (including country code digits, if present).",
     ],
   },
   teacher: {

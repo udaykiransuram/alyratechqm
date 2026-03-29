@@ -9,13 +9,28 @@ import path from "node:path";
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import { resolveExamRuntimeMongoResponseId } from "@/lib/exam-runtime";
+import { resolveExamRuntimeMongoResponseIdWithCooldown } from "@/lib/exam-runtime-sync-cache";
+import {
+  filterItemsByScopedSection,
+  isSectionInScope,
+  resolveTeacherPaperScope,
+  toUniqueScopeIds,
+} from "@/lib/question-paper/access";
+import {
+  getLegacyPaperSubject,
+  resolvePaperSubjectIds,
+} from "@/lib/question-paper/subjects";
+import { isStudentResultReleasedForPaper } from "@/lib/student-tests";
 import "@/models/User";
 import "@/models/Subject";
 import "@/models/Class";
 import "@/models/TagType";
 import "@/models/Tag";
 import { buildTagReport } from "@/lib/analytics/tagReport";
+import {
+  buildAnalyticsTagLookup,
+  resolveAnalyticsTags,
+} from "@/lib/analytics/tag-resolution";
 import {
   filterResponsesByAcademicSection,
   getStudentAcademicSectionId,
@@ -27,13 +42,6 @@ import {
 } from "@/lib/question-paper/grading";
 import { z } from "zod";
 import { objectIdSchema, parseOr400 } from "@/lib/validation";
-
-function getTagValue(tags: any[], type: string) {
-  const tag = tags.find(
-    (t: any) => t.type?.name?.toLowerCase() === type.toLowerCase(),
-  );
-  return tag?.name || `Unknown ${type.charAt(0).toUpperCase() + type.slice(1)}`;
-}
 
 // Recursively deduplicate question ID arrays in stats
 function dedupeStatsArrays(obj: any) {
@@ -108,7 +116,10 @@ export async function GET(
     !mongoose.Types.ObjectId.isValid(resolvedResponseId)
   ) {
     resolvedResponseId =
-      (await resolveExamRuntimeMongoResponseId(tenantKey, resolvedResponseId)) ||
+      (await resolveExamRuntimeMongoResponseIdWithCooldown(
+        tenantKey,
+        resolvedResponseId,
+      )) ||
       resolvedResponseId;
   }
   const isStudentSession = auth.session.user.role === "student";
@@ -185,6 +196,8 @@ export async function GET(
   const {
     QuestionPaperResponse: QPRModel,
     QuestionPaper: QPModel,
+    Tag: TagModel,
+    TagType: TagTypeModel,
     User: UserModel,
     Class: ClassModel,
     AcademicSection: AcademicSectionModel,
@@ -199,13 +212,21 @@ export async function GET(
     "User",
     "AcademicSection",
   ]);
+  const scopedUser = !isStudentSession
+    ? await UserModel.findById(auth.session.user.id)
+        .select(
+          "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
+        )
+        .lean()
+    : null;
 
   if (req.nextUrl.searchParams.get("groupFields") === "1") {
     try {
       const response = await QPRModel.findOne(responseQuery)
         .populate({
           path: "paper",
-          select: "title class sections assignedAcademicSections",
+          select:
+            "title class subject subjectIds sections assignedAcademicSections onlineEnabled onlineEndsAt",
           populate: [
             {
               path: "sections.questions.question",
@@ -223,6 +244,14 @@ export async function GET(
               path: "assignedAcademicSections",
               select: "name class",
             },
+            {
+              path: "subject",
+              select: "name",
+            },
+            {
+              path: "subjectIds",
+              select: "name",
+            },
           ],
         })
         .lean();
@@ -237,9 +266,54 @@ export async function GET(
       const paperObj = Array.isArray(response)
         ? response[0]?.paper
         : response?.paper;
+      if (
+        isStudentSession &&
+        paperObj?.onlineEnabled &&
+        !isStudentResultReleasedForPaper(paperObj)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "This report is not available until the online test window closes.",
+          },
+          { status: 403 },
+        );
+      }
+      let teacherScope:
+        | ReturnType<typeof resolveTeacherPaperScope>
+        | null = null;
+      if (!isStudentSession) {
+        teacherScope = resolveTeacherPaperScope(
+          scopedUser,
+          String(paperObj?.class?._id || paperObj?.class || "").trim(),
+          resolvePaperSubjectIds(paperObj),
+          toUniqueScopeIds(paperObj?.assignedAcademicSections),
+        );
+
+        if (
+          !teacherScope.hasClassAccess ||
+          !teacherScope.hasSubjectAccess ||
+          !teacherScope.hasSectionAccess
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "You do not have access to analytics for this paper.",
+            },
+            { status: 403 },
+          );
+        }
+      }
       const paperSections = Array.isArray(response)
         ? response[0]?.paper?.sections || []
         : response?.paper?.sections || [];
+      const paperDefaultSubject = getLegacyPaperSubject(paperObj);
+      const tagLookup = await buildAnalyticsTagLookup({
+        TagModel,
+        TagTypeModel,
+        paperSections,
+      });
       const tagTypeSet = new Set<string>();
       const classMap = new Map<string, { value: string; label: string }>();
       const subjectMap = new Map<string, { value: string; label: string }>();
@@ -247,20 +321,52 @@ export async function GET(
       paperSections.forEach((section: any) => {
         (section.questions || []).forEach((qWrap: any) => {
           const question = qWrap.question;
-          (question?.tags || []).forEach((tag: any) => {
-            if (tag.type?.name) tagTypeSet.add(tag.type.name);
-          });
+          const questionClassId = String(
+            question?.class?._id || question?.class || "",
+          ).trim();
+          const subjectCandidate = question?.subject || paperDefaultSubject;
+          const candidateSubjectId = String(subjectCandidate?._id || "").trim();
+          const isSubjectInScope =
+            isStudentSession ||
+            !teacherScope?.requiresSubjectIntersection ||
+            teacherScope.allowedSubjectIds.includes(candidateSubjectId);
+          const matchesSelectedClass =
+            !filterClassId || questionClassId === filterClassId;
+          const matchesSelectedSubject =
+            isSubjectInScope &&
+            (!filterSubjectId || candidateSubjectId === filterSubjectId);
+
+          if (matchesSelectedClass && matchesSelectedSubject) {
+            resolveAnalyticsTags(question?.tags || [], tagLookup).forEach(
+              (tag) => {
+                if (tag.type?.name) {
+                  tagTypeSet.add(tag.type.name);
+                }
+              },
+            );
+          }
+
           if (question?.class?._id) {
             classMap.set(String(question.class._id), {
               value: String(question.class._id),
               label: question.class.name || "Unknown Class",
             });
           }
-          if (question?.subject?._id) {
-            subjectMap.set(String(question.subject._id), {
-              value: String(question.subject._id),
-              label: question.subject.name || "Unknown Subject",
-            });
+          if (subjectCandidate?._id) {
+            if (
+              isStudentSession ||
+              !scopedUser ||
+              Boolean(scopedUser?.hasAllSubjects) ||
+              (Array.isArray(scopedUser?.subjectIds) &&
+                scopedUser.subjectIds.some(
+                  (subjectId: any) => String(subjectId || "") === candidateSubjectId,
+                ))
+            ) {
+              subjectMap.set(candidateSubjectId, {
+                value: candidateSubjectId,
+                label: subjectCandidate.name || "Unknown Subject",
+              });
+            }
           }
         });
       });
@@ -300,6 +406,12 @@ export async function GET(
             }))
       )
         .filter((section: any) => section.value)
+        .filter(
+          (section: any) =>
+            !teacherScope ||
+            teacherScope.allowedSectionIds === null ||
+            teacherScope.allowedSectionIds.includes(section.value),
+        )
         .sort((a: any, b: any) => a.label.localeCompare(b.label));
 
       const res = NextResponse.json({
@@ -353,6 +465,10 @@ export async function GET(
     let paperId = "";
     let students: any[] = [];
     let paperSections: any[] = [];
+    let tagLookup = new Map();
+    let paperDefaultSubject: { _id: string; name: string } | null = null;
+    let scopedAllowedSubjectIds: string[] | undefined;
+    let scopedAllowedSectionIds: string[] | null | undefined;
 
     // --- Per-question stats for class level ---
     let questionStats: Record<
@@ -372,7 +488,10 @@ export async function GET(
     > = {};
     if (isClassLevel) {
       const firstResponse = await QPRModel.findOne(responseQuery)
-        .populate("paper", "title sections")
+        .populate(
+          "paper",
+          "title class subject subjectIds sections assignedAcademicSections",
+        )
         .lean();
       if (!firstResponse) {
         return NextResponse.json(
@@ -387,6 +506,7 @@ export async function GET(
       paperTitle = paperObj?.title || "";
 
       const paper = await QPModel.findById(paperId)
+        .select("title class subject subjectIds sections assignedAcademicSections")
         .populate({
           path: "sections.questions.question",
           select: "tags content answerIndexes options subject class type matrixOptions matrixAnswers",
@@ -399,7 +519,73 @@ export async function GET(
             { path: "class", select: "name" },
           ],
         })
+        .populate({ path: "subject", select: "name" })
+        .populate({ path: "subjectIds", select: "name" })
         .lean();
+
+      const resolvedPaper = Array.isArray(paper) ? paper[0] : paper;
+      if (!resolvedPaper) {
+        return NextResponse.json(
+          { success: false, message: "Paper not found" },
+          { status: 404 },
+        );
+      }
+
+      if (!isStudentSession) {
+        const paperScope = resolveTeacherPaperScope(
+          scopedUser,
+          String(
+            resolvedPaper?.class?._id || resolvedPaper?.class || "",
+          ).trim(),
+          resolvePaperSubjectIds(resolvedPaper),
+          toUniqueScopeIds(resolvedPaper?.assignedAcademicSections),
+        );
+
+        if (
+          !paperScope.hasClassAccess ||
+          !paperScope.hasSubjectAccess ||
+          !paperScope.hasSectionAccess
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "You do not have access to analytics for this paper.",
+            },
+            { status: 403 },
+          );
+        }
+        if (
+          filterAcademicSectionId &&
+          !isSectionInScope(filterAcademicSectionId, paperScope.allowedSectionIds)
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "You do not have access to analytics for the selected section.",
+            },
+            { status: 403 },
+          );
+        }
+
+        if (
+          filterSubjectId &&
+          paperScope.requiresSubjectIntersection &&
+          !paperScope.allowedSubjectIds.includes(filterSubjectId)
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "You do not have access to analytics for the selected subject.",
+            },
+            { status: 403 },
+          );
+        }
+
+        scopedAllowedSubjectIds = paperScope.requiresSubjectIntersection
+          ? paperScope.allowedSubjectIds
+          : undefined;
+        scopedAllowedSectionIds = paperScope.allowedSectionIds;
+      }
 
       responses = await QPRModel.find({ paper: paperId })
         .populate({
@@ -423,15 +609,30 @@ export async function GET(
         ClassModel,
         studentSelect: "name rollNumber academicSection",
       });
+      if (!isStudentSession) {
+        responses = filterItemsByScopedSection(
+          responses,
+          (response: any) =>
+            response?.student?.academicSection?._id ||
+            response?.student?.academicSection,
+          scopedAllowedSectionIds ?? null,
+        );
+      }
       responses = filterResponsesByAcademicSection(
         responses,
         filterAcademicSectionId,
       );
       students = responses.map((r) => r.student).filter(Boolean);
+      paperDefaultSubject = getLegacyPaperSubject(resolvedPaper);
 
       paperSections = Array.isArray(paper)
         ? paper[0]?.sections || []
         : paper?.sections || [];
+      tagLookup = await buildAnalyticsTagLookup({
+        TagModel,
+        TagTypeModel,
+        paperSections,
+      });
       const questionLookup = buildPaperQuestionLookup({ sections: paperSections });
 
       // --- Aggregate per-question stats for class level ---
@@ -455,7 +656,7 @@ export async function GET(
           const questions = paperSection.questions || [];
           for (const qWrap of questions) {
             const question = qWrap.question;
-            if (!question || !question.tags || !question._id) continue;
+            if (!question || !question._id) continue;
             const qid = String(question._id);
             const ans = answerMap[sectionName]?.[qid];
             const evaluation = evaluateQuestionAnswer(
@@ -502,7 +703,7 @@ export async function GET(
         })
         .populate({
           path: "paper",
-          select: "title subject sections",
+          select: "title class subject subjectIds sections assignedAcademicSections",
           populate: {
             path: "sections.questions.question",
             select: "tags content answerIndexes options subject class type matrixOptions matrixAnswers",
@@ -558,9 +759,95 @@ export async function GET(
       students = Array.isArray(response)
         ? response.map((r) => r.student)
         : [response.student];
+      const responsePaper = Array.isArray(response)
+        ? response[0]?.paper
+        : response.paper;
+      paperDefaultSubject = getLegacyPaperSubject(responsePaper);
+      if (!isStudentSession) {
+        const paperScope = resolveTeacherPaperScope(
+          scopedUser,
+          String(responsePaper?.class?._id || responsePaper?.class || "").trim(),
+          resolvePaperSubjectIds(responsePaper),
+          toUniqueScopeIds(responsePaper?.assignedAcademicSections),
+        );
+
+        if (
+          !paperScope.hasClassAccess ||
+          !paperScope.hasSubjectAccess ||
+          !paperScope.hasSectionAccess
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "You do not have access to analytics for this paper.",
+            },
+            { status: 403 },
+          );
+        }
+        if (
+          filterAcademicSectionId &&
+          !isSectionInScope(filterAcademicSectionId, paperScope.allowedSectionIds)
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "You do not have access to analytics for the selected section.",
+            },
+            { status: 403 },
+          );
+        }
+
+        if (
+          filterSubjectId &&
+          paperScope.requiresSubjectIntersection &&
+          !paperScope.allowedSubjectIds.includes(filterSubjectId)
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "You do not have access to analytics for the selected subject.",
+            },
+            { status: 403 },
+          );
+        }
+
+        scopedAllowedSubjectIds = paperScope.requiresSubjectIntersection
+          ? paperScope.allowedSubjectIds
+          : undefined;
+        scopedAllowedSectionIds = paperScope.allowedSectionIds;
+
+        const responseStudentSectionId = getStudentAcademicSectionId(students[0]);
+        if (!responseStudentSectionId && paperScope.allowedSectionIds !== null) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "Teacher-scoped analytics requires the student to belong to an assigned section.",
+            },
+            { status: 403 },
+          );
+        }
+        if (
+          responseStudentSectionId &&
+          !isSectionInScope(responseStudentSectionId, paperScope.allowedSectionIds)
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "You do not have access to analytics for this student's section.",
+            },
+            { status: 403 },
+          );
+        }
+      }
       paperSections = Array.isArray(response)
         ? response[0]?.paper?.sections || []
         : response.paper?.sections || [];
+      tagLookup = await buildAnalyticsTagLookup({
+        TagModel,
+        TagTypeModel,
+        paperSections,
+      });
     }
 
     // --- Aggregate stats using shared helper ---
@@ -573,7 +860,10 @@ export async function GET(
       filters: {
         classId: filterClassId || undefined,
         subjectId: filterSubjectId || undefined,
+        subjectIds: scopedAllowedSubjectIds,
+        paperDefaultSubject,
       },
+      tagLookup,
     });
 
     if (req.nextUrl.searchParams.get("json") === "1") {

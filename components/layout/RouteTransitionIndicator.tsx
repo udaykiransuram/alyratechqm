@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-import { APP_NAVIGATION_START_EVENT } from "@/lib/client/navigation-feedback";
-
-const NAVIGATION_RESET_TIMEOUT_MS = 12_000;
+import {
+  APP_NAVIGATION_START_EVENT,
+  NAVIGATION_FEEDBACK_RESET_TIMEOUT_MS,
+  resetPendingNavigationFeedback,
+} from "@/lib/client/navigation-feedback";
 
 function resolveInternalNavigationTarget(rawHref: string | null | undefined) {
   if (typeof window === "undefined") {
@@ -70,7 +72,8 @@ export default function RouteTransitionIndicator() {
     const timeoutId = window.setTimeout(() => {
       setPendingHref(null);
       setShowIndicator(false);
-    }, NAVIGATION_RESET_TIMEOUT_MS);
+      resetPendingNavigationFeedback();
+    }, NAVIGATION_FEEDBACK_RESET_TIMEOUT_MS);
 
     return () => {
       window.clearTimeout(timeoutId);
@@ -80,6 +83,7 @@ export default function RouteTransitionIndicator() {
   useEffect(() => {
     setPendingHref(null);
     setShowIndicator(false);
+    resetPendingNavigationFeedback();
   }, [routeKey]);
 
   useEffect(() => {
@@ -136,8 +140,10 @@ export default function RouteTransitionIndicator() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[10001] h-0.5 overflow-hidden bg-primary/10">
-      <div className="h-full w-40 animate-pulse rounded-full bg-primary" />
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-[10001]">
+      <div className="h-1 overflow-hidden bg-[hsl(var(--primary)/0.14)] shadow-[0_1px_0_hsl(var(--app-shadow-deep)/0.08)]">
+        <div className="h-full w-56 max-w-[45vw] animate-pulse rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+      </div>
     </div>
   );
 }

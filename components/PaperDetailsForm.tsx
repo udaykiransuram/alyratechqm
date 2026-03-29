@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { BookOpen } from 'lucide-react';
 import MultiSelectChecklist from '@/components/multi-select-checklist';
 
@@ -32,10 +33,8 @@ export interface PaperDetailsFormProps {
   setOnlineEndsAt: (v: Date | null) => void;
   classId: string;
   setClassId: (v: string) => void;
-  subjectId: string;
-  setSubjectId: (v: string) => void;
   classes: any[];
-  subjects: any[];
+  derivedSubjects: Array<{ _id: string; name: string }>;
   availableAcademicSections: AcademicSectionItem[];
   assignedAcademicSectionIds: string[];
   setAssignedAcademicSectionIds: (ids: string[]) => void;
@@ -139,10 +138,8 @@ export function PaperDetailsForm({
   setOnlineEndsAt,
   classId,
   setClassId,
-  subjectId,
-  setSubjectId,
   classes,
-  subjects,
+  derivedSubjects,
   availableAcademicSections,
   assignedAcademicSectionIds,
   setAssignedAcademicSectionIds,
@@ -185,7 +182,7 @@ export function PaperDetailsForm({
     return (
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2">
             <BookOpen className="h-4 w-4 text-primary" />
             Paper Details
           </CardTitle>
@@ -215,7 +212,7 @@ export function PaperDetailsForm({
   return (
     <Card className="app-surface overflow-hidden">
       <CardHeader className="app-section-header">
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-primary" />
           Paper Details
         </CardTitle>
@@ -245,25 +242,35 @@ export function PaperDetailsForm({
           </div>
 
           <div className="app-field-group">
-            <Label htmlFor="subject" className="app-field-label">Subject</Label>
-            <Select value={subjectId} onValueChange={setSubjectId}>
-              <SelectTrigger id="subject"><SelectValue placeholder="Select subject" /></SelectTrigger>
-              <SelectContent>
-                {subjects.map(sub => (
-                  <SelectItem key={sub._id} value={sub._id}>{sub.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="app-field-label">Paper Subjects</Label>
+            <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+              {derivedSubjects.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {derivedSubjects.map((subject) => (
+                    <Badge key={subject._id} variant="secondary">
+                      {subject.name || subject._id}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="app-copy-muted">
+                  Subjects are derived automatically from the questions you add to this paper.
+                </p>
+              )}
+              <p className="mt-2 text-xs text-muted-foreground">
+                The paper subject mix updates as you change the question selection.
+              </p>
+            </div>
           </div>
 
           <div className="app-field-group sm:col-span-2">
             <Label className="app-field-label">Assigned Class Sections</Label>
             {!classId ? (
-              <div className="rounded-xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border/60 px-4 py-3 app-copy-muted">
                 Select a class first to assign sections.
               </div>
             ) : availableAcademicSections.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border/60 px-4 py-3 app-copy-muted">
                 No sections for this class yet.
               </div>
             ) : (
@@ -325,7 +332,14 @@ export function PaperDetailsForm({
           </div>
 
           <div className="app-field-group sm:col-span-2 rounded-2xl border border-border/60 bg-muted/20 p-4">
-            <Label className="app-field-label">Delivery Mode</Label>
+            <div className="space-y-1">
+              <p className="app-form-section-title">Delivery Mode</p>
+              <p className="app-form-section-copy">
+                {onlineEnabled
+                  ? 'Online delivery is enabled for student logins. Objective and matrix questions are auto-graded; descriptive answers still need manual review.'
+                  : 'Offline/manual workflow only. Enable online mode when students should log in and take the paper digitally.'}
+              </p>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <Button
                 type="button"
@@ -346,165 +360,168 @@ export function PaperDetailsForm({
                 Online
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {onlineEnabled
-                ? 'Online delivery is enabled for student logins. Objective and matrix questions are auto-graded; descriptive answers still need manual review.'
-                : 'Offline/manual workflow only. Enable online mode when students should log in and take the paper digitally.'}
-            </p>
 
             {onlineEnabled ? (
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div className="app-field-group">
-                  <Label htmlFor="onlineStartsAt" className="app-field-label">
-                    Online Start
-                  </Label>
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8.5rem]">
-                    <Input
-                      id="onlineStartsAt"
-                      type="date"
-                      value={onlineStartsAtDateInput}
-                      onChange={(e) => {
-                        const nextDateValue = e.target.value;
-                        setOnlineStartsAtDateInput(nextDateValue);
-                        if (!nextDateValue) {
-                          setOnlineStartsAt(null);
-                          return;
-                        }
+                <div className="app-online-window-card">
+                  <div className="app-field-group">
+                    <Label htmlFor="onlineStartsAt" className="app-field-label">
+                      Online Start
+                    </Label>
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                      <Input
+                        id="onlineStartsAt"
+                        type="date"
+                        value={onlineStartsAtDateInput}
+                        onChange={(e) => {
+                          const nextDateValue = e.target.value;
+                          setOnlineStartsAtDateInput(nextDateValue);
+                          if (!nextDateValue) {
+                            setOnlineStartsAt(null);
+                            return;
+                          }
 
-                        const effectiveTimeValue =
-                          onlineStartsAtTimeInput || '00:00';
-                        if (!onlineStartsAtTimeInput) {
+                          const effectiveTimeValue =
+                            onlineStartsAtTimeInput || '00:00';
+                          if (!onlineStartsAtTimeInput) {
+                            setOnlineStartsAtTimeInput(effectiveTimeValue);
+                          }
+
+                          const parsedDate = combineDateAndTimeInput(
+                            nextDateValue,
+                            effectiveTimeValue,
+                          );
+                          if (parsedDate) {
+                            setOnlineStartsAt(parsedDate);
+                          }
+                        }}
+                      />
+                      <Input
+                        type="time"
+                        step={60}
+                        value={onlineStartsAtTimeInput}
+                        onChange={(e) => {
+                          const effectiveTimeValue =
+                            e.target.value || (onlineStartsAtDateInput ? '00:00' : '');
                           setOnlineStartsAtTimeInput(effectiveTimeValue);
-                        }
+                          if (!onlineStartsAtDateInput) {
+                            setOnlineStartsAt(null);
+                            return;
+                          }
 
-                        const parsedDate = combineDateAndTimeInput(
-                          nextDateValue,
-                          effectiveTimeValue,
-                        );
-                        if (parsedDate) {
-                          setOnlineStartsAt(parsedDate);
-                        }
-                      }}
-                    />
-                    <Input
-                      type="time"
-                      step={60}
-                      value={onlineStartsAtTimeInput}
-                      onChange={(e) => {
-                        const effectiveTimeValue =
-                          e.target.value || (onlineStartsAtDateInput ? '00:00' : '');
-                        setOnlineStartsAtTimeInput(effectiveTimeValue);
-                        if (!onlineStartsAtDateInput) {
+                          const parsedDate = combineDateAndTimeInput(
+                            onlineStartsAtDateInput,
+                            effectiveTimeValue,
+                          );
+                          if (parsedDate) {
+                            setOnlineStartsAt(parsedDate);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="app-online-window-footer">
+                    <p className="app-field-note app-online-window-note">
+                      Leave blank to start from the paper exam date.
+                    </p>
+                    <div className="app-online-window-footer-actions">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="app-online-window-clear"
+                        onClick={() => {
+                          setOnlineStartsAtDateInput('');
+                          setOnlineStartsAtTimeInput('');
                           setOnlineStartsAt(null);
-                          return;
-                        }
-
-                        const parsedDate = combineDateAndTimeInput(
-                          onlineStartsAtDateInput,
-                          effectiveTimeValue,
-                        );
-                        if (parsedDate) {
-                          setOnlineStartsAt(parsedDate);
-                        }
-                      }}
-                    />
+                        }}
+                        disabled={!onlineStartsAtDateInput && !onlineStartsAtTimeInput}
+                      >
+                        Clear start
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 rounded-xl px-2.5 text-xs"
-                      onClick={() => {
-                        setOnlineStartsAtDateInput('');
-                        setOnlineStartsAtTimeInput('');
-                        setOnlineStartsAt(null);
-                      }}
-                      disabled={!onlineStartsAtDateInput && !onlineStartsAtTimeInput}
-                    >
-                      Clear start
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Leave blank to start from the paper exam date.
-                  </p>
                 </div>
 
-                <div className="app-field-group">
-                  <Label htmlFor="onlineEndsAt" className="app-field-label">
-                    Online End
-                  </Label>
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8.5rem]">
-                    <Input
-                      id="onlineEndsAt"
-                      type="date"
-                      value={onlineEndsAtDateInput}
-                      onChange={(e) => {
-                        const nextDateValue = e.target.value;
-                        setOnlineEndsAtDateInput(nextDateValue);
-                        if (!nextDateValue) {
-                          setOnlineEndsAt(null);
-                          return;
-                        }
+                <div className="app-online-window-card">
+                  <div className="app-field-group">
+                    <Label htmlFor="onlineEndsAt" className="app-field-label">
+                      Online End
+                    </Label>
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                      <Input
+                        id="onlineEndsAt"
+                        type="date"
+                        value={onlineEndsAtDateInput}
+                        onChange={(e) => {
+                          const nextDateValue = e.target.value;
+                          setOnlineEndsAtDateInput(nextDateValue);
+                          if (!nextDateValue) {
+                            setOnlineEndsAt(null);
+                            return;
+                          }
 
-                        const effectiveTimeValue =
-                          onlineEndsAtTimeInput || '00:00';
-                        if (!onlineEndsAtTimeInput) {
+                          const effectiveTimeValue =
+                            onlineEndsAtTimeInput || '00:00';
+                          if (!onlineEndsAtTimeInput) {
+                            setOnlineEndsAtTimeInput(effectiveTimeValue);
+                          }
+
+                          const parsedDate = combineDateAndTimeInput(
+                            nextDateValue,
+                            effectiveTimeValue,
+                          );
+                          if (parsedDate) {
+                            setOnlineEndsAt(parsedDate);
+                          }
+                        }}
+                      />
+                      <Input
+                        type="time"
+                        step={60}
+                        value={onlineEndsAtTimeInput}
+                        onChange={(e) => {
+                          const effectiveTimeValue =
+                            e.target.value || (onlineEndsAtDateInput ? '00:00' : '');
                           setOnlineEndsAtTimeInput(effectiveTimeValue);
-                        }
+                          if (!onlineEndsAtDateInput) {
+                            setOnlineEndsAt(null);
+                            return;
+                          }
 
-                        const parsedDate = combineDateAndTimeInput(
-                          nextDateValue,
-                          effectiveTimeValue,
-                        );
-                        if (parsedDate) {
-                          setOnlineEndsAt(parsedDate);
-                        }
-                      }}
-                    />
-                    <Input
-                      type="time"
-                      step={60}
-                      value={onlineEndsAtTimeInput}
-                      onChange={(e) => {
-                        const effectiveTimeValue =
-                          e.target.value || (onlineEndsAtDateInput ? '00:00' : '');
-                        setOnlineEndsAtTimeInput(effectiveTimeValue);
-                        if (!onlineEndsAtDateInput) {
+                          const parsedDate = combineDateAndTimeInput(
+                            onlineEndsAtDateInput,
+                            effectiveTimeValue,
+                          );
+                          if (parsedDate) {
+                            setOnlineEndsAt(parsedDate);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="app-online-window-footer">
+                    <p className="app-field-note app-online-window-note">
+                      Optional global cutoff. Student timers still respect the
+                      paper duration.
+                    </p>
+                    <div className="app-online-window-footer-actions">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="app-online-window-clear"
+                        onClick={() => {
+                          setOnlineEndsAtDateInput('');
+                          setOnlineEndsAtTimeInput('');
                           setOnlineEndsAt(null);
-                          return;
-                        }
-
-                        const parsedDate = combineDateAndTimeInput(
-                          onlineEndsAtDateInput,
-                          effectiveTimeValue,
-                        );
-                        if (parsedDate) {
-                          setOnlineEndsAt(parsedDate);
-                        }
-                      }}
-                    />
+                        }}
+                        disabled={!onlineEndsAtDateInput && !onlineEndsAtTimeInput}
+                      >
+                        Clear end
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 rounded-xl px-2.5 text-xs"
-                      onClick={() => {
-                        setOnlineEndsAtDateInput('');
-                        setOnlineEndsAtTimeInput('');
-                        setOnlineEndsAt(null);
-                      }}
-                      disabled={!onlineEndsAtDateInput && !onlineEndsAtTimeInput}
-                    >
-                      Clear end
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Optional global cutoff. Student timers still respect the
-                    paper duration.
-                  </p>
                 </div>
               </div>
             ) : null}

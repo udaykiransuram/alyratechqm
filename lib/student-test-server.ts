@@ -6,6 +6,7 @@ const STUDENT_SNAPSHOT_TTL_MS = 30_000;
 const PAPER_RUNTIME_TTL_MS = 120_000;
 const PAPER_DELIVERY_TTL_MS = 60_000;
 const CLASS_PAPER_LIST_TTL_MS = 60_000;
+const CLASS_PAPER_ASSIGNMENT_TTL_MS = 60_000;
 
 type CacheEntry<T> = {
   expiresAt: number;
@@ -177,10 +178,11 @@ async function loadOnlinePaperDeliveryByIdUncached(
     ...buildArchiveFilter(false),
   })
     .select(
-      "title instructions class subject duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections",
+      "title instructions class subject subjectIds duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections",
     )
     .populate({ path: "class", model: ClassModel, select: "name" })
     .populate({ path: "subject", model: SubjectModel, select: "name" })
+    .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
     .populate({
       path: "assignedAcademicSections",
       model: AcademicSectionModel,
@@ -190,7 +192,8 @@ async function loadOnlinePaperDeliveryByIdUncached(
     .populate({
       path: "sections.questions.question",
       model: QuestionModel,
-      select: "content options type answerIndexes matrixOptions matrixAnswers",
+      select: "content options type answerIndexes matrixOptions matrixAnswers subject",
+      populate: { path: "subject", model: SubjectModel, select: "name" },
     })
     .lean();
 }
@@ -233,15 +236,34 @@ async function loadOnlinePapersForClassUncached(
     ...buildArchiveFilter(false),
   })
     .select(
-      "title class subject duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections.name sections.questions.question",
+      "title class subject subjectIds duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections.name sections.questions.question",
     )
     .populate({ path: "class", model: ClassModel, select: "name" })
     .populate({ path: "subject", model: SubjectModel, select: "name" })
+    .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
     .populate({
       path: "sections.questions.question",
       model: QuestionModel,
-      select: "type matrixOptions",
+      select: "type matrixOptions subject",
+      populate: { path: "subject", model: SubjectModel, select: "name" },
     })
+    .lean();
+}
+
+async function loadOnlinePaperAssignmentsForClassUncached(
+  {
+    QuestionPaper: QuestionPaperModel,
+  }: {
+    QuestionPaper: any;
+  },
+  classId: string,
+) {
+  return QuestionPaperModel.find({
+    class: classId,
+    onlineEnabled: true,
+    ...buildArchiveFilter(false),
+  })
+    .select("_id class assignedAcademicSections")
     .lean();
 }
 
@@ -259,5 +281,19 @@ export async function loadOnlinePapersForClass(
     createCacheKey("student-class-paper-list", schoolKey, classId),
     CLASS_PAPER_LIST_TTL_MS,
     () => loadOnlinePapersForClassUncached(models, classId),
+  );
+}
+
+export async function loadOnlinePaperAssignmentsForClass(
+  models: {
+    QuestionPaper: any;
+  },
+  schoolKey: string,
+  classId: string,
+) {
+  return getCachedResource(
+    createCacheKey("student-class-paper-assignments", schoolKey, classId),
+    CLASS_PAPER_ASSIGNMENT_TTL_MS,
+    () => loadOnlinePaperAssignmentsForClassUncached(models, classId),
   );
 }

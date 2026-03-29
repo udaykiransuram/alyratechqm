@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 import {
   buildWorkspaceListPageHref,
@@ -72,13 +73,14 @@ export default async function TeachersPage({
       : null;
 
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+    <PageShell width="wide" padding="standard">
       <PageHero
+        variant="directory"
         eyebrow="People"
         title="Teachers"
         description="View and manage teacher accounts with the same workspace structure used across students and admins."
         actions={
-          <Button asChild>
+          <Button asChild className="app-button-page">
             <AppPrefetchLink
               href="/workspace/teachers/create"
               prefetchOnMount
@@ -202,6 +204,6 @@ export default async function TeachersPage({
           ) : null}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

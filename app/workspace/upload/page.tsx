@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import PageHero from '@/components/layout/PageHero';
+import PageShell from '@/components/layout/PageShell';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
@@ -45,13 +46,14 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-6 sm:px-0">
+    <PageShell width="content" padding="standard">
       <PageHero
+        variant="editor"
         eyebrow="Import Tools"
         title="Upload Question PDF"
         description="Upload a PDF and extract question content into a structured format before deciding how to clean or publish it."
         actions={
-          <Button variant="outline" onClick={navigateBack} className="gap-2">
+          <Button variant="outline" onClick={navigateBack} className="app-button-back">
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
@@ -114,6 +116,6 @@ export default function UploadPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

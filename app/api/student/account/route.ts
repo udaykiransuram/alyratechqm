@@ -1,52 +1,17 @@
+import bcrypt from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import { normalizeEmail } from "@/lib/user-credentials";
+import { getStudentProfileForAccount } from "@/lib/student-account/data";
+import {
+  getDefaultStudentPassword,
+  normalizeEmail,
+  validateStudentDefaultPasswordSource,
+} from "@/lib/user-credentials";
 
 export const dynamic = "force-dynamic";
-
-async function loadStudentProfile(
-  schoolKey: string,
-  studentId: string,
-) {
-  const {
-    User: UserModel,
-    Class: ClassModel,
-    AcademicSection: AcademicSectionModel,
-  } = await getTenantModels(schoolKey, ["User", "Class", "AcademicSection"]);
-
-  const student = await UserModel.findById(studentId)
-    .select("name email rollNumber mobileNumber class academicSection")
-    .populate({ path: "class", model: ClassModel, select: "name" })
-    .populate({
-      path: "academicSection",
-      model: AcademicSectionModel,
-      select: "name",
-    })
-    .lean();
-
-  return { student, UserModel };
-}
-
-function serializeStudentProfile(student: any) {
-  return {
-    _id: String(student._id),
-    name: String(student.name || ""),
-    email: student.email ? String(student.email) : "",
-    rollNumber: student.rollNumber ? String(student.rollNumber) : "",
-    mobileNumber: student.mobileNumber ? String(student.mobileNumber) : "",
-    className:
-      typeof student.class === "object" && student.class?.name
-        ? String(student.class.name)
-        : "",
-    academicSectionName:
-      typeof student.academicSection === "object" && student.academicSection?.name
-        ? String(student.academicSection.name)
-        : "",
-  };
-}
 
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, {
@@ -57,8 +22,10 @@ export async function GET(req: NextRequest) {
   const schoolKey = auth.schoolKey as string;
 
   try {
-    await connectDB();
-    const { student } = await loadStudentProfile(schoolKey, auth.session.user.id);
+    const student = await getStudentProfileForAccount(
+      schoolKey,
+      auth.session.user.id,
+    );
 
     if (!student) {
       return NextResponse.json(
@@ -69,7 +36,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      student: serializeStudentProfile(student),
+      student,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -110,8 +77,29 @@ export async function PATCH(req: NextRequest) {
         { status: 400 },
       );
     }
+    const studentPasswordSourceValidation =
+      validateStudentDefaultPasswordSource(mobileNumber);
+    if (!studentPasswordSourceValidation.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: studentPasswordSourceValidation.message,
+        },
+        { status: 400 },
+      );
+    }
 
-    const { UserModel } = await loadStudentProfile(schoolKey, auth.session.user.id);
+    const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
+    const studentRecord = await UserModel.findById(auth.session.user.id).select(
+      "mobileNumber passwordHash",
+    );
+
+    if (!studentRecord) {
+      return NextResponse.json(
+        { success: false, message: "Student profile not found." },
+        { status: 404 },
+      );
+    }
 
     if (email) {
       const existingUser = await UserModel.findOne({
@@ -132,12 +120,44 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    const currentPasswordHash = String(studentRecord.passwordHash || "");
+    const currentDefaultStudentPassword = getDefaultStudentPassword(
+      studentRecord.mobileNumber,
+    );
+    const nextDefaultStudentPassword = getDefaultStudentPassword(mobileNumber);
+    let nextPasswordHash: string | undefined;
+
+    if (nextDefaultStudentPassword) {
+      const shouldRestoreMissingPassword = !currentPasswordHash;
+      let shouldSyncDefaultPassword = false;
+
+      if (
+        currentPasswordHash &&
+        currentDefaultStudentPassword &&
+        currentDefaultStudentPassword !== nextDefaultStudentPassword
+      ) {
+        try {
+          shouldSyncDefaultPassword = await bcrypt.compare(
+            currentDefaultStudentPassword,
+            currentPasswordHash,
+          );
+        } catch {
+          shouldSyncDefaultPassword = false;
+        }
+      }
+
+      if (shouldRestoreMissingPassword || shouldSyncDefaultPassword) {
+        nextPasswordHash = await bcrypt.hash(nextDefaultStudentPassword, 10);
+      }
+    }
+
     await UserModel.findByIdAndUpdate(
       auth.session.user.id,
       {
         name,
         mobileNumber,
         email: email || undefined,
+        ...(nextPasswordHash ? { passwordHash: nextPasswordHash } : {}),
       },
       {
         new: true,
@@ -145,7 +165,10 @@ export async function PATCH(req: NextRequest) {
       },
     );
 
-    const { student } = await loadStudentProfile(schoolKey, auth.session.user.id);
+    const student = await getStudentProfileForAccount(
+      schoolKey,
+      auth.session.user.id,
+    );
 
     if (!student) {
       return NextResponse.json(
@@ -157,7 +180,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Profile updated successfully.",
-      student: serializeStudentProfile(student),
+      student,
     });
   } catch (error: any) {
     return NextResponse.json(

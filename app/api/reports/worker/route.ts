@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { requireTenantSession } from "@/lib/api-auth";
 import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
+import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 
 export const runtime = "nodejs";
@@ -141,6 +142,7 @@ async function runScheduledDispatchWorker({
 
 export async function POST(req: NextRequest) {
   await connectDB();
+  const trustedOrigin = getTrustedInternalOrigin();
 
   if (isCronWorkerRequest(req)) {
     const body = await req.json().catch(() => ({}));
@@ -152,7 +154,7 @@ export async function POST(req: NextRequest) {
     );
     const maxSchools = normalizePositiveInteger(body?.maxSchools, 25, 100);
     const result = await runScheduledDispatchWorker({
-      origin: req.nextUrl.origin,
+      origin: trustedOrigin,
       schoolKey,
       limitPerSchool,
       maxSchools,
@@ -167,7 +169,7 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.response;
   const { schoolKey } = auth;
   const result = await runReportDispatchWorker({
-    origin: req.nextUrl.origin,
+    origin: trustedOrigin,
     schoolKey,
   });
 

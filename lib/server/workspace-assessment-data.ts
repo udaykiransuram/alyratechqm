@@ -1,9 +1,39 @@
 import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { serializePaperSubjects } from "@/lib/question-paper/subjects";
 
-function toPlain<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+function normalizeForTransport<T>(value: T): T {
+  if (value === null || typeof value === "undefined") {
+    return value as T;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString() as T;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeForTransport(entry)) as T;
+  }
+
+  if (typeof value === "object") {
+    const maybeObjectId = value as { _bsontype?: string; toString?: () => string };
+    if (
+      maybeObjectId &&
+      maybeObjectId._bsontype === "ObjectId" &&
+      typeof maybeObjectId.toString === "function"
+    ) {
+      return maybeObjectId.toString() as T;
+    }
+
+    const normalized: Record<string, unknown> = {};
+    Object.entries(value as Record<string, unknown>).forEach(([key, entry]) => {
+      normalized[key] = normalizeForTransport(entry);
+    });
+    return normalized as T;
+  }
+
+  return value;
 }
 
 export async function getWorkspaceQuestionById(
@@ -28,7 +58,7 @@ export async function getWorkspaceQuestionById(
     })
     .lean();
 
-  return question ? toPlain(question) : null;
+  return question ? normalizeForTransport(question) : null;
 }
 
 export async function getWorkspaceQuestionPaperById(
@@ -60,6 +90,7 @@ export async function getWorkspaceQuestionPaperById(
   })
     .populate({ path: "class", model: ClassModel })
     .populate({ path: "subject", model: SubjectModel })
+    .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
     .populate({
       path: "assignedAcademicSections",
       model: AcademicSectionModel,
@@ -68,13 +99,20 @@ export async function getWorkspaceQuestionPaperById(
     .populate({
       path: "sections.questions.question",
       model: QuestionModel,
-      populate: {
-        path: "tags",
-        model: Tag,
-        populate: { path: "type", model: TagType, select: "name" },
-      },
+      select: "subject class tags content answerIndexes options type matrixOptions matrixAnswers",
+      populate: [
+        {
+          path: "tags",
+          model: Tag,
+          populate: { path: "type", model: TagType, select: "name" },
+        },
+        { path: "subject", model: SubjectModel, select: "name" },
+        { path: "class", model: ClassModel, select: "name" },
+      ],
     })
     .lean();
 
-  return paper ? toPlain(paper) : null;
+  return paper
+    ? normalizeForTransport({ ...paper, ...serializePaperSubjects(paper) })
+    : null;
 }

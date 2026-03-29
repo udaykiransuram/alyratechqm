@@ -8,7 +8,12 @@ import {
   getStudentAcademicSectionId,
   toIdString,
 } from "@/lib/analytics/hydrateResponses";
+import {
+  resolveAnalyticsTags,
+  type AnalyticsTagLookup,
+} from "@/lib/analytics/tag-resolution";
 import { arraysEqual, matricesEqual } from "@/lib/question-paper/grading";
+import { getLegacyPaperSubject } from "@/lib/question-paper/subjects";
 
 type ParsedTagFilter = {
   type: string;
@@ -176,9 +181,9 @@ export function parseBenchmarkTagFilters(values: string[]) {
   }));
 }
 
-function getQuestionTags(question: any) {
-  return (Array.isArray(question?.tags) ? question.tags : [])
-    .map((tag: any) => ({
+function getQuestionTags(question: any, tagLookup?: AnalyticsTagLookup) {
+  return resolveAnalyticsTags(question?.tags || [], tagLookup)
+    .map((tag) => ({
       type: String(tag?.type?.name || "").trim().toLowerCase(),
       value: String(tag?.name || "").trim(),
     }))
@@ -197,7 +202,11 @@ function getTagsByType(tags: { type: string; value: string }[]) {
   }, {});
 }
 
-function buildQuestionMetas(paperSections: any[]) {
+function buildQuestionMetas(
+  paperSections: any[],
+  paperDefaultSubject?: { _id: string; name: string } | null,
+  tagLookup?: AnalyticsTagLookup,
+) {
   const metas: QuestionMeta[] = [];
 
   (Array.isArray(paperSections) ? paperSections : []).forEach((paperSection: any) => {
@@ -210,8 +219,9 @@ function buildQuestionMetas(paperSections: any[]) {
           questionNumber += 1;
           return;
         }
-        const tags = getQuestionTags(question);
+        const tags = getQuestionTags(question, tagLookup);
         const tagsByType = getTagsByType(tags);
+        const subject = question?.subject || paperDefaultSubject || null;
         metas.push({
           key: `${String(paperSection?.name || "")}::${questionId}`,
           questionId,
@@ -234,8 +244,8 @@ function buildQuestionMetas(paperSections: any[]) {
           question,
           tags,
           tagsByType,
-          subjectId: toIdString(question?.subject),
-          subjectName: String(question?.subject?.name || "Unknown Subject"),
+          subjectId: toIdString(subject),
+          subjectName: String(subject?.name || "Unknown Subject"),
           classId: toIdString(question?.class),
           className: String(question?.class?.name || "Unknown Class"),
         });
@@ -1121,21 +1131,61 @@ export function buildBenchmarkReport({
   responses,
   groupBy,
   tagFilters,
+  selectedClassId,
   selectedAcademicSectionId,
+  selectedSubjectId,
+  allowedSubjectIds,
+  tagLookup,
 }: {
   paper: any;
   eligibleStudents: any[];
   responses: any[];
   groupBy: string[];
   tagFilters: ParsedTagFilter[];
+  selectedClassId?: string;
   selectedAcademicSectionId?: string;
+  selectedSubjectId?: string;
+  allowedSubjectIds?: string[];
+  tagLookup?: AnalyticsTagLookup;
 }) {
   const paperObj = paper || {};
   const paperSections = Array.isArray(paperObj?.sections) ? paperObj.sections : [];
-  const questionMetas = buildQuestionMetas(paperSections);
-  const filteredQuestionMetas = questionMetas.filter((meta) =>
-    questionMatchesTagFilters(meta, tagFilters),
+  const questionMetas = buildQuestionMetas(
+    paperSections,
+    getLegacyPaperSubject(paperObj),
+    tagLookup,
   );
+  const allowedSubjectIdSet = new Set(
+    (Array.isArray(allowedSubjectIds) ? allowedSubjectIds : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
+  );
+  const normalizedSelectedClassId = String(selectedClassId || "").trim();
+  const normalizedSelectedSubjectId = String(selectedSubjectId || "").trim();
+  const filteredQuestionMetas = questionMetas.filter((meta) => {
+    if (
+      normalizedSelectedClassId &&
+      String(meta.classId || "").trim() !== normalizedSelectedClassId
+    ) {
+      return false;
+    }
+
+    if (
+      allowedSubjectIdSet.size > 0 &&
+      !allowedSubjectIdSet.has(String(meta.subjectId || "").trim())
+    ) {
+      return false;
+    }
+
+    if (
+      normalizedSelectedSubjectId &&
+      String(meta.subjectId || "").trim() !== normalizedSelectedSubjectId
+    ) {
+      return false;
+    }
+
+    return questionMatchesTagFilters(meta, tagFilters);
+  });
   const effectiveGroupBy = Array.isArray(groupBy) && groupBy.length > 0 ? groupBy : ["section"];
 
   const eligibleSectionMap = new Map<string, any>();
