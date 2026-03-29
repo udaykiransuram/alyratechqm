@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { Activity, ArrowRight, Menu, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { performNextAuthSignOutAndRedirect } from "@/lib/client/next-auth-client";
+import { usePublicNavSession } from "@/lib/client/public-nav-session";
 import { cn } from "@/lib/utils";
 
 import { HOME_NAV_LINKS } from "./home-content";
@@ -14,8 +16,10 @@ const HOME_SECTION_LINKS = HOME_NAV_LINKS.filter((item) =>
 );
 
 export default function HomeNavbar() {
+  const { signedIn, portalHref, portalLabel } = usePublicNavSession();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [activeHref, setActiveHref] = useState<string>(
     () => HOME_SECTION_LINKS[0]?.href ?? "",
   );
@@ -132,6 +136,15 @@ export default function HomeNavbar() {
     );
   };
 
+  async function handleSignOut() {
+    setMobileOpen(false);
+    setSigningOut(true);
+
+    await performNextAuthSignOutAndRedirect({
+      callbackUrl: window.location.href,
+    });
+  }
+
   return (
     <>
       <header
@@ -177,31 +190,54 @@ export default function HomeNavbar() {
 
             <div className="home-nav-actions flex items-center gap-2.5">
               <div className="home-nav-divider" />
-              <Link href="/auth/signin" className="home-nav-utility-link">
-                Sign In
-              </Link>
-              <Button
-                asChild
-                size="sm"
-                variant="outline"
-                className="home-nav-cta-secondary rounded-full px-4 text-[hsl(var(--home-text))]"
-              >
-                <Link href="/talent-test">Start Baseline Test</Link>
-              </Button>
-              <Button
-                asChild
-                size="sm"
-                className="home-nav-cta-primary rounded-full border-0 px-4.5 text-[hsl(var(--home-bg-0))]"
-                style={{
-                  background:
-                    "linear-gradient(135deg, hsl(var(--home-accent-strong)) 0%, hsl(var(--home-accent)) 100%)",
-                }}
-              >
-                <Link href="/contact">
-                  Book a Demo
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
+              {signedIn ? (
+                <>
+                  <button
+                    type="button"
+                    className="home-nav-utility-link"
+                    onClick={() => void handleSignOut()}
+                    disabled={signingOut}
+                  >
+                    {signingOut ? "Signing out..." : "Sign out"}
+                  </button>
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="home-nav-cta-secondary rounded-full px-4 text-[hsl(var(--home-text))]"
+                  >
+                    <Link href={portalHref}>{portalLabel}</Link>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Link href="/auth/signin" className="home-nav-utility-link">
+                    Sign In
+                  </Link>
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="home-nav-cta-secondary rounded-full px-4 text-[hsl(var(--home-text))]"
+                  >
+                    <Link href="/talent-test">Start Baseline Test</Link>
+                  </Button>
+                  <Button
+                    asChild
+                    size="sm"
+                    className="home-nav-cta-primary rounded-full border-0 px-4.5 text-[hsl(var(--home-bg-0))]"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, hsl(var(--home-accent-strong)) 0%, hsl(var(--home-accent)) 100%)",
+                    }}
+                  >
+                    <Link href="/contact">
+                      Book a Demo
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
@@ -292,39 +328,70 @@ export default function HomeNavbar() {
 
             <nav className="space-y-3">
               {HOME_NAV_LINKS.map((item) => renderNavLink(item, { mobile: true }))}
-              <Link
-                href="/auth/signin"
-                className="home-nav-mobile-link"
-                onClick={() => setMobileOpen(false)}
-              >
-                <span>Sign In</span>
-                <ArrowRight className="h-4 w-4" />
-              </Link>
+              {!signedIn ? (
+                <Link
+                  href="/auth/signin"
+                  className="home-nav-mobile-link"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <span>Sign In</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              ) : null}
             </nav>
 
             <div className="mt-auto space-y-3">
-              <Button
-                asChild
-                className="home-nav-cta-primary h-12 w-full rounded-full border-0 text-[hsl(var(--home-bg-0))]"
-                style={{
-                  background:
-                    "linear-gradient(135deg, hsl(var(--home-accent-strong)) 0%, hsl(var(--home-accent)) 100%)",
-                }}
-              >
-                <Link href="/contact" onClick={() => setMobileOpen(false)}>
-                  Book a Demo
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="home-nav-cta-secondary h-12 w-full rounded-full border-[hsl(var(--home-border)/0.84)] bg-[hsl(var(--home-surface)/0.48)] text-[hsl(var(--home-text))]"
-              >
-                <Link href="/talent-test" onClick={() => setMobileOpen(false)}>
-                  Start Baseline Test
-                </Link>
-              </Button>
+              {signedIn ? (
+                <>
+                  <Button
+                    asChild
+                    className="home-nav-cta-primary h-12 w-full rounded-full border-0 text-[hsl(var(--home-bg-0))]"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, hsl(var(--home-accent-strong)) 0%, hsl(var(--home-accent)) 100%)",
+                    }}
+                  >
+                    <Link href={portalHref} onClick={() => setMobileOpen(false)}>
+                      {portalLabel}
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="home-nav-cta-secondary h-12 w-full rounded-full border-[hsl(var(--home-border)/0.84)] bg-[hsl(var(--home-surface)/0.48)] text-[hsl(var(--home-text))]"
+                    onClick={() => void handleSignOut()}
+                    disabled={signingOut}
+                  >
+                    {signingOut ? "Signing out..." : "Sign out"}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    asChild
+                    className="home-nav-cta-primary h-12 w-full rounded-full border-0 text-[hsl(var(--home-bg-0))]"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, hsl(var(--home-accent-strong)) 0%, hsl(var(--home-accent)) 100%)",
+                    }}
+                  >
+                    <Link href="/contact" onClick={() => setMobileOpen(false)}>
+                      Book a Demo
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="home-nav-cta-secondary h-12 w-full rounded-full border-[hsl(var(--home-border)/0.84)] bg-[hsl(var(--home-surface)/0.48)] text-[hsl(var(--home-text))]"
+                  >
+                    <Link href="/talent-test" onClick={() => setMobileOpen(false)}>
+                      Start Baseline Test
+                    </Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

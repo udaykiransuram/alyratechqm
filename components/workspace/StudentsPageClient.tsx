@@ -10,24 +10,13 @@ import PageShell from "@/components/layout/PageShell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { SearchableCommandOption } from "@/components/ui/searchable-command-select";
+import {
+  SearchableCommandSelect,
+  type SearchableCommandOption,
+} from "@/components/ui/searchable-command-select";
 import ListPagination from "@/components/ui/list-pagination";
+import StudentsGroupsSection from "@/components/workspace/students/StudentsGroupsSection";
 import { useReturnHrefBuilder } from "@/hooks/useReturnNavigation";
-
-const SearchableCommandSelect = dynamic(
-  () =>
-    import("@/components/ui/searchable-command-select").then(
-      (module) => module.SearchableCommandSelect,
-    ),
-  {
-    ssr: false,
-    loading: () => <div className="h-11 rounded-xl border border-border/60 bg-muted/30" />,
-  },
-);
-
-const StudentsGroupsSection = dynamic(
-  () => import("@/components/workspace/students/StudentsGroupsSection"),
-);
 const StudentEditDialog = dynamic(
   () => import("@/components/workspace/students/StudentEditDialog"),
   { ssr: false },

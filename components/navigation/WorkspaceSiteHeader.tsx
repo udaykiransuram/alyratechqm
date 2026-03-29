@@ -32,7 +32,7 @@ import {
   useCurrentSchoolInfo,
 } from "@/components/navigation/SiteHeaderShared";
 import { Button } from "@/components/ui/button";
-import { performNextAuthSignOut } from "@/lib/client/next-auth-client";
+import { performNextAuthSignOutAndRedirect } from "@/lib/client/next-auth-client";
 
 const schoolSidebarGroups: SidebarGroup[] = [
   {
@@ -291,14 +291,9 @@ export default function WorkspaceSiteHeader({
   async function handleSignOut() {
     const targetUrl = new URL("/auth/signin", window.location.origin);
     targetUrl.searchParams.set("signedOut", "1");
-
-    try {
-      await performNextAuthSignOut({
-        callbackUrl: targetUrl.toString(),
-      });
-    } catch {}
-
-    window.location.assign(targetUrl.toString());
+    await performNextAuthSignOutAndRedirect({
+      callbackUrl: targetUrl.toString(),
+    });
   }
 
   return (

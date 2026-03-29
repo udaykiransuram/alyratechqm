@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,25 +79,6 @@ function getFilterLabel(options: SearchableCommandOption[], value: string) {
   return options.find((option) => option.value === value)?.label || "All";
 }
 
-function FilterControlShell({
-  label,
-  preview,
-}: {
-  label: string;
-  preview: string;
-}) {
-  return (
-    <div className="app-report-filter-card">
-      <p className="app-report-filter-label">{label}</p>
-      <div className="app-report-filter-control">
-        <div className="app-report-filter-preview">
-          {preview}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function ReportJobsFiltersCard({
   totalJobs,
   failedCount,
@@ -114,34 +95,6 @@ export default function ReportJobsFiltersCard({
   onAcademicSectionChange,
   onClearFilters,
 }: ReportJobsFiltersCardProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [showInteractiveControls, setShowInteractiveControls] = useState(false);
-
-  useEffect(() => {
-    if (showInteractiveControls) return;
-
-    const root = containerRef.current;
-    if (!root) return;
-
-    if (typeof window === "undefined" || typeof window.IntersectionObserver !== "function") {
-      setShowInteractiveControls(true);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setShowInteractiveControls(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "140px 0px" },
-    );
-
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, [showInteractiveControls]);
-
   const academicSectionFilterOptions = useMemo<SearchableCommandOption[]>(
     () => [
       {
@@ -155,135 +108,119 @@ export default function ReportJobsFiltersCard({
   );
 
   return (
-    <Card className="analytics-card overflow-hidden">
-      <CardHeader className="analytics-card-header analytics-card-header-highlight">
-        <div className="analytics-toolbar-row gap-4">
-          <div className="analytics-toolbar-copy">
-            <CardTitle className="analytics-card-title">Filters & Actions</CardTitle>
-            <p className="analytics-card-description">
+    <Card className="app-filter-panel">
+      <CardHeader className="app-filter-panel-header">
+        <div className="app-filter-panel-heading">
+          <div className="app-filter-panel-copy">
+            <CardTitle className="app-filter-panel-title">Report Filters</CardTitle>
+            <p className="app-filter-panel-note">
               Narrow the delivery queue by dispatch state, recipient type, report scope, and
               class-section context.
             </p>
           </div>
-          <div className="analytics-toolbar-meta">
-            <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
-              {totalJobs} matching
+          <div className="app-filter-panel-chips">
+            <span className="app-meta-chip">
+              {totalJobs} matching job{totalJobs === 1 ? "" : "s"}
             </span>
-            <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+            <span className="app-meta-chip">
               {failedCount} failed
             </span>
-            <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+            <span className="app-meta-chip">
               {awaitingAckCount} waiting ack
+            </span>
+            <span className="app-meta-chip">
+              {getFilterLabel(STATUS_FILTER_OPTIONS, statusFilter)}
             </span>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 p-3 sm:p-4">
-        <div className="analytics-toolbar">
-          <div ref={containerRef} className="app-report-filter-layout">
-            <div className="app-report-filter-grid">
-              {showInteractiveControls ? (
-                <>
-                  <div className="app-report-filter-card">
-                    <p className="app-report-filter-label">Dispatch status</p>
-                    <div className="app-report-filter-control">
-                      <SearchableCommandSelect
-                        value={statusFilter}
-                        options={STATUS_FILTER_OPTIONS}
-                        onValueChange={onStatusChange}
-                        placeholder="All statuses"
-                        searchPlaceholder="Search statuses..."
-                        emptyText="No statuses found."
-                        onClear={() => onStatusChange("all")}
-                        showCloseAction
-                      />
-                    </div>
-                  </div>
-                  <div className="app-report-filter-card">
-                    <p className="app-report-filter-label">Recipients</p>
-                    <div className="app-report-filter-control">
-                      <SearchableCommandSelect
-                        value={typeFilter}
-                        options={RECIPIENT_FILTER_OPTIONS}
-                        onValueChange={(value) => onTypeChange(value as TypeFilter)}
-                        placeholder="All recipients"
-                        searchPlaceholder="Search recipient types..."
-                        emptyText="No recipient types found."
-                        onClear={() => onTypeChange("all")}
-                        showCloseAction
-                      />
-                    </div>
-                  </div>
-                  <div className="app-report-filter-card">
-                    <p className="app-report-filter-label">Report scope</p>
-                    <div className="app-report-filter-control">
-                      <SearchableCommandSelect
-                        value={reportScopeFilter}
-                        options={REPORT_SCOPE_FILTER_OPTIONS}
-                        onValueChange={(value) => onReportScopeChange(value as ReportScopeFilter)}
-                        placeholder="All report scopes"
-                        searchPlaceholder="Search report scopes..."
-                        emptyText="No report scopes found."
-                        onClear={() => onReportScopeChange("all")}
-                        showCloseAction
-                      />
-                    </div>
-                  </div>
-                  <div className="app-report-filter-card">
-                    <p className="app-report-filter-label">Class section</p>
-                    <div className="app-report-filter-control">
-                      <SearchableCommandSelect
-                        value={academicSectionFilter}
-                        options={academicSectionFilterOptions}
-                        onValueChange={onAcademicSectionChange}
-                        placeholder="All class sections"
-                        searchPlaceholder="Search class sections..."
-                        emptyText="No class sections found."
-                        onClear={() => onAcademicSectionChange("all")}
-                        showCloseAction
-                      />
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <FilterControlShell
-                    label="Dispatch status"
-                    preview={getFilterLabel(STATUS_FILTER_OPTIONS, statusFilter)}
-                  />
-                  <FilterControlShell
-                    label="Recipients"
-                    preview={getFilterLabel(RECIPIENT_FILTER_OPTIONS, typeFilter)}
-                  />
-                  <FilterControlShell
-                    label="Report scope"
-                    preview={getFilterLabel(REPORT_SCOPE_FILTER_OPTIONS, reportScopeFilter)}
-                  />
-                  <FilterControlShell
-                    label="Class section"
-                    preview={getFilterLabel(academicSectionFilterOptions, academicSectionFilter)}
-                  />
-                </>
-              )}
-            </div>
-            <div className="app-report-filter-footer">
-              <p className="app-report-filter-hint">
-                Filters refresh the queue directly from the server so each page stays lighter
-                and quicker to open.
-              </p>
-              {hasActiveFilters ? (
-                <div className="app-filter-summary-actions">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="app-button-filter"
-                    onClick={onClearFilters}
-                  >
-                    Clear filters
-                  </Button>
-                </div>
-              ) : null}
-            </div>
+      <CardContent className="app-filter-panel-body">
+        <div className="app-filter-grid xl:grid-cols-4">
+          <div className="app-field-group">
+            <span className="app-field-label">Dispatch status</span>
+            <SearchableCommandSelect
+              value={statusFilter}
+              options={STATUS_FILTER_OPTIONS}
+              onValueChange={onStatusChange}
+              placeholder="All statuses"
+              searchPlaceholder="Search statuses..."
+              emptyText="No statuses found."
+              onClear={() => onStatusChange("all")}
+              showCloseAction
+            />
+          </div>
+          <div className="app-field-group">
+            <span className="app-field-label">Recipients</span>
+            <SearchableCommandSelect
+              value={typeFilter}
+              options={RECIPIENT_FILTER_OPTIONS}
+              onValueChange={(value) => onTypeChange(value as TypeFilter)}
+              placeholder="All recipients"
+              searchPlaceholder="Search recipient types..."
+              emptyText="No recipient types found."
+              onClear={() => onTypeChange("all")}
+              showCloseAction
+            />
+          </div>
+          <div className="app-field-group">
+            <span className="app-field-label">Report scope</span>
+            <SearchableCommandSelect
+              value={reportScopeFilter}
+              options={REPORT_SCOPE_FILTER_OPTIONS}
+              onValueChange={(value) => onReportScopeChange(value as ReportScopeFilter)}
+              placeholder="All report scopes"
+              searchPlaceholder="Search report scopes..."
+              emptyText="No report scopes found."
+              onClear={() => onReportScopeChange("all")}
+              showCloseAction
+            />
+          </div>
+          <div className="app-field-group">
+            <span className="app-field-label">Class section</span>
+            <SearchableCommandSelect
+              value={academicSectionFilter}
+              options={academicSectionFilterOptions}
+              onValueChange={onAcademicSectionChange}
+              placeholder="All class sections"
+              searchPlaceholder="Search class sections..."
+              emptyText="No class sections found."
+              onClear={() => onAcademicSectionChange("all")}
+              showCloseAction
+            />
+          </div>
+        </div>
+
+        <div className="app-filter-summary">
+          <div className="app-filter-summary-copy">
+            <p className="app-filter-summary-title">
+              {hasActiveFilters ? "Filtered queue" : "All report jobs"}
+            </p>
+            <p className="app-filter-summary-note">
+              {hasActiveFilters
+                ? `${totalJobs} job${totalJobs === 1 ? "" : "s"} match the current server-side filters.`
+                : "Browse the full delivery queue, then narrow the list when a retry or delivery issue needs attention."}
+            </p>
+          </div>
+          <div className="app-filter-summary-actions">
+            {hasActiveFilters ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="app-button-filter"
+                onClick={onClearFilters}
+              >
+                Clear Filters
+              </Button>
+            ) : null}
+            <span className="app-meta-chip">
+              {getFilterLabel(RECIPIENT_FILTER_OPTIONS, typeFilter)}
+            </span>
+            <span className="app-meta-chip">
+              {getFilterLabel(REPORT_SCOPE_FILTER_OPTIONS, reportScopeFilter)}
+            </span>
+            <span className="app-meta-chip">
+              {getFilterLabel(academicSectionFilterOptions, academicSectionFilter)}
+            </span>
           </div>
         </div>
       </CardContent>

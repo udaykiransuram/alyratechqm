@@ -51,6 +51,26 @@ type StudentsGroupsSectionProps = {
   onDeleteStudent: (studentId: string) => Promise<void>;
 };
 
+const enrolledDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+function formatEnrolledAt(value?: string) {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+
+  return enrolledDateFormatter.format(parsed);
+}
+
 export default function StudentsGroupsSection({
   groups,
   pagesByGroup,
@@ -171,11 +191,7 @@ export default function StudentsGroupsSection({
                               </TableCell>
                               <TableCell>{student.rollNumber || "-"}</TableCell>
                               <TableCell>{student.email || "-"}</TableCell>
-                              <TableCell>
-                                {student.enrolledAt
-                                  ? new Date(student.enrolledAt).toLocaleDateString()
-                                  : "-"}
-                              </TableCell>
+                              <TableCell>{formatEnrolledAt(student.enrolledAt)}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <Button

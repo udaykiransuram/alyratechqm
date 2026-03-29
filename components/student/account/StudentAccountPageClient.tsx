@@ -10,13 +10,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { fetchApiJson } from "@/lib/client/api";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 import type {
   StudentAccountProfile,
   StudentAccountReleasedReport,
 } from "@/lib/student-account/types";
-import { cn } from "@/lib/utils";
 
 type StudentAccountPageClientProps = {
   initialStudent: StudentAccountProfile | null;
@@ -410,7 +417,7 @@ export default function StudentAccountPageClient({
             <div className="space-y-1">
               <CardTitle>Online-Test Analysis Reports</CardTitle>
               <p className="text-sm leading-6 text-muted-foreground">
-                Reopen completed test analysis from one clean history view.
+                Browse your completed tests and reopen each analysis report from one list.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -425,113 +432,132 @@ export default function StudentAccountPageClient({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="app-section-body">
+        <CardContent className="p-0">
           {reportsError ? (
-            <div className="app-feedback app-feedback-error">{reportsError}</div>
+            <div className="p-4">
+              <div className="app-feedback app-feedback-error">{reportsError}</div>
+            </div>
           ) : reportTests.length === 0 ? (
-            <div className="app-empty-state">
+            <div className="app-empty-state rounded-none border-0 py-12">
               No submitted online-test reports are available yet.
             </div>
           ) : (
-            <div className="app-account-report-list">
-              {reportTests.map((test, index) => {
-                const responseId = test.attempt?._id;
-                if (!responseId) return null;
+            <div className="app-table-wrap rounded-none border-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[20rem]">Test</TableHead>
+                    <TableHead className="w-[11rem]">Subject</TableHead>
+                    <TableHead className="w-[13rem]">Submitted</TableHead>
+                    <TableHead className="w-[11rem]">Status</TableHead>
+                    <TableHead className="w-[9rem]">Score</TableHead>
+                    <TableHead className="w-[12rem]">Report Access</TableHead>
+                    <TableHead className="text-right min-w-[10rem]">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reportTests.map((test, index) => {
+                    const responseId = test.attempt?._id;
+                    if (!responseId) return null;
 
-                const reportHref = buildHrefWithReturnTo(
-                  `/student/reports/${responseId}`,
-                  "/student/account",
-                );
-                const statusLabel = getAttemptStatusLabel(
-                  test.attempt?.status || test.status,
-                );
-                const scoreLabel =
-                  typeof test.attempt?.totalMarksAwarded === "number"
-                    ? String(test.attempt.totalMarksAwarded)
-                    : "Pending";
-                const subjectLabel = test.subject?.name
-                  ? formatTitleCase(test.subject.name)
-                  : "Subject Pending";
-                const windowLabel = test.onlineEndsAt
-                  ? formatDateTime(test.onlineEndsAt)
-                  : "Available now";
+                    const reportHref = buildHrefWithReturnTo(
+                      `/student/reports/${responseId}`,
+                      "/student/account",
+                    );
+                    const statusLabel = getAttemptStatusLabel(
+                      test.attempt?.status || test.status,
+                    );
+                    const scoreLabel =
+                      typeof test.attempt?.totalMarksAwarded === "number"
+                        ? String(test.attempt.totalMarksAwarded)
+                        : "Pending";
+                    const subjectLabel = test.subject?.name
+                      ? formatTitleCase(test.subject.name)
+                      : "Subject Pending";
+                    const windowLabel = test.onlineEndsAt
+                      ? formatDateTime(test.onlineEndsAt)
+                      : "Available now";
+                    const submittedLabel = formatDateTime(test.attempt?.submittedAt);
 
-                return (
-                  <article
-                    key={responseId}
-                    className={cn(
-                      "app-account-report-card",
-                      index === 0 && "app-account-report-card-featured",
-                    )}
-                  >
-                    <div className="app-account-report-head">
-                      <div className="min-w-0 space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {index === 0 ? (
-                            <Badge variant="info">Most Recent</Badge>
-                          ) : null}
-                          <Badge
-                            variant={getAttemptStatusVariant(
-                              test.attempt?.status || test.status,
-                            )}
+                    return (
+                      <TableRow key={responseId}>
+                        <TableCell>
+                          <div className="min-w-[16rem] space-y-2">
+                            {index === 0 ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="info">Most Recent</Badge>
+                              </div>
+                            ) : null}
+                            <div className="space-y-1">
+                              <div className="app-list-title">
+                                {test.title || "Online Test"}
+                              </div>
+                              <div className="app-list-meta">
+                                Completed analysis report
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {test.subject?.name ? (
+                            <Badge variant="outline">{subjectLabel}</Badge>
+                          ) : (
+                            <span className="app-list-meta">{subjectLabel}</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="min-w-[11rem] space-y-1">
+                            <div className="app-list-value">{submittedLabel}</div>
+                            <div className="app-list-meta">
+                              {index === 0 ? "Latest submission" : "Submitted"}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="min-w-[10rem] space-y-2">
+                            <Badge
+                              variant={getAttemptStatusVariant(
+                                test.attempt?.status || test.status,
+                              )}
+                            >
+                              {statusLabel}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="app-list-value">{scoreLabel}</div>
+                            <div className="app-list-meta">Marks awarded</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="min-w-[11rem] space-y-1">
+                            <div className="app-list-value">{windowLabel}</div>
+                            <div className="app-list-meta">Report window</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            asChild
+                            size="md"
+                            variant="secondary"
+                            className="app-student-action-compact"
                           >
-                            {statusLabel}
-                          </Badge>
-                        </div>
-                        <div className="space-y-1.5">
-                          <h3 className="app-account-report-title">
-                            {test.title || "Online Test"}
-                          </h3>
-                          <p className="app-account-report-copy">
-                            Submitted {formatDateTime(test.attempt?.submittedAt)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex w-full sm:w-auto sm:justify-end">
-                        <Button
-                          asChild
-                          size="lg"
-                          variant="secondary"
-                          className="app-student-action-secondary w-full sm:w-auto"
-                        >
-                          <AppPrefetchLink
-                            href={reportHref}
-                            relatedApiPrefetches={[
-                              `/api/analytics/student-tag-report/${responseId}?groupFields=1`,
-                            ]}
-                          >
-                            Open Analysis Report
-                          </AppPrefetchLink>
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="app-account-report-stats">
-                      <div className="app-account-report-stat">
-                        <p className="app-account-report-stat-label">Subject</p>
-                        <p className="app-account-report-stat-value">
-                          {subjectLabel}
-                        </p>
-                      </div>
-                      <div className="app-account-report-stat">
-                        <p className="app-account-report-stat-label">Score</p>
-                        <p className="app-account-report-stat-value">
-                          {scoreLabel}
-                        </p>
-                      </div>
-                      <div className="app-account-report-stat">
-                        <p className="app-account-report-stat-label">
-                          Report Access
-                        </p>
-                        <p className="app-account-report-stat-value">
-                          {windowLabel}
-                        </p>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+                            <AppPrefetchLink
+                              href={reportHref}
+                              relatedApiPrefetches={[
+                                `/api/analytics/student-tag-report/${responseId}?groupFields=1`,
+                              ]}
+                            >
+                              Open Report
+                            </AppPrefetchLink>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>

@@ -129,7 +129,11 @@ export const metadata: Metadata = {
 
 export default function WorkspaceHomePage() {
   return (
-    <PageShell width="wide" padding="relaxed">
+    <PageShell
+      width="wide"
+      padding="relaxed"
+      className="app-workspace-overview-page"
+    >
       <PageHero
         variant="overview"
         eyebrow="School Operations"
@@ -285,7 +289,7 @@ export default function WorkspaceHomePage() {
               return (
                 <AppPrefetchLink key={area.title} href={area.href} className="app-link-card">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/10 bg-primary/10 text-primary shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.3)]">
+                    <div className="app-workspace-overview-link-icon">
                       <Icon className="h-5 w-5" />
                     </div>
                     <div>

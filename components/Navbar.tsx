@@ -16,6 +16,8 @@ import {
   X,
 } from "lucide-react";
 
+import { performNextAuthSignOutAndRedirect } from "@/lib/client/next-auth-client";
+import { usePublicNavSession } from "@/lib/client/public-nav-session";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -57,6 +59,7 @@ const navItems = [
 
 export default function Navbar() {
   const pathname = usePathname() || "/";
+  const { signedIn, portalHref, portalLabel } = usePublicNavSession();
   const [scrolled, setScrolled] = useState(false);
   const [desktopDropdown, setDesktopDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -64,6 +67,7 @@ export default function Navbar() {
     null,
   );
   const [mounted, setMounted] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
   const [headerHeight, setHeaderHeight] = useState(80);
 
@@ -174,7 +178,14 @@ export default function Navbar() {
   const isActivePath = (href: string) =>
     pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
 
-  const useHeroChrome = pathname === "/" && !scrolled;
+  const isMarketingHome = pathname === "/";
+  const useHeroChrome = isMarketingHome && !scrolled;
+  const shellClassName = cn(
+    "public-nav-shell",
+    isMarketingHome && "public-nav-shell-home",
+    useHeroChrome && "public-nav-shell-hero",
+    isMarketingHome && scrolled && "public-nav-shell-home-scrolled",
+  );
 
   const navLinkClassName = (active: boolean) =>
     cn(
@@ -183,22 +194,54 @@ export default function Navbar() {
       active && "public-nav-link-active",
     );
 
+  async function handleSignOut() {
+    setDesktopDropdown(null);
+    setMobileDropdownOpen(null);
+    setMobileMenuOpen(false);
+    setSigningOut(true);
+
+    await performNextAuthSignOutAndRedirect({
+      callbackUrl: window.location.href,
+    });
+  }
+
   return (
     <header
       suppressHydrationWarning
       ref={headerRef}
       className={cn(
-        "fixed top-0 z-[1000] w-full border-b text-slate-900 transition-all duration-300",
-        "public-nav-shell",
-        useHeroChrome && "public-nav-shell-hero",
+        "fixed inset-x-0 top-0 z-[1000] text-slate-900 transition-all duration-300",
+        isMarketingHome ? "px-2 sm:px-3 md:px-4" : "w-full border-b",
+        !isMarketingHome && shellClassName,
       )}
+      style={
+        isMarketingHome
+          ? {
+              paddingTop: "max(env(safe-area-inset-top, 0px), 12px)",
+              paddingLeft: "max(env(safe-area-inset-left, 0px), 12px)",
+              paddingRight: "max(env(safe-area-inset-right, 0px), 12px)",
+            }
+          : undefined
+      }
     >
       <div
-        className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-2 px-4 sm:px-8 md:px-16"
-        style={{
-          paddingLeft: "max(env(safe-area-inset-left, 0px), 24px)",
-          paddingRight: "max(env(safe-area-inset-right, 0px), 24px)",
-        }}
+        className={cn(
+          "mx-auto flex items-center justify-between gap-2",
+          isMarketingHome
+            ? cn(
+                "public-nav-frame h-20 w-full max-w-[84rem] px-4 sm:px-6 md:px-8",
+                shellClassName,
+              )
+            : "h-20 max-w-7xl px-4 sm:px-8 md:px-16",
+        )}
+        style={
+          isMarketingHome
+            ? undefined
+            : {
+                paddingLeft: "max(env(safe-area-inset-left, 0px), 24px)",
+                paddingRight: "max(env(safe-area-inset-right, 0px), 24px)",
+              }
+        }
       >
         <Link
           href="/"
@@ -211,7 +254,7 @@ export default function Navbar() {
             <span
               className={cn(
                 "text-[13px] font-semibold leading-none tracking-tight",
-                useHeroChrome ? "text-white" : "text-[hsl(var(--public-ink))]",
+                isMarketingHome ? "text-white" : "text-[hsl(var(--public-ink))]",
               )}
             >
               Alyra Tech
@@ -221,7 +264,7 @@ export default function Navbar() {
             <span
               className={cn(
                 "text-lg font-bold leading-none tracking-tight",
-                useHeroChrome ? "text-white" : "text-[hsl(var(--public-ink))]",
+                isMarketingHome ? "text-white" : "text-[hsl(var(--public-ink))]",
               )}
             >
               Alyra Tech
@@ -229,7 +272,9 @@ export default function Navbar() {
             <span
               className={cn(
                 "text-[10px] font-medium uppercase tracking-wider",
-                useHeroChrome ? "text-white/66" : "text-[hsl(var(--public-muted))]",
+                isMarketingHome
+                  ? "text-white/68"
+                  : "text-[hsl(var(--public-muted))]",
               )}
             >
               Precision Diagnostics
@@ -287,12 +332,12 @@ export default function Navbar() {
                   <button
                     type="button"
                     className={cn(
-                      "inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--public-accent))/0.34]",
-                      useHeroChrome
-                        ? "text-white/78 hover:bg-white/12 hover:text-white"
+                      "public-nav-disclosure inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--public-accent))/0.34]",
+                      isMarketingHome
+                        ? "text-white/78 hover:bg-white/10 hover:text-white"
                         : "text-[hsl(var(--public-muted))] hover:bg-[hsl(var(--public-accent))/0.08] hover:text-[hsl(var(--public-ink))]",
                       dropdownOpen &&
-                        (useHeroChrome
+                        (isMarketingHome
                           ? "bg-white/12 text-white"
                           : "bg-white/90 text-[hsl(var(--public-ink))]"),
                     )}
@@ -363,41 +408,69 @@ export default function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-4 md:flex">
-          <Link
-            href="/auth/signin"
-            className={cn(
-              "public-nav-secondary-action",
-              useHeroChrome && "text-white/78 hover:text-white",
-            )}
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/contact"
-            className={cn(
-              "public-nav-secondary-action",
-              useHeroChrome && "text-white/78 hover:text-white",
-            )}
-          >
-            Request Demo
-          </Link>
-          <Link
-            href="/talent-test"
-            className="public-nav-cta focus:outline-none focus:ring-2 focus:ring-[hsl(var(--public-accent))/0.34] focus:ring-offset-2"
-            aria-label="Start Baseline Test"
-          >
-            <span className="mr-2 whitespace-nowrap drop-shadow-sm">
-              Baseline Test
-            </span>
-            <ArrowRight className="h-3.5 w-3.5 drop-shadow-sm transition-transform group-hover:translate-x-1 md:h-4 md:w-4" />
-          </Link>
+          {signedIn ? (
+            <>
+              <button
+                type="button"
+                className={cn(
+                  "public-nav-secondary-action",
+                  isMarketingHome && "text-white/80 hover:text-white",
+                )}
+                onClick={() => void handleSignOut()}
+                disabled={signingOut}
+              >
+                {signingOut ? "Signing out..." : "Sign out"}
+              </button>
+              <Link
+                href={portalHref}
+                className="public-nav-cta focus:outline-none focus:ring-2 focus:ring-[hsl(var(--public-accent))/0.34] focus:ring-offset-2"
+                aria-label={portalLabel}
+              >
+                <span className="mr-2 whitespace-nowrap drop-shadow-sm">
+                  {portalLabel}
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 drop-shadow-sm transition-transform group-hover:translate-x-1 md:h-4 md:w-4" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/auth/signin"
+                className={cn(
+                  "public-nav-secondary-action",
+                  isMarketingHome && "text-white/80 hover:text-white",
+                )}
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/contact"
+                className={cn(
+                  "public-nav-secondary-action",
+                  isMarketingHome && "text-white/80 hover:text-white",
+                )}
+              >
+                Request Demo
+              </Link>
+              <Link
+                href="/talent-test"
+                className="public-nav-cta focus:outline-none focus:ring-2 focus:ring-[hsl(var(--public-accent))/0.34] focus:ring-offset-2"
+                aria-label="Start Baseline Test"
+              >
+                <span className="mr-2 whitespace-nowrap drop-shadow-sm">
+                  Baseline Test
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 drop-shadow-sm transition-transform group-hover:translate-x-1 md:h-4 md:w-4" />
+              </Link>
+            </>
+          )}
         </div>
 
         <button
           type="button"
           className={cn(
-            "inline-flex h-11 w-11 items-center justify-center rounded-xl transition-colors md:hidden",
-            useHeroChrome
+            "public-nav-mobile-trigger inline-flex h-11 w-11 items-center justify-center rounded-xl transition-colors md:hidden",
+            isMarketingHome
               ? "text-white hover:bg-white/10"
               : "text-[hsl(var(--public-ink-soft))] hover:bg-[hsl(var(--public-accent))/0.08]",
           )}
@@ -528,30 +601,52 @@ export default function Navbar() {
                       </div>
                     ))}
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 px-2">
-                    <Link
-                      href="/auth/signin"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="public-mobile-menu-action public-mobile-menu-action-primary"
-                    >
-                      Sign In
-                    </Link>
-                    <Link
-                      href="/contact"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="public-mobile-menu-action public-mobile-menu-action-secondary"
-                    >
-                      Contact
-                    </Link>
-                  </div>
-                  <Link
-                    href="/talent-test"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="public-mobile-menu-link mx-2 mt-1 inline-flex items-center justify-center"
-                  >
-                    Start Baseline Test
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
+                  {signedIn ? (
+                    <div className="mt-3 grid grid-cols-2 gap-2 px-2">
+                      <Link
+                        href={portalHref}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="public-mobile-menu-action public-mobile-menu-action-primary"
+                      >
+                        Portal
+                      </Link>
+                      <button
+                        type="button"
+                        className="public-mobile-menu-action public-mobile-menu-action-secondary"
+                        onClick={() => void handleSignOut()}
+                        disabled={signingOut}
+                      >
+                        {signingOut ? "Signing out..." : "Sign out"}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mt-3 grid grid-cols-2 gap-2 px-2">
+                        <Link
+                          href="/auth/signin"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="public-mobile-menu-action public-mobile-menu-action-primary"
+                        >
+                          Sign In
+                        </Link>
+                        <Link
+                          href="/contact"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="public-mobile-menu-action public-mobile-menu-action-secondary"
+                        >
+                          Contact
+                        </Link>
+                      </div>
+                      <Link
+                        href="/talent-test"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="public-mobile-menu-link mx-2 mt-1 inline-flex items-center justify-center"
+                      >
+                        Start Baseline Test
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </>
+                  )}
                 </nav>
               </div>
             </>,

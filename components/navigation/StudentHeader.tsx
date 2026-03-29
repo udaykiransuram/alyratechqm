@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Button } from "@/components/ui/button";
-import { performNextAuthSignOut } from "@/lib/client/next-auth-client";
+import { performNextAuthSignOutAndRedirect } from "@/lib/client/next-auth-client";
 
 function isTestsRoute(pathname: string) {
   return pathname === "/student/tests" || pathname.startsWith("/student/tests/");
@@ -21,14 +21,9 @@ export default function StudentHeader() {
   async function handleSignOut() {
     const targetUrl = new URL("/auth/signin", window.location.origin);
     targetUrl.searchParams.set("signedOut", "1");
-
-    try {
-      await performNextAuthSignOut({
-        callbackUrl: targetUrl.toString(),
-      });
-    } catch {}
-
-    window.location.assign(targetUrl.toString());
+    await performNextAuthSignOutAndRedirect({
+      callbackUrl: targetUrl.toString(),
+    });
   }
 
   return (
