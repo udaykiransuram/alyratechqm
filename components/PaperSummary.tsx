@@ -2,6 +2,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { Layers, ListOrdered, Clock, Award, CalendarDays, Hash, CheckCircle, Tag as TagIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { calculateSectionTotalMarks } from '@/lib/question-paper/sections';
+import { resolveSectionSubjects } from '@/lib/question-paper/subjects';
 
 interface Tag {
   _id: string;
@@ -9,18 +11,23 @@ interface Tag {
   type?: { name: string };
 }
 
-interface Section {
+type PaperSummaryQuestion = {
+  question: {
+    tags?: Tag[];
+    subject?: string | { _id?: string; name?: string } | null;
+  };
+  marks: number;
+  negativeMarks: number;
+};
+
+interface PaperSummarySection {
   id: string;
   name: string;
+  description?: string;
+  instructions?: string;
   defaultMarks: number | undefined;
   defaultNegativeMarks: number | undefined;
-  questions: {
-    question: {
-      tags?: Tag[];
-    };
-    marks: number;
-    negativeMarks: number;
-  }[];
+  questions: PaperSummaryQuestion[];
 }
 
 function formatExamDate(value: string | null | undefined) {
@@ -46,7 +53,7 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks, examDate, onlineEnabled, onlineStartsAt, onlineEndsAt, subjects }: {
-  sections: Section[];
+  sections: PaperSummarySection[];
   totalPaperMarks: number;
   duration: number;
   passingMarks: number;
@@ -57,6 +64,17 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
   subjects?: Array<{ _id: string; name: string }>;
 }) {
   const totalQuestions = sections.reduce((sum, section) => sum + section.questions.length, 0);
+  const sectionSummaries = sections.map((section, index) => ({
+    id: section.id || `section-${index + 1}`,
+    name: section.name || `Section ${index + 1}`,
+    description: String(section.description || '').trim(),
+    instructions: String(section.instructions || '').trim(),
+    defaultMarks: section.defaultMarks ?? 0,
+    defaultNegativeMarks: section.defaultNegativeMarks ?? 0,
+    totalMarks: calculateSectionTotalMarks(section),
+    questionCount: section.questions.length,
+    subjects: resolveSectionSubjects(section, subjects || []),
+  }));
 
   const tagTypeCounts: Record<string, Record<string, number>> = {};
   sections.forEach(section => {
@@ -157,6 +175,61 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
           ) : (
             <p className="text-sm text-muted-foreground">
               Subjects will appear here once questions are added.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-3 border-t border-border/60 pt-4">
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Layers className="h-4 w-4" />
+            Section Setup
+          </h4>
+          {sectionSummaries.length > 0 ? (
+            <div className="space-y-3">
+              {sectionSummaries.map((section) => (
+                <div
+                  key={section.id}
+                  className="rounded-2xl border border-border/60 bg-muted/15 p-3.5"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        {section.name}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {section.questionCount} question{section.questionCount === 1 ? '' : 's'} • {section.totalMarks} marks • +{section.defaultMarks} / -{section.defaultNegativeMarks}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {section.subjects.length > 0 ? (
+                        section.subjects.map((subject) => (
+                          <Badge key={`${section.id}-${subject._id}`} variant="secondary" className="font-normal">
+                            {subject.name || subject._id}
+                          </Badge>
+                        ))
+                      ) : (
+                        <Badge variant="secondary" className="font-normal">
+                          Subject mix pending
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  {section.description ? (
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                      {section.description}
+                    </p>
+                  ) : null}
+                  {section.instructions ? (
+                    <p className="mt-2 text-xs leading-5 text-foreground/80">
+                      {section.instructions}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Add sections to review their marking defaults and subject mix.
             </p>
           )}
         </div>

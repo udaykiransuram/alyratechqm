@@ -25,8 +25,10 @@ const StudentEditDialog = dynamic(
 type StudentItem = {
   _id: string;
   name: string;
+  gender?: string;
   fatherName?: string;
   email?: string;
+  mobileNumber?: string;
   rollNumber?: string;
   enrolledAt?: string;
   academicSectionId?: string;
@@ -58,7 +60,9 @@ type AcademicSectionItem = {
 type StudentEditDraft = {
   _id: string;
   name: string;
+  gender: string;
   fatherName: string;
+  mobileNumber: string;
   classId: string;
   academicSectionId: string;
   rollNumber: string;
@@ -313,7 +317,9 @@ export default function StudentsPageClient({
     setEditStudent({
       _id: student._id,
       name: student.name,
+      gender: student.gender || "",
       fatherName: student.fatherName || "",
+      mobileNumber: student.mobileNumber || "",
       classId: groupClassId,
       academicSectionId: student.academicSectionId || "",
       rollNumber: student.rollNumber || "",

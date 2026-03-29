@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { buildHrefWithReturnTo } from '@/lib/navigation/returnTo';
 
 export default function QuestionListModal({
   isOpen,
@@ -32,13 +33,25 @@ export default function QuestionListModal({
     if (!pathname) return '/workspace/questions';
     return query ? `${pathname}?${query}` : pathname;
   }, [pathname, searchParams]);
+  const studentReportMatch = useMemo(
+    () => (/^\/student\/reports\/([^/]+)/.exec(pathname || '') || null),
+    [pathname],
+  );
+  const studentReportResponseId = studentReportMatch?.[1] || '';
 
   const getQuestionHref = (questionId?: string | number) => {
-    if (!questionId) return '/workspace/questions';
-    const params = new URLSearchParams();
-    if (questionReturnTo) params.set('returnTo', questionReturnTo);
-    const questionPath = `/workspace/questions/view/${encodeURIComponent(String(questionId))}`;
-    return params.size > 0 ? `${questionPath}?${params.toString()}` : questionPath;
+    if (!questionId) {
+      return studentReportResponseId
+        ? questionReturnTo || `/student/reports/${encodeURIComponent(studentReportResponseId)}`
+        : '/workspace/questions';
+    }
+
+    const normalizedQuestionId = encodeURIComponent(String(questionId));
+    const questionPath = studentReportResponseId
+      ? `/student/reports/${encodeURIComponent(studentReportResponseId)}/questions/${normalizedQuestionId}`
+      : `/workspace/questions/view/${normalizedQuestionId}`;
+
+    return buildHrefWithReturnTo(questionPath, questionReturnTo);
   };
 
   function getStudentCounts(key: 'correctStudents' | 'incorrectStudents' | 'unattemptedStudents') {

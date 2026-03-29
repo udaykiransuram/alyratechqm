@@ -9,6 +9,7 @@ interface Section {
   id: string;
   name: string;
   description: string;
+  instructions: string;
   defaultMarks: number | undefined;
   defaultNegativeMarks: number | undefined;
   questions: any[];
@@ -55,9 +56,17 @@ export function SectionEditor({
         <Textarea
           value={section.description}
           onChange={e => onUpdate('description', e.target.value)}
-          placeholder="Optional: Add a description or instructions for this section..."
+          placeholder="Optional: Add a short overview for this section..."
           className="min-h-[80px] bg-background"
           rows={3}
+        />
+
+        <Textarea
+          value={section.instructions}
+          onChange={e => onUpdate('instructions', e.target.value)}
+          placeholder="Optional: Add student-facing instructions for this section..."
+          className="min-h-[96px] bg-background"
+          rows={4}
         />
 
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -66,7 +75,7 @@ export function SectionEditor({
           </div>
           <div className="grid grid-cols-2 gap-3 sm:w-auto">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Default Marks</Label>
+              <Label className="text-xs font-medium text-muted-foreground">Default Positive</Label>
               <Input
                 type="number"
                 min={1}

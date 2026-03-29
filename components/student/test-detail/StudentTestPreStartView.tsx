@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FeedbackNotice from "@/components/ui/feedback-notice";
 import { Spinner } from "@/components/ui/spinner";
+import { resolveSectionSubjects } from "@/lib/question-paper/subjects";
 
 import type { StudentPaper } from "./student-test-types";
 
@@ -56,6 +57,19 @@ export default function StudentTestPreStartView({
   const effectiveEnd = formatDateTime(paper.onlineEndsAt);
   const statusLabel = STATUS_LABELS[testStatus] || testStatus;
   const canStartNow = testStatus === "available";
+  const sectionSummaries = (Array.isArray(paper.sections) ? paper.sections : []).map(
+    (section, index) => ({
+      id: `${section.name}-${index}`,
+      name: section.name || `Section ${index + 1}`,
+      description: String(section.description || "").trim(),
+      instructions: String(section.instructions || "").trim(),
+      subjects: resolveSectionSubjects(section, paperSubjects),
+      questionCount: Array.isArray(section.questions) ? section.questions.length : 0,
+      totalMarks: Number(section.marks || 0),
+      defaultMarks: Number(section.defaultMarks || 0),
+      defaultNegativeMarks: Number(section.defaultNegativeMarks || 0),
+    }),
+  );
 
   return (
     <div className="app-student-page-shell">
@@ -191,6 +205,54 @@ export default function StudentTestPreStartView({
           </div>
         </CardContent>
       </Card>
+
+      {sectionSummaries.length > 0 ? (
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header">
+            <CardTitle>Test Structure</CardTitle>
+          </CardHeader>
+          <CardContent className="app-section-body space-y-3">
+            {sectionSummaries.map((section, index) => (
+              <div
+                key={section.id}
+                className="rounded-[1.2rem] border border-border/60 bg-muted/15 p-4"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1.5">
+                    <p className="app-title-sm">
+                      {`Section ${index + 1}: ${section.name}`}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {section.questionCount} question{section.questionCount === 1 ? "" : "s"} • {section.totalMarks} marks • +{section.defaultMarks} / -{section.defaultNegativeMarks}
+                    </p>
+                    {section.description ? (
+                      <p className="text-sm text-muted-foreground">
+                        {section.description}
+                      </p>
+                    ) : null}
+                    {section.instructions ? (
+                      <p className="text-sm leading-6 text-foreground/82">
+                        {section.instructions}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {section.subjects.length > 0 ? (
+                      section.subjects.map((subject) => (
+                        <span key={`${section.id}-${subject._id}`} className="app-meta-chip">
+                          {subject.name || subject._id}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="app-meta-chip">Subject mix pending</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {hasManualReviewQuestions ? (
         <FeedbackNotice variant="info">

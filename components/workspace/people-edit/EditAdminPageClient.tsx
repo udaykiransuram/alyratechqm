@@ -15,6 +15,7 @@ import FeedbackNotice from "@/components/ui/feedback-notice";
 import PageState from "@/components/ui/page-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { USER_GENDER_OPTIONS } from "@/lib/user-gender";
 
 type ClassItem = {
   _id: string;
@@ -35,6 +36,7 @@ type AcademicSectionItem = {
 type UserRecord = {
   _id: string;
   name?: string;
+  gender?: string;
   email?: string;
   mobileNumber?: string;
   hasAllClasses?: boolean;
@@ -63,6 +65,7 @@ function getSectionClassId(section: AcademicSectionItem) {
 function buildAdminForm(user: UserRecord | null) {
   return {
     name: user?.name || "",
+    gender: user?.gender || "",
     email: user?.email || "",
     password: "",
     mobileNumber: user?.mobileNumber || "",
@@ -123,7 +126,7 @@ export default function EditAdminPageClient({
     [availableSections],
   );
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = event.target;
     setForm((previous) => ({
       ...previous,
@@ -180,6 +183,7 @@ export default function EditAdminPageClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim(),
+          gender: form.gender || undefined,
           role: "admin",
           email: form.email.trim(),
           mobileNumber: form.mobileNumber.trim(),
@@ -296,7 +300,7 @@ export default function EditAdminPageClient({
                     <input id="name" name="name" value={form.name} onChange={handleChange} required className="app-form-input" placeholder="Name" />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-3">
                     <div className="app-field-group">
                       <label className="app-field-label" htmlFor="email">Email</label>
                       <input id="email" name="email" value={form.email} onChange={handleChange} type="email" className="app-form-input" placeholder="Email" />
@@ -304,6 +308,23 @@ export default function EditAdminPageClient({
                     <div className="app-field-group">
                       <label className="app-field-label" htmlFor="mobileNumber">Phone Number</label>
                       <input id="mobileNumber" name="mobileNumber" value={form.mobileNumber} onChange={handleChange} required className="app-form-input" placeholder="Phone Number" />
+                    </div>
+                    <div className="app-field-group">
+                      <label className="app-field-label" htmlFor="gender">Gender</label>
+                      <select
+                        id="gender"
+                        name="gender"
+                        value={form.gender}
+                        onChange={handleChange}
+                        className="app-form-input"
+                      >
+                        <option value="">Select gender</option>
+                        {USER_GENDER_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 

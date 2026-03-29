@@ -3,9 +3,9 @@ import {
   parseUploadBoolean,
   parseUploadDate,
   splitUploadListCell,
-  toUploadLookupKey,
   type ParsedUploadRow,
 } from "@/lib/client/bulk-upload";
+import { normalizeUserGender } from "@/lib/user-gender";
 import type {
   WorkspaceAcademicSectionItem,
   WorkspaceClassItem,
@@ -50,6 +50,7 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     headers: [
       "name",
       "fatherName",
+      "gender",
       "email",
       "mobileNumber",
       "class",
@@ -61,6 +62,7 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
       [
         "Aarav Sharma",
         "Rakesh Sharma",
+        "male",
         "aarav@example.com",
         "9876543210",
         "Grade 10",
@@ -72,6 +74,7 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     tips: [
       "Use the class and section names you want in the workspace. Missing class and section names are created during bulk upload.",
       "The fatherName column is optional, but it helps when schools verify students through family records.",
+      "Use `male`, `female`, or `other` in the gender column when you want to save it.",
       "Students sign in with the roll number. If no password is supplied, saved phone-number digits become the default password exactly as stored (including country code digits, if present).",
     ],
   },
@@ -79,6 +82,7 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     filename: "teachers-bulk-template.csv",
     headers: [
       "name",
+      "gender",
       "email",
       "mobileNumber",
       "password",
@@ -90,6 +94,7 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     sampleRows: [
       [
         "Meera Nair",
+        "female",
         "meera@example.com",
         "9876500000",
         "teacher@123",
@@ -100,8 +105,9 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
       ],
     ],
     tips: [
+      "Use `male`, `female`, or `other` in the gender column when you want to save it.",
       "Separate multiple classes, sections, and subjects with the `|` character.",
-      "Missing classes are created during bulk upload, and sections are always created inside a class.",
+      "Missing classes and subjects are created during bulk upload, and sections are always created inside a class.",
       "If the same section names repeat across the selected classes, entering `A|B` applies those section names to each selected class.",
       "Use `Class Name:Section Name` when a section should be limited to one class or when the row does not list classes.",
     ],
@@ -110,6 +116,7 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     filename: "admins-bulk-template.csv",
     headers: [
       "name",
+      "gender",
       "email",
       "mobileNumber",
       "password",
@@ -123,6 +130,7 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
     sampleRows: [
       [
         "Ritu Verma",
+        "female",
         "ritu@example.com",
         "9876511111",
         "admin@123",
@@ -135,51 +143,15 @@ export const WORKSPACE_USER_BULK_TEMPLATES: Record<
       ],
     ],
     tips: [
+      "Use `male`, `female`, or `other` in the gender column when you want to save it.",
       "Leave the class, section, or subject columns empty when the corresponding `hasAll...` flag is `true`.",
-      "Missing classes are created during bulk upload, and sections are always created inside a class.",
+      "Missing classes and subjects are created during bulk upload, and sections are always created inside a class.",
       "When the same section names repeat across the selected classes, entering `A|B` applies those section names to each selected class.",
       "Use `Class Name:Section Name` when a section should be tied to one specific class or when class scope is not listed in the row.",
       "Use `true` or `false` in the scope columns to control whether the admin has full access.",
     ],
   },
 };
-
-function buildSubjectLookup(subjects: WorkspaceSubjectItem[]) {
-  const lookup = new Map<string, WorkspaceSubjectItem>();
-  subjects.forEach((subject) => {
-    lookup.set(subject._id, subject);
-    lookup.set(toUploadLookupKey(subject.name), subject);
-    if (subject.code) {
-      lookup.set(toUploadLookupKey(subject.code), subject);
-    }
-  });
-  return lookup;
-}
-
-function resolveSubjectIds(
-  value: unknown,
-  subjects: WorkspaceSubjectItem[],
-) {
-  const subjectLookup = buildSubjectLookup(subjects);
-  const tokens = splitUploadListCell(value);
-  const ids = new Set<string>();
-  const unresolved: string[] = [];
-
-  tokens.forEach((token) => {
-    const lookupToken = toUploadLookupKey(token);
-    const match = subjectLookup.get(token) || subjectLookup.get(lookupToken);
-    if (match?._id) {
-      ids.add(match._id);
-      return;
-    }
-    unresolved.push(token);
-  });
-
-  return {
-    ids: Array.from(ids),
-    unresolved,
-  };
-}
 
 function buildRowLabel(row: ParsedUploadRow, index: number) {
   const name = String(getUploadCell(row, "name") || "").trim();
@@ -195,6 +167,7 @@ export function buildWorkspaceUserBulkRows({
 }: BuildWorkspaceUserBulkRowsArgs): BuildWorkspaceUserBulkRowsResult {
   void classes;
   void sections;
+  void subjects;
   const users: Array<Record<string, unknown>> = [];
   const skippedRows: string[] = [];
 
@@ -209,9 +182,18 @@ export function buildWorkspaceUserBulkRows({
       getUploadCell(row, "mobilenumber", "mobile", "phone"),
     ).trim();
     const password = String(getUploadCell(row, "password") || "").trim();
+    const rawGender = String(getUploadCell(row, "gender") || "").trim();
+    const gender = normalizeUserGender(rawGender);
 
     if (!name || !mobileNumber) {
       skippedRows.push(`${rowLabel}: name and mobile number are required.`);
+      return;
+    }
+
+    if (rawGender && !gender) {
+      skippedRows.push(
+        `${rowLabel}: gender must be male, female, or other.`,
+      );
       return;
     }
 
@@ -241,6 +223,7 @@ export function buildWorkspaceUserBulkRows({
       users.push({
         name,
         fatherName: fatherName || undefined,
+        gender,
         email,
         mobileNumber,
         role,
@@ -256,9 +239,8 @@ export function buildWorkspaceUserBulkRows({
       const classTokens = splitUploadListCell(
         getUploadCell(row, "classids", "classes", "classid", "class"),
       );
-      const subjectResolution = resolveSubjectIds(
+      const subjectTokens = splitUploadListCell(
         getUploadCell(row, "subjectids", "subjects", "subjectid", "subject"),
-        subjects,
       );
       const hasAllSections = parseUploadBoolean(
         getUploadCell(row, "hasallsections"),
@@ -276,14 +258,7 @@ export function buildWorkspaceUserBulkRows({
             ),
           );
 
-      if (subjectResolution.unresolved.length > 0) {
-        skippedRows.push(
-          `${rowLabel}: couldn't resolve subjects ${subjectResolution.unresolved.join(", ")}.`,
-        );
-        return;
-      }
-
-      if (classTokens.length === 0 || subjectResolution.ids.length === 0) {
+      if (classTokens.length === 0 || subjectTokens.length === 0) {
         skippedRows.push(
           `${rowLabel}: teachers need at least one class and one subject.`,
         );
@@ -292,6 +267,7 @@ export function buildWorkspaceUserBulkRows({
 
       users.push({
         name,
+        gender,
         email,
         mobileNumber,
         password: password || undefined,
@@ -299,7 +275,7 @@ export function buildWorkspaceUserBulkRows({
         classIds: classTokens,
         academicSectionIds: hasAllSections ? [] : sectionTokens,
         hasAllSections,
-        subjectIds: subjectResolution.ids,
+        subjectIds: subjectTokens,
       });
       return;
     }
@@ -321,11 +297,10 @@ export function buildWorkspaceUserBulkRows({
       : splitUploadListCell(
           getUploadCell(row, "classids", "classes", "classid", "class"),
         );
-    const subjectResolution = hasAllSubjects
-      ? { ids: [], unresolved: [] as string[] }
-      : resolveSubjectIds(
+    const subjectTokens = hasAllSubjects
+      ? []
+      : splitUploadListCell(
           getUploadCell(row, "subjectids", "subjects", "subjectid", "subject"),
-          subjects,
         );
     const sectionTokens = hasAllSections
       ? []
@@ -339,15 +314,9 @@ export function buildWorkspaceUserBulkRows({
           ),
         );
 
-    if (subjectResolution.unresolved.length > 0) {
-      skippedRows.push(
-        `${rowLabel}: couldn't resolve subjects ${subjectResolution.unresolved.join(", ")}.`,
-      );
-      return;
-    }
-
     users.push({
       name,
+      gender,
       email,
       mobileNumber,
       password: password || undefined,
@@ -357,7 +326,7 @@ export function buildWorkspaceUserBulkRows({
       hasAllSubjects,
       classIds: hasAllClasses ? [] : classTokens,
       academicSectionIds: hasAllSections ? [] : sectionTokens,
-      subjectIds: hasAllSubjects ? [] : subjectResolution.ids,
+      subjectIds: hasAllSubjects ? [] : subjectTokens,
     });
   });
 
@@ -392,6 +361,8 @@ export function buildWorkspaceBulkStructureSummary(data: {
   restoredClasses?: WorkspaceBulkStructureChangeItem[];
   createdSections?: WorkspaceBulkStructureChangeItem[];
   restoredSections?: WorkspaceBulkStructureChangeItem[];
+  createdSubjects?: WorkspaceBulkStructureChangeItem[];
+  restoredSubjects?: WorkspaceBulkStructureChangeItem[];
 }) {
   const createdClasses = Array.isArray(data?.createdClasses)
     ? data.createdClasses
@@ -404,6 +375,12 @@ export function buildWorkspaceBulkStructureSummary(data: {
     : [];
   const restoredSections = Array.isArray(data?.restoredSections)
     ? data.restoredSections
+    : [];
+  const createdSubjects = Array.isArray(data?.createdSubjects)
+    ? data.createdSubjects
+    : [];
+  const restoredSubjects = Array.isArray(data?.restoredSubjects)
+    ? data.restoredSubjects
     : [];
 
   return [
@@ -431,6 +408,18 @@ export function buildWorkspaceBulkStructureSummary(data: {
           restoredSections,
           (item) =>
             item.className ? `${item.className}:${item.name || ""}` : item.name || "",
+        )}).`
+      : null,
+    createdSubjects.length
+      ? `Subjects created: ${createdSubjects.length} (${formatStructureChangeList(
+          createdSubjects,
+          (item) => item.name || "",
+        )}).`
+      : null,
+    restoredSubjects.length
+      ? `Subjects restored: ${restoredSubjects.length} (${formatStructureChangeList(
+          restoredSubjects,
+          (item) => item.name || "",
         )}).`
       : null,
   ].filter(Boolean);

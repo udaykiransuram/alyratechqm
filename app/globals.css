@@ -1774,20 +1774,29 @@
   }
 
   .app-online-window-card {
-    @apply flex h-full flex-col gap-3 rounded-2xl border border-border/60 bg-background/75 p-3.5;
-    box-shadow: 0 14px 22px -24px hsl(var(--app-shadow-deep) / 0.08);
+    @apply rounded-2xl border border-border/60 p-4;
+    background-color: hsl(var(--background) / 0.78);
+    box-shadow: 0 16px 24px -26px hsl(var(--app-shadow-deep) / 0.08);
   }
 
-  .app-online-window-footer {
-    @apply mt-auto grid gap-2 border-t border-border/50 pt-3;
+  .app-online-window-header {
+    @apply flex flex-col gap-3 border-b border-border/50 pb-3 sm:flex-row sm:items-start sm:justify-between;
   }
 
-  .app-online-window-note {
-    @apply min-h-0 sm:min-h-[2.5rem];
+  .app-online-window-header-copy {
+    @apply min-w-0 space-y-1;
   }
 
-  .app-online-window-footer-actions {
-    @apply flex justify-start sm:justify-end;
+  .app-online-window-input-grid {
+    @apply mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem];
+  }
+
+  .app-online-window-input-field {
+    @apply space-y-1.5;
+  }
+
+  .app-online-window-input-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground;
   }
 
   .app-online-window-clear {
@@ -3093,31 +3102,187 @@
   }
 
   .app-exam-focus-topbar {
-    @apply sticky top-0 z-20 grid gap-3 rounded-[1.75rem] border px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-center;
+    @apply sticky top-0 z-20 grid gap-2.5 rounded-[1.5rem] border px-4 py-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] lg:gap-2.5 lg:px-4 xl:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)_minmax(18rem,22rem)] xl:items-stretch;
     border-color: hsl(var(--border) / 0.82);
     background:
-      radial-gradient(circle at top right, hsl(var(--primary) / 0.08) 0%, transparent 18rem),
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.12) 0%, transparent 18rem),
+      radial-gradient(circle at bottom left, hsl(var(--app-surface-tint) / 0.52) 0%, transparent 18rem),
       linear-gradient(
         180deg,
-        hsl(var(--app-surface-1) / 0.97) 0%,
-        hsl(var(--app-surface-2) / 0.86) 100%
+        hsl(var(--app-surface-1) / 0.985) 0%,
+        hsl(var(--app-surface-2) / 0.9) 100%
       );
     box-shadow:
-      0 24px 40px -34px hsl(var(--app-shadow-deep) / 0.16),
-      inset 0 1px 0 hsl(var(--app-surface-1) / 0.76);
-    backdrop-filter: blur(10px);
+      0 28px 48px -36px hsl(var(--app-shadow-deep) / 0.18),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+    backdrop-filter: blur(14px);
   }
 
   .app-exam-focus-topbar-copy {
-    @apply min-w-0 space-y-1.5;
+    @apply flex min-w-0 flex-col justify-center space-y-1 lg:self-stretch;
   }
 
-  .app-exam-focus-topbar-meta {
-    @apply flex flex-wrap items-center gap-2 xl:justify-center;
+  .app-exam-focus-topbar-status {
+    @apply grid gap-1.5 rounded-[1.2rem] border p-2.5 lg:col-span-2 lg:grid-cols-3 xl:col-span-1 xl:grid-cols-1 xl:content-center xl:self-stretch;
+    border-color: hsl(var(--border) / 0.76);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.992) 0%,
+        hsl(var(--app-surface-2) / 0.86) 100%
+      );
+    box-shadow:
+      0 20px 32px -32px hsl(var(--app-shadow-deep) / 0.12),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-exam-focus-topbar-stat {
+    @apply flex min-w-0 flex-col justify-center rounded-[1rem] border px-3 py-2;
+    border-color: hsl(var(--border) / 0.72);
+    background-color: hsl(var(--app-surface-1) / 0.84);
+  }
+
+  .app-exam-focus-topbar-stat-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  .app-exam-focus-topbar-stat-value {
+    @apply mt-1 text-sm font-semibold text-foreground;
+  }
+
+  .app-exam-focus-topbar-stat-value-soft {
+    @apply line-clamp-2 text-[13px] leading-5;
+  }
+
+  .app-exam-focus-topbar-side {
+    @apply grid gap-1.5 lg:self-stretch;
   }
 
   .app-exam-focus-topbar-actions {
-    @apply flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end;
+    @apply grid w-full grid-cols-1 gap-1.5 rounded-[1.2rem] border p-1.5 sm:grid-cols-3 lg:w-auto lg:min-w-[20rem] lg:self-stretch;
+    border-color: hsl(var(--border) / 0.76);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.992) 0%,
+        hsl(var(--app-surface-2) / 0.86) 100%
+      );
+    box-shadow:
+      0 20px 32px -32px hsl(var(--app-shadow-deep) / 0.12),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-exam-topbar-action {
+    @apply min-h-11 w-full justify-center rounded-[1rem] whitespace-nowrap;
+  }
+
+  .app-exam-timer-card {
+    @apply flex min-w-[12.75rem] flex-col rounded-[1.2rem] border px-3.5 py-2.5 lg:self-stretch;
+    border-color: hsl(var(--primary) / 0.18);
+    background:
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.16) 0%, transparent 11rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-tint) / 0.86) 100%
+      );
+    box-shadow:
+      0 24px 34px -30px hsl(var(--app-shadow-deep) / 0.16),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.86);
+  }
+
+  .app-exam-timer-card-warning {
+    border-color: hsl(var(--app-warning) / 0.22);
+    background:
+      radial-gradient(circle at top right, hsl(var(--app-warning) / 0.22) 0%, transparent 11rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-tint) / 0.84) 100%
+      );
+  }
+
+  .app-exam-timer-card-danger {
+    border-color: hsl(var(--app-danger) / 0.2);
+    background:
+      radial-gradient(circle at top right, hsl(var(--app-danger) / 0.22) 0%, transparent 11rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-tint) / 0.84) 100%
+      );
+  }
+
+  .app-exam-timer-card-kicker {
+    @apply text-[10px] font-semibold uppercase tracking-[0.18em];
+    color: hsl(var(--muted-foreground));
+  }
+
+  .app-exam-timer-card-head {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  .app-exam-timer-card-value {
+    @apply mt-1.5 text-[1.45rem] font-semibold leading-none tracking-[-0.05em] text-foreground sm:text-[1.8rem];
+  }
+
+  .app-exam-timer-card-warning .app-exam-timer-card-value {
+    color: hsl(var(--app-warning));
+  }
+
+  .app-exam-timer-card-danger .app-exam-timer-card-value {
+    color: hsl(var(--app-danger));
+  }
+
+  .app-exam-status-card {
+    @apply rounded-[1.35rem] border px-4 py-3.5;
+    border-color: hsl(var(--border) / 0.78);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.992) 0%,
+        hsl(var(--app-surface-2) / 0.82) 100%
+      );
+    box-shadow:
+      0 18px 28px -30px hsl(var(--app-shadow-deep) / 0.12),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.78);
+  }
+
+  .app-exam-status-card-head {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  .app-exam-status-card-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
+  }
+
+  .app-exam-status-card-value {
+    @apply text-[13px] font-semibold text-foreground;
+  }
+
+  .app-exam-status-card-primary {
+    @apply mt-2 text-[1.02rem] font-semibold leading-tight text-foreground;
+  }
+
+  .app-exam-status-card-meta {
+    @apply mt-1.5 text-[12px] leading-5 text-muted-foreground;
+  }
+
+  .app-exam-progress-track {
+    @apply mt-3 h-2 overflow-hidden rounded-full;
+    background-color: hsl(var(--border) / 0.76);
+  }
+
+  .app-exam-progress-fill {
+    height: 100%;
+    border-radius: inherit;
+    background:
+      linear-gradient(
+        90deg,
+        hsl(var(--primary) / 0.76) 0%,
+        hsl(var(--primary)) 100%
+      );
+    box-shadow: 0 10px 16px -12px hsl(var(--primary) / 0.4);
   }
 
   .app-exam-shell-focus {
@@ -3177,12 +3342,12 @@
 
   .app-exam-palette {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(2.65rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(2.8rem, 1fr));
     gap: 0.5rem;
   }
 
   .app-exam-palette-button {
-    @apply rounded-[0.95rem] border px-0 py-2.5 text-[13px] font-semibold leading-none transition-all duration-200;
+    @apply rounded-[1rem] border px-0 py-2.5 text-[13px] font-semibold leading-none transition-all duration-200;
     border-color: hsl(var(--border) / 0.76);
     background:
       linear-gradient(
@@ -3204,15 +3369,25 @@
 
   .app-exam-palette-button-active {
     border-color: hsl(var(--primary) / 0.28);
-    background-color: hsl(var(--primary));
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--primary) / 0.92) 0%,
+        hsl(var(--primary)) 100%
+      );
     color: hsl(var(--primary-foreground));
-    box-shadow: 0 16px 24px -22px hsl(var(--app-shadow-deep) / 0.2);
+    box-shadow: 0 18px 26px -22px hsl(var(--primary) / 0.36);
   }
 
   .app-exam-palette-button-complete {
-    border-color: rgb(167 243 208);
-    background: linear-gradient(180deg, rgb(236 253 245) 0%, rgb(209 250 229) 100%);
-    color: rgb(6 95 70);
+    border-color: hsl(var(--app-success) / 0.24);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-success) / 0.12) 0%,
+        hsl(var(--app-success) / 0.18) 100%
+      );
+    color: hsl(var(--app-success));
   }
 
   .app-exam-palette-legend {
@@ -3225,6 +3400,42 @@
 
   .app-exam-palette-swatch {
     @apply h-2.5 w-2.5 rounded-full;
+  }
+
+  .app-exam-sidebar-summary {
+    @apply grid gap-2 sm:grid-cols-3 xl:grid-cols-1;
+  }
+
+  .app-exam-sidebar-summary-card {
+    @apply rounded-[1.15rem] border px-3.5 py-3;
+    border-color: hsl(var(--border) / 0.76);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.76) 100%
+      );
+    box-shadow:
+      0 14px 22px -26px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.76);
+  }
+
+  .app-exam-sidebar-summary-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground;
+  }
+
+  .app-exam-sidebar-summary-value {
+    @apply mt-1 block text-[1.02rem] font-semibold leading-tight text-foreground;
+  }
+
+  .app-exam-sidebar-summary-meta {
+    @apply mt-1 block text-[11px] leading-5 text-muted-foreground;
+  }
+
+  .app-exam-sidebar-panel {
+    @apply rounded-[1.15rem] border bg-muted/15 p-2.5;
+    border-color: hsl(var(--border) / 0.74);
+    box-shadow: inset 0 1px 0 hsl(var(--app-surface-1) / 0.52);
   }
 
   .app-exam-question-shell {
@@ -3281,7 +3492,7 @@
   }
 
   .app-exam-nav-row {
-    @apply flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between;
+    @apply flex flex-col gap-3 border-t border-border/60 pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between;
   }
 
   @media (min-width: 1280px) {

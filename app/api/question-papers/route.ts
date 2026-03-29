@@ -15,6 +15,11 @@ import {
   derivePaperSubjectIdsFromQuestions,
   serializePaperSubjects,
 } from "@/lib/question-paper/subjects";
+import {
+  calculateSectionTotalMarks,
+  deriveSectionDefaultMarks,
+  deriveSectionDefaultNegativeMarks,
+} from "@/lib/question-paper/sections";
 import { isOnlineQuestionType } from "@/lib/question-paper/grading";
 import { resolveTeacherPaperScope } from "@/lib/question-paper/access";
 import { listWorkspaceQuestionPapers } from "@/lib/server/workspace-question-papers";
@@ -44,6 +49,36 @@ function toIdString(value: unknown) {
     return String((value as any)._id || "").trim();
   }
   return String(value || "").trim();
+}
+
+function normalizeSectionsPayload(sections: any[]) {
+  return (Array.isArray(sections) ? sections : []).map((section: any) => {
+    const normalizedQuestions = (
+      Array.isArray(section?.questions) ? section.questions : []
+    ).map((question: any) => ({
+      question: toIdString(question?.question),
+      marks: Number(question?.marks || 0),
+      negativeMarks: Number(question?.negativeMarks || 0),
+    }));
+
+    const normalizedSection = {
+      name: String(section?.name || "").trim(),
+      description: String(section?.description || ""),
+      instructions: String(section?.instructions || ""),
+      defaultMarks: deriveSectionDefaultMarks({
+        ...section,
+        questions: normalizedQuestions,
+      }),
+      defaultNegativeMarks: deriveSectionDefaultNegativeMarks({
+        ...section,
+        questions: normalizedQuestions,
+      }),
+      marks: calculateSectionTotalMarks({ questions: normalizedQuestions }),
+      questions: normalizedQuestions,
+    };
+
+    return normalizedSection;
+  });
 }
 
 async function validateQuestionSelection(
@@ -178,6 +213,11 @@ export async function POST(req: NextRequest) {
       totalMarks,
       sections,
     } = body || {};
+    const normalizedSections = normalizeSectionsPayload(sections);
+    const normalizedTotalMarks = normalizedSections.reduce(
+      (sum, section) => sum + section.marks,
+      0,
+    );
     const onlineEnabled = Boolean(rawOnlineEnabled);
     const onlineStartsAt = normalizeDate(rawOnlineStartsAt);
     const onlineEndsAt = normalizeDate(rawOnlineEndsAt);
@@ -192,9 +232,7 @@ export async function POST(req: NextRequest) {
     if (
       !title ||
       !classId ||
-      !sections ||
-      !Array.isArray(sections) ||
-      sections.length === 0 ||
+      normalizedSections.length === 0 ||
       typeof duration !== "number" ||
       duration <= 0 ||
       typeof passingMarks !== "number" ||
@@ -221,10 +259,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    for (const section of sections) {
+    for (const section of normalizedSections) {
       if (
         !section?.name ||
-        typeof section?.marks !== "number" ||
+        typeof section?.defaultMarks !== "number" ||
+        section.defaultMarks <= 0 ||
+        typeof section?.defaultNegativeMarks !== "number" ||
+        section.defaultNegativeMarks < 0 ||
         !Array.isArray(section?.questions)
       ) {
         return NextResponse.json(
@@ -233,24 +274,26 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const sectionQuestionMarks = section.questions.reduce(
-        (sum: number, question: { marks?: number }) =>
-          sum + (question?.marks ?? 0),
-        0,
-      );
-
-      if (section.marks !== sectionQuestionMarks) {
+      if (section.questions.length === 0) {
         return NextResponse.json(
           {
             success: false,
-            message: `Section "${section.name}" marks (${section.marks}) do not match total question marks (${sectionQuestionMarks}).`,
+            message: `Section "${section.name}" must include at least one question.`,
           },
           { status: 400 },
         );
       }
 
       for (const [questionIndex, question] of section.questions.entries()) {
-        if (!question?.question || typeof question?.marks !== "number") {
+        if (
+          !question?.question ||
+          typeof question?.marks !== "number" ||
+          Number.isNaN(question.marks) ||
+          question.marks < 0 ||
+          typeof question?.negativeMarks !== "number" ||
+          Number.isNaN(question.negativeMarks) ||
+          question.negativeMarks < 0
+        ) {
           return NextResponse.json(
             {
               success: false,
@@ -271,11 +314,11 @@ export async function POST(req: NextRequest) {
       return assignmentValidation.response;
     }
 
-    const questionValidation = await validateQuestionSelection(
-      QuestionModel,
-      sections,
-      onlineEnabled,
-    );
+      const questionValidation = await validateQuestionSelection(
+        QuestionModel,
+        normalizedSections,
+        onlineEnabled,
+      );
     if (!questionValidation.ok) {
       return questionValidation.response;
     }
@@ -374,8 +417,8 @@ export async function POST(req: NextRequest) {
       onlineEnabled,
       onlineStartsAt,
       onlineEndsAt,
-      totalMarks,
-      sections,
+      totalMarks: normalizedTotalMarks,
+      sections: normalizedSections,
       assignedAcademicSections: assignmentValidation.ids,
       createdBy: actorId,
     });

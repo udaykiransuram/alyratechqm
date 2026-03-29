@@ -15,6 +15,7 @@ import PageState from "@/components/ui/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import type { StudentPasswordAdminInfo } from "@/lib/user-credentials";
+import { USER_GENDER_OPTIONS } from "@/lib/user-gender";
 
 type ClassItem = {
   _id: string;
@@ -30,6 +31,7 @@ type AcademicSectionItem = {
 type UserRecord = {
   _id: string;
   name?: string;
+  gender?: string;
   fatherName?: string;
   email?: string;
   mobileNumber?: string;
@@ -57,6 +59,7 @@ function getSectionClassId(section: AcademicSectionItem) {
 function buildStudentForm(user: UserRecord | null) {
   return {
     name: user?.name || "",
+    gender: user?.gender || "",
     fatherName: user?.fatherName || "",
     email: user?.email || "",
     mobileNumber: user?.mobileNumber || "",
@@ -126,6 +129,7 @@ export default function EditStudentPageClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim(),
+          gender: form.gender || undefined,
           fatherName: form.fatherName.trim(),
           role: "student",
           email: form.email.trim(),
@@ -256,7 +260,7 @@ export default function EditStudentPageClient({
                         className="app-form-input"
                       />
                     </div>
-                    <div className="grid gap-4 md:grid-cols-3">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <div className="app-field-group">
                         <label className="app-field-label" htmlFor="fatherName">Father Name (Optional)</label>
                         <input
@@ -268,6 +272,24 @@ export default function EditStudentPageClient({
                           disabled={saving}
                           className="app-form-input"
                         />
+                      </div>
+                      <div className="app-field-group">
+                        <label className="app-field-label" htmlFor="gender">Gender</label>
+                        <select
+                          id="gender"
+                          name="gender"
+                          value={form.gender}
+                          onChange={handleChange}
+                          disabled={saving}
+                          className="app-form-input"
+                        >
+                          <option value="">Select gender</option>
+                          {USER_GENDER_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div className="app-field-group">
                         <label className="app-field-label" htmlFor="email">Email (Optional)</label>

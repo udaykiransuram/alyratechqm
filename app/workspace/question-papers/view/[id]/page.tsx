@@ -9,6 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { QuestionPaperReadOnlyQuestionCard } from "@/components/workspace/question-paper-view/QuestionPaperReadOnlyQuestionCard";
+import {
+  deriveSectionDefaultMarks,
+  deriveSectionDefaultNegativeMarks,
+} from "@/lib/question-paper/sections";
+import { resolveSectionSubjects } from "@/lib/question-paper/subjects";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { getWorkspaceQuestionPaperById } from "@/lib/server/workspace-assessment-data";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
@@ -86,8 +91,10 @@ export default async function ViewQuestionPaperPage({
     return {
       id: section?._id || `section-${sectionIndex}`,
       name: section?.name || `Section ${sectionIndex + 1}`,
-      defaultMarks: section?.marks,
-      defaultNegativeMarks: questions[0]?.negativeMarks ?? 0,
+      description: section?.description || "",
+      instructions: section?.instructions || "",
+      defaultMarks: deriveSectionDefaultMarks(section, 1),
+      defaultNegativeMarks: deriveSectionDefaultNegativeMarks(section, 0),
       questions: questions
         .filter(Boolean)
         .map((item: any) => ({
@@ -254,6 +261,13 @@ export default async function ViewQuestionPaperPage({
               const sectionQuestions = Array.isArray(section?.questions)
                 ? section.questions
                 : [];
+              const sectionSubjects = resolveSectionSubjects(
+                section,
+                paperSubjects,
+              );
+              const sectionDefaultMarks = deriveSectionDefaultMarks(section, 1);
+              const sectionDefaultNegativeMarks =
+                deriveSectionDefaultNegativeMarks(section, 0);
 
               return (
                 <Card
@@ -271,12 +285,28 @@ export default async function ViewQuestionPaperPage({
                             {section.description}
                           </p>
                         ) : null}
+                        {section?.instructions ? (
+                          <p className="mt-2 text-sm leading-6 text-foreground/82">
+                            {section.instructions}
+                          </p>
+                        ) : null}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {sectionSubjects.map((subject) => (
+                          <Badge
+                            key={`${section?._id || sectionIndex}-${subject._id}`}
+                            variant="outline"
+                          >
+                            {subject.name || subject._id}
+                          </Badge>
+                        ))}
                         <Badge variant="outline">
                           {sectionQuestions.length} Questions
                         </Badge>
                         <Badge variant="secondary">{section?.marks ?? 0} Marks</Badge>
+                        <Badge variant="secondary">
+                          +{sectionDefaultMarks} / -{sectionDefaultNegativeMarks}
+                        </Badge>
                       </div>
                     </div>
                   </CardHeader>

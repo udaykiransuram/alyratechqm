@@ -16,10 +16,12 @@ import {
 import PageLoadingState from "@/components/ui/page-loading-state";
 import PageState from "@/components/ui/page-state";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
+import { getUserGenderLabel } from "@/lib/user-gender";
 
 type UserItem = {
   _id: string;
   name: string;
+  gender?: string;
   email?: string;
   mobileNumber?: string;
   role: string;
@@ -340,6 +342,7 @@ export default function AdminDetailPageClient({
           </CardHeader>
           <CardContent className="app-section-body">
             <div className="app-detail-grid">
+              <DetailItem label="Gender" value={getUserGenderLabel(user.gender) || "-"} />
               <DetailItem label="Email" value={user.email || "-"} />
               <DetailItem label="Phone" value={user.mobileNumber || "-"} />
               <DetailItem

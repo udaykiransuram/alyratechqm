@@ -36,15 +36,21 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
       id: section._id || `section-${Math.random()}`,
       name: section.name ?? "",
       description: section.description ?? "",
-      defaultMarks: section.marks ?? 1,
+      instructions: section.instructions ?? "",
+      defaultMarks:
+        section.defaultMarks ??
+        (Array.isArray(section.questions) && section.questions.length > 0
+          ? section.questions[0].marks ?? 1
+          : 1),
       defaultNegativeMarks:
-        Array.isArray(section.questions) && section.questions.length > 0
+        section.defaultNegativeMarks ??
+        (Array.isArray(section.questions) && section.questions.length > 0
           ? section.questions[0].negativeMarks ?? 0
-          : 0,
+          : 0),
       questions: (section.questions || []).map((question: any) => {
         const questionObj = typeof question.question === "object" ? question.question : {};
         return {
-          question: questionObj,
+          question: questionObj._id ?? question.question,
           marks: question.marks ?? section.marks ?? 1,
           negativeMarks: question.negativeMarks ?? 0,
         };

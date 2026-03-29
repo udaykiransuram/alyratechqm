@@ -7,8 +7,10 @@ import { getTenantModels } from "@/lib/db-tenant";
 type StudentItem = {
   _id: string;
   name: string;
+  gender?: string;
   fatherName?: string;
   email?: string;
+  mobileNumber?: string;
   rollNumber?: string;
   enrolledAt?: string;
   academicSectionId?: string;
@@ -132,7 +134,7 @@ export async function getStudentsByClassPageData({
   }
 
   const students = await UserModel.find(studentQuery)
-    .select("name fatherName email rollNumber enrolledAt class academicSection")
+    .select("name gender fatherName email mobileNumber rollNumber enrolledAt class academicSection")
     .sort({ name: 1 })
     .lean();
 
@@ -253,8 +255,10 @@ export async function getStudentsByClassPageData({
     group.students.push({
       _id: String(student._id),
       name: student.name,
+      gender: student.gender ? String(student.gender) : undefined,
       fatherName: student.fatherName,
       email: student.email,
+      mobileNumber: student.mobileNumber,
       rollNumber: student.rollNumber,
       enrolledAt: student.enrolledAt,
       academicSectionId: studentSectionId,

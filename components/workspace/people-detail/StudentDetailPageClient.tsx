@@ -28,6 +28,7 @@ import {
 } from "@/hooks/useReturnNavigation";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
+import { getUserGenderLabel } from "@/lib/user-gender";
 import type { StudentPasswordAdminInfo } from "@/lib/user-credentials";
 
 type ClassItem = {
@@ -43,6 +44,7 @@ type AcademicSectionItem = {
 type UserItem = {
   _id: string;
   name: string;
+  gender?: string;
   fatherName?: string;
   email?: string;
   mobileNumber?: string;
@@ -471,6 +473,12 @@ export default function StudentDetailPageClient({
                 <div className="app-detail-item">
                   <div className="app-detail-label">Father Name</div>
                   <div className="app-detail-value">{user.fatherName || "-"}</div>
+                </div>
+                <div className="app-detail-item">
+                  <div className="app-detail-label">Gender</div>
+                  <div className="app-detail-value">
+                    {getUserGenderLabel(user.gender) || "-"}
+                  </div>
                 </div>
                 <div className="app-detail-item">
                   <div className="app-detail-label">Email</div>

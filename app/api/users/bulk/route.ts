@@ -15,6 +15,7 @@ import {
   validatePasswordInput,
   validateStudentDefaultPasswordSource,
 } from "@/lib/user-credentials";
+import { normalizeUserGender } from "@/lib/user-gender";
 
 function normalizeIds(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -75,6 +76,14 @@ type CachedSectionRecord = {
   isArchived?: boolean;
 };
 
+type CachedSubjectRecord = {
+  _id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  isArchived?: boolean;
+};
+
 type StructureChangeItem = {
   _id: string;
   name: string;
@@ -88,14 +97,20 @@ type StructureState = {
   sectionById: Map<string, CachedSectionRecord>;
   sectionByClassLookupKey: Map<string, CachedSectionRecord>;
   sectionsByLookupKey: Map<string, CachedSectionRecord[]>;
+  subjectById: Map<string, CachedSubjectRecord>;
+  subjectByLookupKey: Map<string, CachedSubjectRecord>;
   createdClasses: StructureChangeItem[];
   restoredClasses: StructureChangeItem[];
   createdSections: StructureChangeItem[];
   restoredSections: StructureChangeItem[];
+  createdSubjects: StructureChangeItem[];
+  restoredSubjects: StructureChangeItem[];
   createdClassIds: Set<string>;
   restoredClassIds: Set<string>;
   createdSectionIds: Set<string>;
   restoredSectionIds: Set<string>;
+  createdSubjectIds: Set<string>;
+  restoredSubjectIds: Set<string>;
 };
 
 function createStructureState(): StructureState {
@@ -105,14 +120,20 @@ function createStructureState(): StructureState {
     sectionById: new Map(),
     sectionByClassLookupKey: new Map(),
     sectionsByLookupKey: new Map(),
+    subjectById: new Map(),
+    subjectByLookupKey: new Map(),
     createdClasses: [],
     restoredClasses: [],
     createdSections: [],
     restoredSections: [],
+    createdSubjects: [],
+    restoredSubjects: [],
     createdClassIds: new Set(),
     restoredClassIds: new Set(),
     createdSectionIds: new Set(),
     restoredSectionIds: new Set(),
+    createdSubjectIds: new Set(),
+    restoredSubjectIds: new Set(),
   };
 }
 
@@ -171,6 +192,37 @@ function rememberSection(state: StructureState, rawSection: any) {
   );
 
   return sectionRecord;
+}
+
+function rememberSubject(state: StructureState, rawSubject: any) {
+  const subjectRecord: CachedSubjectRecord = {
+    _id: String(rawSubject?._id || ""),
+    name: String(rawSubject?.name || "").trim(),
+    code: rawSubject?.code ? String(rawSubject.code).trim() : undefined,
+    description: rawSubject?.description
+      ? String(rawSubject.description).trim()
+      : undefined,
+    isArchived: Boolean(rawSubject?.isArchived),
+  };
+
+  if (!subjectRecord._id || !subjectRecord.name) {
+    return null;
+  }
+
+  state.subjectById.set(subjectRecord._id, subjectRecord);
+  state.subjectByLookupKey.set(
+    toUploadLookupKey(subjectRecord.name),
+    subjectRecord,
+  );
+
+  if (subjectRecord.code) {
+    state.subjectByLookupKey.set(
+      toUploadLookupKey(subjectRecord.code),
+      subjectRecord,
+    );
+  }
+
+  return subjectRecord;
 }
 
 function pushStructureChange(
@@ -447,6 +499,105 @@ async function createSectionRecord({
   return nextRecord;
 }
 
+async function restoreSubjectRecord({
+  record,
+  SubjectModel,
+  schoolKey,
+  request,
+  state,
+}: {
+  record: CachedSubjectRecord;
+  SubjectModel: any;
+  schoolKey: string;
+  request: NextRequest;
+  state: StructureState;
+}) {
+  if (!record.isArchived) {
+    return record;
+  }
+
+  const restored = await SubjectModel.findByIdAndUpdate(
+    record._id,
+    {
+      ...buildRestoreUpdate(),
+      name: record.name,
+      code: record.code || undefined,
+      description: record.description,
+    },
+    { new: true, runValidators: true },
+  )
+    .select("name code description isArchived")
+    .lean();
+
+  const nextRecord = rememberSubject(state, restored || record) || record;
+
+  pushStructureChange(
+    state.restoredSubjects,
+    state.restoredSubjectIds,
+    {
+      _id: nextRecord._id,
+      name: nextRecord.name,
+    },
+  );
+
+  await recordTenantAudit({
+    schoolKey,
+    req: request,
+    entityType: "subject",
+    entityId: nextRecord._id,
+    entityLabel: nextRecord.name,
+    action: "restored",
+    summary: `Restored subject ${nextRecord.name}.`,
+    details: { via: "user_bulk_upload" },
+  });
+
+  return nextRecord;
+}
+
+async function createSubjectRecord({
+  name,
+  SubjectModel,
+  schoolKey,
+  request,
+  state,
+}: {
+  name: string;
+  SubjectModel: any;
+  schoolKey: string;
+  request: NextRequest;
+  state: StructureState;
+}) {
+  const created = await SubjectModel.create({
+    name,
+  });
+  const nextRecord = rememberSubject(state, created.toObject()) || {
+    _id: String(created._id),
+    name: String(created.name || "").trim(),
+  };
+
+  pushStructureChange(
+    state.createdSubjects,
+    state.createdSubjectIds,
+    {
+      _id: nextRecord._id,
+      name: nextRecord.name,
+    },
+  );
+
+  await recordTenantAudit({
+    schoolKey,
+    req: request,
+    entityType: "subject",
+    entityId: nextRecord._id,
+    entityLabel: nextRecord.name,
+    action: "created",
+    summary: `Created subject ${nextRecord.name}.`,
+    details: { via: "user_bulk_upload" },
+  });
+
+  return nextRecord;
+}
+
 async function ensureSectionForClass({
   classRecord,
   name,
@@ -495,6 +646,56 @@ async function ensureSectionForClass({
       schoolKey,
       request,
       state,
+    }),
+  } as const;
+}
+
+async function ensureSubjectRecord(
+  value: unknown,
+  context: {
+    SubjectModel: any;
+    schoolKey: string;
+    request: NextRequest;
+    state: StructureState;
+  },
+) {
+  const token = String(value || "").trim();
+  if (!token) {
+    return {
+      ok: false,
+      message: "Subject name is required.",
+    } as const;
+  }
+
+  const directMatch = context.state.subjectById.get(token);
+  if (directMatch) {
+    return {
+      ok: true,
+      record: await restoreSubjectRecord({
+        record: directMatch,
+        ...context,
+      }),
+    } as const;
+  }
+
+  const lookupMatch = context.state.subjectByLookupKey.get(
+    toUploadLookupKey(token),
+  );
+  if (lookupMatch) {
+    return {
+      ok: true,
+      record: await restoreSubjectRecord({
+        record: lookupMatch,
+        ...context,
+      }),
+    } as const;
+  }
+
+  return {
+    ok: true,
+    record: await createSubjectRecord({
+      name: token,
+      ...context,
     }),
   } as const;
 }
@@ -745,6 +946,31 @@ async function resolveSectionTokens({
   } as const;
 }
 
+async function resolveSubjectTokens(
+  values: unknown,
+  context: {
+    SubjectModel: any;
+    schoolKey: string;
+    request: NextRequest;
+    state: StructureState;
+  },
+) {
+  const ids = new Set<string>();
+
+  for (const token of splitUploadTokens(values)) {
+    const subjectResult = await ensureSubjectRecord(token, context);
+    if (!subjectResult.ok) {
+      return subjectResult;
+    }
+    ids.add(subjectResult.record._id);
+  }
+
+  return {
+    ok: true,
+    ids: Array.from(ids),
+  } as const;
+}
+
 function resolveUserScope({
   role,
   classIds,
@@ -847,7 +1073,13 @@ export async function POST(request: NextRequest) {
       User,
       AcademicSection: AcademicSectionModel,
       Class: ClassModel,
-    } = await getTenantModels(schoolKey, ["User", "AcademicSection", "Class"]);
+      Subject: SubjectModel,
+    } = await getTenantModels(schoolKey, [
+      "User",
+      "AcademicSection",
+      "Class",
+      "Subject",
+    ]);
 
     const payload = await request.json();
     const students = Array.isArray(payload?.users)
@@ -861,12 +1093,15 @@ export async function POST(request: NextRequest) {
     }
 
     const structureState = createStructureState();
-    const [existingClasses, existingSections] = await Promise.all([
+    const [existingClasses, existingSections, existingSubjects] = await Promise.all([
       ClassModel.find({})
         .select("name description isArchived")
         .lean(),
       AcademicSectionModel.find({})
         .select("name class description isActive isArchived")
+        .lean(),
+      SubjectModel.find({})
+        .select("name code description isArchived")
         .lean(),
     ]);
 
@@ -875,6 +1110,9 @@ export async function POST(request: NextRequest) {
     });
     existingSections.forEach((sectionRecord: any) => {
       rememberSection(structureState, sectionRecord);
+    });
+    existingSubjects.forEach((subjectRecord: any) => {
+      rememberSubject(structureState, subjectRecord);
     });
 
     const results: any[] = [];
@@ -890,6 +1128,7 @@ export async function POST(request: NextRequest) {
         ? String(normalizedStudent.password)
         : undefined;
       const role = String(normalizedStudent.role || "").trim();
+      const gender = normalizeUserGender(normalizedStudent.gender);
       const fatherName = String(normalizedStudent.fathername || "").trim();
       const classId = normalizeId(normalizedStudent.classid ?? normalizedStudent.class);
       const academicSectionId = normalizeId(
@@ -983,6 +1222,7 @@ export async function POST(request: NextRequest) {
       let resolvedAcademicSectionId = academicSectionId;
       let resolvedScopedClassIds = scopedClassIds;
       let resolvedScopedAcademicSectionIds = scopedAcademicSectionIds;
+      let resolvedScopedSubjectIds = scopedSubjectIds;
 
       if (role === "student") {
         const classResolution = await ensureClassRecord(classId, {
@@ -1063,6 +1303,29 @@ export async function POST(request: NextRequest) {
           resolvedScopedAcademicSectionIds = sectionResolution.ids;
         } else {
           resolvedScopedAcademicSectionIds = [];
+        }
+
+        if (!(role === "admin" && allowAllSubjects)) {
+          const subjectResolution = await resolveSubjectTokens(
+            normalizedSubjectIds,
+            {
+              SubjectModel,
+              schoolKey,
+              request,
+              state: structureState,
+            },
+          );
+          if (!subjectResolution.ok) {
+            results.push({
+              success: false,
+              message: subjectResolution.message,
+              student,
+            });
+            continue;
+          }
+          resolvedScopedSubjectIds = subjectResolution.ids;
+        } else {
+          resolvedScopedSubjectIds = [];
         }
       }
 
@@ -1159,6 +1422,7 @@ export async function POST(request: NextRequest) {
         passwordHash,
         role,
         mobileNumber: String(finalMobileNumber).trim(),
+        gender,
         fatherName: role === "student" ? fatherName || undefined : undefined,
         class: role === "student" ? resolvedClassId || undefined : undefined,
         academicSection:
@@ -1175,7 +1439,7 @@ export async function POST(request: NextRequest) {
             : undefined,
         subjectIds:
           role === "teacher" || role === "admin"
-            ? scopedSubjectIds
+            ? resolvedScopedSubjectIds
             : undefined,
         hasAllClasses: role === "admin" ? allowAllClasses : false,
         hasAllSections:
@@ -1200,6 +1464,8 @@ export async function POST(request: NextRequest) {
       restoredClasses: structureState.restoredClasses,
       createdSections: structureState.createdSections,
       restoredSections: structureState.restoredSections,
+      createdSubjects: structureState.createdSubjects,
+      restoredSubjects: structureState.restoredSubjects,
     });
   } catch (error: any) {
     return NextResponse.json(

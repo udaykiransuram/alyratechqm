@@ -7,6 +7,7 @@ import PageHero from '@/components/layout/PageHero';
 import PageShell from '@/components/layout/PageShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import FilePickerField from '@/components/ui/file-picker-field';
 import { useToast } from '@/components/ui/use-toast';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
 
@@ -258,15 +259,13 @@ export default function ImportQuestionsPage() {
 
               <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                 <div className="app-field-group">
-                  <label htmlFor="questionImportFile" className="app-field-label">
-                    Excel File
-                  </label>
-                  <input
+                  <FilePickerField
                     id="questionImportFile"
-                    type="file"
+                    label="Excel File"
                     accept=".xlsx,.xls"
-                    className="app-form-file"
                     onChange={handleFileChange}
+                    selectedFileName={file?.name || null}
+                    placeholder="Excel workbook"
                   />
                 </div>
                 <Button type="submit" disabled={!file} className="md:min-w-[120px]">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import QuestionPaperForm from "@/components/QuestionPaperForm";
 
@@ -23,23 +23,21 @@ export default function CreateQuestionPaperPageClient({
   initialSections,
   initialMessage = null,
 }: CreateQuestionPaperPageClientProps) {
-  const [initialData] = useState<any>(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
+  const [initialData, setInitialData] = useState<any>(null);
 
+  useEffect(() => {
     try {
       const copy = sessionStorage.getItem("questionPaperCopy");
       if (!copy) {
-        return null;
+        return;
       }
 
       sessionStorage.removeItem("questionPaperCopy");
-      return JSON.parse(copy);
+      setInitialData(JSON.parse(copy));
     } catch {
-      return null;
+      setInitialData(null);
     }
-  });
+  }, []);
 
   return (
     <QuestionPaperForm

@@ -19,6 +19,7 @@ import {
   validatePasswordInput,
   validateStudentDefaultPasswordSource,
 } from "@/lib/user-credentials";
+import { normalizeUserGender } from "@/lib/user-gender";
 
 export const dynamic = "force-dynamic";
 
@@ -216,6 +217,7 @@ export async function POST(req: NextRequest) {
     const email = normalizeEmail(body?.email);
     const password = body?.password ? String(body.password) : undefined;
     const role = String(body?.role || "").trim();
+    const gender = normalizeUserGender(body?.gender);
     const fatherName = String(body?.fatherName || "").trim();
     const classId = normalizeId(body?.classId ?? body?.class);
     const academicSectionId = normalizeId(
@@ -394,6 +396,7 @@ export async function POST(req: NextRequest) {
             passwordHash,
             role,
             mobileNumber,
+            gender,
             fatherName: role === "student" ? fatherName || undefined : undefined,
             class: classId || undefined,
             academicSection: academicSectionId || undefined,
@@ -439,6 +442,7 @@ export async function POST(req: NextRequest) {
             passwordHash,
             role,
             mobileNumber,
+            gender,
             fatherName: role === "student" ? fatherName || undefined : undefined,
             class: role === "student" ? classId || undefined : undefined,
             academicSection:
@@ -490,6 +494,7 @@ export async function POST(req: NextRequest) {
       passwordHash,
       role,
       mobileNumber,
+      gender,
       fatherName: role === "student" ? fatherName || undefined : undefined,
       class: role === "student" ? classId || undefined : undefined,
       academicSection:

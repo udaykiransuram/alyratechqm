@@ -6,6 +6,10 @@ import {
   validateStudentSectionAnswers,
 } from "@/lib/question-paper/grading";
 import { serializePaperSubjects } from "@/lib/question-paper/subjects";
+import {
+  deriveSectionDefaultMarks,
+  deriveSectionDefaultNegativeMarks,
+} from "@/lib/question-paper/sections";
 
 function normalizeId(value: unknown) {
   return String(value || "").trim();
@@ -250,6 +254,9 @@ export function sanitizePaperForStudent(paper: any) {
       (section: any) => ({
         name: String(section?.name || ""),
         description: String(section?.description || ""),
+        instructions: String(section?.instructions || ""),
+        defaultMarks: deriveSectionDefaultMarks(section, 1),
+        defaultNegativeMarks: deriveSectionDefaultNegativeMarks(section, 0),
         marks: Number(section?.marks || 0),
         questions: (Array.isArray(section?.questions) ? section.questions : []).map(
           (entry: any) => {

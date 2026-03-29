@@ -38,6 +38,39 @@ function sortSubjectsByLabel(values: ResolvedPaperSubject[]) {
   });
 }
 
+export function resolveSectionSubjects(
+  section: any,
+  fallbackSubjectsInput: Array<{ _id?: string; name?: string }> = [],
+): ResolvedPaperSubject[] {
+  const subjects = new Map<string, ResolvedPaperSubject>();
+  const fallbackSubjects = Array.isArray(fallbackSubjectsInput)
+    ? fallbackSubjectsInput
+    : [];
+  const fallbackSubject = fallbackSubjects.length === 1 ? fallbackSubjects[0] : null;
+
+  const register = (candidate: unknown) => {
+    const id = normalizeId(candidate);
+    if (!id || subjects.has(id)) return;
+
+    subjects.set(id, {
+      _id: id,
+      name: normalizeName(candidate) || id,
+    });
+  };
+
+  (Array.isArray(section?.questions) ? section.questions : []).forEach(
+    (entry: any) => {
+      register(entry?.question?.subject);
+    },
+  );
+
+  if (subjects.size === 0 && fallbackSubject) {
+    register(fallbackSubject);
+  }
+
+  return sortSubjectsByLabel(Array.from(subjects.values()));
+}
+
 function buildSubjectNameLookup(paper: any) {
   const lookup = new Map<string, string>();
 

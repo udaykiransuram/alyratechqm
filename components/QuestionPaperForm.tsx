@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Button }  from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
 import { fetchApiJson, peekCachedApiJson } from '@/lib/client/api';
 import { announceNavigationStart } from '@/lib/client/navigation-feedback';
+import { calculateSectionTotalMarks } from '@/lib/question-paper/sections';
 import { resolvePaperSubjects } from '@/lib/question-paper/subjects';
 import {
   Accordion,
@@ -178,6 +179,7 @@ interface Section {
   id: string;
   name: string;
   description: string;
+  instructions: string;
   defaultMarks: number | undefined;
   defaultNegativeMarks: number | undefined;
   questions: QuestionInPaper[];
@@ -227,7 +229,7 @@ export default function QuestionPaperForm({
   const [duration, setDuration] = useState(initialData?.duration ?? 60);
   const [passingMarks, setPassingMarks] = useState(initialData?.passingMarks ?? 0);
   const [examDate, setExamDate] = useState<Date | null>(
-    parseStoredDate(initialData?.examDate) ?? new Date(),
+    parseStoredDate(initialData?.examDate),
   );
   const [onlineEnabled, setOnlineEnabled] = useState(
     Boolean(initialData?.onlineEnabled),
@@ -241,6 +243,7 @@ export default function QuestionPaperForm({
   const [sections, setSections] = useState<Section[]>(initialData?.sections || []);
   const [classId, setClassId] = useState(initialData?.classId || '');
   const [assignedAcademicSectionIds, setAssignedAcademicSectionIds] = useState<string[]>(initialData?.assignedAcademicSectionIds || []);
+  const nextSectionIdRef = useRef(1);
 
   // Hydrate state when initialData changes (for edit mode)
   useEffect(() => {
@@ -258,6 +261,24 @@ export default function QuestionPaperForm({
       setSections(initialData.sections || []);
     }
   }, [initialData]);
+
+  useEffect(() => {
+    if (initialData || isEditMode || examDate) {
+      return;
+    }
+
+    setExamDate(new Date());
+  }, [examDate, initialData, isEditMode]);
+
+  useEffect(() => {
+    const maxExistingSectionId = sections.reduce((currentMax, section) => {
+      const match = /^section-(\d+)$/.exec(String(section.id || ''));
+      const numericId = match ? Number(match[1]) : 0;
+      return Number.isFinite(numericId) ? Math.max(currentMax, numericId) : currentMax;
+    }, 0);
+
+    nextSectionIdRef.current = Math.max(nextSectionIdRef.current, maxExistingSectionId + 1);
+  }, [sections]);
 
   // Question Bank State
   const [availableQuestions, setAvailableQuestions] = useState<any[]>([]);
@@ -623,12 +644,16 @@ export default function QuestionPaperForm({
 
   // Section Handlers
   const handleAddSection = () => {
+    const nextSectionId = `section-${nextSectionIdRef.current}`;
+    nextSectionIdRef.current += 1;
+
     setSections(prev => [
       ...prev,
       {
-        id: `section-${Date.now()}`,
+        id: nextSectionId,
         name: '',
         description: '',
+        instructions: '',
         defaultMarks: undefined,
         defaultNegativeMarks: 0, 
         questions: []
@@ -638,7 +663,7 @@ export default function QuestionPaperForm({
 
   const handleUpdateSection = (
     id: string,
-    field: 'name' | 'description' | 'defaultMarks' | 'defaultNegativeMarks',
+    field: 'name' | 'description' | 'instructions' | 'defaultMarks' | 'defaultNegativeMarks',
     value: string | number | undefined
   ) => {
     setSections(prev =>
@@ -868,7 +893,10 @@ export default function QuestionPaperForm({
         sections: sections.map(s => ({
           name: s.name,
           description: s.description,
-          marks: s.questions.reduce((sum, q) => sum + q.marks, 0),
+          instructions: s.instructions,
+          defaultMarks: s.defaultMarks,
+          defaultNegativeMarks: s.defaultNegativeMarks,
+          marks: calculateSectionTotalMarks(s),
           questions: s.questions.map(q => ({
             question: q.question._id,
             marks: q.marks,
@@ -1002,6 +1030,9 @@ export default function QuestionPaperForm({
                               <span className="rounded-full bg-muted px-2.5 py-1">
                                 {section.questions.length} question{section.questions.length === 1 ? '' : 's'}
                               </span>
+                              <span className="rounded-full bg-muted px-2.5 py-1">
+                                +{section.defaultMarks ?? 0} / -{section.defaultNegativeMarks ?? 0}
+                              </span>
                               <span className="rounded-full bg-muted px-2.5 py-1">{sectionTotalMarks} marks</span>
                             </div>
                           </div>
@@ -1012,7 +1043,7 @@ export default function QuestionPaperForm({
                             onUpdate={(field, value) =>
                               handleUpdateSection(
                                 section.id,
-                                field as 'name' | 'description' | 'defaultMarks' | 'defaultNegativeMarks',
+                                field as 'name' | 'description' | 'instructions' | 'defaultMarks' | 'defaultNegativeMarks',
                                 value,
                               )
                             }

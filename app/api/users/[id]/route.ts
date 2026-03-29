@@ -20,6 +20,7 @@ import {
   validatePasswordInput,
   validateStudentDefaultPasswordSource,
 } from "@/lib/user-credentials";
+import { normalizeUserGender } from "@/lib/user-gender";
 
 export const dynamic = "force-dynamic";
 
@@ -227,6 +228,7 @@ export async function PUT(
       email,
       password,
       mobileNumber,
+      gender,
       fatherName,
       classIds,
       academicSectionIds,
@@ -241,6 +243,7 @@ export async function PUT(
       rawAcademicSectionId ?? rawAcademicSection,
     );
     const normalizedMobileNumber = String(mobileNumber || "").trim();
+    const normalizedGender = normalizeUserGender(gender);
     const normalizedFatherName = String(fatherName || "").trim();
     const normalizedEmail = normalizeEmail(email);
     const normalizedRollNumber = normalizeRollNumber(rollNumber);
@@ -346,6 +349,7 @@ export async function PUT(
       name,
       role,
       mobileNumber: normalizedMobileNumber,
+      gender: normalizedGender,
       fatherName:
         role === "student" ? normalizedFatherName || undefined : undefined,
     };

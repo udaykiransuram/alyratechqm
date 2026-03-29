@@ -4,6 +4,10 @@ import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/button";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
+import {
+  deriveSectionDefaultMarks,
+  deriveSectionDefaultNegativeMarks,
+} from "@/lib/question-paper/sections";
 import { getWorkspaceQuestionPaperById } from "@/lib/server/workspace-assessment-data";
 import {
   getWorkspaceClasses,
@@ -34,11 +38,9 @@ function buildQuestionPaperInitialData(rawData: any) {
       id: section._id || `section-${sectionIndex + 1}`,
       name: section.name ?? "",
       description: section.description ?? "",
-      defaultMarks: section.marks ?? 1,
-      defaultNegativeMarks:
-        Array.isArray(section.questions) && section.questions.length > 0
-          ? (section.questions[0].negativeMarks ?? 0)
-          : 0,
+      instructions: section.instructions ?? "",
+      defaultMarks: deriveSectionDefaultMarks(section, 1),
+      defaultNegativeMarks: deriveSectionDefaultNegativeMarks(section, 0),
       questions: (section.questions || []).map((question: any) => ({
         question:
           typeof question.question === "object" && question.question

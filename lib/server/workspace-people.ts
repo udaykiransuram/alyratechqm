@@ -51,6 +51,7 @@ function normalizeUserRecord(rawUser: any) {
   return {
     _id: toId(rawUser?._id),
     name: toOptionalString(rawUser?.name) || "",
+    gender: toOptionalString(rawUser?.gender),
     fatherName: toOptionalString(rawUser?.fatherName),
     email: toOptionalString(rawUser?.email),
     mobileNumber: toOptionalString(rawUser?.mobileNumber),

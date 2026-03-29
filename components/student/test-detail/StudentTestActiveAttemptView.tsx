@@ -21,6 +21,7 @@ import FeedbackNotice from "@/components/ui/feedback-notice";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { resolveSectionSubjects } from "@/lib/question-paper/subjects";
 
 import type {
   StudentAnswerState,
@@ -28,6 +29,8 @@ import type {
   StudentQuestion,
   StudentQuestionListItem,
 } from "./student-test-types";
+
+type CountdownTone = "normal" | "warning" | "danger";
 
 function toTimestamp(value?: string | null) {
   if (!value) return 0;
@@ -48,27 +51,53 @@ function formatRemainingTime(value: number | null) {
   return `${minutes}m ${seconds}s`;
 }
 
-function StudentTestCountdownText({ deadlineAt }: { deadlineAt?: string | null }) {
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const deadlineMs = toTimestamp(deadlineAt);
+function useCountdownRemaining(deadlineAt?: string | null) {
+  const deadlineMs = useMemo(() => toTimestamp(deadlineAt), [deadlineAt]);
+  const [nowMs, setNowMs] = useState<number | null>(null);
 
   useEffect(() => {
     if (!deadlineMs) {
+      setNowMs(null);
       return;
     }
 
-    setNowMs(Date.now());
-    const intervalId = window.setInterval(() => {
+    const updateNow = () => {
       setNowMs(Date.now());
-    }, 1000);
+    };
+
+    updateNow();
+    const intervalId = window.setInterval(updateNow, 1000);
 
     return () => {
       window.clearInterval(intervalId);
     };
   }, [deadlineMs]);
 
-  const remainingMs = deadlineMs ? Math.max(0, deadlineMs - nowMs) : null;
-  return <>{formatRemainingTime(remainingMs)}</>;
+  return deadlineMs && nowMs !== null ? Math.max(0, deadlineMs - nowMs) : null;
+}
+
+function getCountdownTone(remainingMs: number | null): CountdownTone {
+  if (remainingMs === null) return "normal";
+  if (remainingMs <= 5 * 60 * 1000) return "danger";
+  if (remainingMs <= 15 * 60 * 1000) return "warning";
+  return "normal";
+}
+
+function getCountdownBadgeLabel(remainingMs: number | null) {
+  if (remainingMs === null) return "No timer";
+  if (remainingMs <= 5 * 60 * 1000) return "Last 5 min";
+  if (remainingMs <= 15 * 60 * 1000) return "Final 15 min";
+  return "On track";
+}
+
+function normalizeLabel(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function labelsMatch(left: unknown, right: unknown) {
+  const normalizedLeft = normalizeLabel(left);
+  const normalizedRight = normalizeLabel(right);
+  return Boolean(normalizedLeft) && normalizedLeft === normalizedRight;
 }
 
 function getOptionLabel(index: number) {
@@ -152,6 +181,12 @@ export default function StudentTestActiveAttemptView({
   onUpdateMatrixSelection,
   onClearCurrentAnswer,
 }: StudentTestActiveAttemptViewProps) {
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   const subjectProgress = useMemo(() => {
     const progressMap = new Map<
       string,
@@ -184,6 +219,48 @@ export default function StudentTestActiveAttemptView({
       left.name.localeCompare(right.name),
     );
   }, [answeredQuestionIds, paperSubjects, questionList]);
+  const sectionNavigation = useMemo(() => {
+    let runningIndex = 0;
+
+    return (Array.isArray(paper.sections) ? paper.sections : [])
+      .map((section, sectionIndex) => {
+        const sectionQuestions = Array.isArray(section?.questions)
+          ? section.questions
+          : [];
+        const items = sectionQuestions.map((entry, questionIndex) => {
+          const globalIndex = runningIndex + questionIndex;
+          const questionId = String(entry?.question?._id || "").trim();
+
+          return {
+            questionId,
+            globalIndex,
+            answered: questionId ? answeredQuestionIds.has(questionId) : false,
+          };
+        });
+        runningIndex += sectionQuestions.length;
+
+        return {
+          id: `${sectionIndex}-${String(section?.name || "section").trim()}`,
+          sectionIndex,
+          name: String(section?.name || "").trim() || `Section ${sectionIndex + 1}`,
+          description: String(section?.description || "").trim(),
+          instructions: String(section?.instructions || "").trim(),
+          defaultMarks: Number(section?.defaultMarks || 0),
+          defaultNegativeMarks: Number(section?.defaultNegativeMarks || 0),
+          totalMarks: Number(section?.marks || 0),
+          subjects: resolveSectionSubjects(section, paperSubjects),
+          items,
+        };
+      })
+      .filter((section) => section.items.length > 0);
+  }, [answeredQuestionIds, paper.sections, paperSubjects]);
+  const currentSection = useMemo(
+    () =>
+      sectionNavigation.find((section) =>
+        section.items.some((item) => item.globalIndex === currentIndex),
+      ) || null,
+    [currentIndex, sectionNavigation],
+  );
 
   const currentQuestionAnswered = currentQuestion
     ? answeredQuestionIds.has(currentQuestion.question._id)
@@ -199,6 +276,72 @@ export default function StudentTestActiveAttemptView({
         : [],
     [currentQuestion],
   );
+  const remainingMs = useCountdownRemaining(deadlineAt);
+  const countdownTone = getCountdownTone(remainingMs);
+  const countdownValue = formatRemainingTime(remainingMs);
+  const totalQuestions = questionList.length;
+  const currentQuestionNumber = totalQuestions
+    ? Math.min(currentIndex + 1, totalQuestions)
+    : 0;
+  const saveStateToneClass =
+    isSubmitting || isSaving
+      ? "app-status-badge-info"
+      : actionError
+        ? "app-status-badge-danger"
+        : pendingSubmitRetry || saveRetryPending
+          ? "app-status-badge-warning"
+          : "app-status-badge-success";
+  const saveStateBadgeLabel = isSubmitting
+    ? "Submitting"
+    : isSaving
+      ? "Syncing"
+      : actionError
+        ? "Needs check"
+        : pendingSubmitRetry || saveRetryPending
+      ? "Retrying"
+      : "Protected";
+  const currentSectionRuleLabel = currentSection
+    ? `+${currentSection.defaultMarks || currentQuestion?.marks || 0} / -${currentSection.defaultNegativeMarks || currentQuestion?.negativeMarks || 0}`
+    : `+${currentQuestion?.marks || 0} / -${currentQuestion?.negativeMarks || 0}`;
+  const showPaperSubjectChips = paperSubjects.length > 1;
+  const answeredCompactLabel = totalQuestions
+    ? `${answeredCount}/${totalQuestions}`
+    : "—";
+  const showCurrentSectionChip = Boolean(
+    currentSection &&
+      (sectionNavigation.length > 1 ||
+        !labelsMatch(currentSection.name, paperSubjectLabel)),
+  );
+  const showQuestionEyebrow = Boolean(
+    currentQuestion?.sectionName &&
+      (sectionNavigation.length > 1 ||
+        !labelsMatch(currentQuestion.sectionName, paperSubjectLabel)),
+  );
+  const currentQuestionSubjectName = String(
+    currentQuestion?.question.subject?.name || "",
+  ).trim();
+  const showQuestionSubjectChip = Boolean(
+    currentQuestionSubjectName &&
+      !labelsMatch(currentQuestionSubjectName, paperSubjectLabel) &&
+      !labelsMatch(currentQuestionSubjectName, currentQuestion?.sectionName),
+  );
+  const visibleCurrentSectionSubjects = currentSection
+    ? currentSection.subjects.filter((subject) => {
+        const subjectLabel = String(subject?.name || subject?._id || "").trim();
+        if (!subjectLabel) {
+          return false;
+        }
+
+        if (currentSection.subjects.length > 1) {
+          return true;
+        }
+
+        return (
+          !labelsMatch(subjectLabel, currentQuestion?.sectionName) &&
+          !labelsMatch(subjectLabel, paperSubjectLabel)
+        );
+      })
+    : [];
 
   return (
     <div
@@ -214,10 +357,12 @@ export default function StudentTestActiveAttemptView({
             {paper.title}
           </h1>
           <p className="app-copy-muted">
-            {[paperSubjectLabel, paperClassLabel].filter(Boolean).join(" • ") ||
+            {[paperSubjectLabel, paperClassLabel, `${paper.duration} min`]
+              .filter(Boolean)
+              .join(" • ") ||
               `${questionList.length} questions`}
           </p>
-          {paperSubjects.length > 0 ? (
+          {showPaperSubjectChips ? (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {paperSubjects.map((subject) => (
                 <span key={subject._id} className="app-meta-chip">
@@ -227,84 +372,140 @@ export default function StudentTestActiveAttemptView({
             </div>
           ) : null}
         </div>
-        <div className="app-exam-focus-topbar-meta">
-          <span className="app-meta-chip">
-            Time left <StudentTestCountdownText deadlineAt={deadlineAt} />
-          </span>
-          <span className="app-meta-chip">
-            {answeredCount}/{questionList.length} answered
-          </span>
-          <span className="app-meta-chip">
-            Q {Math.min(currentIndex + 1, questionList.length)} / {questionList.length}
-          </span>
-          <span className="app-meta-chip">Save: {saveStatusLabel}</span>
-        </div>
-        <div className="app-exam-focus-topbar-actions">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="app-button-compact"
-            onClick={() => void onSaveAttempt(true)}
-            disabled={isSaving || isSubmitting}
-          >
-            {isSaving ? <Spinner /> : "Save Progress"}
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="app-button-compact"
-            onClick={() => void onToggleFullscreen()}
-          >
-            {isFullscreen ? (
-              <Minimize2 className="mr-2 h-4 w-4" />
-            ) : (
-              <Expand className="mr-2 h-4 w-4" />
-            )}
-            {isFullscreen ? "Exit Full Screen" : "Full Screen"}
-          </Button>
-
-          <AlertDialog
-            open={submitDialogOpen}
-            onOpenChange={setSubmitDialogOpen}
-          >
-            <AlertDialogTrigger asChild>
-              <Button
-                size="sm"
-                className="app-button-compact"
-                disabled={isSubmitting}
+        <div className="app-exam-focus-topbar-status" aria-label="Test status">
+          <div className="app-exam-focus-topbar-stat">
+            <span className="app-exam-focus-topbar-stat-label">Answered</span>
+            <span className="app-exam-focus-topbar-stat-value">
+              {answeredCompactLabel}
+            </span>
+          </div>
+          {showCurrentSectionChip && currentSection ? (
+            <div className="app-exam-focus-topbar-stat">
+              <span className="app-exam-focus-topbar-stat-label">Current</span>
+              <span
+                className="app-exam-focus-topbar-stat-value app-exam-focus-topbar-stat-value-soft"
+                title={currentSection.name}
               >
-                {isSubmitting ? <Spinner /> : "Submit Test"}
+                {currentSection.name}
+              </span>
+            </div>
+          ) : null}
+          <div className="app-exam-focus-topbar-stat">
+            <span className="app-exam-focus-topbar-stat-label">Save</span>
+            <span className={cn("app-status-badge w-fit", saveStateToneClass)}>
+              {saveStateBadgeLabel}
+            </span>
+          </div>
+        </div>
+        <div className="app-exam-focus-topbar-side">
+          <div
+            className={cn(
+              "app-exam-timer-card",
+              countdownTone === "warning" && "app-exam-timer-card-warning",
+              countdownTone === "danger" && "app-exam-timer-card-danger",
+            )}
+          >
+            <div className="app-exam-timer-card-head">
+              <p className="app-exam-timer-card-kicker">Time left</p>
+              <span
+                className={cn(
+                  "app-status-badge w-fit",
+                  countdownTone === "warning"
+                    ? "app-status-badge-warning"
+                    : countdownTone === "danger"
+                      ? "app-status-badge-danger"
+                      : "app-status-badge-info",
+                )}
+              >
+                {getCountdownBadgeLabel(remainingMs)}
+              </span>
+            </div>
+            <div className="app-exam-timer-card-value" suppressHydrationWarning>
+              {countdownValue}
+            </div>
+          </div>
+          <div
+            className="app-exam-focus-topbar-actions"
+            role="group"
+            aria-label="Test actions"
+          >
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="app-button-compact app-exam-topbar-action"
+              onClick={() => void onSaveAttempt(true)}
+              disabled={isSaving || isSubmitting}
+            >
+              {isSaving ? <Spinner /> : "Save"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="app-button-compact app-exam-topbar-action"
+              onClick={() => void onToggleFullscreen()}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="mr-2 h-4 w-4" />
+              ) : (
+                <Expand className="mr-2 h-4 w-4" />
+              )}
+              {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            </Button>
+
+            {hasMounted ? (
+              <AlertDialog
+                open={submitDialogOpen}
+                onOpenChange={setSubmitDialogOpen}
+              >
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    className="app-button-compact app-exam-topbar-action"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? <Spinner /> : "Submit"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Submit this test?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      You have answered {answeredCount} of {questionList.length} questions.
+                      {unansweredCount > 0
+                        ? ` ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} will be left unanswered.`
+                        : " All questions have a saved answer."}
+                      {hasManualReviewQuestions
+                        ? " Descriptive responses may remain pending review after submission."
+                        : ""}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isSubmitting}>
+                      Continue Reviewing
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => void onSubmitAttempt(false)}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? <Spinner /> : "Confirm Submit"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                className="app-button-compact app-exam-topbar-action"
+                disabled
+              >
+                Submit
               </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Submit this test?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  You have answered {answeredCount} of {questionList.length} questions.
-                  {unansweredCount > 0
-                    ? ` ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} will be left unanswered.`
-                    : " All questions have a saved answer."}
-                  {hasManualReviewQuestions
-                    ? " Descriptive responses may remain pending review after submission."
-                    : ""}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={isSubmitting}>
-                  Continue Reviewing
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => void onSubmitAttempt(false)}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? <Spinner /> : "Confirm Submit"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+            )}
+          </div>
         </div>
       </div>
 
@@ -344,14 +545,29 @@ export default function StudentTestActiveAttemptView({
               </div>
             </CardHeader>
             <CardContent className="app-section-body space-y-3">
-              <div className="flex items-center justify-between rounded-[1rem] border border-border/60 bg-[hsl(var(--app-surface-2)/0.58)] px-3 py-2 app-copy-meta font-medium">
-                <span>{unansweredCount} unanswered</span>
-                <span>
-                  <StudentTestCountdownText deadlineAt={deadlineAt} /> left
-                </span>
+              <div className="app-exam-sidebar-summary">
+                <div className="app-exam-sidebar-summary-card">
+                  <span className="app-exam-sidebar-summary-label">Answered</span>
+                  <span className="app-exam-sidebar-summary-value">{answeredCount}</span>
+                  <span className="app-exam-sidebar-summary-meta">Saved responses</span>
+                </div>
+                <div className="app-exam-sidebar-summary-card">
+                  <span className="app-exam-sidebar-summary-label">Remaining</span>
+                  <span className="app-exam-sidebar-summary-value">{unansweredCount}</span>
+                  <span className="app-exam-sidebar-summary-meta">Still to review</span>
+                </div>
+                <div className="app-exam-sidebar-summary-card">
+                  <span className="app-exam-sidebar-summary-label">Current</span>
+                  <span className="app-exam-sidebar-summary-value">
+                    Q {currentQuestionNumber || "—"}
+                  </span>
+                  <span className="app-exam-sidebar-summary-meta">
+                    Jump with the palette
+                  </span>
+                </div>
               </div>
               {subjectProgress.length > 1 ? (
-                <div className="rounded-[1.1rem] border border-border/60 bg-muted/15 p-2.5">
+                <div className="app-exam-sidebar-panel">
                   <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Subject progress
                   </p>
@@ -372,26 +588,62 @@ export default function StudentTestActiveAttemptView({
                   </div>
                 </div>
               ) : null}
-              <div className="app-exam-palette">
-                {questionList.map((item, index) => {
-                  const selected = answeredQuestionIds.has(item.question._id);
-                  const active = index === currentIndex;
+              <div className="space-y-3">
+                {sectionNavigation.map((section) => {
+                  const sectionActive = section.items.some(
+                    (item) => item.globalIndex === currentIndex,
+                  );
 
                   return (
-                    <button
-                      key={item.question._id}
-                      type="button"
-                      onClick={() => void onJumpToQuestion(index)}
-                      className={cn(
-                        "app-exam-palette-button",
-                        active && "app-exam-palette-button-active",
-                        !active &&
-                          selected &&
-                          "app-exam-palette-button-complete",
-                      )}
-                    >
-                      {index + 1}
-                    </button>
+                    <div key={section.id} className="app-exam-sidebar-panel">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {`Section ${section.sectionIndex + 1}: ${section.name}`}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {section.items.length} question
+                            {section.items.length === 1 ? "" : "s"} • {section.totalMarks} marks • +{section.defaultMarks} / -{section.defaultNegativeMarks}
+                          </p>
+                        </div>
+                        {sectionActive ? (
+                          <span className="app-status-badge app-status-badge-info w-fit">
+                            Current
+                          </span>
+                        ) : null}
+                      </div>
+                      {section.subjects.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {section.subjects.map((subject) => (
+                            <span
+                              key={`${section.id}-${subject._id}`}
+                              className="app-meta-chip"
+                            >
+                              {subject.name || subject._id}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="app-exam-palette mt-3">
+                        {section.items.map((item) => (
+                          <button
+                            key={`${section.id}-${item.questionId || item.globalIndex}`}
+                            type="button"
+                            onClick={() => void onJumpToQuestion(item.globalIndex)}
+                            className={cn(
+                              "app-exam-palette-button",
+                              item.globalIndex === currentIndex &&
+                                "app-exam-palette-button-active",
+                              item.globalIndex !== currentIndex &&
+                                item.answered &&
+                                "app-exam-palette-button-complete",
+                            )}
+                          >
+                            {item.globalIndex + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -412,7 +664,7 @@ export default function StudentTestActiveAttemptView({
               </div>
 
               {paper.instructions ? (
-                <details className="rounded-[1.2rem] border border-border/60 bg-muted/15 px-3.5 py-2.5">
+                <details className="app-exam-sidebar-panel px-3.5 py-2.5">
                   <summary className="app-title-sm cursor-pointer">
                     View instructions
                   </summary>
@@ -431,7 +683,11 @@ export default function StudentTestActiveAttemptView({
               <CardHeader className="app-section-header">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="space-y-1.5">
-                    <p className="app-spotlight-label">{currentQuestion.sectionName}</p>
+                    {showQuestionEyebrow ? (
+                      <p className="app-spotlight-label">
+                        {currentQuestion.sectionName}
+                      </p>
+                    ) : null}
                     <CardTitle className="text-xl tracking-tight sm:text-2xl">
                       Question {currentIndex + 1} of {questionList.length}
                     </CardTitle>
@@ -440,18 +696,39 @@ export default function StudentTestActiveAttemptView({
                         {currentQuestion.sectionDescription}
                       </p>
                     ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {currentQuestion.question.subject?.name ? (
-                      <div className="app-meta-chip">
-                        {currentQuestion.question.subject.name}
+                    {currentSection ? (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {visibleCurrentSectionSubjects.map((subject) => (
+                          <span
+                            key={`${currentSection.id}-${subject._id}`}
+                            className="app-meta-chip"
+                          >
+                            {subject.name || subject._id}
+                          </span>
+                        ))}
+                        <span className="app-meta-chip">
+                          Rule {currentSectionRuleLabel}
+                          {currentSection.totalMarks > 0
+                            ? ` • ${currentSection.totalMarks} total`
+                            : ""}
+                        </span>
                       </div>
                     ) : null}
-                    <div className="app-meta-chip capitalize">
-                      {currentQuestion.question.type.replace("-", " ")}
-                    </div>
+                    {currentQuestion.sectionInstructions ? (
+                      <div className="rounded-[1.15rem] border border-border/60 bg-muted/15 px-4 py-3 text-sm leading-6 text-foreground/82">
+                        {currentQuestion.sectionInstructions}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {showQuestionSubjectChip ? (
+                      <div className="app-meta-chip">
+                        {currentQuestionSubjectName}
+                      </div>
+                    ) : null}
                     <div className="app-meta-chip">
-                      {currentQuestion.marks} mark(s)
+                      {currentQuestion.marks} mark
+                      {currentQuestion.marks === 1 ? "" : "s"}
                     </div>
                     {currentQuestion.negativeMarks > 0 ? (
                       <div className="app-meta-chip">
@@ -625,7 +902,7 @@ export default function StudentTestActiveAttemptView({
                   </Button>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="md"
                       className="app-student-action-compact"
                       onClick={onClearCurrentAnswer}
@@ -634,7 +911,7 @@ export default function StudentTestActiveAttemptView({
                       Clear Answer
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="primary"
                       size="md"
                       className="app-student-action-compact"
                       onClick={() =>

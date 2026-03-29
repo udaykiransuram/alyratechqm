@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
 import { applyArchiveFields, hasArchiveFields } from "@/lib/archive";
 import { getModelRegistry } from "@/lib/mongoose-models";
+import type { UserGender } from "@/lib/user-gender";
 
 export interface IUser extends Document {
   name: string;
@@ -8,6 +9,7 @@ export interface IUser extends Document {
   passwordHash: string; // Never store plain-text passwords
   role: "admin" | "teacher" | "student";
   mobileNumber: string;
+  gender?: UserGender;
   fatherName?: string;
   class?: Types.ObjectId;
   academicSection?: Types.ObjectId;
@@ -30,6 +32,12 @@ const UserSchema: Schema<IUser> = new Schema(
     email: { type: String, required: false, unique: true, sparse: true },
     passwordHash: { type: String, required: false },
     mobileNumber: { type: String, required: true, trim: true },
+    gender: {
+      type: String,
+      enum: ["male", "female", "other"],
+      required: false,
+      trim: true,
+    },
     fatherName: { type: String, required: false, trim: true },
     role: {
       type: String,
@@ -173,6 +181,7 @@ if (
   (!existingUserModel.schema.path("academicSection") ||
     !existingUserModel.schema.path("academicSectionIds") ||
     !existingUserModel.schema.path("classIds") ||
+    !existingUserModel.schema.path("gender") ||
     !existingUserModel.schema.path("fatherName") ||
     !existingUserModel.schema.path("hasAllSections") ||
     !existingUserModel.schema.path("activeStudentSessionId") ||

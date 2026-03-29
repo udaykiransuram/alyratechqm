@@ -18,6 +18,13 @@ import FeedbackNotice, {
 } from "@/components/ui/feedback-notice";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
@@ -27,6 +34,7 @@ import {
   buildWorkspaceUserBulkRows,
   WORKSPACE_USER_BULK_TEMPLATES,
 } from "@/lib/client/workspace-user-bulk";
+import { USER_GENDER_OPTIONS } from "@/lib/user-gender";
 import type {
   WorkspaceAcademicSectionItem,
   WorkspaceClassItem,
@@ -58,6 +66,7 @@ export default function CreateTeacherPageClient({
     email: "",
     password: "",
     mobileNumber: "",
+    gender: "",
     classIds: [] as string[],
     academicSectionIds: [] as string[],
     hasAllSections: true,
@@ -154,6 +163,7 @@ export default function CreateTeacherPageClient({
           academicSectionIds: form.hasAllSections
             ? []
             : form.academicSectionIds.filter((sectionId) => availableSectionIds.has(sectionId)),
+          gender: form.gender || undefined,
         }),
         schoolKey,
         fallbackMessage: "We couldn't create the teacher account.",
@@ -168,6 +178,7 @@ export default function CreateTeacherPageClient({
         email: "",
         password: "",
         mobileNumber: "",
+        gender: "",
         classIds: [],
         academicSectionIds: [],
         hasAllSections: true,
@@ -243,6 +254,7 @@ export default function CreateTeacherPageClient({
               : "error"
             : "success",
       });
+      router.refresh();
     } catch (error: any) {
       setBulkFeedback({
         message: error?.message || "We couldn't complete the bulk upload.",
@@ -315,7 +327,7 @@ export default function CreateTeacherPageClient({
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-3">
                   <div className="app-field-group">
                     <Label htmlFor="teacher-email">Email</Label>
                     <Input
@@ -338,6 +350,31 @@ export default function CreateTeacherPageClient({
                       onChange={handleChange}
                       required
                     />
+                  </div>
+
+                  <div className="app-field-group">
+                    <Label htmlFor="teacher-gender">Gender</Label>
+                    <Select
+                      value={form.gender || "unspecified"}
+                      onValueChange={(value) =>
+                        setForm((currentForm) => ({
+                          ...currentForm,
+                          gender: value === "unspecified" ? "" : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="teacher-gender">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unspecified">Select gender</SelectItem>
+                        {USER_GENDER_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -463,7 +500,6 @@ export default function CreateTeacherPageClient({
           loading={bulkLoading}
           loadingLabel="Uploading teachers..."
           feedback={bulkFeedback}
-          disabled={initialClasses.length === 0 || initialSubjects.length === 0}
           compact
           tips={WORKSPACE_USER_BULK_TEMPLATES.teacher.tips}
         />
