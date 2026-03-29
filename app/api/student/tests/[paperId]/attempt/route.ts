@@ -15,6 +15,7 @@ import {
 } from "@/lib/student-test-server";
 import {
   autoSubmitExpiredAttemptIfNeeded,
+  buildStudentPlacementSnapshot,
   buildSectionAnswersSignature,
   deriveStudentTestStatus,
   findOrCreateStudentAttempt,
@@ -24,7 +25,7 @@ import {
   getRemainingTimeMs,
   isStudentEligibleForPaper,
   paperSupportsOnlineDelivery,
-  serializeStudentAttempt,
+  sanitizeAttemptForStudentDelivery,
 } from "@/lib/student-tests";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,10 @@ export async function POST(
   const schoolKey = auth.schoolKey as string;
   const studentId = auth.session.user.id;
   const now = new Date();
+  const studentPlacement = {
+    classId: auth.session.user.studentClassId,
+    academicSectionId: auth.session.user.studentAcademicSectionId,
+  };
 
   try {
     if (await isExamRuntimeEnabled()) {
@@ -72,6 +77,7 @@ export async function POST(
         schoolKey,
         studentId,
         paperId,
+        studentPlacement,
       );
       return NextResponse.json(result);
     }
@@ -120,10 +126,14 @@ export async function POST(
 
     if (!attempt || (attempt.status !== "submitted" && attempt.status !== "auto_submitted")) {
       if (!attempt) {
-        const student = await loadStudentUser(UserModel, studentId, {
-          schoolKey,
-          useCache: true,
-        });
+        const sessionPlacement = buildStudentPlacementSnapshot(auth.session.user);
+        const student =
+          sessionPlacement.classId
+            ? sessionPlacement
+            : await loadStudentUser(UserModel, studentId, {
+                schoolKey,
+                useCache: true,
+              });
         if (!student) {
           return testErrorResponse({
             message: "Student profile not found.",
@@ -172,7 +182,7 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        attempt: serializeStudentAttempt(attempt),
+        attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
         status: deriveStudentTestStatus(paper, attempt, now),
         remainingTimeMs: getRemainingTimeMs(paper, attempt, now),
         deadlineAt: deadlineMs ? new Date(deadlineMs).toISOString() : null,
@@ -181,7 +191,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      attempt: serializeStudentAttempt(attempt),
+      attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
       status: deriveStudentTestStatus(paper, attempt, now),
       remainingTimeMs: 0,
       deadlineAt: attempt?.submittedAt || null,
@@ -311,7 +321,7 @@ export async function PATCH(
         status: 409,
         code: "ATTEMPT_ALREADY_SUBMITTED",
         details: {
-          attempt: serializeStudentAttempt(attempt),
+          attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
           serverLastSavedAt: attempt?.lastSavedAt || null,
         },
       });
@@ -361,7 +371,7 @@ export async function PATCH(
         status: 409,
         code: "ATTEMPT_STATE_CONFLICT",
         details: {
-          attempt: serializeStudentAttempt(attempt),
+          attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
           serverLastSavedAt: attempt?.lastSavedAt || null,
         },
       });
@@ -371,7 +381,7 @@ export async function PATCH(
       const deadlineMs = getAttemptDeadlineMs(paper, attempt);
       return NextResponse.json({
         success: true,
-        attempt: serializeStudentAttempt(attempt),
+        attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
         status: deriveStudentTestStatus(paper, attempt, now),
         remainingTimeMs: getRemainingTimeMs(paper, attempt, now),
         deadlineAt: deadlineMs ? new Date(deadlineMs).toISOString() : null,
@@ -406,7 +416,7 @@ export async function PATCH(
         status: 409,
         code: "ATTEMPT_ALREADY_SUBMITTED",
         details: {
-          attempt: serializeStudentAttempt(submittedAttempt),
+          attempt: sanitizeAttemptForStudentDelivery(submittedAttempt, paper, now),
           serverLastSavedAt: submittedAttempt?.lastSavedAt || null,
         },
       });
@@ -416,7 +426,7 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      attempt: serializeStudentAttempt(attempt),
+      attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
       status: deriveStudentTestStatus(paper, attempt, now),
       remainingTimeMs: getRemainingTimeMs(paper, attempt, now),
       deadlineAt: deadlineMs ? new Date(deadlineMs).toISOString() : null,

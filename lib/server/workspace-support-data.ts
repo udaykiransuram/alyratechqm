@@ -10,6 +10,119 @@ import type {
   WorkspaceTagTypeItem,
 } from "@/lib/workspace/support-types";
 
+const SUPPORT_DATA_CACHE_MAX_ENTRIES = 400;
+const SUPPORT_DATA_CACHE_TTLS = {
+  classes: 60_000,
+  sections: 60_000,
+  subjects: 60_000,
+  tagTypes: 60_000,
+  tags: 60_000,
+  tagsWithSubjects: 45_000,
+} as const;
+const DEV_SUPPORT_DATA_CACHE_TTL_MS = 5_000;
+
+type SupportDataCacheEntry<T> = {
+  expiresAt: number;
+  hasValue: boolean;
+  value?: T;
+  promise?: Promise<T>;
+};
+
+function cloneForTransport<T>(value: T): T {
+  if (typeof value === "undefined") {
+    return value;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function getWorkspaceSupportDataCache() {
+  const globalState = global as typeof globalThis & {
+    __workspaceSupportDataCache?: Map<string, SupportDataCacheEntry<unknown>>;
+  };
+
+  if (!globalState.__workspaceSupportDataCache) {
+    globalState.__workspaceSupportDataCache = new Map();
+  }
+
+  return globalState.__workspaceSupportDataCache;
+}
+
+function pruneWorkspaceSupportDataCache() {
+  const cache = getWorkspaceSupportDataCache();
+  if (cache.size <= SUPPORT_DATA_CACHE_MAX_ENTRIES) {
+    return;
+  }
+
+  const now = Date.now();
+  for (const [key, entry] of cache.entries()) {
+    if ((entry.expiresAt <= now && !entry.promise) || cache.size > SUPPORT_DATA_CACHE_MAX_ENTRIES) {
+      cache.delete(key);
+    }
+    if (cache.size <= SUPPORT_DATA_CACHE_MAX_ENTRIES) {
+      break;
+    }
+  }
+}
+
+function buildWorkspaceSupportDataCacheKey(
+  schoolKey: string,
+  namespace: string,
+  variant?: string,
+) {
+  return [schoolKey, namespace, variant || ""].join("::");
+}
+
+async function getCachedWorkspaceSupportData<T>(
+  cacheKey: string,
+  ttlMs: number,
+  loader: () => Promise<T>,
+) {
+  const effectiveTtlMs =
+    process.env.NODE_ENV === "production"
+      ? ttlMs
+      : Math.min(ttlMs, DEV_SUPPORT_DATA_CACHE_TTL_MS);
+
+  const cache = getWorkspaceSupportDataCache();
+  const now = Date.now();
+  const existingEntry = cache.get(cacheKey) as
+    | SupportDataCacheEntry<T>
+    | undefined;
+
+  if (existingEntry?.hasValue && existingEntry.expiresAt > now) {
+    return cloneForTransport(existingEntry.value as T);
+  }
+
+  if (existingEntry?.promise) {
+    return existingEntry.promise;
+  }
+
+  const promise = loader()
+    .then((value) => {
+      const normalizedValue = cloneForTransport(value);
+      cache.set(cacheKey, {
+        expiresAt: Date.now() + effectiveTtlMs,
+        hasValue: true,
+        value: normalizedValue,
+      });
+      pruneWorkspaceSupportDataCache();
+      return normalizedValue;
+    })
+    .catch((error) => {
+      cache.delete(cacheKey);
+      throw error;
+    });
+
+  cache.set(cacheKey, {
+    expiresAt: now + effectiveTtlMs,
+    hasValue: false,
+    promise,
+  });
+  pruneWorkspaceSupportDataCache();
+
+  return promise;
+}
+
 function toId(value: unknown) {
   return String(value || "").trim();
 }
@@ -91,13 +204,21 @@ export async function getWorkspaceClasses(
     return [];
   }
 
-  await connectDB();
-  const { Class: ClassModel } = await getTenantModels(schoolKey, ["Class"]);
-  const classes = await ClassModel.find(buildArchiveFilter(false))
-    .sort({ name: 1 })
-    .lean();
+  const cacheKey = buildWorkspaceSupportDataCacheKey(schoolKey, "classes");
+  return getCachedWorkspaceSupportData(
+    cacheKey,
+    SUPPORT_DATA_CACHE_TTLS.classes,
+    async () => {
+      await connectDB();
+      const { Class: ClassModel } = await getTenantModels(schoolKey, ["Class"]);
+      const classes = await ClassModel.find(buildArchiveFilter(false))
+        .select("_id name description")
+        .sort({ name: 1 })
+        .lean();
 
-  return Array.isArray(classes) ? classes.map(mapClassItem) : [];
+      return Array.isArray(classes) ? classes.map(mapClassItem) : [];
+    },
+  );
 }
 
 export async function getWorkspaceSections(
@@ -110,22 +231,35 @@ export async function getWorkspaceSections(
     return [];
   }
 
-  await connectDB();
   const includeInactive = options?.includeInactive === true;
-  const {
-    AcademicSection: AcademicSectionModel,
-    Class: ClassModel,
-  } = await getTenantModels(schoolKey, ["AcademicSection", "Class"]);
+  const cacheKey = buildWorkspaceSupportDataCacheKey(
+    schoolKey,
+    "sections",
+    includeInactive ? "all" : "active",
+  );
 
-  const sections = await AcademicSectionModel.find({
-    ...buildArchiveFilter(false),
-    ...(includeInactive ? {} : { isActive: true }),
-  })
-    .populate({ path: "class", model: ClassModel, select: "name" })
-    .sort({ name: 1, _id: 1 })
-    .lean();
+  return getCachedWorkspaceSupportData(
+    cacheKey,
+    SUPPORT_DATA_CACHE_TTLS.sections,
+    async () => {
+      await connectDB();
+      const {
+        AcademicSection: AcademicSectionModel,
+        Class: ClassModel,
+      } = await getTenantModels(schoolKey, ["AcademicSection", "Class"]);
 
-  return Array.isArray(sections) ? sections.map(mapAcademicSectionItem) : [];
+      const sections = await AcademicSectionModel.find({
+        ...buildArchiveFilter(false),
+        ...(includeInactive ? {} : { isActive: true }),
+      })
+        .select("_id name description isActive class")
+        .populate({ path: "class", model: ClassModel, select: "name" })
+        .sort({ name: 1, _id: 1 })
+        .lean();
+
+      return Array.isArray(sections) ? sections.map(mapAcademicSectionItem) : [];
+    },
+  );
 }
 
 export async function getWorkspaceSubjects(
@@ -135,22 +269,31 @@ export async function getWorkspaceSubjects(
     return [];
   }
 
-  await connectDB();
-  const {
-    Subject: SubjectModel,
-    TagType: TagTypeModel,
-  } = await getTenantModels(schoolKey, ["Subject", "Tag", "TagType"]);
+  const cacheKey = buildWorkspaceSupportDataCacheKey(schoolKey, "subjects");
+  return getCachedWorkspaceSupportData(
+    cacheKey,
+    SUPPORT_DATA_CACHE_TTLS.subjects,
+    async () => {
+      await connectDB();
+      const {
+        Subject: SubjectModel,
+        TagType: TagTypeModel,
+      } = await getTenantModels(schoolKey, ["Subject", "Tag", "TagType"]);
 
-  const subjects = await SubjectModel.find(buildArchiveFilter(false))
-    .populate({
-      path: "tags",
-      match: buildArchiveFilter(false),
-      populate: { path: "type", model: TagTypeModel, select: "name" },
-    })
-    .sort({ name: 1, _id: 1 })
-    .lean();
+      const subjects = await SubjectModel.find(buildArchiveFilter(false))
+        .select("_id name code description tags")
+        .populate({
+          path: "tags",
+          match: buildArchiveFilter(false),
+          select: "_id name type",
+          populate: { path: "type", model: TagTypeModel, select: "name" },
+        })
+        .sort({ name: 1, _id: 1 })
+        .lean();
 
-  return Array.isArray(subjects) ? subjects.map(mapSubjectItem) : [];
+      return Array.isArray(subjects) ? subjects.map(mapSubjectItem) : [];
+    },
+  );
 }
 
 export async function getWorkspaceTagTypes(
@@ -160,17 +303,27 @@ export async function getWorkspaceTagTypes(
     return [];
   }
 
-  await connectDB();
-  const { TagType: TagTypeModel } = await getTenantModels(schoolKey, [
-    "TagType",
-  ]);
-  const tagTypes = await TagTypeModel.find({}).sort({ name: 1, _id: 1 }).lean();
+  const cacheKey = buildWorkspaceSupportDataCacheKey(schoolKey, "tag-types");
+  return getCachedWorkspaceSupportData(
+    cacheKey,
+    SUPPORT_DATA_CACHE_TTLS.tagTypes,
+    async () => {
+      await connectDB();
+      const { TagType: TagTypeModel } = await getTenantModels(schoolKey, [
+        "TagType",
+      ]);
+      const tagTypes = await TagTypeModel.find({})
+        .select("_id name")
+        .sort({ name: 1, _id: 1 })
+        .lean();
 
-  return Array.isArray(tagTypes)
-    ? tagTypes
-        .map(mapTagTypeItem)
-        .filter((tagType) => Boolean(tagType._id) && Boolean(tagType.name))
-    : [];
+      return Array.isArray(tagTypes)
+        ? tagTypes
+            .map(mapTagTypeItem)
+            .filter((tagType) => Boolean(tagType._id) && Boolean(tagType.name))
+        : [];
+    },
+  );
 }
 
 export async function getWorkspaceTags(
@@ -180,14 +333,25 @@ export async function getWorkspaceTags(
     return [];
   }
 
-  await connectDB();
-  const { Tag: TagModel } = await getTenantModels(schoolKey, ["Tag", "TagType"]);
-  const tags = await TagModel.find(buildArchiveFilter(false))
-    .populate("type")
-    .sort({ name: 1, _id: 1 })
-    .lean();
+  const cacheKey = buildWorkspaceSupportDataCacheKey(schoolKey, "tags");
+  return getCachedWorkspaceSupportData(
+    cacheKey,
+    SUPPORT_DATA_CACHE_TTLS.tags,
+    async () => {
+      await connectDB();
+      const { Tag: TagModel } = await getTenantModels(schoolKey, [
+        "Tag",
+        "TagType",
+      ]);
+      const tags = await TagModel.find(buildArchiveFilter(false))
+        .select("_id name type subjects")
+        .populate({ path: "type", select: "name" })
+        .sort({ name: 1, _id: 1 })
+        .lean();
 
-  return Array.isArray(tags) ? tags.map(mapTagItem) : [];
+      return Array.isArray(tags) ? tags.map(mapTagItem) : [];
+    },
+  );
 }
 
 export async function getWorkspaceTagsWithSubjects(
@@ -208,76 +372,91 @@ export async function getWorkspaceTagsWithSubjects(
     };
   }
 
-  await connectDB();
-  const { Tag: TagModel, Subject: SubjectModel } = await getTenantModels(
-    schoolKey,
-    ["Tag", "Subject", "TagType"],
-  );
-  const tagFilter = buildArchiveFilter(false);
   const limit =
     typeof options?.limit === "number" && options.limit > 0
       ? Math.min(Math.floor(options.limit), 100)
       : null;
+  const cacheKey = buildWorkspaceSupportDataCacheKey(
+    schoolKey,
+    "tags-with-subjects",
+    limit ? String(limit) : "all",
+  );
 
-  const tagsQuery = TagModel.find(tagFilter).populate("type").sort({
-    name: 1,
-    _id: 1,
-  });
-  if (limit) {
-    tagsQuery.limit(limit);
-  }
+  return getCachedWorkspaceSupportData(
+    cacheKey,
+    SUPPORT_DATA_CACHE_TTLS.tagsWithSubjects,
+    async () => {
+      await connectDB();
+      const { Tag: TagModel, Subject: SubjectModel } = await getTenantModels(
+        schoolKey,
+        ["Tag", "Subject", "TagType"],
+      );
+      const tagFilter = buildArchiveFilter(false);
 
-  const [tags, total] = await Promise.all([
-    tagsQuery.lean(),
-    TagModel.countDocuments(tagFilter),
-  ]);
+      const tagsQuery = TagModel.find(tagFilter)
+        .select("_id name type")
+        .populate({ path: "type", select: "name" })
+        .sort({
+          name: 1,
+          _id: 1,
+        });
+      if (limit) {
+        tagsQuery.limit(limit);
+      }
 
-  const tagIds = Array.isArray(tags) ? tags.map((tag: any) => tag?._id) : [];
-  const subjects =
-    tagIds.length > 0
-      ? await SubjectModel.find({
-          tags: { $in: tagIds },
-          ...buildArchiveFilter(false),
-        })
-          .select("name code tags")
-          .lean()
-      : [];
+      const [tags, total] = await Promise.all([
+        tagsQuery.lean(),
+        TagModel.countDocuments(tagFilter),
+      ]);
 
-  const tagIdToSubjects: Record<
-    string,
-    Array<{ _id: string; name: string; code?: string }>
-  > = {};
+      const tagIds = Array.isArray(tags) ? tags.map((tag: any) => tag?._id) : [];
+      const subjects =
+        tagIds.length > 0
+          ? await SubjectModel.find({
+              tags: { $in: tagIds },
+              ...buildArchiveFilter(false),
+            })
+              .select("_id name code tags")
+              .lean()
+          : [];
 
-  if (Array.isArray(subjects)) {
-    subjects.forEach((subject: any) => {
-      const subjectItem = {
-        _id: toId(subject?._id),
-        name: toOptionalString(subject?.name) || "",
-        code: toOptionalString(subject?.code),
+      const tagIdToSubjects: Record<
+        string,
+        Array<{ _id: string; name: string; code?: string }>
+      > = {};
+
+      if (Array.isArray(subjects)) {
+        subjects.forEach((subject: any) => {
+          const subjectItem = {
+            _id: toId(subject?._id),
+            name: toOptionalString(subject?.name) || "",
+            code: toOptionalString(subject?.code),
+          };
+
+          (Array.isArray(subject?.tags) ? subject.tags : []).forEach((tagId: any) => {
+            const normalizedTagId = toId(tagId);
+            if (!normalizedTagId) {
+              return;
+            }
+            (tagIdToSubjects[normalizedTagId] ||= []).push(subjectItem);
+          });
+        });
+      }
+
+      const mappedTags = Array.isArray(tags)
+        ? tags.map((tag: any) =>
+            mapTagItem({
+              ...tag,
+              subjects: tagIdToSubjects[toId(tag?._id)] || [],
+            }),
+          )
+        : [];
+
+      return {
+        tags: mappedTags,
+        total: Number(total || 0),
+        partial: mappedTags.length < Number(total || 0),
       };
-
-      (Array.isArray(subject?.tags) ? subject.tags : []).forEach((tagId: any) => {
-        const normalizedTagId = toId(tagId);
-        if (!normalizedTagId) {
-          return;
-        }
-        (tagIdToSubjects[normalizedTagId] ||= []).push(subjectItem);
-      });
-    });
-  }
-
-  const mappedTags = Array.isArray(tags)
-    ? tags.map((tag: any) =>
-        mapTagItem({
-          ...tag,
-          subjects: tagIdToSubjects[toId(tag?._id)] || [],
-        }),
-      )
-    : [];
-
-  return {
-    tags: mappedTags,
-    total,
-    partial: mappedTags.length < total,
-  };
+    },
+  );
 }

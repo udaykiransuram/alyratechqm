@@ -27,7 +27,7 @@ const TableHeader = React.forwardRef<
   <thead
     ref={ref}
     className={cn(
-      "[&_tr]:border-b [&_tr]:border-border/70 [&_tr]:bg-muted/35",
+      "[&_tr]:border-b [&_tr]:border-border/72 [&_tr]:bg-[linear-gradient(180deg,hsl(var(--app-surface-2)/0.96)_0%,hsl(var(--app-surface-1)/0.99)_100%)]",
       className,
     )}
     {...props}
@@ -54,7 +54,7 @@ const TableFooter = React.forwardRef<
   <tfoot
     ref={ref}
     className={cn(
-      "border-t border-border/70 bg-muted/40 font-medium [&>tr]:last:border-b-0",
+      "border-t border-border/70 bg-[hsl(var(--app-surface-2)/0.76)] font-medium [&>tr]:last:border-b-0",
       className,
     )}
     {...props}
@@ -69,7 +69,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b border-border/60 transition-colors duration-200 hover:bg-accent/30 data-[state=selected]:bg-accent/45",
+      "border-b border-border/60 transition-colors duration-200 hover:bg-[hsl(var(--app-surface-2)/0.72)] data-[state=selected]:bg-[hsl(var(--primary)/0.08)]",
       className,
     )}
     {...props}
@@ -84,7 +84,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-12 px-4 py-3 text-left align-middle text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground [&:has([role=checkbox])]:pr-0",
+      "h-12 px-4 py-3 text-left align-middle text-[12px] font-semibold tracking-[0.03em] text-muted-foreground [&:has([role=checkbox])]:pr-0",
       className,
     )}
     {...props}
@@ -99,7 +99,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "px-4 py-3.5 align-middle text-sm text-foreground [&:has([role=checkbox])]:pr-0",
+      "px-4 py-3.5 align-middle text-[14px] leading-6 text-foreground sm:text-sm [&:has([role=checkbox])]:pr-0",
       className,
     )}
     {...props}

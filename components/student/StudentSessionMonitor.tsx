@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { signOut } from "next-auth/react";
 
+import { performNextAuthSignOut } from "@/lib/client/next-auth-client";
 import { STUDENT_SESSION_HEARTBEAT_INTERVAL_MS } from "@/lib/student-session";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
@@ -51,8 +51,8 @@ export default function StudentSessionMonitor() {
           const callbackUrl = buildStudentSessionExpiredCallbackUrl();
 
           try {
-            await signOut({
-              redirect: false,
+            await performNextAuthSignOut({
+              callbackUrl,
             });
           } catch {}
 

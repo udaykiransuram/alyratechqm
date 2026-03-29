@@ -213,12 +213,13 @@ export default function CreateClassPageClient({
   return (
     <PageShell width="wide" padding="relaxed">
       <PageHero
+        variant="editor"
         eyebrow="Academic Setup"
         title="Create Classes"
         description="Add one class at a time or import a whole class list from a spreadsheet."
         actions={
-          <Button type="button" variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <Button type="button" variant="outline" onClick={navigateBack} className="app-button-back">
+            <ArrowLeft className="h-4 w-4" />
             Back to Classes
           </Button>
         }
@@ -283,7 +284,7 @@ export default function CreateClassPageClient({
                     placeholder="Optional description"
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? "Creating..." : "Create Class"}
                 </Button>
               </form>

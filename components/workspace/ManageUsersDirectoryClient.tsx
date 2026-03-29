@@ -35,7 +35,6 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
 import {
-  buildPartialLoadMessage,
   fetchApiJson,
   resolveClientSchoolKey,
 } from "@/lib/client/api";
@@ -67,7 +66,31 @@ type AcademicSectionItem = {
   class?: { _id: string; name: string } | string;
 };
 
+type ManageUsersDirectoryClientProps = {
+  initialUsers: ManagedUser[];
+  initialClasses: ClassItem[];
+  initialSections: AcademicSectionItem[];
+  initialSchoolKey: string;
+  initialTotal: number;
+  initialPage: number;
+  initialPages: number;
+  initialListError?: string | null;
+  initialSupportDataNotice?: string | null;
+};
+
 const NO_SCHOOL_USERS_MESSAGE = "Select a school to load users.";
+
+function getRoleBadgeVariant(role: ManagedUser["role"]) {
+  if (role === "student") return "success";
+  if (role === "teacher") return "warning";
+  return "default";
+}
+
+function getRoleAccountLabel(role: ManagedUser["role"]) {
+  if (role === "student") return "Student account";
+  if (role === "teacher") return "Teacher account";
+  return "Admin account";
+}
 
 function getUserDetailPath(user: ManagedUser) {
   if (user.role === "student") {
@@ -81,22 +104,34 @@ function getUserDetailPath(user: ManagedUser) {
   return `/workspace/admins/${user._id}`;
 }
 
-export default function ManageUsersDirectoryClient() {
+export default function ManageUsersDirectoryClient({
+  initialUsers,
+  initialClasses,
+  initialSections,
+  initialSchoolKey,
+  initialTotal,
+  initialPage,
+  initialPages,
+  initialListError = null,
+  initialSupportDataNotice = null,
+}: ManageUsersDirectoryClientProps) {
   const { toast } = useToast();
   const { buildReturnHref } = useReturnHrefBuilder("/workspace/manage/users");
 
-  const [users, setUsers] = useState<ManagedUser[]>([]);
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [sections, setSections] = useState<AcademicSectionItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [listError, setListError] = useState<string | null>(null);
-  const [supportDataNotice, setSupportDataNotice] = useState<string | null>(null);
-  const [currentSchoolKey, setCurrentSchoolKey] = useState("");
+  const [users, setUsers] = useState<ManagedUser[]>(initialUsers);
+  const [classes, setClasses] = useState<ClassItem[]>(initialClasses);
+  const [sections, setSections] = useState<AcademicSectionItem[]>(initialSections);
+  const [isLoading, setIsLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(initialListError);
+  const [supportDataNotice, setSupportDataNotice] = useState<string | null>(
+    initialSupportDataNotice,
+  );
+  const [currentSchoolKey, setCurrentSchoolKey] = useState(initialSchoolKey);
   const [archivingUserId, setArchivingUserId] = useState<string | null>(null);
 
-  const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(initialPage);
+  const [pages, setPages] = useState(initialPages);
+  const [total, setTotal] = useState(initialTotal);
   const limit = 100;
 
   const loadUsers = async (
@@ -111,7 +146,7 @@ export default function ManageUsersDirectoryClient() {
         setListError(null);
       }
 
-      const schoolKey = resolveClientSchoolKey();
+      const schoolKey = resolveClientSchoolKey() || initialSchoolKey;
       setCurrentSchoolKey(schoolKey);
 
       if (!schoolKey) {
@@ -156,50 +191,27 @@ export default function ManageUsersDirectoryClient() {
   };
 
   useEffect(() => {
-    const init = async () => {
-      const schoolKey = resolveClientSchoolKey();
-      setCurrentSchoolKey(schoolKey);
-
-      if (!schoolKey) {
-        setSupportDataNotice("Select a school to load class and section details.");
-        await loadUsers(1);
-        return;
-      }
-
-      const [classesResult, sectionsResult] = await Promise.allSettled([
-        fetchApiJson<any>("/api/classes", {
-          cache: "no-store",
-          schoolKey,
-          fallbackMessage: "We couldn't load classes.",
-        }),
-        fetchApiJson<any>("/api/sections", {
-          cache: "no-store",
-          schoolKey,
-          fallbackMessage: "We couldn't load sections.",
-        }),
-      ]);
-
-      if (classesResult.status === "fulfilled") {
-        setClasses(Array.isArray(classesResult.value.classes) ? classesResult.value.classes : []);
-      }
-
-      if (sectionsResult.status === "fulfilled") {
-        setSections(Array.isArray(sectionsResult.value.sections) ? sectionsResult.value.sections : []);
-      }
-
-      setSupportDataNotice(
-        buildPartialLoadMessage([
-          ...(classesResult.status === "rejected" ? ["Class labels"] : []),
-          ...(sectionsResult.status === "rejected" ? ["Section labels"] : []),
-        ]),
-      );
-
-      await loadUsers(1);
-    };
-
-    void init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setUsers(initialUsers);
+    setClasses(initialClasses);
+    setSections(initialSections);
+    setCurrentSchoolKey(initialSchoolKey);
+    setTotal(initialTotal);
+    setPage(initialPage);
+    setPages(initialPages);
+    setListError(initialListError);
+    setSupportDataNotice(initialSupportDataNotice);
+    setIsLoading(false);
+  }, [
+    initialClasses,
+    initialListError,
+    initialPage,
+    initialPages,
+    initialSchoolKey,
+    initialSections,
+    initialSupportDataNotice,
+    initialTotal,
+    initialUsers,
+  ]);
 
   const roleCounts = useMemo(() => {
     return users.reduce(
@@ -271,12 +283,13 @@ export default function ManageUsersDirectoryClient() {
   return (
     <PageShell width="wide" padding="relaxed">
       <PageHero
+        variant="directory"
         eyebrow="School Workspace"
-        title="User Management"
+        title="Manage Users"
         description="Browse every school user from one directory, then open the dedicated student, teacher, or admin flows when you need deeper edits."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild>
+            <Button asChild className="app-button-page">
               <AppPrefetchLink
                 href="/workspace/manage/users/create"
                 prefetchOnMount
@@ -292,6 +305,7 @@ export default function ManageUsersDirectoryClient() {
             <Button
               type="button"
               variant="outline"
+              className="app-button-filter"
               onClick={() => void loadUsers(page)}
               disabled={isLoading}
             >
@@ -304,7 +318,7 @@ export default function ManageUsersDirectoryClient() {
             <span className="app-meta-chip">
               {currentSchoolKey ? `School: ${currentSchoolKey}` : "No school selected"}
             </span>
-            <span className="app-meta-chip">Create flow split out</span>
+            <span className="app-meta-chip">Role-specific detail pages</span>
           </>
         }
         stats={[
@@ -341,13 +355,14 @@ export default function ManageUsersDirectoryClient() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-1">
                 <CardTitle>User Directory</CardTitle>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Open the dedicated detail flow for full edits, or archive accounts directly from this directory.
+                <p className="app-form-section-copy">
+                  Scan identity, login context, role, and scope quickly here, then open the dedicated detail page for deeper edits.
                 </p>
               </div>
               <div className="app-chip-cloud">
-                <span className="app-meta-chip">Dedicated create page</span>
-                <span className="app-meta-chip">Dedicated role detail flows</span>
+                <span className="app-meta-chip">{`${roleCounts.admin} admins loaded`}</span>
+                <span className="app-meta-chip">{`${roleCounts.teacher} teachers loaded`}</span>
+                <span className="app-meta-chip">{`${roleCounts.student} students loaded`}</span>
               </div>
             </div>
           </CardHeader>
@@ -370,10 +385,10 @@ export default function ManageUsersDirectoryClient() {
               />
             ) : users.length === 0 ? (
               <SectionState
-                title="No users yet"
-                description="Open the dedicated create page to add students, teachers, and admins one by one or in bulk."
-                action={
-                  <Button asChild>
+              title="No users yet"
+              description="Open the dedicated create page to add students, teachers, and admins one by one or in bulk."
+              action={
+                  <Button asChild className="app-button-page">
                     <AppPrefetchLink href="/workspace/manage/users/create">
                       Go to Create Users
                     </AppPrefetchLink>
@@ -387,7 +402,7 @@ export default function ManageUsersDirectoryClient() {
                     <div className="app-toolbar-copy">
                       <p className="app-toolbar-title">Loaded users</p>
                       <p className="app-toolbar-note">
-                        Total {total} users. Page {page} of {pages}.
+                        Total {total} users. Page {page} of {pages}. Open a row to continue in the dedicated student, teacher, or admin flow.
                       </p>
                     </div>
                     <div className="app-toolbar-actions">
@@ -432,26 +447,47 @@ export default function ManageUsersDirectoryClient() {
                         <TableRow key={user._id}>
                           <TableCell className="font-medium">
                             <div className="space-y-1">
-                              <div>{user.name}</div>
-                              {user.role === "student" && user.rollNumber ? (
-                                <div className="text-xs text-muted-foreground">
-                                  Username: {user.rollNumber}
-                                </div>
-                              ) : null}
+                              <div className="app-table-primary">{user.name}</div>
+                              <div className="app-table-secondary">
+                                {user.role === "student" && user.rollNumber
+                                  ? `Roll number login: ${user.rollNumber}`
+                                  : getRoleAccountLabel(user.role)}
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell>{user.email || "—"}</TableCell>
-                          <TableCell>{user.mobileNumber || "—"}</TableCell>
+                          <TableCell>
+                            {user.email ? (
+                              <div className="app-table-primary">{user.email}</div>
+                            ) : (
+                              <span className="app-table-secondary">No email</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {user.mobileNumber ? (
+                              <div className="app-table-primary">{user.mobileNumber}</div>
+                            ) : (
+                              <span className="app-table-secondary">No phone</span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Badge
-                              variant={user.role === "admin" ? "default" : "secondary"}
+                              variant={getRoleBadgeVariant(user.role)}
                               className="capitalize"
                             >
                               {user.role}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {getScopeSummary(user)}
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="app-table-primary">
+                                {getScopeSummary(user)}
+                              </div>
+                              <div className="app-table-secondary">
+                                {user.role === "student"
+                                  ? "Student placement"
+                                  : "Academic access scope"}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
@@ -465,7 +501,7 @@ export default function ManageUsersDirectoryClient() {
                                     "/api/subjects",
                                   ]}
                                 >
-                                  Open
+                                  Open Profile
                                 </AppPrefetchLink>
                               </Button>
 

@@ -3,7 +3,7 @@ import {
   withSchool,
   withSchoolHeaders,
 } from '@/lib/client/school';
-import { signOut } from 'next-auth/react';
+import { performNextAuthSignOut } from '@/lib/client/next-auth-client';
 
 export type ApiPayload<T = any> = {
   ok: boolean;
@@ -448,8 +448,8 @@ async function redirectToExpiredStudentSessionSignIn(): Promise<never> {
       signInUrl.searchParams.set('callbackUrl', window.location.href);
 
       try {
-        await signOut({
-          redirect: false,
+        await performNextAuthSignOut({
+          callbackUrl: signInUrl.toString(),
         });
       } catch {}
 

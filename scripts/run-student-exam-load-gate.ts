@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
 
 type ParsedArgs = {
   baseUrl: string;
@@ -22,6 +23,7 @@ type ParsedArgs = {
   submitEnabled: boolean;
   heartbeatEnabled: boolean;
   listFirstEnabled: boolean;
+  warmupEnabled: boolean;
   maxFailureRatePct: number;
   maxP95ListMs: number;
   maxP95StartMs: number;
@@ -95,6 +97,7 @@ function printHelp() {
       "  --submit=<true|false>         Submit after save rounds (default: true)",
       "  --heartbeat=<true|false>      Hit the student heartbeat during the flow (default: true)",
       "  --list-first=<true|false>     Hit /api/student/tests before detail/start (default: true)",
+      "  --warmup=<true|false>         Prewarm auth and test routes before measuring (default: true)",
       "  --max-failure-rate-pct=<n>    Max allowed failure rate percentage (default: 0.5)",
       "  --max-p95-list-ms=<ms>        Max allowed test.list p95 latency (default: 1200)",
       "  --max-p95-start-ms=<ms>       Max allowed test.start p95 latency (default: 1200)",
@@ -175,6 +178,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     submitEnabled: parseBoolean(argMap.get("submit"), true),
     heartbeatEnabled: parseBoolean(argMap.get("heartbeat"), true),
     listFirstEnabled: parseBoolean(argMap.get("list-first"), true),
+    warmupEnabled: parseBoolean(argMap.get("warmup"), true),
     maxFailureRatePct: parseNumber(argMap.get("max-failure-rate-pct"), 0.5),
     maxP95ListMs: parsePositiveInt(argMap.get("max-p95-list-ms"), 1200),
     maxP95StartMs: parsePositiveInt(argMap.get("max-p95-start-ms"), 1200),
@@ -198,6 +202,7 @@ function runStressScript(args: ParsedArgs) {
     `--submit=${args.submitEnabled ? "true" : "false"}`,
     `--heartbeat=${args.heartbeatEnabled ? "true" : "false"}`,
     `--list-first=${args.listFirstEnabled ? "true" : "false"}`,
+    `--warmup=${args.warmupEnabled ? "true" : "false"}`,
     `--out=${args.outFile}`,
   ];
 
@@ -236,6 +241,11 @@ async function auditPersistedAnswers(params: {
       failedAuditCount: 0,
     };
   }
+
+  await syncExamRuntimeMongoProjectionsForPaper(
+    params.schoolKey,
+    params.paperId,
+  ).catch(() => undefined);
 
   await connectDB();
   const { User: UserModel, QuestionPaperResponse: ResponseModel } = await getTenantModels(

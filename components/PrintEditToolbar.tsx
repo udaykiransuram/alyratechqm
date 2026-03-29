@@ -10,7 +10,7 @@ export function PrintEditToolbar({ paperId }: { paperId: string }) {
 
   return (
     <div className="flex items-center gap-2 print:hidden">
-      <Button variant="outline" asChild>
+      <Button variant="outline" asChild className="app-button-inline">
         <AppPrefetchLink
           href={buildReturnHref(`/workspace/question-papers/edit/${paperId}`)}
           relatedApiPrefetches={[
@@ -21,11 +21,11 @@ export function PrintEditToolbar({ paperId }: { paperId: string }) {
             '/api/tags/with-subjects',
           ]}
         >
-          <FilePenLine className="mr-2 h-4 w-4" /> Edit
+          <FilePenLine className="h-4 w-4" /> Edit
         </AppPrefetchLink>
       </Button>
-      <Button variant="outline" onClick={() => window.print()}>
-        <Printer className="mr-2 h-4 w-4" /> Print
+      <Button variant="outline" className="app-button-inline" onClick={() => window.print()}>
+        <Printer className="h-4 w-4" /> Print
       </Button>
     </div>
   );

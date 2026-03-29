@@ -51,6 +51,18 @@ function resolveTrackedApiUrl(rawUrl: string) {
 
 export default function ClientApiRequestProbe() {
   useEffect(() => {
+    const probeEnabled = (() => {
+      try {
+        return window.localStorage.getItem("app:enable-api-probe") === "1";
+      } catch {
+        return false;
+      }
+    })();
+
+    if (!probeEnabled) {
+      return;
+    }
+
     const appWindow = window as AppInstrumentedWindow;
     if (appWindow.__APP_API_FETCH_INSTRUMENTED__) {
       return;

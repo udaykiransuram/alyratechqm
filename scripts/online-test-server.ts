@@ -135,8 +135,10 @@ function buildServerEnv(baseUrl: string, mode: OnlineTestServerMode) {
     ...process.env,
     BROWSERSLIST_IGNORE_OLD_DATA:
       process.env.BROWSERSLIST_IGNORE_OLD_DATA || "1",
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL || baseUrl,
-    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || baseUrl,
+    // Managed local runs must use the exact resolved loopback origin so auth
+    // redirects and cookies stay on the same host/port as the browser harness.
+    NEXTAUTH_URL: baseUrl,
+    NEXT_PUBLIC_SITE_URL: baseUrl,
     NODE_ENV:
       process.env.NODE_ENV || (mode === "prod" ? "production" : "development"),
   };

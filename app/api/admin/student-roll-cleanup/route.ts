@@ -29,7 +29,7 @@ async function recordRollCleanupAudits(
     userId: string;
     fromRollNumber: string;
     toRollNumber: string;
-    passwordResetToRollNumber: boolean;
+    passwordResetToDefaultPassword: boolean;
   }>,
   source: "safe_fix" | "manual_resolution" | "suggested_bulk_fix",
 ) {
@@ -46,7 +46,8 @@ async function recordRollCleanupAudits(
         details: {
           fromRollNumber: update.fromRollNumber,
           toRollNumber: update.toRollNumber,
-          passwordResetToRollNumber: update.passwordResetToRollNumber,
+          passwordResetToDefaultPassword:
+            update.passwordResetToDefaultPassword,
           cleanupSource: source,
         },
         actor: {

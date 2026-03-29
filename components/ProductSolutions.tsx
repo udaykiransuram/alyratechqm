@@ -1,17 +1,17 @@
 "use client";
 
-import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import { useRef } from "react";
-import { LottieAnimation } from "@/components/LottieAnimation";
-import Link from "next/link";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import {
-  ChartBarIcon,
-  BuildingLibraryIcon,
   AcademicCapIcon,
+  BuildingLibraryIcon,
+  ChartBarIcon,
   DocumentTextIcon,
 } from "@heroicons/react/24/outline";
+import Link from "next/link";
 
-/* ── colour palette lookup (Tailwind JIT-safe) ─────────────────── */
+import { LottieAnimation } from "@/components/LottieAnimation";
+
 const colorMap: Record<
   string,
   {
@@ -87,7 +87,6 @@ const colorMap: Record<
   },
 };
 
-/* ── types ──────────────────────────────────────────────────────── */
 interface SolutionData {
   id: string;
   title: string;
@@ -99,7 +98,6 @@ interface SolutionData {
   features: string[];
 }
 
-/* ── single card ────────────────────────────────────────────────── */
 function SolutionCard({
   sol,
   index,
@@ -112,13 +110,16 @@ function SolutionCard({
   const isEven = index % 2 === 0;
   const prefersReduced = useReducedMotion();
 
-  // Parallax on the animation container
   const { scrollYProgress } = useScroll({
     target: cardRef,
     offset: ["start end", "end start"],
   });
   const animY = useTransform(scrollYProgress, [0, 1], [40, -40]);
-  const animScale = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0.9, 1.05, 1.05, 0.95]);
+  const animScale = useTransform(
+    scrollYProgress,
+    [0, 0.3, 0.7, 1],
+    [0.9, 1.05, 1.05, 0.95],
+  );
 
   return (
     <motion.div
@@ -131,59 +132,59 @@ function SolutionCard({
       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
     >
       <div
-        className={`group relative overflow-hidden rounded-[2rem] lg:rounded-[2.5rem] bg-white border border-slate-100/80 shadow-sm hover:shadow-2xl transition-shadow duration-500 flex flex-col ${
+        className={`public-panel group relative flex flex-col overflow-hidden transition-shadow duration-500 hover:shadow-2xl lg:rounded-[2.5rem] ${
           isEven ? "lg:flex-row" : "lg:flex-row-reverse"
         }`}
       >
-        {/* ── Gradient glow blob behind card ── */}
         <div
-          className={`absolute -z-10 w-[500px] h-[400px] rounded-full blur-[100px] opacity-0 group-hover:opacity-100 transition-opacity duration-700 bg-gradient-to-br ${c.glow} ${
+          className={`absolute -z-10 h-[400px] w-[500px] rounded-full bg-gradient-to-br ${c.glow} opacity-0 blur-[100px] transition-opacity duration-700 group-hover:opacity-100 ${
             isEven ? "-right-20 -top-20" : "-left-20 -top-20"
           }`}
         />
 
-        {/* ── Animation Column ── */}
         <motion.div
-          style={{ y: prefersReduced ? 0 : animY, scale: prefersReduced ? 1 : animScale }}
-          className={`relative flex items-center justify-center p-6 sm:p-8 lg:p-12 lg:w-[42%] flex-none overflow-hidden bg-gradient-to-br ${c.gradientFrom} ${c.gradientTo}`}
+          style={{
+            y: prefersReduced ? 0 : animY,
+            scale: prefersReduced ? 1 : animScale,
+          }}
+          className={`relative flex flex-none items-center justify-center overflow-hidden bg-gradient-to-br p-6 sm:p-8 lg:w-[42%] lg:p-12 ${c.gradientFrom} ${c.gradientTo}`}
         >
-          {/* Decorative radial */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.8),transparent_70%)] pointer-events-none" />
-          {/* Decorative grid dots */}
-          <div className="absolute inset-0 opacity-[0.03] bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEuNSIgZmlsbD0iIzMzMyIvPjwvc3ZnPg==')] pointer-events-none" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.8),transparent_70%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEuNSIgZmlsbD0iIzMzMyIvPjwvc3ZnPg==')] opacity-[0.03]" />
 
-          {/* Floating animation wrapper */}
           <motion.div
             animate={prefersReduced ? undefined : { y: [0, -8, 0] }}
-            transition={prefersReduced ? undefined : { duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            transition={
+              prefersReduced
+                ? undefined
+                : { duration: 4, repeat: Infinity, ease: "easeInOut" }
+            }
             className="relative z-10 w-full"
           >
             <LottieAnimation
               src={sol.animation}
-              className="w-full h-[260px] sm:h-[320px] lg:h-[380px]"
+              className="h-[260px] w-full sm:h-[320px] lg:h-[380px]"
             />
           </motion.div>
 
-          {/* Number watermark */}
-          <div className="absolute bottom-4 right-6 text-[8rem] lg:text-[10rem] font-black opacity-[0.04] leading-none pointer-events-none select-none">
+          <div className="pointer-events-none absolute bottom-4 right-6 select-none text-[8rem] font-black leading-none opacity-[0.04] lg:text-[10rem]">
             0{index + 1}
           </div>
         </motion.div>
 
-        {/* ── Content Column ── */}
-        <div className="flex-1 p-6 sm:p-8 lg:p-12 relative z-10">
-          {/* Colored accent stripe */}
-          <div className={`absolute top-0 left-0 w-full h-1 lg:h-full lg:w-1.5 ${c.sidebar}`} />
+        <div className="relative z-10 flex-1 p-6 sm:p-8 lg:p-12">
+          <div
+            className={`absolute left-0 top-0 h-1 w-full lg:h-full lg:w-1.5 ${c.sidebar}`}
+          />
 
           <div className="lg:pl-4">
-            {/* Header */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: 0.2 }}
             >
-              <div className="flex items-center gap-4 mb-5">
+              <div className="mb-5 flex items-center gap-4">
                 <div
                   className={`flex h-14 w-14 flex-none items-center justify-center rounded-2xl ${c.iconBg} ${c.iconText} ring-1 ${c.iconRing} shadow-sm`}
                 >
@@ -191,43 +192,42 @@ function SolutionCard({
                 </div>
                 <div>
                   <span
-                    className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${c.pillBg} ${c.pillText} uppercase tracking-wider`}
+                    className={`inline-block rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider ${c.pillBg} ${c.pillText}`}
                   >
                     {sol.subtitle}
                   </span>
                 </div>
               </div>
 
-              <h3 className="text-2xl sm:text-3xl font-bold leading-tight text-slate-900 mb-3">
+              <h3 className="mb-3 text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">
                 {sol.title}
               </h3>
-              <p className="text-base lg:text-lg leading-relaxed text-slate-600 mb-8 max-w-2xl">
+              <p className="mb-8 max-w-2xl text-base leading-relaxed text-slate-600 lg:text-lg">
                 {sol.description}
               </p>
             </motion.div>
 
-            {/* Features - staggered reveal */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 mb-8">
-              {sol.features.map((feature, i) => (
+            <div className="mb-8 grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
+              {sol.features.map((feature, featureIndex) => (
                 <motion.div
-                  key={i}
+                  key={feature}
                   className="flex items-start gap-3 py-1"
                   initial={{ opacity: 0, x: -12 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
-                  transition={{ duration: 0.35, delay: 0.3 + i * 0.05 }}
+                  transition={{
+                    duration: 0.35,
+                    delay: 0.3 + featureIndex * 0.05,
+                  }}
                 >
-                  <div
-                    className={`mt-2 h-1.5 w-1.5 rounded-full ${c.dot} flex-none`}
-                  />
-                  <span className="text-sm lg:text-base text-slate-700 font-medium leading-snug">
+                  <div className={`mt-2 h-1.5 w-1.5 flex-none rounded-full ${c.dot}`} />
+                  <span className="text-sm font-medium leading-snug text-slate-700 lg:text-base">
                     {feature}
                   </span>
                 </motion.div>
               ))}
             </div>
 
-            {/* CTA */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -236,11 +236,11 @@ function SolutionCard({
             >
               <Link
                 href="/contact"
-                className={`inline-flex items-center gap-2 rounded-full ${c.buttonBg} ${c.buttonHover} px-6 py-3 text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all duration-300 group/btn`}
+                className={`group/btn inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:shadow-lg ${c.buttonBg} ${c.buttonHover}`}
               >
                 Get Started
                 <svg
-                  className="w-4 h-4 transition-transform group-hover/btn:translate-x-1"
+                  className="h-4 w-4 transition-transform group-hover/btn:translate-x-1"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -261,7 +261,6 @@ function SolutionCard({
   );
 }
 
-/* ── solutions data ─────────────────────────────────────────────── */
 const solutions: SolutionData[] = [
   {
     id: "diagnostics",
@@ -345,13 +344,11 @@ const solutions: SolutionData[] = [
   },
 ];
 
-/* ── exported list ──────────────────────────────────────────────── */
 export function ProductSolutions() {
   return (
-    <section className="cards-section mx-auto max-w-7xl px-4 sm:px-6 pt-16 md:pt-24 pb-12 lg:px-8 relative overflow-hidden">
-      {/* Section header */}
+    <section className="cards-section relative mx-auto max-w-7xl overflow-hidden px-4 pb-12 pt-16 sm:px-6 md:pt-24 lg:px-8">
       <motion.div
-        className="flex flex-col lg:flex-row items-center gap-10 mb-20"
+        className="mb-20 flex flex-col items-center gap-10 lg:flex-row"
         initial={{ opacity: 0, y: 40 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.3 }}
@@ -359,7 +356,7 @@ export function ProductSolutions() {
       >
         <div className="flex-1 text-center lg:text-left">
           <motion.span
-            className="inline-block mb-4 rounded-full bg-slate-100 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-500"
+            className="mb-4 inline-block rounded-full bg-slate-100 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-500"
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
@@ -367,31 +364,31 @@ export function ProductSolutions() {
           >
             Our Products
           </motion.span>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight mb-4 leading-[1.15]">
+          <h2 className="mb-4 text-2xl font-bold leading-[1.15] tracking-tight text-slate-900 sm:text-3xl md:text-4xl lg:text-5xl">
             Powerful Tools for{" "}
             <span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">
               Modern Schools
             </span>
           </h2>
-          <p className="text-lg text-slate-600 leading-relaxed max-w-2xl">
-            From precision diagnostics to full-stack school management —
-            everything your institution needs to thrive, delivered through our reports and process.
+          <p className="max-w-2xl text-lg leading-relaxed text-slate-600">
+            From precision diagnostics to full-stack school management,
+            everything your institution needs to thrive, delivered through our
+            reports and process.
           </p>
         </div>
         <motion.div
-          className="hidden md:block w-full max-w-xs sm:max-w-sm lg:max-w-md flex-none"
+          className="hidden w-full max-w-xs flex-none md:block sm:max-w-sm lg:max-w-md"
           animate={{ y: [0, -10, 0] }}
           transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
         >
           <LottieAnimation
             src="/animations/business-analyst.lottie"
-            className="w-full h-[320px]"
+            className="h-[320px] w-full"
           />
         </motion.div>
       </motion.div>
 
-      {/* Cards */}
-      <div className="flex flex-col gap-10 md:gap-20 lg:gap-24 relative z-10">
+      <div className="relative z-10 flex flex-col gap-10 md:gap-20 lg:gap-24">
         {solutions.map((sol, index) => (
           <SolutionCard key={sol.id} sol={sol} index={index} />
         ))}

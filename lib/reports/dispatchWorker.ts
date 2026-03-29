@@ -1,5 +1,5 @@
 import { getTenantModels } from "@/lib/db-tenant";
-import { resolveExamRuntimeMongoResponseId } from "@/lib/exam-runtime";
+import { resolveExamRuntimeMongoResponseIdWithCooldown } from "@/lib/exam-runtime-sync-cache";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 import {
   createPendingDeliveryAttempt,
@@ -394,7 +394,7 @@ export async function runReportDispatchWorker({
         }
 
         const resolvedResponseId =
-          (await resolveExamRuntimeMongoResponseId(
+          (await resolveExamRuntimeMongoResponseIdWithCooldown(
             job.schoolKey,
             String(job.responseId),
           )) || String(job.responseId);

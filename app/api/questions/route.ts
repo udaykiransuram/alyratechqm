@@ -4,6 +4,15 @@ import { connectDB } from '@/lib/db';
 import { getTenantModels } from '@/lib/db-tenant';
 import { buildArchiveFilter, resolveIncludeArchived } from '@/lib/archive';
 import { requireTenantSession } from '@/lib/api-auth';
+import {
+  sanitizeQuestionForApiResponse,
+  sanitizeQuestionOptions,
+  sanitizeRichTextHtml,
+} from '@/lib/security/html-sanitize';
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, {
@@ -46,7 +55,7 @@ export async function GET(req: NextRequest) {
 
   // Search by content
   const search = searchParams.get('search');
-  if (search) query.content = { $regex: search, $options: 'i' };
+  if (search) query.content = { $regex: escapeRegExp(search), $options: 'i' };
 
   const pageParam = Number(searchParams.get('page') || '');
   const limitParam = Number(searchParams.get('limit') || '');
@@ -78,13 +87,15 @@ export async function GET(req: NextRequest) {
     const totalCount = await QuestionModel.countDocuments(query);
     total = totalCount;
     page = Math.max(1, pageParam);
-    limit = Math.max(1, limitParam);
+    limit = Math.min(100, Math.max(1, limitParam));
     pages = Math.max(1, Math.ceil(totalCount / (limit || 1)));
     const skip = (page - 1) * limit;
     cursor = cursor.skip(skip).limit(limit);
   }
 
-  const questions = await cursor;
+  const questions = (await cursor).map((question: any) =>
+    sanitizeQuestionForApiResponse(question),
+  );
   return NextResponse.json({ success: true, questions, total, page, pages, limit });
 }
 
@@ -119,9 +130,12 @@ export async function POST(req: NextRequest) {
       matrixAnswers
     } = body;
 
+    const sanitizedContent = sanitizeRichTextHtml(content);
+    const sanitizedExplanation = sanitizeRichTextHtml(explanation);
+    const sanitizedOptions = sanitizeQuestionOptions(options);
 
     // --- Server-Side Validation ---
-    if (!subject || !classId || !content || !marks) {
+    if (!subject || !classId || !sanitizedContent || !marks) {
       return NextResponse.json(
         { success: false, message: 'Missing required fields: subject, class, content, and marks are required.' },
         { status: 400 }
@@ -152,10 +166,10 @@ export async function POST(req: NextRequest) {
         subject,
         class: classId,
         tags,
-        content,
+        content: sanitizedContent,
         matrixOptions: filteredMatrixOptions,
         matrixAnswers,
-        explanation,
+        explanation: sanitizedExplanation,
         marks,
         type,
       });
@@ -175,16 +189,29 @@ export async function POST(req: NextRequest) {
           }
         });
 
-      return NextResponse.json({ success: true, question: createdQuestion }, { status: 201 });
+      return NextResponse.json(
+        { success: true, question: sanitizeQuestionForApiResponse(createdQuestion) },
+        { status: 201 },
+      );
     } else {
+      if (
+        (type === 'single' || type === 'multiple') &&
+        sanitizedOptions.some((option: any) => !String(option?.content || '').trim())
+      ) {
+        return NextResponse.json(
+          { success: false, message: 'Question options cannot be empty.' },
+          { status: 400 },
+        );
+      }
+
       const newQuestion = new QuestionModelPost({
         subject,
         class: classId,
         tags,
-        content,
-        options,
+        content: sanitizedContent,
+        options: sanitizedOptions,
         answerIndexes,
-        explanation,
+        explanation: sanitizedExplanation,
         marks,
         type,
       });
@@ -204,7 +231,10 @@ export async function POST(req: NextRequest) {
           }
         });
 
-      return NextResponse.json({ success: true, question: createdQuestion }, { status: 201 });
+      return NextResponse.json(
+        { success: true, question: sanitizeQuestionForApiResponse(createdQuestion) },
+        { status: 201 },
+      );
     }
   } catch (error: any) {
     if (error.name === 'ValidationError') {

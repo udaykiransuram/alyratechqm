@@ -6,9 +6,10 @@ import { usePathname } from "next/navigation";
 const excludedRouteMatchers = [
   (pathname: string) => pathname.startsWith("/auth/"),
   (pathname: string) => pathname.startsWith("/student/"),
-  (pathname: string) => pathname === "/workspace/manage/reports" || pathname.startsWith("/workspace/manage/reports/"),
-  (pathname: string) => pathname === "/workspace/analytics" || pathname.startsWith("/workspace/analytics/"),
-  (pathname: string) => pathname.includes("/report"),
+  (pathname: string) =>
+    pathname.startsWith("/workspace/analytics/student-tag-report/"),
+  (pathname: string) =>
+    pathname.startsWith("/workspace/analytics/class-tag-report/"),
   (pathname: string) => /^\/workspace\/question-papers\/[^/]+\/responses(?:\/|$)/.test(pathname),
 ];
 

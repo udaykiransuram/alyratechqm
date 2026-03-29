@@ -9,6 +9,7 @@ import BulkUploadPanel from "@/components/workspace/BulkUploadPanel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
@@ -263,14 +264,15 @@ export default function CreateAdminPageClient({
   };
 
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+    <PageShell width="wide" padding="standard">
       <PageHero
+        variant="editor"
         eyebrow="People"
         title="Create Admin"
         description="Create a school-admin account and decide whether it should keep full-school access or operate within a restricted scope."
         actions={
-          <Button type="button" variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <Button type="button" variant="outline" onClick={navigateBack} className="app-button-back">
+            <ArrowLeft className="h-4 w-4" />
             Back to Admins
           </Button>
         }
@@ -474,9 +476,9 @@ export default function CreateAdminPageClient({
                   </div>
                 ) : null}
 
-                <button type="submit" disabled={loading} className="app-button-primary w-full">
+                <Button type="submit" size="lg" className="w-full" disabled={loading}>
                   {loading ? "Saving..." : "Create Admin"}
-                </button>
+                </Button>
               </form>
             </CardContent>
           </Card>
@@ -496,6 +498,6 @@ export default function CreateAdminPageClient({
           />
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

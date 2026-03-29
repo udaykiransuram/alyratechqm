@@ -1,11 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type {
   StudentRollDuplicateAuditReport,
   StudentRollDuplicateGroup,
 } from '@/lib/admin/student-roll-cleanup';
-import useSWR from 'swr';
 import { AlertTriangle, ArrowLeft, Search, ShieldCheck, Wrench } from 'lucide-react';
 
 import PageHero from '@/components/layout/PageHero';
@@ -42,16 +41,16 @@ type CleanupMessage = {
   text: string;
 };
 
+type IndexingClientProps = {
+  initialSchoolOptions: SchoolOption[];
+};
+
 async function readJsonResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => null);
   if (!response.ok || !data?.success) {
     throw new Error(data?.message || 'Request failed.');
   }
   return data as T;
-}
-
-async function fetcher(url: string) {
-  return readJsonResponse<any>(await fetch(url, { cache: 'no-store' }));
 }
 
 function getResolutionGroupKey(schoolKey: string, normalizedRollNumber: string) {
@@ -85,7 +84,9 @@ function getCleanupMessageClassName(message: CleanupMessage) {
   return 'app-feedback app-feedback-info';
 }
 
-export default function IndexingClient() {
+export default function IndexingClient({
+  initialSchoolOptions,
+}: IndexingClientProps) {
   const { navigateBack } = useBackNavigation('/company/schools');
   const [indexSchoolKey, setIndexSchoolKey] = useState('');
   const [indexResults, setIndexResults] = useState<Record<string, any> | null>(null);
@@ -104,15 +105,10 @@ export default function IndexingClient() {
   >({});
   const [cleanupMessage, setCleanupMessage] = useState<CleanupMessage | null>(null);
 
-  const { data: schoolsData, error: schoolsError } = useSWR('/api/schools', fetcher);
-
-  const schoolOptions = useMemo(
-    () =>
-      Array.isArray(schoolsData?.schools)
-        ? (schoolsData.schools as SchoolOption[])
-        : [],
-    [schoolsData],
-  );
+  const schoolOptions = Array.isArray(initialSchoolOptions)
+    ? initialSchoolOptions
+    : [];
+  const hasSchoolOptions = schoolOptions.length > 0;
 
   const cleanupSummary = cleanupReport?.summary;
 
@@ -252,7 +248,7 @@ export default function IndexingClient() {
         tone: 'success',
         text:
           data.summary.updatedCount > 0
-            ? `Updated ${data.summary.updatedCount} student record(s) across ${data.summary.schoolsProcessed} school(s). Passwords were resynced to the new roll number for ${data.summary.passwordResetCount} account(s).`
+            ? `Updated ${data.summary.updatedCount} student record(s) across ${data.summary.schoolsProcessed} school(s). Default passwords were restored from student phone numbers for ${data.summary.passwordResetCount} account(s).`
             : 'No safe duplicate records were available to auto-fix.',
       });
 
@@ -305,7 +301,7 @@ export default function IndexingClient() {
         tone: 'success',
         text:
           data.summary.updatedCount > 0
-            ? `Applied suggested values across ${data.summary.groupCount} duplicate group(s) and updated ${data.summary.updatedCount} student record(s). Passwords were resynced to the new roll number for ${data.summary.passwordResetCount} account(s).`
+            ? `Applied suggested values across ${data.summary.groupCount} duplicate group(s) and updated ${data.summary.updatedCount} student record(s). Default passwords were restored from student phone numbers for ${data.summary.passwordResetCount} account(s).`
             : 'No duplicate records were available for suggested-value auto-fix.',
       });
 
@@ -494,7 +490,7 @@ export default function IndexingClient() {
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
             <div className="space-y-2">
               <Label>Select School</Label>
-              {schoolsError ? (
+              {!hasSchoolOptions ? (
                 <Input
                   placeholder="Enter school key"
                   value={indexSchoolKey}
@@ -570,7 +566,7 @@ export default function IndexingClient() {
                 </p>
               </div>
               <div className="app-toolbar-actions">
-                {schoolsError ? (
+                {!hasSchoolOptions ? (
                   <Input
                     placeholder="Enter school key"
                     value={cleanupSchoolKey}

@@ -1,11 +1,11 @@
 /*
-  Reset student passwords to their roll numbers.
+  Reset student passwords to the saved phone-number default.
 
   Default mode is dry-run. Use --commit to apply changes.
 
   Examples:
-    npm run reset:student-passwords-to-roll -- --school=all
-    npm run reset:student-passwords-to-roll -- --school=my_school --commit
+    npm run reset:student-passwords-to-phone -- --school=all
+    npm run reset:student-passwords-to-phone -- --school=my_school --commit
 */
 
 import bcrypt from "bcryptjs";
@@ -20,7 +20,6 @@ import {
 } from "../lib/redis.ts";
 import {
   getDefaultStudentPassword,
-  normalizeRollNumber,
 } from "../lib/user-credentials.ts";
 import School from "../models/School.ts";
 
@@ -37,7 +36,7 @@ type TenantSummary = {
   totalStudents: number;
   alreadyDefault: number;
   resetCount: number;
-  skippedMissingRollNumber: number;
+  skippedMissingPhoneNumber: number;
 };
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -86,12 +85,12 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 function printHelp() {
   console.log(`
-Reset student passwords so the stored password matches the student's roll number.
+Reset student passwords so the stored password matches the student's saved phone number digits.
 
 Options:
   --school=<key|key1,key2|all>   Limit the reset to specific school keys. Default: all
   --commit                       Apply changes. Without this flag, the script only previews
-  --clear-auth-state             Clear student session locks and login rate limits even if the password already matches the roll number
+  --clear-auth-state             Clear student session locks and login rate limits even if the password already matches the saved phone number digits
   --include-archived             Include archived student records
   --help                         Show this help text
 `);
@@ -137,12 +136,12 @@ async function resetTenantStudentPasswords(
     role: "student",
     ...buildArchiveFilter(args.includeArchived),
   })
-    .select("_id rollNumber passwordHash")
+    .select("_id rollNumber mobileNumber passwordHash")
     .lean();
 
   let alreadyDefault = 0;
   let resetCount = 0;
-  let skippedMissingRollNumber = 0;
+  let skippedMissingPhoneNumber = 0;
   const authCleanupTargets: Array<{ studentId: string; rollNumber: string }> = [];
 
   const updateOperations: Array<{
@@ -159,10 +158,10 @@ async function resetTenantStudentPasswords(
   }> = [];
 
   for (const student of students) {
-    const normalizedRollNumber = normalizeRollNumber(student?.rollNumber);
-    const defaultPassword = getDefaultStudentPassword(normalizedRollNumber);
+    const rollNumber = String(student?.rollNumber || "").trim();
+    const defaultPassword = getDefaultStudentPassword(student?.mobileNumber);
     if (!defaultPassword) {
-      skippedMissingRollNumber += 1;
+      skippedMissingPhoneNumber += 1;
       continue;
     }
 
@@ -185,7 +184,7 @@ async function resetTenantStudentPasswords(
       if (args.commit && args.clearAuthState) {
         authCleanupTargets.push({
           studentId: String(student._id),
-          rollNumber: normalizedRollNumber,
+          rollNumber,
         });
       }
       continue;
@@ -199,7 +198,7 @@ async function resetTenantStudentPasswords(
 
     authCleanupTargets.push({
       studentId: String(student._id),
-      rollNumber: normalizedRollNumber,
+      rollNumber,
     });
 
     updateOperations.push({
@@ -217,7 +216,7 @@ async function resetTenantStudentPasswords(
       },
     });
 
-    const processedCount = alreadyDefault + resetCount + skippedMissingRollNumber;
+    const processedCount = alreadyDefault + resetCount + skippedMissingPhoneNumber;
     if (processedCount % 100 === 0 || processedCount === students.length) {
       console.log(
         `[student-password-reset] ${schoolKey}: processed=${processedCount}/${students.length}`,
@@ -255,7 +254,7 @@ async function resetTenantStudentPasswords(
     totalStudents: students.length,
     alreadyDefault,
     resetCount,
-    skippedMissingRollNumber,
+    skippedMissingPhoneNumber,
   };
 }
 
@@ -282,7 +281,7 @@ async function main() {
     const summary = await resetTenantStudentPasswords(schoolKey, args);
     summaries.push(summary);
     console.log(
-      `[student-password-reset] ${schoolKey}: total=${summary.totalStudents}, already-default=${summary.alreadyDefault}, reset=${summary.resetCount}, skipped-missing-roll=${summary.skippedMissingRollNumber}`,
+      `[student-password-reset] ${schoolKey}: total=${summary.totalStudents}, already-default=${summary.alreadyDefault}, reset=${summary.resetCount}, skipped-missing-phone=${summary.skippedMissingPhoneNumber}`,
     );
   }
 
@@ -291,19 +290,19 @@ async function main() {
       totalStudents: accumulator.totalStudents + summary.totalStudents,
       alreadyDefault: accumulator.alreadyDefault + summary.alreadyDefault,
       resetCount: accumulator.resetCount + summary.resetCount,
-      skippedMissingRollNumber:
-        accumulator.skippedMissingRollNumber + summary.skippedMissingRollNumber,
+      skippedMissingPhoneNumber:
+        accumulator.skippedMissingPhoneNumber + summary.skippedMissingPhoneNumber,
     }),
     {
       totalStudents: 0,
       alreadyDefault: 0,
       resetCount: 0,
-      skippedMissingRollNumber: 0,
+      skippedMissingPhoneNumber: 0,
     },
   );
 
   console.log(
-    `[student-password-reset] complete: total=${totals.totalStudents}, already-default=${totals.alreadyDefault}, reset=${totals.resetCount}, skipped-missing-roll=${totals.skippedMissingRollNumber}`,
+    `[student-password-reset] complete: total=${totals.totalStudents}, already-default=${totals.alreadyDefault}, reset=${totals.resetCount}, skipped-missing-phone=${totals.skippedMissingPhoneNumber}`,
   );
 }
 

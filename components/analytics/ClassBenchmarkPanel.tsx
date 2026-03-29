@@ -213,7 +213,7 @@ function LowestSectionsCell({ row }: { row: any }) {
           {compactText(label)}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-80" align="start">
+      <PopoverContent className="analytics-popover w-80 p-4" align="start">
         <div className="space-y-3">
           <div>
             <p className="text-sm font-semibold text-foreground">
@@ -276,7 +276,7 @@ function MostAffectedSectionsCell({ row }: { row: any }) {
           {compactText(label)}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-80" align="start">
+      <PopoverContent className="analytics-popover w-80 p-4" align="start">
         <div className="space-y-3">
           <div>
             <p className="text-sm font-semibold text-foreground">

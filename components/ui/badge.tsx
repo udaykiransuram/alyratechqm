@@ -9,16 +9,23 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground shadow-[0_10px_24px_-24px_hsl(var(--primary)/0.35)] hover:bg-primary/90",
+          "app-status-badge app-status-badge-info",
+        info:
+          "app-status-badge app-status-badge-info",
         secondary:
-          "border-border/60 bg-secondary/84 text-secondary-foreground shadow-[0_10px_24px_-24px_hsl(var(--app-shadow-deep)/0.18)] hover:bg-secondary",
+          "app-status-badge app-status-badge-neutral",
+        neutral:
+          "app-status-badge app-status-badge-neutral",
         destructive:
-          "border-destructive/20 bg-destructive/10 text-destructive hover:bg-destructive/15",
-        outline: "border-border/70 bg-background/90 text-foreground shadow-[0_10px_24px_-24px_hsl(var(--app-shadow-deep)/0.12)]",
+          "app-status-badge app-status-badge-danger",
+        danger:
+          "app-status-badge app-status-badge-danger",
+        outline:
+          "app-status-badge border-border/78 bg-[hsl(var(--app-surface-1)/0.98)] text-foreground/84",
         success:
-          "border-[hsl(var(--app-success)/0.22)] bg-[hsl(var(--app-success)/0.12)] text-[hsl(var(--app-success))]",
+          "app-status-badge app-status-badge-success",
         warning:
-          "border-[hsl(var(--app-warning)/0.22)] bg-[hsl(var(--app-warning)/0.12)] text-[hsl(var(--app-warning))]",
+          "app-status-badge app-status-badge-warning",
       },
     },
     defaultVariants: {

@@ -5,11 +5,26 @@ import QuestionPaperResponse from "@/models/QuestionPaperResponse";
 import QuestionPaper from "@/models/QuestionPaper";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import {
+  filterItemsByScopedSection,
+  isSectionInScope,
+  resolveTeacherPaperScope,
+  toUniqueScopeIds,
+} from "@/lib/question-paper/access";
+import {
+  getLegacyPaperSubject,
+  resolvePaperSubjectIds,
+  serializePaperSubjects,
+} from "@/lib/question-paper/subjects";
 import "@/models/User";
 import "@/models/Subject";
 import "@/models/TagType";
 import "@/models/Tag";
 import { buildTagReport } from "@/lib/analytics/tagReport";
+import {
+  buildAnalyticsTagLookup,
+  resolveAnalyticsTags,
+} from "@/lib/analytics/tag-resolution";
 import {
   filterResponsesByAcademicSection,
   hydrateResponsesWithStudents,
@@ -18,7 +33,7 @@ import {
   buildPaperQuestionLookup,
   evaluateQuestionAnswer,
 } from "@/lib/question-paper/grading";
-import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
+import { syncExamRuntimeMongoProjectionsForPaperWithCooldown } from "@/lib/exam-runtime-sync-cache";
 import { requireTenantSession } from "@/lib/api-auth";
 import { z } from "zod";
 import { objectIdSchema, schoolKeySchema, parseOr400 } from "@/lib/validation";
@@ -110,14 +125,28 @@ export async function GET(
 
   // Validate params and query
   const groupByParam = req.nextUrl.searchParams.get("groupBy");
+  const rawClassId = req.nextUrl.searchParams.get("classId")?.trim() || "";
   const rawAcademicSectionId =
     req.nextUrl.searchParams.get("academicSectionId")?.trim() || "";
+  const rawSubjectId = req.nextUrl.searchParams.get("subjectId")?.trim() || "";
+  if (rawClassId && !mongoose.Types.ObjectId.isValid(rawClassId)) {
+    return NextResponse.json(
+      { success: false, message: "Invalid classId" },
+      { status: 400 },
+    );
+  }
   if (
     rawAcademicSectionId &&
     !mongoose.Types.ObjectId.isValid(rawAcademicSectionId)
   ) {
     return NextResponse.json(
       { success: false, message: "Invalid academicSectionId" },
+      { status: 400 },
+    );
+  }
+  if (rawSubjectId && !mongoose.Types.ObjectId.isValid(rawSubjectId)) {
+    return NextResponse.json(
+      { success: false, message: "Invalid subjectId" },
       { status: 400 },
     );
   }
@@ -133,6 +162,8 @@ export async function GET(
     groupBy: z.array(z.string()).max(5).optional(),
     json: z.string().optional(),
     groupFields: z.string().optional(),
+    classId: objectIdSchema.optional(),
+    subjectId: objectIdSchema.optional(),
     academicSectionId: objectIdSchema.optional(),
   });
   const qRes = parseOr400(querySchema, {
@@ -140,6 +171,8 @@ export async function GET(
     groupBy: groupByParts,
     json: req.nextUrl.searchParams.get("json"),
     groupFields: req.nextUrl.searchParams.get("groupFields"),
+    classId: rawClassId || undefined,
+    subjectId: rawSubjectId || undefined,
     academicSectionId: filterAcademicSectionId || undefined,
   });
   // Do not block on validation; proceed with best-effort to avoid hard failures in UI
@@ -151,9 +184,12 @@ export async function GET(
     const {
       QuestionPaperResponse: QPRModel,
       QuestionPaper: QPModel,
+      Tag: TagModel,
+      TagType: TagTypeModel,
       User: UserModel,
       AcademicSection: AcademicSectionModel,
       Class: ClassModel,
+      Subject: SubjectModel,
     } = await getTenantModels(tenantKey, [
       "QuestionPaperResponse",
       "QuestionPaper",
@@ -163,22 +199,34 @@ export async function GET(
       "User",
       "AcademicSection",
       "Class",
+      "Subject",
     ]);
+    const scopedUser = await UserModel.findById(auth.session.user.id)
+      .select(
+        "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
+      )
+      .lean();
 
     const groupBy = groupByParts;
     const groupFieldsOnly = req.nextUrl.searchParams.get("groupFields") === "1";
 
     if (groupFieldsOnly) {
       const paper = await QPModel.findById(paperId)
-        .select("title class sections assignedAcademicSections")
+        .select("title class subject subjectIds sections assignedAcademicSections")
         .populate({
           path: "sections.questions.question",
-          select: "tags",
-          populate: {
-            path: "tags",
-            populate: { path: "type", select: "name" },
-          },
+          select: "tags subject class",
+          populate: [
+            {
+              path: "tags",
+              populate: { path: "type", select: "name" },
+            },
+            { path: "subject", model: SubjectModel, select: "name" },
+            { path: "class", model: ClassModel, select: "name" },
+          ],
         })
+        .populate({ path: "subject", model: SubjectModel, select: "name" })
+        .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
         .populate({
           path: "assignedAcademicSections",
           model: AcademicSectionModel,
@@ -195,18 +243,85 @@ export async function GET(
       }
 
       const paperObj: any = Array.isArray(paper) ? paper[0] : paper;
+      const assignedSectionIds = toUniqueScopeIds(
+        paperObj?.assignedAcademicSections,
+      );
+      const paperScope = resolveTeacherPaperScope(
+        scopedUser,
+        toIdString(paperObj?.class),
+        resolvePaperSubjectIds(paperObj),
+        assignedSectionIds,
+      );
+      if (
+        !paperScope.hasClassAccess ||
+        !paperScope.hasSubjectAccess ||
+        !paperScope.hasSectionAccess
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "You do not have access to analytics for this paper.",
+          },
+          { status: 403 },
+        );
+      }
       const paperSections = paperObj.sections || [];
+      const paperDefaultSubject = getLegacyPaperSubject(paperObj);
+      const tagLookup = await buildAnalyticsTagLookup({
+        TagModel,
+        TagTypeModel,
+        paperSections,
+      });
       const tagTypes = new Set<string>();
+      const classMap = new Map<string, { value: string; label: string }>();
+      const subjectMap = new Map<string, { value: string; label: string }>();
       paperSections.forEach((section: any) => {
         (section.questions || []).forEach((qWrap: any) => {
-          (qWrap.question?.tags || []).forEach((tag: any) => {
-            if (tag.type?.name) tagTypes.add(tag.type.name);
-          });
+          const question = qWrap.question;
+          const questionClassId = toIdString(question?.class);
+          const subjectCandidate = question?.subject || paperDefaultSubject;
+          const subjectId = toIdString(subjectCandidate);
+          const isSubjectInScope =
+            !paperScope.requiresSubjectIntersection ||
+            paperScope.allowedSubjectIds.includes(subjectId);
+          const matchesSelectedClass =
+            !rawClassId || questionClassId === rawClassId;
+          const matchesSelectedSubject =
+            isSubjectInScope && (!rawSubjectId || subjectId === rawSubjectId);
+
+          if (matchesSelectedClass && matchesSelectedSubject) {
+            resolveAnalyticsTags(question?.tags || [], tagLookup).forEach(
+              (tag) => {
+                if (tag.type?.name) {
+                  tagTypes.add(tag.type.name);
+                }
+              },
+            );
+          }
+
+          if (questionClassId) {
+            classMap.set(questionClassId, {
+              value: questionClassId,
+              label: question?.class?.name || "Unknown Class",
+            });
+          }
+          if (
+            subjectId &&
+            (!paperScope.requiresSubjectIntersection ||
+              paperScope.allowedSubjectIds.includes(subjectId))
+          ) {
+            subjectMap.set(subjectId, {
+              value: subjectId,
+              label: subjectCandidate?.name || "Unknown Subject",
+            });
+          }
         });
       });
 
       const fields = [
         { value: "section", label: "Section" },
+        { value: "class", label: "Class" },
+        { value: "subject", label: "Subject" },
         ...Array.from(tagTypes).map((type) => ({
           value: type.toLowerCase(),
           label: type,
@@ -236,6 +351,11 @@ export async function GET(
       ]
         .filter((section: any) => section.value)
         .filter(
+          (section: any) =>
+            paperScope.allowedSectionIds === null ||
+            paperScope.allowedSectionIds.includes(section.value),
+        )
+        .filter(
           (section: any, index: number, allSections: any[]) =>
             allSections.findIndex(
               (candidate) => candidate.value === section.value,
@@ -246,7 +366,13 @@ export async function GET(
       return NextResponse.json({
         fields,
         filters: {
+          classes: Array.from(classMap.values()).sort((a, b) =>
+            a.label.localeCompare(b.label),
+          ),
           academicSections,
+          subjects: Array.from(subjectMap.values()).sort((a, b) =>
+            a.label.localeCompare(b.label),
+          ),
         },
       });
     }
@@ -255,17 +381,25 @@ export async function GET(
     let paperTitle = "";
     let students: any[] = [];
     let paperSections: any[] = [];
+    let tagLookup = new Map();
 
     // --- Fetch paper and responses ---
     const paper = await QPModel.findById(paperId)
+      .select("title class subject subjectIds sections assignedAcademicSections")
       .populate({
         path: "sections.questions.question",
-        select: "tags content answerIndexes options type matrixOptions matrixAnswers",
-        populate: {
-          path: "tags",
-          populate: { path: "type", select: "name" },
-        },
+        select: "tags content answerIndexes options subject class type matrixOptions matrixAnswers",
+        populate: [
+          {
+            path: "tags",
+            populate: { path: "type", select: "name" },
+          },
+          { path: "subject", model: SubjectModel, select: "name" },
+          { path: "class", model: ClassModel, select: "name" },
+        ],
       })
+      .populate({ path: "subject", model: SubjectModel, select: "name" })
+      .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
       .populate({
         path: "assignedAcademicSections",
         model: AcademicSectionModel,
@@ -282,19 +416,74 @@ export async function GET(
     }
 
     const paperObj: any = Array.isArray(paper) ? paper[0] : paper;
+    tagLookup = await buildAnalyticsTagLookup({
+      TagModel,
+      TagTypeModel,
+      paperSections: paperObj?.sections || [],
+    });
+    const assignedSectionIds = toUniqueScopeIds(paperObj?.assignedAcademicSections);
+    const paperScope = resolveTeacherPaperScope(
+      scopedUser,
+      toIdString(paperObj?.class),
+      resolvePaperSubjectIds(paperObj),
+      assignedSectionIds,
+    );
+
+    if (
+      !paperScope.hasClassAccess ||
+      !paperScope.hasSubjectAccess ||
+      !paperScope.hasSectionAccess
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You do not have access to analytics for this paper.",
+        },
+        { status: 403 },
+      );
+    }
+    if (
+      filterAcademicSectionId &&
+      !isSectionInScope(filterAcademicSectionId, paperScope.allowedSectionIds)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You do not have access to analytics for the selected section.",
+        },
+        { status: 403 },
+      );
+    }
+
+    if (
+      rawSubjectId &&
+      paperScope.requiresSubjectIntersection &&
+      !paperScope.allowedSubjectIds.includes(rawSubjectId)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You do not have access to analytics for the selected subject.",
+        },
+        { status: 403 },
+      );
+    }
+
     paperTitle = paperObj.title || "";
     paperSections = paperObj.sections || [];
     const questionLookup = buildPaperQuestionLookup({ sections: paperSections });
 
-    await syncExamRuntimeMongoProjectionsForPaper(tenantKey, paperId).catch(
-      (error) => {
-        console.error(
-          "Failed to sync exam runtime attempts into Mongo projections for class analytics:",
-          error,
-        );
-        return new Map<string, string>();
-      },
-    );
+    void syncExamRuntimeMongoProjectionsForPaperWithCooldown(
+      tenantKey,
+      paperId,
+      { minIntervalMs: 60_000 },
+    ).catch((error) => {
+      console.error(
+        "Failed to sync exam runtime attempts into Mongo projections for class analytics:",
+        error,
+      );
+      return new Map<string, string>();
+    });
 
     responses = await QPRModel.find({ paper: paperId })
       .populate({
@@ -314,6 +503,14 @@ export async function GET(
       ClassModel,
       studentSelect: "name rollNumber academicSection",
     });
+
+    responses = filterItemsByScopedSection(
+      responses,
+      (response: any) =>
+        response?.student?.academicSection?._id ||
+        response?.student?.academicSection,
+      paperScope.allowedSectionIds,
+    );
 
     responses = filterResponsesByAcademicSection(
       responses,
@@ -359,7 +556,7 @@ export async function GET(
         const questions = paperSection.questions || [];
         for (const qWrap of questions) {
           const question = qWrap.question;
-          if (!question || !question.tags || !question._id) continue;
+          if (!question || !question._id) continue;
           const qid = String(question._id);
           const ans = answerMap[sectionName]?.[qid];
           const evaluation = evaluateQuestionAnswer(
@@ -398,7 +595,17 @@ export async function GET(
       groupBy,
       isClassLevel: true,
       questionStats,
+      filters: {
+        classId: rawClassId || undefined,
+        subjectId: rawSubjectId || undefined,
+        subjectIds: paperScope.requiresSubjectIntersection
+          ? paperScope.allowedSubjectIds
+          : undefined,
+        paperDefaultSubject: getLegacyPaperSubject(paperObj),
+      },
+      tagLookup,
     });
+    const paperSubjects = serializePaperSubjects(paperObj);
 
     if (req.nextUrl.searchParams.get("json") === "1") {
       dedupeStatsArrays(stats);
@@ -485,6 +692,7 @@ export async function GET(
         stats,
         students,
         paper: paperTitle,
+        paperSubjects: paperSubjects.subjects,
       };
       const res = NextResponse.json(responsePayload);
       try {
@@ -501,6 +709,7 @@ export async function GET(
       stats,
       students,
       paper: paperTitle,
+      paperSubjects: paperSubjects.subjects,
     });
   } catch (error: any) {
     console.error("Error in class analytics route:", error);

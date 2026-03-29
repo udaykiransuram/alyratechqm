@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { connectDB } from "@/lib/db";
 import { getSiteUrlOrFallback } from "@/lib/site-url";
+import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
+import {
+  generateRegistrationLookupToken,
+  hashRegistrationLookupToken,
+  hashSensitiveRegistrationValue,
+} from "@/lib/security/registration-security";
 import Registration from "@/models/Registration";
 import TalentTestConfig from "@/models/TalentTestConfig";
 
@@ -78,23 +84,32 @@ export async function POST(req: NextRequest) {
     const amount = Number(config?.price ?? 100);
     const currency = String(config?.currency ?? "INR").toUpperCase();
 
+    const registrationLookupToken = generateRegistrationLookupToken();
+    const registrationLookupTokenHash =
+      hashRegistrationLookupToken(registrationLookupToken);
+    const normalizedAadhar = String(body.aadhar || "").replace(/\s+/g, "").trim();
+    const aadharLast4 = normalizedAadhar.slice(-4);
+    const aadharHash = hashSensitiveRegistrationValue("aadhar", normalizedAadhar);
+
     await Registration.create({
-      studentName: body.studentName,
-      guardianName: body.guardianName,
-      phone: body.phone,
-      schoolKey: body.schoolKey,
-      schoolName: body.schoolName,
-      classId: body.classId,
-      classLevel: body.classLevel,
-      sectionId: body.sectionId,
-      sectionName: body.sectionName,
-      aadhar: body.aadhar,
-      careerAspiration: body.careerAspiration,
-      rollNumber: body.rollNumber,
+      studentName: String(body.studentName || "").trim(),
+      guardianName: String(body.guardianName || "").trim(),
+      phone: String(body.phone || "").trim(),
+      schoolKey: String(body.schoolKey || "").trim().toLowerCase(),
+      schoolName: String(body.schoolName || "").trim(),
+      classId: String(body.classId || "").trim(),
+      classLevel: String(body.classLevel || "").trim(),
+      sectionId: String(body.sectionId || "").trim(),
+      sectionName: String(body.sectionName || "").trim(),
+      aadharHash,
+      aadharLast4,
+      careerAspiration: String(body.careerAspiration || "").trim(),
+      rollNumber: String(body.rollNumber || "").trim(),
       amount,
       currency,
       orderId,
       status: "pending",
+      successLookupTokenHash: registrationLookupTokenHash,
     });
 
     const cashfreeEnv = (
@@ -108,6 +123,7 @@ export async function POST(req: NextRequest) {
         ? "https://api.cashfree.com"
         : "https://sandbox.cashfree.com");
 
+    const siteUrl = getSiteUrlOrFallback(getTrustedInternalOrigin());
     const res = await fetch(`${cashfreeBaseUrl}/pg/orders`, {
       method: "POST",
       headers: {
@@ -125,14 +141,7 @@ export async function POST(req: NextRequest) {
           customer_phone: body.phone,
         },
         order_meta: {
-          return_url: `${getSiteUrlOrFallback(req.nextUrl.origin)}/success/${orderId}`,
-          studentName: body.studentName,
-          guardianName: body.guardianName,
-              schoolName: body.schoolName,
-          classLevel: body.classLevel,
-          sectionName: body.sectionName,
-          aadhar: body.aadhar,
-          careerAspiration: body.careerAspiration,
+          return_url: `${siteUrl}/success/${orderId}?token=${encodeURIComponent(registrationLookupToken)}`,
         },
       }),
     });

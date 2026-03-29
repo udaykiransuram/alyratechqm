@@ -9,11 +9,11 @@ import {
 import { validateStudentSectionAnswers } from "@/lib/question-paper/grading";
 import { getStudentTestModels, loadOnlinePaperRuntimeById } from "@/lib/student-test-server";
 import {
+  autoSubmitExpiredAttemptIfNeeded,
   buildSectionAnswersSignature,
   finalizeAttemptAsSubmitted,
-  getAttemptDeadlineMs,
   paperSupportsOnlineDelivery,
-  serializeStudentAttempt,
+  sanitizeAttemptForStudentDelivery,
 } from "@/lib/student-tests";
 
 export const dynamic = "force-dynamic";
@@ -110,10 +110,17 @@ export async function POST(
       });
     }
 
+    attempt = await autoSubmitExpiredAttemptIfNeeded({
+      QuestionPaperResponseModel,
+      attempt,
+      paper,
+      now,
+    });
+
     if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
       return NextResponse.json({
         success: true,
-        attempt: serializeStudentAttempt(attempt),
+        attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
         status: attempt.status,
       });
     }
@@ -162,25 +169,19 @@ export async function POST(
         status: 409,
         code: "ATTEMPT_STATE_CONFLICT",
         details: {
-          attempt: serializeStudentAttempt(attempt),
+          attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
           serverLastSavedAt: attempt?.lastSavedAt || null,
         },
       });
     }
-
-    const deadlineMs = getAttemptDeadlineMs(paper, attempt);
-    const autoSubmitted =
-      deadlineMs !== null && now.getTime() > deadlineMs;
-    const submittedAt =
-      deadlineMs !== null && autoSubmitted ? new Date(deadlineMs) : now;
 
     attempt = await finalizeAttemptAsSubmitted({
       QuestionPaperResponseModel,
       attempt,
       paper,
       sectionAnswers: normalized.sectionAnswers,
-      autoSubmitted,
-      submittedAt,
+      autoSubmitted: false,
+      submittedAt: now,
     });
 
     if (!attempt) {
@@ -193,7 +194,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      attempt: serializeStudentAttempt(attempt),
+      attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
       status: attempt.status,
     });
   } catch (error: any) {

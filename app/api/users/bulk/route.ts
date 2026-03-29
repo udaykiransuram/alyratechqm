@@ -11,6 +11,7 @@ import {
   normalizeRollNumber,
   resolveUserPasswordInput,
   validatePasswordInput,
+  validateStudentDefaultPasswordSource,
 } from "@/lib/user-credentials";
 
 function normalizeIds(value: unknown) {
@@ -206,6 +207,18 @@ export async function POST(request: NextRequest) {
         });
         continue;
       }
+      if (role === "student") {
+        const studentPasswordSourceValidation =
+          validateStudentDefaultPasswordSource(finalMobileNumber);
+        if (!studentPasswordSourceValidation.ok) {
+          results.push({
+            success: false,
+            message: studentPasswordSourceValidation.message,
+            student,
+          });
+          continue;
+        }
+      }
       if (
         role === "teacher" &&
         (normalizedClassIds.length === 0 || normalizedSubjectIds.length === 0)
@@ -281,11 +294,13 @@ export async function POST(request: NextRequest) {
       const effectivePassword = resolveUserPasswordInput({
         role,
         rollNumber: finalRollNumber,
+        mobileNumber: String(finalMobileNumber).trim(),
         password,
       });
       const passwordValidation = validatePasswordInput({
         role,
         rollNumber: finalRollNumber,
+        mobileNumber: String(finalMobileNumber).trim(),
         password: effectivePassword,
       });
       if (!passwordValidation.ok) {

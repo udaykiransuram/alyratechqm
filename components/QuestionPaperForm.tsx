@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
 import { fetchApiJson, peekCachedApiJson } from '@/lib/client/api';
 import { announceNavigationStart } from '@/lib/client/navigation-feedback';
+import { resolvePaperSubjects } from '@/lib/question-paper/subjects';
 import {
   Accordion,
   AccordionContent,
@@ -100,15 +101,11 @@ function QuestionFilterModalLoadingState() {
             ))}
           </div>
           <div className="app-surface flex min-h-0 flex-col p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="mb-4">
               <div className="space-y-2">
                 <div className="h-5 w-40 animate-pulse rounded bg-muted" />
                 <div className="h-4 w-64 animate-pulse rounded bg-muted/80" />
               </div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs text-muted-foreground">
-                <Spinner />
-                Loading
-              </span>
             </div>
             <div className="min-h-0 flex-1 space-y-3 overflow-hidden">
               {Array.from({ length: 3 }).map((_, index) => (
@@ -243,7 +240,6 @@ export default function QuestionPaperForm({
   );
   const [sections, setSections] = useState<Section[]>(initialData?.sections || []);
   const [classId, setClassId] = useState(initialData?.classId || '');
-  const [subjectId, setSubjectId] = useState(initialData?.subjectId || '');
   const [assignedAcademicSectionIds, setAssignedAcademicSectionIds] = useState<string[]>(initialData?.assignedAcademicSectionIds || []);
 
   // Hydrate state when initialData changes (for edit mode)
@@ -258,7 +254,6 @@ export default function QuestionPaperForm({
       setOnlineStartsAt(parseStoredDate(initialData.onlineStartsAt));
       setOnlineEndsAt(parseStoredDate(initialData.onlineEndsAt));
       setClassId(initialData.classId || '');
-      setSubjectId(initialData.subjectId || '');
       setAssignedAcademicSectionIds(initialData.assignedAcademicSectionIds || []);
       setSections(initialData.sections || []);
     }
@@ -297,6 +292,9 @@ export default function QuestionPaperForm({
   const [subjects, setSubjects] = useState<SubjectWithTags[]>(
     () => initialSubjects ?? cachedSubjectsResponse?.subjects ?? [],
   );
+  const [questionFilterSubjects, setQuestionFilterSubjects] = useState<SubjectWithTags[]>(
+    () => initialSubjects ?? cachedSubjectsResponse?.subjects ?? [],
+  );
   const [availableAcademicSections, setAvailableAcademicSections] = useState<AcademicSectionItem[]>(
     () =>
       classId
@@ -314,6 +312,7 @@ export default function QuestionPaperForm({
   const [subjectsLoading, setSubjectsLoading] = useState(
     () => !(hasProvidedSupportData || cachedSubjectsResponse?.subjects),
   );
+  const [questionFilterSubjectsLoading, setQuestionFilterSubjectsLoading] = useState(false);
 
   // Modal State
   const [questionModalOpen, setQuestionModalOpen] = useState(false);
@@ -433,6 +432,68 @@ export default function QuestionPaperForm({
   }, [cachedSectionsResponse?.sections, classId, initialAcademicSections]);
 
   useEffect(() => {
+    if (questionFilterClassId === 'all') {
+      setQuestionFilterSubjects(subjects);
+      setQuestionFilterSubjectId((current) =>
+        current === 'all' || subjects.some((subject) => subject._id === current)
+          ? current
+          : 'all',
+      );
+      setQuestionFilterSubjectsLoading(false);
+      return;
+    }
+
+    if (!questionModalOpen) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    setQuestionFilterSubjectsLoading(true);
+
+    fetchApiJson<{ subjects?: SubjectWithTags[] }>(
+      `/api/subjects?classId=${questionFilterClassId}`,
+      {
+        signal: abortController.signal,
+        cache: 'no-store',
+        fallbackMessage: 'Could not load subjects for the selected question class.',
+        clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
+        preferClientCache: true,
+      },
+    )
+      .then((data) => {
+        const nextSubjects = Array.isArray(data.subjects) ? data.subjects : [];
+        setQuestionFilterSubjects(nextSubjects);
+        setQuestionFilterSubjectId((current) =>
+          current === 'all' || nextSubjects.some((subject) => subject._id === current)
+            ? current
+            : 'all',
+        );
+      })
+      .catch((error) => {
+        if (error?.name === 'AbortError') {
+          return;
+        }
+
+        setQuestionFilterSubjects([]);
+        setQuestionFilterSubjectId('all');
+        toast({
+          title: 'Subject filters unavailable',
+          description: 'Could not load subjects for the selected question class.',
+          variant: 'destructive',
+        });
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) {
+          setQuestionFilterSubjectsLoading(false);
+        }
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [questionFilterClassId, questionModalOpen, subjects, toast]);
+
+  useEffect(() => {
     if (!questionModalOpen) {
       setLoadingQuestions(false);
       return;
@@ -523,6 +584,16 @@ export default function QuestionPaperForm({
     () => sections.reduce((sum, section) => sum + section.questions.length, 0),
     [sections]
   );
+  const derivedSubjects = useMemo(() => {
+    const knownSubjectNames = new Map(
+      subjects.map((subject) => [String(subject._id || '').trim(), String(subject.name || '').trim()]),
+    );
+
+    return resolvePaperSubjects({ sections }).map((subject) => ({
+      ...subject,
+      name: subject.name || knownSubjectNames.get(subject._id) || subject._id,
+    }));
+  }, [sections, subjects]);
   const normalizedAllTags = useMemo(
     () =>
       allTags.map((tag) => ({
@@ -702,10 +773,6 @@ export default function QuestionPaperForm({
       toast({ title: 'Validation Error', description: 'Class is required.', variant: 'destructive' });
       return;
     }
-    if (!subjectId) {
-      toast({ title: 'Validation Error', description: 'Subject is required.', variant: 'destructive' });
-      return;
-    }
     if (!duration || isNaN(Number(duration)) || Number(duration) <= 0) {
       toast({ title: 'Validation Error', description: 'Duration must be a positive number.', variant: 'destructive' });
       return;
@@ -775,13 +842,21 @@ export default function QuestionPaperForm({
       }
     }
 
+    if (derivedSubjects.length === 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Each selected question must have a subject so the paper can derive its subject mix.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
         title: paperTitle,
         instructions,
         class: classId,
-        subject: subjectId,
         duration,
         passingMarks,
         examDate,
@@ -889,8 +964,8 @@ export default function QuestionPaperForm({
                   <h2 className="text-base font-semibold text-foreground">Section Builder</h2>
                   <p className="app-page-subtitle">Organize sections, set defaults, and add questions to each block.</p>
                 </div>
-                <Button variant="outline" className="border-dashed" onClick={handleAddSection}>
-                  <Plus className="mr-2 h-4 w-4" />
+                <Button variant="outline" className="app-button-inline border-dashed" onClick={handleAddSection}>
+                  <Plus className="h-4 w-4" />
                   Add New Section
                 </Button>
               </div>
@@ -1011,12 +1086,11 @@ export default function QuestionPaperForm({
                                 <div className="mt-4 flex justify-center">
                                   <Button
                                     variant="outline"
-                                    size="sm"
-                                    className="app-button-compact"
+                                    className="app-button-inline"
                                     onClick={() => openQuestionModal(section.id)}
                                     disabled={!canAddQuestions}
                                   >
-                                    <Plus className="mr-1 h-4 w-4" />
+                                    <Plus className="h-4 w-4" />
                                     Add Questions
                                   </Button>
                                 </div>
@@ -1037,8 +1111,8 @@ export default function QuestionPaperForm({
                 <div className="app-empty-state">
                   <p>No sections added yet.</p>
                   <div className="mt-4 flex justify-center">
-                    <Button variant="outline" onClick={handleAddSection}>
-                      <Plus className="mr-2 h-4 w-4" />
+                    <Button variant="outline" className="app-button-inline" onClick={handleAddSection}>
+                      <Plus className="h-4 w-4" />
                       Add Your First Section
                     </Button>
                   </div>
@@ -1068,10 +1142,8 @@ export default function QuestionPaperForm({
             setOnlineEndsAt={setOnlineEndsAt}
             classId={classId}
             setClassId={setClassId}
-            subjectId={subjectId}
-            setSubjectId={setSubjectId}
             classes={classes}
-            subjects={subjects}
+            derivedSubjects={derivedSubjects}
             availableAcademicSections={availableAcademicSections}
             assignedAcademicSectionIds={assignedAcademicSectionIds}
             setAssignedAcademicSectionIds={setAssignedAcademicSectionIds}
@@ -1087,6 +1159,7 @@ export default function QuestionPaperForm({
             onlineEnabled={onlineEnabled}
             onlineStartsAt={onlineStartsAt ? onlineStartsAt.toISOString() : null}
             onlineEndsAt={onlineEndsAt ? onlineEndsAt.toISOString() : null}
+            subjects={derivedSubjects}
           />
           <Button size="lg" className="w-full" onClick={handleSavePaper} disabled={saving}>
             {saving ? <Spinner /> : isEditMode ? 'Update Question Paper' : 'Save Question Paper'}
@@ -1108,10 +1181,10 @@ export default function QuestionPaperForm({
           classes={classes}
           classId={questionFilterClassId}
           setClassId={id => setQuestionFilterClassId(String(id))}
-          subjects={subjects}
+          subjects={questionFilterSubjects}
           subjectId={questionFilterSubjectId}
           setSubjectId={id => setQuestionFilterSubjectId(String(id))}
-          subjectsLoading={subjectsLoading}
+          subjectsLoading={subjectsLoading || questionFilterSubjectsLoading}
           allTags={normalizedAllTags}
           selectedTags={selectedTags}
           setSelectedTags={setSelectedTags}

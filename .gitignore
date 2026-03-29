@@ -49,3 +49,4 @@ local-tests/tests/*
 playwright-report/
 test-results/
 blob-report/
+public/uploads/

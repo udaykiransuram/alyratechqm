@@ -7,8 +7,8 @@ export type PageShellPadding = "standard" | "relaxed" | "none";
 
 const widthClasses: Record<PageShellWidth, string> = {
   narrow: "max-w-6xl",
-  content: "max-w-7xl",
-  wide: "max-w-[88rem]",
+  content: "max-w-[78rem]",
+  wide: "max-w-[92rem]",
 };
 
 const paddingClasses: Record<PageShellPadding, string> = {

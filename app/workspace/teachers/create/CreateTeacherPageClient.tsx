@@ -1,15 +1,20 @@
 "use client";
 
-import { useMemo, useState, type ChangeEvent } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import MultiSelectChecklist from "@/components/multi-select-checklist";
 import BulkUploadPanel from "@/components/workspace/BulkUploadPanel";
+import WorkspaceCreateGuideCard from "@/components/workspace/WorkspaceCreateGuideCard";
+import WorkspaceCreateShell from "@/components/workspace/WorkspaceCreateShell";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import PageHero from "@/components/layout/PageHero";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import FeedbackNotice, {
+  type FeedbackNoticeVariant,
+} from "@/components/ui/feedback-notice";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
@@ -18,7 +23,6 @@ import {
   buildWorkspaceUserBulkRows,
   WORKSPACE_USER_BULK_TEMPLATES,
 } from "@/lib/client/workspace-user-bulk";
-import FeedbackNotice, { type FeedbackNoticeVariant } from "@/components/ui/feedback-notice";
 import type {
   WorkspaceAcademicSectionItem,
   WorkspaceClassItem,
@@ -44,6 +48,7 @@ export default function CreateTeacherPageClient({
 }: CreateTeacherPageClientProps) {
   const router = useRouter();
   const { navigateBack } = useBackNavigation("/workspace/teachers");
+  const [currentSchoolKey, setCurrentSchoolKey] = useState("");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -247,226 +252,252 @@ export default function CreateTeacherPageClient({
     downloadCsvTemplate(template.filename, template.headers, template.sampleRows);
   };
 
-  return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <PageHero
-        eyebrow="People"
-        title="Create Teacher"
-        description="Create a teacher account and configure the exact class, section, and subject scope the teacher should see in the workspace."
-        actions={
-          <Button type="button" variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Teachers
-          </Button>
-        }
-        meta={
-          <>
-            <span className="app-meta-chip">Scoped teacher access</span>
-            <span className="app-meta-chip">Class + subject required</span>
-          </>
-        }
-        stats={[
-          {
-            label: "Classes selected",
-            value: String(form.classIds.length),
-            meta: "Teachers must have at least one class assignment.",
-          },
-          {
-            label: "Sections in scope",
-            value: form.hasAllSections ? "All" : String(form.academicSectionIds.length),
-            meta: form.hasAllSections
-              ? "Teacher can work in all sections of selected classes."
-              : "Only explicitly selected sections are enabled.",
-          },
-          {
-            label: "Subjects selected",
-            value: String(form.subjectIds.length),
-            meta: "Teachers must have at least one subject assignment.",
-          },
-          {
-            label: "Form state",
-            value: loading ? "Saving" : "Ready",
-            meta: "This page now opens with server-loaded assignment data.",
-          },
-        ]}
-      />
+  useEffect(() => {
+    setCurrentSchoolKey(resolveClientSchoolKey());
+  }, []);
 
+  return (
+    <WorkspaceCreateShell
+      eyebrow="People"
+      title="Create Teacher"
+      description="Set up one teacher with the right classes, sections, subjects, and first-login details before the account goes live."
+      backLabel="Back to Teachers"
+      onBack={navigateBack}
+      badges={
+        <>
+          <span className="app-meta-chip">
+            {currentSchoolKey ? `School: ${currentSchoolKey}` : "No school selected"}
+          </span>
+          <span className="app-meta-chip">Scoped access</span>
+          <span className="app-meta-chip">Class + subject required</span>
+          <span className="app-meta-chip">All sections optional</span>
+        </>
+      }
+      aside={
+        <>
+          <WorkspaceCreateGuideCard
+            title="Quick rules"
+            description="Set the teacher up so their first sign-in and classroom scope are both obvious and safe."
+            items={[
+              {
+                title: "Classes and subjects matter most",
+                note: "A teacher account is only useful once at least one class and one subject are assigned.",
+              },
+              {
+                title: "Use all sections only when true",
+                note: "Keep section access wide only when the teacher actually handles every section in the selected classes.",
+              },
+              {
+                title: "Bulk upload for larger teams",
+                note: "The upload template supports multi-class and multi-subject assignments with the `|` separator.",
+              },
+            ]}
+          />
+
+          <BulkUploadPanel
+            title="Bulk upload teachers"
+            description="Import multiple teacher accounts with their class, section, and subject scope already assigned."
+            inputId="bulk-upload-teachers"
+            onFileChange={handleBulkUpload}
+            onDownloadTemplate={downloadTemplate}
+            templateLabel="Download Teacher Template"
+            loading={bulkLoading}
+            loadingLabel="Uploading teachers..."
+            feedback={bulkFeedback}
+            disabled={initialClasses.length === 0 || initialSubjects.length === 0}
+            tips={WORKSPACE_USER_BULK_TEMPLATES.teacher.tips}
+          />
+        </>
+      }
+    >
       {message ? (
         <FeedbackNotice variant={message.variant}>{message.message}</FeedbackNotice>
       ) : null}
 
-      <div className="app-editor-grid">
-        <div className="app-editor-main">
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <CardTitle>Teacher Profile</CardTitle>
-            </CardHeader>
-            <CardContent className="app-section-body">
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="app-section">
-                  <div className="app-form-section-heading">
-                    <p className="app-form-section-title">Identity and contact</p>
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="name">
-                      Name
-                    </label>
-                    <input
-                      id="name"
-                      name="name"
-                      placeholder="Enter name"
-                      value={form.name}
-                      onChange={handleChange}
-                      required
-                      className="app-form-input"
-                    />
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="app-field-group">
-                      <label className="app-field-label" htmlFor="email">
-                        Email
-                      </label>
-                      <input
-                        id="email"
-                        name="email"
-                        placeholder="Enter email"
-                        value={form.email}
-                        onChange={handleChange}
-                        type="email"
-                        className="app-form-input"
-                      />
-                    </div>
-                    <div className="app-field-group">
-                      <label className="app-field-label" htmlFor="mobileNumber">
-                        Phone Number
-                      </label>
-                      <input
-                        id="mobileNumber"
-                        name="mobileNumber"
-                        placeholder="Enter phone number"
-                        value={form.mobileNumber}
-                        onChange={handleChange}
-                        required
-                        className="app-form-input"
-                      />
-                    </div>
-                  </div>
+      <Card className="app-surface overflow-hidden">
+        <CardHeader className="app-section-header space-y-2.5">
+          <CardTitle>Create Teacher Account</CardTitle>
+          <p className="app-form-section-copy">
+            Start with identity and first-login details, then define the exact academic scope the teacher should see.
+          </p>
+        </CardHeader>
+        <CardContent className="app-section-body">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="app-section space-y-4">
+              <div className="app-form-section-heading">
+                <p className="app-form-section-title">Identity and contact</p>
+                <p className="app-form-section-copy">
+                  These are the main contact details that appear in the school directory.
+                </p>
+              </div>
+
+              <div className="app-field-group">
+                <Label htmlFor="teacher-name">Teacher name</Label>
+                <Input
+                  id="teacher-name"
+                  name="name"
+                  placeholder="Enter teacher name"
+                  value={form.name}
+                  onChange={handleChange}
+                  required
+                />
+                <p className="app-field-note">
+                  Use the teacher&apos;s full working name so the directory, reports, and class views stay recognizable.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="app-field-group">
+                  <Label htmlFor="teacher-email">Email</Label>
+                  <Input
+                    id="teacher-email"
+                    name="email"
+                    type="email"
+                    placeholder="Email address"
+                    value={form.email}
+                    onChange={handleChange}
+                  />
+                  <p className="app-field-note">
+                    Helpful for communication and record quality, even if login does not depend on email.
+                  </p>
                 </div>
 
-                <div className="app-section">
-                  <div className="app-form-section-heading">
-                    <p className="app-form-section-title">Credentials</p>
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="password">
-                      Password
-                    </label>
-                    <input
-                      id="password"
-                      name="password"
-                      placeholder="Create password"
-                      value={form.password}
-                      onChange={handleChange}
-                      type="password"
-                      className="app-form-input"
-                    />
-                  </div>
+                <div className="app-field-group">
+                  <Label htmlFor="teacher-mobile">Phone number</Label>
+                  <Input
+                    id="teacher-mobile"
+                    name="mobileNumber"
+                    placeholder="Phone number"
+                    value={form.mobileNumber}
+                    onChange={handleChange}
+                    required
+                  />
+                  <p className="app-field-note">
+                    Keep this current so urgent school contact and parent-facing workflows reach the right person.
+                  </p>
                 </div>
+              </div>
+            </div>
 
-                <div className="app-section">
-                  <div className="app-form-section-heading">
-                    <p className="app-form-section-title">Academic access</p>
-                  </div>
-                  <div className="app-field-group">
-                    <label className="app-field-label">Classes</label>
-                    <MultiSelectChecklist
-                      items={initialClasses.map((classItem) => ({
-                        id: classItem._id,
-                        label: classItem.name,
-                      }))}
-                      selectedIds={form.classIds}
-                      onChange={(ids) => updateSelection("classIds", ids)}
-                    />
-                  </div>
+            <div className="app-section space-y-4">
+              <div className="app-form-section-heading">
+                <p className="app-form-section-title">Login setup</p>
+                <p className="app-form-section-copy">
+                  Set the first password carefully. This is the credential the teacher receives when the account is handed over.
+                </p>
+              </div>
 
-                  <label
-                    className={`app-toggle-card ${form.hasAllSections ? "app-toggle-card-active" : ""}`}
-                  >
-                    <Checkbox
-                      checked={form.hasAllSections}
-                      onCheckedChange={(checked) =>
-                        updateToggle("hasAllSections", checked === true)
-                      }
-                      className="mt-0.5"
-                    />
-                    <span className="app-toggle-card-copy">
-                      <span className="app-toggle-card-title">
-                        Access to all sections in selected classes
-                      </span>
-                    </span>
-                  </label>
+              <div className="app-field-group">
+                <Label htmlFor="teacher-password">Password</Label>
+                <Input
+                  id="teacher-password"
+                  name="password"
+                  type="password"
+                  placeholder="Set the first password"
+                  value={form.password}
+                  onChange={handleChange}
+                />
+                <p className="app-field-note">
+                  Use a strong starting password and share it securely with the teacher.
+                </p>
+              </div>
 
-                  {!form.hasAllSections ? (
-                    <div className="app-field-group">
-                      <label className="app-field-label">Sections</label>
-                      <MultiSelectChecklist
-                        items={availableSections.map((section) => ({
-                          id: section._id,
-                          label: (
-                            <span>
-                              {section.name}
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                (
-                                {initialClasses.find(
-                                  (classItem) => classItem._id === getSectionClassId(section),
-                                )?.name || "Class"}
-                                )
-                              </span>
-                            </span>
-                          ),
-                        }))}
-                        selectedIds={form.academicSectionIds}
-                        onChange={(ids) => updateSelection("academicSectionIds", ids)}
-                        emptyContent="Select one or more classes to choose sections."
-                      />
-                    </div>
-                  ) : null}
+              <div className="app-form-callout">
+                <p className="font-semibold text-foreground">Teacher access rule</p>
+                <p className="mt-1.5">
+                  Teachers should only get the classes and subjects they actively teach. Their scope affects papers, analytics, and student views.
+                </p>
+              </div>
+            </div>
 
-                  <div className="app-field-group">
-                    <label className="app-field-label">Subjects</label>
-                    <MultiSelectChecklist
-                      items={initialSubjects.map((subject) => ({
-                        id: subject._id,
-                        label: subject.name,
-                      }))}
-                      selectedIds={form.subjectIds}
-                      onChange={(ids) => updateSelection("subjectIds", ids)}
-                    />
-                  </div>
+            <div className="app-section space-y-4">
+              <div className="app-form-section-heading">
+                <p className="app-form-section-title">Academic access</p>
+                <p className="app-form-section-copy">
+                  Select the exact classes, sections, and subjects this teacher should work in.
+                </p>
+              </div>
+
+              <div className="app-field-group">
+                <Label>Classes</Label>
+                <MultiSelectChecklist
+                  items={initialClasses.map((classItem) => ({
+                    id: classItem._id,
+                    label: classItem.name,
+                  }))}
+                  selectedIds={form.classIds}
+                  onChange={(ids) => updateSelection("classIds", ids)}
+                  helperText="Critical selection. Pick at least one class before sections and subject-linked work can make sense."
+                />
+              </div>
+
+              <label
+                className={`app-toggle-card ${form.hasAllSections ? "app-toggle-card-active" : ""}`}
+              >
+                <Checkbox
+                  checked={form.hasAllSections}
+                  onCheckedChange={(checked) =>
+                    updateToggle("hasAllSections", checked === true)
+                  }
+                  className="mt-0.5"
+                />
+                <span className="app-toggle-card-copy">
+                  <span className="app-toggle-card-title">
+                    All sections in selected classes
+                  </span>
+                  <span className="app-toggle-card-note">
+                    Leave this on when the teacher works across every section for the chosen classes.
+                  </span>
+                </span>
+              </label>
+
+              {!form.hasAllSections ? (
+                <div className="app-field-group">
+                  <Label>Sections</Label>
+                  <MultiSelectChecklist
+                    items={availableSections.map((section) => ({
+                      id: section._id,
+                      label: (
+                        <span>
+                          {section.name}
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            (
+                            {initialClasses.find(
+                              (classItem) => classItem._id === getSectionClassId(section),
+                            )?.name || "Class"}
+                            )
+                          </span>
+                        </span>
+                      ),
+                    }))}
+                    selectedIds={form.academicSectionIds}
+                    onChange={(ids) => updateSelection("academicSectionIds", ids)}
+                    emptyContent="Select one or more classes to choose sections."
+                    helperText="Only sections from the selected classes appear here, so the final scope stays accurate."
+                  />
                 </div>
+              ) : null}
 
-                <button type="submit" disabled={loading} className="app-button-primary w-full">
-                  {loading ? "Creating..." : "Create Teacher"}
-                </button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+              <div className="app-field-group">
+                <Label>Subjects</Label>
+                <MultiSelectChecklist
+                  items={initialSubjects.map((subject) => ({
+                    id: subject._id,
+                    label: subject.name,
+                  }))}
+                  selectedIds={form.subjectIds}
+                  onChange={(ids) => updateSelection("subjectIds", ids)}
+                  helperText="Critical selection. Subjects control where this teacher can work inside question papers, reports, and analytics."
+                />
+              </div>
+            </div>
 
-        <div className="app-editor-aside">
-          <BulkUploadPanel
-            title="Bulk Upload Teachers"
-            description="Upload a CSV or Excel sheet using the teacher template to create multiple scoped teacher accounts at once."
-            inputId="bulk-upload-teachers"
-            onFileChange={handleBulkUpload}
-            onDownloadTemplate={downloadTemplate}
-            loading={bulkLoading}
-            loadingLabel="Uploading teachers..."
-            feedback={bulkFeedback}
-            tips={WORKSPACE_USER_BULK_TEMPLATES.teacher.tips}
-          />
-        </div>
-      </div>
-    </div>
+            <Button type="submit" size="xl" className="w-full" disabled={loading}>
+              {loading ? "Creating..." : "Create Teacher Account"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </WorkspaceCreateShell>
   );
 }

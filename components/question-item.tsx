@@ -8,6 +8,7 @@ import { Edit, Eye, Trash2 } from 'lucide-react';
 import { Spinner } from './ui/spinner';
 import { ContentRenderer } from './ContentRenderer';
 import { useReturnHrefBuilder } from '@/hooks/useReturnNavigation';
+import { sanitizeRichTextHtml } from '@/lib/security/html-sanitize';
 
 interface TagType {
   _id: string;
@@ -51,18 +52,19 @@ export function QuestionItem({ question, onDelete, onArchive, isDeleting = false
   const { buildReturnHref } = useReturnHrefBuilder('/workspace/questions');
   const tags = Array.isArray(question.tags) ? question.tags : [];
   const handleDelete = onArchive || onDelete;
+  const sanitizedQuestionContent = sanitizeRichTextHtml(question.content);
 
   return (
-    <Card className="app-surface overflow-hidden transition-shadow duration-200 hover:shadow-md">
-      <CardHeader className="flex flex-col gap-4 border-b border-border/60 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+    <Card className="app-surface overflow-hidden transition-[box-shadow,transform] duration-200 hover:-translate-y-px hover:shadow-[0_28px_42px_-34px_hsl(var(--app-shadow-deep)/0.16)]">
+      <CardHeader className="app-section-header flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             {question.class ? <Badge variant="secondary">{question.class.name}</Badge> : null}
             {question.subject ? <Badge variant="outline">{question.subject.name}</Badge> : null}
-            <Badge variant="secondary">{question.marks} Mark(s)</Badge>
+            <Badge variant="info">{question.marks} Mark(s)</Badge>
           </div>
           <div className="prose prose-sm max-w-none font-medium text-foreground dark:prose-invert">
-            <ContentRenderer htmlContent={question.content} />
+            <ContentRenderer htmlContent={sanitizedQuestionContent} />
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -103,7 +105,7 @@ export function QuestionItem({ question, onDelete, onArchive, isDeleting = false
       </CardHeader>
 
       {question.options?.length ? (
-        <CardContent className="space-y-2 px-5 py-4">
+        <CardContent className="space-y-2 px-5 py-5">
           {question.options.map((option, index) => {
             const isCorrect = question.answerIndexes?.includes(index);
             return (
@@ -111,15 +113,15 @@ export function QuestionItem({ question, onDelete, onArchive, isDeleting = false
                 key={index}
                 className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm ${
                   isCorrect
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200'
-                    : 'border-border/60 bg-muted/20'
+                    ? 'border-[hsl(var(--app-success)/0.22)] bg-[hsl(var(--app-success)/0.08)] text-foreground'
+                    : 'border-border/60 bg-[hsl(var(--app-surface-2)/0.4)]'
                 }`}
               >
-                <Badge variant={isCorrect ? 'default' : 'outline'} className="min-w-[72px] justify-center text-xs">
+                <Badge variant={isCorrect ? 'success' : 'outline'} className="min-w-[72px] justify-center text-xs">
                   {isCorrect ? 'Correct' : `Option ${index + 1}`}
                 </Badge>
                 <div className="min-w-0 flex-1 prose prose-sm max-w-none dark:prose-invert">
-                  <ContentRenderer htmlContent={option.content} />
+                  <ContentRenderer htmlContent={sanitizeRichTextHtml(option.content)} />
                 </div>
               </div>
             );
@@ -127,7 +129,7 @@ export function QuestionItem({ question, onDelete, onArchive, isDeleting = false
         </CardContent>
       ) : null}
 
-      <CardFooter className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <CardFooter className="flex flex-col gap-3 border-t border-border/60 bg-[hsl(var(--app-surface-2)/0.44)] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           {tags.map(tag => (
             <Badge key={tag._id} variant="secondary" className="font-normal capitalize">

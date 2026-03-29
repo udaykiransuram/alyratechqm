@@ -1,13 +1,24 @@
-"use client";
-
-import React from "react";
 import { StudentTagReportPageView } from "@/components/analytics/StudentTagReportPageView";
+import { getStudentTagReportPageBootstrap } from "@/lib/analytics/student-tag-report-page";
+import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export default function WorkspaceStudentTagReportPage({
+export const dynamic = "force-dynamic";
+
+export default async function WorkspaceStudentTagReportPage({
   params,
 }: {
   params: Promise<{ responseId: string }>;
 }) {
-  const resolvedParams = React.use(params);
-  return <StudentTagReportPageView params={resolvedParams} />;
+  await requireWorkspaceStaffSession();
+  const resolvedParams = await params;
+
+  return (
+    <StudentTagReportPageView
+      params={resolvedParams}
+      initialBootstrap={await getStudentTagReportPageBootstrap({
+        responseId: resolvedParams.responseId,
+        portalMode: "admin",
+      })}
+    />
+  );
 }

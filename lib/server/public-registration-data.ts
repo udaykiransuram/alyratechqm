@@ -1,4 +1,5 @@
 import { getTenantModels } from "@/lib/db-tenant";
+import { getPublicSchoolOptionByKey } from "@/lib/server/public-school-data";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 export type PublicRegistrationClassOption = {
@@ -30,6 +31,11 @@ export async function getPublicClassOptions(
     return [];
   }
 
+  const allowedSchool = await getPublicSchoolOptionByKey(schoolKey);
+  if (!allowedSchool) {
+    return [];
+  }
+
   const { Class: ClassModel } = await getTenantModels(schoolKey, ["Class"]);
   const classes = (await ClassModel.find({ isArchived: { $ne: true } })
     .sort({ name: 1 })
@@ -51,6 +57,11 @@ export async function getPublicSectionOptions(
   classId: string,
 ): Promise<PublicRegistrationSectionOption[]> {
   if (isMockedE2ETestMode()) {
+    return [];
+  }
+
+  const allowedSchool = await getPublicSchoolOptionByKey(schoolKey);
+  if (!allowedSchool) {
     return [];
   }
 

@@ -3,12 +3,14 @@ import { ArrowLeft, CheckCircle, Grid3X3, Info } from "lucide-react";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { ContentRenderer } from "@/components/ContentRenderer";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildHrefWithReturnTo, getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { getWorkspaceQuestionById } from "@/lib/server/workspace-assessment-data";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
+import { sanitizeRichTextHtml } from "@/lib/security/html-sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -40,15 +42,16 @@ export default async function ViewQuestionPage({
 
   if (!question) {
     return (
-      <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
+      <PageShell width="wide" padding="standard">
         <PageHero
+          variant="editor"
           eyebrow="Question Bank"
           title="View Question"
           description="The requested question could not be loaded."
           actions={
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="app-button-back">
               <AppPrefetchLink href={backHref}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
+                <ArrowLeft className="h-4 w-4" />
                 Back to Questions
               </AppPrefetchLink>
             </Button>
@@ -57,25 +60,26 @@ export default async function ViewQuestionPage({
         <div className="app-feedback app-feedback-error text-center">
           Question not found.
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="app-page-shell max-w-7xl px-4 py-5 sm:px-0">
+    <PageShell width="wide" padding="standard">
       <PageHero
+        variant="editor"
         eyebrow="Question Bank"
         title="View Question"
         description="Detailed view of a single question, its answer data, and the metadata used across paper building."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="app-button-back">
               <AppPrefetchLink href={backHref}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
+                <ArrowLeft className="h-4 w-4" />
                 Back
               </AppPrefetchLink>
             </Button>
-            <Button asChild>
+            <Button asChild className="app-button-page">
               <AppPrefetchLink
                 href={editHref}
                 relatedApiPrefetches={[
@@ -125,7 +129,7 @@ export default async function ViewQuestionPage({
               <CardTitle>Question</CardTitle>
             </CardHeader>
             <CardContent className="app-section-body prose max-w-none dark:prose-invert">
-              <ContentRenderer htmlContent={question.content} />
+              <ContentRenderer htmlContent={sanitizeRichTextHtml(question.content)} />
             </CardContent>
           </Card>
 
@@ -155,7 +159,9 @@ export default async function ViewQuestionPage({
                             isAnswer ? "font-medium" : ""
                           }`}
                         >
-                          <ContentRenderer htmlContent={option.content || ""} />
+                          <ContentRenderer
+                            htmlContent={sanitizeRichTextHtml(option.content || "")}
+                          />
                         </div>
                       </li>
                     );
@@ -204,7 +210,9 @@ export default async function ViewQuestionPage({
                 </CardTitle>
               </CardHeader>
               <CardContent className="app-section-body prose prose-sm max-w-none dark:prose-invert">
-                <ContentRenderer htmlContent={question.explanation} />
+                <ContentRenderer
+                  htmlContent={sanitizeRichTextHtml(question.explanation)}
+                />
               </CardContent>
             </Card>
           ) : null}
@@ -258,6 +266,6 @@ export default async function ViewQuestionPage({
           </Card>
         </aside>
       </div>
-    </div>
+    </PageShell>
   );
 }

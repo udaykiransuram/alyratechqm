@@ -10,24 +10,20 @@ import {
   disableExamPaperSnapshotsForPaperId,
   syncExamPaperSnapshotForPaperId,
 } from "@/lib/exam-runtime";
+import {
+  buildStoredPaperSubjectFields,
+  derivePaperSubjectIdsFromQuestions,
+  serializePaperSubjects,
+} from "@/lib/question-paper/subjects";
 import { isOnlineQuestionType } from "@/lib/question-paper/grading";
+import { resolveTeacherPaperScope } from "@/lib/question-paper/access";
+import { listWorkspaceQuestionPapers } from "@/lib/server/workspace-question-papers";
 import "@/models/QuestionPaperResponse";
 import "@/models/Class";
 import "@/models/Subject";
 import "@/models/TagType";
 import "@/models/Tag";
 import "@/models/AcademicSection";
-
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
-    .toString()
-    .trim();
-}
 
 function normalizeIds(value: unknown) {
   if (!Array.isArray(value)) return [] as string[];
@@ -40,6 +36,14 @@ function normalizeDate(value: unknown) {
   if (!value) return undefined;
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function toIdString(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "object" && value !== null && "_id" in (value as any)) {
+    return String((value as any)._id || "").trim();
+  }
+  return String(value || "").trim();
 }
 
 async function validateQuestionSelection(
@@ -61,7 +65,7 @@ async function validateQuestionSelection(
     _id: { $in: questionIds },
     ...buildArchiveFilter(false),
   })
-    .select("_id type")
+    .select("_id type subject")
     .lean();
 
   if (questions.length !== questionIds.length) {
@@ -97,7 +101,10 @@ async function validateQuestionSelection(
     }
   }
 
-  return { ok: true } as const;
+  return {
+    ok: true,
+    subjectIds: derivePaperSubjectIdsFromQuestions(questions),
+  } as const;
 }
 
 async function validateAssignedAcademicSections(
@@ -149,10 +156,12 @@ export async function POST(req: NextRequest) {
       QuestionPaper: QPModel,
       AcademicSection: AcademicSectionModel,
       Question: QuestionModel,
+      User: UserModel,
     } = await getTenantModels(schoolKey, [
       "QuestionPaper",
       "AcademicSection",
       "Question",
+      "User",
     ]);
 
     const body = await req.json();
@@ -160,7 +169,6 @@ export async function POST(req: NextRequest) {
       title,
       instructions,
       class: classId,
-      subject,
       duration,
       passingMarks,
       examDate,
@@ -184,7 +192,6 @@ export async function POST(req: NextRequest) {
     if (
       !title ||
       !classId ||
-      !subject ||
       !sections ||
       !Array.isArray(sections) ||
       sections.length === 0 ||
@@ -273,11 +280,94 @@ export async function POST(req: NextRequest) {
       return questionValidation.response;
     }
 
+    const subjectFields = buildStoredPaperSubjectFields(
+      questionValidation.subjectIds,
+    );
+
+    if (auth.session.user.role === "teacher") {
+      const scopedUser = await UserModel.findById(auth.session.user.id)
+        .select(
+          "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
+        )
+        .lean();
+
+      const teacherScope = resolveTeacherPaperScope(
+        scopedUser,
+        toIdString(classId),
+        subjectFields.subjectIds,
+        assignmentValidation.ids,
+      );
+
+      if (
+        !teacherScope.hasClassAccess ||
+        !teacherScope.hasSubjectAccess ||
+        !teacherScope.hasSectionAccess
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "You can only create papers inside your assigned class, subject, and section scope.",
+          },
+          { status: 403 },
+        );
+      }
+
+      if (
+        teacherScope.allowedSectionIds !== null &&
+        assignmentValidation.ids.length === 0
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Teachers with section-scoped access must assign at least one section to a question paper.",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (teacherScope.allowedSectionIds !== null) {
+        const outOfScopeSections = assignmentValidation.ids.filter(
+          (sectionId) => !teacherScope.allowedSectionIds!.includes(sectionId),
+        );
+        if (outOfScopeSections.length > 0) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "One or more assigned sections are outside your access scope.",
+            },
+            { status: 403 },
+          );
+        }
+      }
+
+      if (!Boolean(scopedUser?.hasAllSubjects)) {
+        const scopedSubjectIds = Array.isArray(scopedUser?.subjectIds)
+          ? scopedUser.subjectIds.map((subjectId: any) => toIdString(subjectId))
+          : [];
+        const outOfScopeSubjects = subjectFields.subjectIds.filter(
+          (subjectId) => !scopedSubjectIds.includes(subjectId),
+        );
+        if (outOfScopeSubjects.length > 0) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "One or more question subjects are outside your access scope.",
+            },
+            { status: 403 },
+          );
+        }
+      }
+    }
+
     const paper = await QPModel.create({
       title,
       instructions,
       class: classId,
-      subject,
+      ...subjectFields,
       duration,
       passingMarks,
       examDate,
@@ -315,7 +405,18 @@ export async function POST(req: NextRequest) {
       ).catch(() => undefined);
     }
 
-    return NextResponse.json({ success: true, paper }, { status: 201 });
+    const paperObject = paper?.toObject?.() ?? paper;
+
+    return NextResponse.json(
+      {
+        success: true,
+        paper: {
+          ...paperObject,
+          ...serializePaperSubjects(paperObject),
+        },
+      },
+      { status: 201 },
+    );
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message || "Server error." },
@@ -325,7 +426,6 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  await connectDB();
   const auth = await requireTenantSession(req, {
     allowRoles: ["admin", "teacher"],
   });
@@ -333,76 +433,39 @@ export async function GET(req: NextRequest) {
   const schoolKey = auth.schoolKey as string;
 
   try {
-    const {
-      QuestionPaper: QPModel,
-      Class: ClassModel,
-      Subject: SubjectModel,
-      AcademicSection: AcademicSectionModel,
-    } = await getTenantModels(schoolKey, [
-      "QuestionPaper",
-      "Class",
-      "Subject",
-      "AcademicSection",
-    ]);
-
-    const archiveFilter = buildArchiveFilter(resolveIncludeArchived(req.nextUrl));
-    const pageParam = Number(req.nextUrl.searchParams.get("page") || "");
-    const limitParam = Number(req.nextUrl.searchParams.get("limit") || "");
+    const pageParam = Number(req.nextUrl.searchParams.get("page") || "0");
+    const limitParam = Number(req.nextUrl.searchParams.get("limit") || "0");
     const summaryMode = req.nextUrl.searchParams.get("summary") === "1";
+    const classId = req.nextUrl.searchParams.get("class") || "";
+    const sectionId =
+      req.nextUrl.searchParams.get("academicSectionId") ||
+      req.nextUrl.searchParams.get("section") ||
+      "";
+    const search = req.nextUrl.searchParams.get("search") || "";
 
-    let total: number | undefined;
-    let page: number | undefined;
-    let pages: number | undefined;
-    let limit: number | undefined;
+    const paginated = pageParam > 0 && limitParam > 0;
 
-    let cursor = QPModel.find(archiveFilter)
-      .select(
-        summaryMode
-          ? "title class subject totalMarks sections.questions assignedAcademicSections duration examDate onlineEnabled onlineStartsAt onlineEndsAt createdAt updatedAt"
-          : "title class subject totalMarks sections assignedAcademicSections duration examDate onlineEnabled onlineStartsAt onlineEndsAt createdAt updatedAt",
-      )
-      .populate({ path: "class", model: ClassModel, select: "name" })
-      .populate({ path: "subject", model: SubjectModel, select: "name" })
-      .populate({
-        path: "assignedAcademicSections",
-        model: AcademicSectionModel,
-        select: "name class",
-        populate: { path: "class", model: ClassModel, select: "name" },
-      })
-      .sort({ createdAt: -1 })
-      .lean();
+    const listResult = await listWorkspaceQuestionPapers({
+      schoolKey,
+      includeArchived: resolveIncludeArchived(req.nextUrl),
+      summary: summaryMode,
+      page: paginated ? pageParam : null,
+      limit: paginated ? limitParam : null,
+      classId,
+      sectionId,
+      search,
+    });
 
-    if (pageParam && limitParam) {
-      const totalCount = await QPModel.countDocuments(archiveFilter);
-      total = totalCount;
-      page = Math.max(1, pageParam);
-      limit = Math.min(100, Math.max(1, limitParam));
-      pages = Math.max(1, Math.ceil(totalCount / limit));
-      const skip = (page - 1) * limit;
-      cursor = cursor.skip(skip).limit(limit);
-    }
-
-    const rawPapers = await cursor;
-    const papers = summaryMode
-      ? rawPapers.map((paper: any) => {
-          const questionCount = Array.isArray(paper?.sections)
-            ? paper.sections.reduce(
-                (total: number, section: any) =>
-                  total +
-                  (Array.isArray(section?.questions) ? section.questions.length : 0),
-                0,
-              )
-            : 0;
-          const { sections, ...paperSummary } = paper;
-
-          return {
-            ...paperSummary,
-            questionCount,
-          };
-        })
-      : rawPapers;
-
-    return NextResponse.json({ success: true, papers, total, page, pages, limit });
+    return NextResponse.json({
+      success: true,
+      papers: listResult.papers,
+      total: listResult.total,
+      page: listResult.page,
+      pages: listResult.pages,
+      limit: listResult.limit,
+      appliedClassId: listResult.resolvedClassId || undefined,
+      appliedAcademicSectionId: listResult.resolvedSectionId || undefined,
+    });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message || "Server error." },

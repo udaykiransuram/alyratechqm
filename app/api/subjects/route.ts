@@ -28,9 +28,39 @@ export async function GET(req: NextRequest) {
     await connectDB();
 
     const includeArchived = resolveIncludeArchived(req.nextUrl);
-    const { Subject: SubjectModel } = await getTenantModels(schoolKey, ['Subject', 'Tag']);
+    const rawClassId = req.nextUrl.searchParams.get('classId')?.trim() || '';
+    const classId = rawClassId === 'all' ? '' : rawClassId;
 
-    const subjects = await SubjectModel.find(buildArchiveFilter(includeArchived))
+    if (classId && !mongoose.Types.ObjectId.isValid(classId)) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid class ID.' },
+        { status: 400 },
+      );
+    }
+
+    const {
+      Subject: SubjectModel,
+      Question: QuestionModel,
+    } = await getTenantModels(schoolKey, ['Subject', 'Tag', 'Question']);
+
+    const subjectFilter: Record<string, any> = {
+      ...buildArchiveFilter(includeArchived),
+    };
+
+    if (classId) {
+      const subjectIds = await QuestionModel.distinct('subject', {
+        class: classId,
+        ...buildArchiveFilter(false),
+      });
+
+      if (subjectIds.length === 0) {
+        return NextResponse.json({ success: true, subjects: [] });
+      }
+
+      subjectFilter._id = { $in: subjectIds };
+    }
+
+    const subjects = await SubjectModel.find(subjectFilter)
       .populate({ path: 'tags', match: buildArchiveFilter(false) })
       .sort({ name: 1 })
       .lean();

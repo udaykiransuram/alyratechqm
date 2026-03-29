@@ -337,7 +337,7 @@ export function MultiSelectTags({
                 {totalMatchingTagCount} tags. Search to find the remaining {hiddenTagCount} faster.
               </div>
             ) : null}
-            <CommandList className="h-[300px] overflow-y-auto">
+            <CommandList className="app-scroll-area h-[300px] overflow-y-auto overscroll-contain pr-1">
               {!showCreateForm ? (
                 <CommandEmpty>
                   {isNewTagCandidate && onCreateNewTag ? (
@@ -383,10 +383,24 @@ export function MultiSelectTags({
                         <PlusCircle className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" className="app-button-compact" onClick={() => setShowCreateForm(false)}>Cancel</Button>
-                      <Button type="button" size="sm" className="app-button-compact" onClick={handleConfirmCreateNewTag} disabled={isCreatingNewTag}>
-                        {isCreatingNewTag && <span className="mr-2 h-4 w-4"><Spinner /></span>} Create
+                    <div className="flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="app-button-compact sm:min-w-[8.5rem]"
+                        onClick={() => setShowCreateForm(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="app-button-compact sm:min-w-[8.5rem]"
+                        onClick={handleConfirmCreateNewTag}
+                        disabled={isCreatingNewTag}
+                      >
+                        {isCreatingNewTag ? <Spinner /> : null}
+                        Create
                       </Button>
                     </div>
                   </div>

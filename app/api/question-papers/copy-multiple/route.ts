@@ -5,6 +5,11 @@ import { buildArchiveFilter } from "@/lib/archive";
 import { requireTenantSession } from "@/lib/api-auth";
 import { recordTenantAudit } from "@/lib/audit";
 import { syncExamPaperSnapshotForPaperId } from "@/lib/exam-runtime";
+import {
+  buildStoredPaperSubjectFields,
+  derivePaperSubjectIdsFromQuestions,
+  serializePaperSubjects,
+} from "@/lib/question-paper/subjects";
 import { isOnlineQuestionType } from "@/lib/question-paper/grading";
 
 function normalizeIds(value: unknown) {
@@ -39,7 +44,7 @@ async function validateQuestionSelection(
     _id: { $in: questionIds },
     ...buildArchiveFilter(false),
   })
-    .select("_id type")
+    .select("_id type subject")
     .lean();
 
   if (questions.length !== questionIds.length) {
@@ -75,7 +80,10 @@ async function validateQuestionSelection(
     }
   }
 
-  return { ok: true } as const;
+  return {
+    ok: true,
+    subjectIds: derivePaperSubjectIdsFromQuestions(questions),
+  } as const;
 }
 
 async function validateAssignedAcademicSections(
@@ -149,7 +157,6 @@ export async function POST(req: NextRequest) {
         title,
         instructions,
         classId,
-        subjectId,
         totalMarks,
         sections,
         duration,
@@ -173,7 +180,6 @@ export async function POST(req: NextRequest) {
       if (
         !title ||
         !classId ||
-        !subjectId ||
         !Array.isArray(sections) ||
         sections.length === 0
       ) {
@@ -264,11 +270,15 @@ export async function POST(req: NextRequest) {
         return questionValidation.response;
       }
 
+      const subjectFields = buildStoredPaperSubjectFields(
+        questionValidation.subjectIds,
+      );
+
       const newPaper = await QPModel.create({
         title,
         instructions,
         class: classId,
-        subject: subjectId,
+        ...subjectFields,
         totalMarks,
         sections: sections.map((section: any) => ({
           ...section,
@@ -308,7 +318,11 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      createdPapers.push(newPaper);
+      const paperObject = newPaper?.toObject?.() ?? newPaper;
+      createdPapers.push({
+        ...paperObject,
+        ...serializePaperSubjects(paperObject),
+      });
     }
 
     return NextResponse.json({ success: true, papers: createdPapers }, { status: 201 });

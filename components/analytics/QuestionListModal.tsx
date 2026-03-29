@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import React, { useMemo, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 
@@ -90,9 +91,12 @@ export default function QuestionListModal({
         <div className={`text-sm font-semibold ${titleClass}`}>{label}</div>
         {showNames ? (
           students.length > 0 ? (
-            <ul className="space-y-2 text-xs text-foreground">
+            <ul className="analytics-dialog-list text-xs text-foreground">
               {students.map((student, index) => (
-                <li key={`${student.rollNumber}-${student.name}-${index}`} className="analytics-order-item text-xs">
+                <li
+                  key={`${student.rollNumber}-${student.name}-${index}`}
+                  className="analytics-dialog-list-item text-xs"
+                >
                   <span>{student.name} ({student.rollNumber})</span>
                   {'count' in student && student.count ? (
                     <span className="text-muted-foreground">×{student.count}</span>
@@ -123,7 +127,7 @@ export default function QuestionListModal({
         </DialogHeader>
 
         <div className="max-h-[72vh] space-y-4 overflow-y-auto pr-1">
-          <div className="analytics-subsection">
+          <div className="analytics-dialog-panel">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-foreground">Consolidated Stats</p>
@@ -131,7 +135,7 @@ export default function QuestionListModal({
                   Aggregate the question-level student lists across the current group.
                 </p>
               </div>
-              <label className="inline-flex items-center gap-2 text-sm text-foreground">
+              <label className="analytics-checkbox-card">
                 <input
                   type="checkbox"
                   checked={showNames}
@@ -142,13 +146,13 @@ export default function QuestionListModal({
               </label>
             </div>
 
-            <div className="flex flex-wrap gap-2 text-xs">
+            <div className="analytics-dialog-stat-strip text-xs">
               <span className="analytics-badge analytics-badge-success">Correct: {correctCount}</span>
               <span className="analytics-badge analytics-badge-danger">Incorrect: {incorrectCount}</span>
               <span className="analytics-badge analytics-badge-warning">Unattempted: {unattemptedCount}</span>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="analytics-dialog-grid">
               {renderStudentList('Correct Students', correctStudents, 'success')}
               {renderStudentList('Incorrect Students', incorrectStudents, 'danger')}
               {renderStudentList('Unattempted Students', unattemptedStudents, 'warning')}
@@ -157,19 +161,18 @@ export default function QuestionListModal({
 
           <div className="space-y-4">
             {questionIds.map((question) => (
-              <div key={question.id} className="analytics-card">
+              <div key={question.id} className="analytics-dialog-question-card">
                 <div className="analytics-card-body space-y-4">
                   <div className="space-y-2">
-                    <a
+                    <Link
                       href={getQuestionHref(question.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      onClick={onClose}
                       className="inline-flex items-center gap-2 text-sm font-semibold text-primary underline-offset-4 hover:underline"
                     >
                       {question.section ? <span className="text-muted-foreground">{question.section}:</span> : null}
                       <span>Question {question.number ?? '-'}</span>
-                    </a>
-                    <div className="flex flex-wrap gap-2 text-xs">
+                    </Link>
+                    <div className="analytics-dialog-stat-strip text-xs">
                       <span className="analytics-badge analytics-badge-success">
                         Correct: {question.correctCount ?? 0}
                       </span>
@@ -182,7 +185,7 @@ export default function QuestionListModal({
                     </div>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="analytics-dialog-grid">
                     {renderStudentList('Correct Students', question.correctStudents ?? [], 'success')}
                     {renderStudentList('Incorrect Students', question.incorrectStudents ?? [], 'danger')}
                     {renderStudentList('Unattempted Students', question.unattemptedStudents ?? [], 'warning')}

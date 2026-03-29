@@ -9,6 +9,7 @@ import {
   CircleHelp,
   Mail,
   MessageSquareQuote,
+  Palette,
   PhoneCall,
   Sparkles,
   WalletCards,
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 const cmsNavItems = [
   { href: "/company/content", label: "Dashboard", icon: BookOpenText },
+  { href: "/company/content/theme", label: "Theme Studio", icon: Palette },
   { href: "/company/content/stats", label: "Site Stats", icon: BarChart3 },
   { href: "/company/content/testimonials", label: "Testimonials", icon: MessageSquareQuote },
   { href: "/company/content/messages", label: "Messages", icon: Mail },

@@ -1,95 +1,126 @@
 "use client";
-import { useState } from 'react';
+
+import { useState, type FormEvent } from "react";
 
 export default function ContactForm() {
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
+    "idle",
+  );
+  const [errorMsg, setErrorMsg] = useState("");
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setStatus("sending");
+    setErrorMsg("");
+
     try {
-      const form = e.target as HTMLFormElement;
+      const form = event.currentTarget;
       const formData = new FormData(form);
       const payload = Object.fromEntries(formData.entries());
-      const res = await fetch('/api/contact/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/contact/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to send');
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to send");
       }
+
       setStatus("sent");
       form.reset();
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Something went wrong');
+    } catch (error: unknown) {
+      setErrorMsg(
+        error instanceof Error ? error.message : "Something went wrong",
+      );
       setStatus("error");
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl">
-      <div className="grid grid-cols-1 gap-5 sm:gap-6 sm:grid-cols-2">
+    <form onSubmit={onSubmit} className="public-form-shell space-y-6">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
         <div>
-          <label htmlFor="name" className="mb-2 block text-sm font-medium text-slate-700">Name</label>
+          <label htmlFor="name" className="public-form-label">
+            Name
+          </label>
           <input
             id="name"
             name="name"
             required
             placeholder="John Doe"
-            className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-4 text-base text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition"
+            className="public-form-input"
           />
         </div>
+
         <div>
-          <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">Email</label>
+          <label htmlFor="email" className="public-form-label">
+            Email
+          </label>
           <input
             id="email"
             type="email"
             name="email"
             required
             placeholder="john@school.edu"
-            className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-4 text-base text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition"
+            className="public-form-input"
           />
         </div>
       </div>
 
       <div>
-        <label htmlFor="institution" className="mb-2 block text-sm font-medium text-slate-700">Institution / School</label>
+        <label htmlFor="institution" className="public-form-label">
+          Institution / School
+        </label>
         <input
           id="institution"
           name="institution"
           placeholder="St. Xavier's High School"
-          className="w-full h-12 rounded-lg border border-slate-200 bg-slate-50 px-4 text-base text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition"
+          className="public-form-input"
         />
       </div>
 
       <div>
-        <label htmlFor="message" className="mb-2 block text-sm font-medium text-slate-700">Message</label>
+        <label htmlFor="message" className="public-form-label">
+          Message
+        </label>
         <textarea
           id="message"
           name="message"
           required
           rows={5}
           placeholder="How can we help you transform your school?"
-          className="w-full min-h-[140px] rounded-lg border border-slate-200 bg-slate-50 p-4 text-base text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition resize-none"
+          className="public-form-textarea"
         />
       </div>
 
-      <button
-        disabled={status === "sending" || status === "sent"}
-        className="w-full h-12 rounded-lg bg-emerald-600 px-5 font-semibold text-white shadow-lg transition hover:bg-emerald-500 hover:shadow-emerald-500/25 disabled:opacity-70 disabled:cursor-not-allowed"
-      >
-        {status === "sending" ? "Sending..." : status === "sent" ? "Message Sent!" : "Send Message"}
-      </button>
-      
-      {status === "sent" && (
-        <p className="text-sm text-emerald-600 text-center animate-pulse">Thank you! We&apos;ll be in touch shortly.</p>
-      )}
-      {status === "error" && (
-        <p className="text-sm text-red-600 text-center">{errorMsg}</p>
-      )}
+      <div className="space-y-3">
+        <button
+          disabled={status === "sending" || status === "sent"}
+          className="public-button-primary w-full disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {status === "sending"
+            ? "Sending..."
+            : status === "sent"
+              ? "Message Sent"
+              : "Send Message"}
+        </button>
+
+        <p className="public-form-status text-[13px] text-[hsl(var(--public-muted))]">
+          We usually respond within one working day.
+        </p>
+      </div>
+
+      {status === "sent" ? (
+        <p className="public-form-status public-form-status-success">
+          Thank you. We&apos;ll be in touch shortly.
+        </p>
+      ) : null}
+
+      {status === "error" ? (
+        <p className="public-form-status public-form-status-error">{errorMsg}</p>
+      ) : null}
     </form>
   );
 }

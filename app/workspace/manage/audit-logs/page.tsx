@@ -3,7 +3,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  SearchableCommandSelect,
+  type SearchableCommandOption,
+} from "@/components/ui/searchable-command-select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
 
 type AuditLogItem = {
@@ -30,6 +44,34 @@ export default function AuditLogsPage() {
 
   const schoolKey = useMemo(() => resolveClientSchoolKey(), []);
   const hasActiveFilters = entityTypeFilter !== "all" || actionFilter !== "all";
+  const entityTypeOptions = useMemo<SearchableCommandOption[]>(
+    () => [
+      {
+        value: "all",
+        label: "All entities",
+        description: "Show the full audit trail across every entity type.",
+      },
+      ...entityTypes.map((entityType) => ({
+        value: entityType,
+        label: entityType,
+      })),
+    ],
+    [entityTypes],
+  );
+  const actionOptions = useMemo<SearchableCommandOption[]>(
+    () => [
+      {
+        value: "all",
+        label: "All actions",
+        description: "Include every action captured in the current log stream.",
+      },
+      ...actions.map((action) => ({
+        value: action,
+        label: action,
+      })),
+    ],
+    [actions],
+  );
 
   const loadLogs = useCallback(async () => {
     if (!schoolKey) {
@@ -68,8 +110,9 @@ export default function AuditLogsPage() {
   }, [loadLogs]);
 
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
+    <PageShell width="wide" padding="relaxed">
       <PageHero
+        variant="operations"
         eyebrow="School Activity"
         title="Audit Logs"
         description="Review archived items and upload batch activity for the selected school from one consistent activity view."
@@ -131,36 +174,32 @@ export default function AuditLogsPage() {
         </div>
         <div className="app-filter-panel-body">
           <div className="app-filter-grid md:grid-cols-[220px_220px_minmax(0,1fr)] md:items-end">
-            <label className="app-field-group">
+            <div className="app-field-group">
               <span className="app-field-label">Entity</span>
-              <select
-                className="app-form-input"
+              <SearchableCommandSelect
                 value={entityTypeFilter}
-                onChange={(event) => setEntityTypeFilter(event.target.value)}
-              >
-                <option value="all">All entities</option>
-                {entityTypes.map((entityType) => (
-                  <option key={entityType} value={entityType}>
-                    {entityType}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="app-field-group">
+                options={entityTypeOptions}
+                onValueChange={setEntityTypeFilter}
+                placeholder="All entities"
+                searchPlaceholder="Search entities..."
+                emptyText="No entity filters found."
+                onClear={() => setEntityTypeFilter("all")}
+                showCloseAction
+              />
+            </div>
+            <div className="app-field-group">
               <span className="app-field-label">Action</span>
-              <select
-                className="app-form-input"
+              <SearchableCommandSelect
                 value={actionFilter}
-                onChange={(event) => setActionFilter(event.target.value)}
-              >
-                <option value="all">All actions</option>
-                {actions.map((action) => (
-                  <option key={action} value={action}>
-                    {action}
-                  </option>
-                ))}
-              </select>
-            </label>
+                options={actionOptions}
+                onValueChange={setActionFilter}
+                placeholder="All actions"
+                searchPlaceholder="Search actions..."
+                emptyText="No audit actions found."
+                onClear={() => setActionFilter("all")}
+                showCloseAction
+              />
+            </div>
             <div className="app-filter-summary">
               <div className="app-filter-summary-copy">
                 <p className="app-filter-summary-title">Current scope</p>
@@ -173,6 +212,7 @@ export default function AuditLogsPage() {
                   <Button
                     type="button"
                     variant="outline"
+                    className="app-button-filter"
                     onClick={() => {
                       setEntityTypeFilter("all");
                       setActionFilter("all");
@@ -188,61 +228,64 @@ export default function AuditLogsPage() {
           {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
 
           <div className="app-table-wrap">
-            <table className="min-w-full text-sm">
-              <thead className="bg-muted/30">
-                <tr>
-                  <th className="analytics-th">Time</th>
-                  <th className="analytics-th">Actor</th>
-                  <th className="analytics-th">Action</th>
-                  <th className="analytics-th">Entity</th>
-                  <th className="analytics-th">Summary</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Actor</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Summary</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {logs.length === 0 ? (
-                  <tr>
-                    <td className="analytics-td text-center text-muted-foreground" colSpan={5}>
+                  <TableRow>
+                    <TableCell
+                      className="py-10 text-center text-muted-foreground"
+                      colSpan={5}
+                    >
                       {loading ? "Loading audit logs…" : "No audit activity found."}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   logs.map((log) => (
-                    <tr key={log._id} className="analytics-row">
-                      <td className="analytics-td text-muted-foreground">
+                    <TableRow key={log._id}>
+                      <TableCell className="text-muted-foreground">
                         {log.createdAt ? new Date(log.createdAt).toLocaleString() : "-"}
-                      </td>
-                      <td className="analytics-td">
+                      </TableCell>
+                      <TableCell>
                         <div className="font-medium text-foreground">
                           {log.actorName || log.actorEmail || "System"}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {log.actorRole || "Unknown role"}
                         </div>
-                      </td>
-                      <td className="analytics-td">
-                        <span className="analytics-toolbar-chip analytics-toolbar-chip-muted">
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="neutral">
                           {log.action || "-"}
-                        </span>
-                      </td>
-                      <td className="analytics-td">
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         <div className="font-medium text-foreground">
                           {log.entityLabel || log.entityType || "-"}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {log.entityId || log.entityType || "-"}
                         </div>
-                      </td>
-                      <td className="analytics-td text-muted-foreground">
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
                         {log.summary || "-"}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

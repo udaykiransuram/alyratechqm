@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, {
-    allowRoles: ["admin", "teacher"],
+    allowRoles: ["admin"],
   });
   if (!auth.ok) {
     return auth.response;

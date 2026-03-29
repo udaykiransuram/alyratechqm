@@ -14,14 +14,15 @@ const PopoverTrigger = PopoverPrimitive.Trigger
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = "center", sideOffset = 6, ...props }, ref) => (
+>(({ className, align = "center", sideOffset = 6, collisionPadding = 12, ...props }, ref) => (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       ref={ref}
       align={align}
       sideOffset={sideOffset}
+      collisionPadding={collisionPadding}
       className={cn(
-        "z-50 w-72 rounded-[calc(var(--app-radius-lg)+2px)] border border-border/60 bg-popover/95 p-4 text-popover-foreground shadow-[0_24px_48px_-28px_hsl(var(--app-shadow-deep)/0.34)] outline-none backdrop-blur supports-[backdrop-filter]:bg-popover/90 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-popover-content-transform-origin]",
+        "z-[70] w-72 rounded-[calc(var(--app-radius-lg)+1px)] border border-border/72 bg-popover/96 p-4 text-popover-foreground shadow-[0_24px_42px_-30px_hsl(var(--app-shadow-deep)/0.18)] outline-none backdrop-blur supports-[backdrop-filter]:bg-popover/92 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-popover-content-transform-origin]",
         className,
       )}
       {...props}

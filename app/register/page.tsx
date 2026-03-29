@@ -40,6 +40,14 @@ type SectionsResponse = {
 	message?: string;
 };
 
+let cachedTalentTestConfig:
+	| { name?: string; price?: number; currency?: string; duration?: string; subjects?: string[]; features?: string[] }
+	| null
+	| undefined;
+let cachedSchools: SchoolOption[] | null = null;
+const cachedClassesBySchool = new Map<string, ClassOption[]>();
+const cachedSectionsBySchoolClass = new Map<string, SectionOption[]>();
+
 export default function TalentTestRegisterPage() {
 	const [cashfreeSDK, setCashfreeSDK] = useState<CashfreeSDK | null>(null);
 	const [loading, setLoading] = useState(false);
@@ -77,52 +85,72 @@ export default function TalentTestRegisterPage() {
 	useEffect(() => {
 		let mounted = true;
 
-		fetch('/api/talent-test-config')
-			.then(res => res.json())
-			.then(data => {
-				if (!mounted) return;
-				if (data.success && data.data) {
-					setTestConfig(data.data);
-					setFormData(prev => ({ ...prev, amount: String(data.data.price) }));
-				}
-			})
-			.catch(err => console.error('Failed to fetch test config:', err));
+		if (cachedTalentTestConfig) {
+			setTestConfig(cachedTalentTestConfig);
+			setFormData(prev => ({ ...prev, amount: String(cachedTalentTestConfig?.price ?? prev.amount) }));
+		} else {
+			fetch('/api/talent-test-config', { cache: 'force-cache' })
+				.then(res => res.json())
+				.then(data => {
+					if (!mounted) return;
+					if (data.success && data.data) {
+						cachedTalentTestConfig = data.data;
+						setTestConfig(data.data);
+						setFormData(prev => ({ ...prev, amount: String(data.data.price) }));
+					}
+				})
+				.catch(err => console.error('Failed to fetch test config:', err));
+		}
 
-		fetch('/api/public/schools', { cache: 'no-store' })
-			.then(async res => {
-				const data: SchoolsResponse = await res.json();
-				if (!res.ok || !data?.success) {
-					throw new Error(data?.message || 'Failed to load schools.');
-				}
-				if (!mounted) return;
-				const nextSchools = Array.isArray(data.schools)
-					? data.schools
-						.map((school) => ({
-							key: String(school?.key || '').trim(),
-							displayName: String(school?.displayName || '').trim(),
-						}))
-						.filter((school: SchoolOption) => school.key && school.displayName)
-					: [];
-				setSchools(nextSchools);
-				if (nextSchools.length === 1) {
-					setSchoolSearch(nextSchools[0].displayName);
-					setFormData(prev => ({
-						...prev,
-						schoolKey: nextSchools[0].key,
-						schoolName: nextSchools[0].displayName,
-					}));
-				}
-			})
-			.catch((error: Error) => {
-				console.error('Failed to fetch schools:', error);
-				if (!mounted) return;
-				setSchools([]);
-				setDirectoryError(error.message || 'Failed to load schools.');
-			})
-			.finally(() => {
-				if (!mounted) return;
-				setDirectoryLoading(prev => ({ ...prev, schools: false }));
-			});
+		if (cachedSchools) {
+			setSchools(cachedSchools);
+			if (cachedSchools.length === 1) {
+				setSchoolSearch(cachedSchools[0].displayName);
+				setFormData(prev => ({
+					...prev,
+					schoolKey: cachedSchools![0].key,
+					schoolName: cachedSchools![0].displayName,
+				}));
+			}
+			setDirectoryLoading(prev => ({ ...prev, schools: false }));
+		} else {
+			fetch('/api/public/schools', { cache: 'force-cache' })
+				.then(async res => {
+					const data: SchoolsResponse = await res.json();
+					if (!res.ok || !data?.success) {
+						throw new Error(data?.message || 'Failed to load schools.');
+					}
+					if (!mounted) return;
+					const nextSchools = Array.isArray(data.schools)
+						? data.schools
+							.map((school) => ({
+								key: String(school?.key || '').trim(),
+								displayName: String(school?.displayName || '').trim(),
+							}))
+							.filter((school: SchoolOption) => school.key && school.displayName)
+						: [];
+					cachedSchools = nextSchools;
+					setSchools(nextSchools);
+					if (nextSchools.length === 1) {
+						setSchoolSearch(nextSchools[0].displayName);
+						setFormData(prev => ({
+							...prev,
+							schoolKey: nextSchools[0].key,
+							schoolName: nextSchools[0].displayName,
+						}));
+					}
+				})
+				.catch((error: Error) => {
+					console.error('Failed to fetch schools:', error);
+					if (!mounted) return;
+					setSchools([]);
+					setDirectoryError(error.message || 'Failed to load schools.');
+				})
+				.finally(() => {
+					if (!mounted) return;
+					setDirectoryLoading(prev => ({ ...prev, schools: false }));
+				});
+		}
 
 		load({ mode: process.env.NEXT_PUBLIC_CASHFREE_ENV || 'sandbox' })
 			.then(setCashfreeSDK)
@@ -154,36 +182,41 @@ export default function TalentTestRegisterPage() {
 		setClasses([]);
 		setSections([]);
 
-		fetch(`/api/public/classes?school=${encodeURIComponent(formData.schoolKey)}`, {
-			cache: 'no-store',
-		})
-			.then(async res => {
-				const data: ClassesResponse = await res.json();
-				if (!res.ok || !data?.success) {
-					throw new Error(data?.message || 'Failed to load classes.');
-				}
-				if (!mounted) return;
-				setClasses(
-					Array.isArray(data.classes)
+		if (cachedClassesBySchool.has(formData.schoolKey)) {
+			setClasses(cachedClassesBySchool.get(formData.schoolKey) || []);
+			setDirectoryLoading(prev => ({ ...prev, classes: false }));
+		} else {
+			fetch(`/api/public/classes?school=${encodeURIComponent(formData.schoolKey)}`, {
+				cache: 'force-cache',
+			})
+				.then(async res => {
+					const data: ClassesResponse = await res.json();
+					if (!res.ok || !data?.success) {
+						throw new Error(data?.message || 'Failed to load classes.');
+					}
+					if (!mounted) return;
+					const nextClasses = Array.isArray(data.classes)
 						? data.classes
 							.map((classItem) => ({
 								id: String(classItem?.id || '').trim(),
 								name: String(classItem?.name || '').trim(),
 							}))
 							.filter((classItem: ClassOption) => classItem.id && classItem.name)
-						: [],
-				);
-			})
-			.catch((error: Error) => {
-				console.error('Failed to fetch classes:', error);
-				if (!mounted) return;
-				setClasses([]);
-				setDirectoryError(error.message || 'Failed to load classes.');
-			})
-			.finally(() => {
-				if (!mounted) return;
-				setDirectoryLoading(prev => ({ ...prev, classes: false }));
-			});
+						: [];
+					cachedClassesBySchool.set(formData.schoolKey, nextClasses);
+					setClasses(nextClasses);
+				})
+				.catch((error: Error) => {
+					console.error('Failed to fetch classes:', error);
+					if (!mounted) return;
+					setClasses([]);
+					setDirectoryError(error.message || 'Failed to load classes.');
+				})
+				.finally(() => {
+					if (!mounted) return;
+					setDirectoryLoading(prev => ({ ...prev, classes: false }));
+				});
+		}
 
 		return () => {
 			mounted = false;
@@ -202,17 +235,21 @@ export default function TalentTestRegisterPage() {
 		setDirectoryError('');
 		setSections([]);
 
-		fetch(`/api/public/sections?school=${encodeURIComponent(formData.schoolKey)}&classId=${encodeURIComponent(formData.classId)}`, {
-			cache: 'no-store',
-		})
-			.then(async res => {
-				const data: SectionsResponse = await res.json();
-				if (!res.ok || !data?.success) {
-					throw new Error(data?.message || 'Failed to load sections.');
-				}
-				if (!mounted) return;
-				setSections(
-					Array.isArray(data.sections)
+		const sectionCacheKey = `${formData.schoolKey}::${formData.classId}`;
+		if (cachedSectionsBySchoolClass.has(sectionCacheKey)) {
+			setSections(cachedSectionsBySchoolClass.get(sectionCacheKey) || []);
+			setDirectoryLoading(prev => ({ ...prev, sections: false }));
+		} else {
+			fetch(`/api/public/sections?school=${encodeURIComponent(formData.schoolKey)}&classId=${encodeURIComponent(formData.classId)}`, {
+				cache: 'force-cache',
+			})
+				.then(async res => {
+					const data: SectionsResponse = await res.json();
+					if (!res.ok || !data?.success) {
+						throw new Error(data?.message || 'Failed to load sections.');
+					}
+					if (!mounted) return;
+					const nextSections = Array.isArray(data.sections)
 						? data.sections
 							.map((section) => ({
 								id: String(section?.id || '').trim(),
@@ -220,19 +257,21 @@ export default function TalentTestRegisterPage() {
 								classId: String(section?.classId || '').trim(),
 							}))
 							.filter((section: SectionOption) => section.id && section.name)
-						: [],
-				);
-			})
-			.catch((error: Error) => {
-				console.error('Failed to fetch sections:', error);
-				if (!mounted) return;
-				setSections([]);
-				setDirectoryError(error.message || 'Failed to load sections.');
-			})
-			.finally(() => {
-				if (!mounted) return;
-				setDirectoryLoading(prev => ({ ...prev, sections: false }));
-			});
+						: [];
+					cachedSectionsBySchoolClass.set(sectionCacheKey, nextSections);
+					setSections(nextSections);
+				})
+				.catch((error: Error) => {
+					console.error('Failed to fetch sections:', error);
+					if (!mounted) return;
+					setSections([]);
+					setDirectoryError(error.message || 'Failed to load sections.');
+				})
+				.finally(() => {
+					if (!mounted) return;
+					setDirectoryLoading(prev => ({ ...prev, sections: false }));
+				});
+		}
 
 		return () => {
 			mounted = false;
@@ -457,16 +496,29 @@ export default function TalentTestRegisterPage() {
 					<h1 className="text-4xl font-extrabold tracking-tight text-foreground md:text-5xl">
 						{testConfig?.name || 'Talent Test'} Registration
 					</h1>
-					<p className="mt-4 text-lg text-muted-foreground">
-						Fill in the details below to secure your spot in the national-level STEM assessment.
-					{testConfig?.duration && <span className="mt-2 block text-sm font-medium text-muted-foreground">⏱ Duration: {testConfig.duration} &bull; Subjects: {(testConfig.subjects || ['Mathematics', 'Science', 'English']).join(', ')}</span>}
+					<p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
+						Fill in the details below to secure a confirmed seat for the national-level STEM assessment.
 					</p>
-					<div className="public-flow-banner mt-6 inline-flex items-center gap-3">
-						<span className="text-2xl">
-							{testConfig?.currency === 'INR' ? '₹' : testConfig?.currency === 'USD' ? '$' : '€'}
-							{testConfig?.price || 100}
-						</span>
-						<span className="text-sm font-normal opacity-90">Registration Fee</span>
+					<div className="mt-8 grid gap-4 sm:grid-cols-3">
+						<div className="public-flow-stat-card">
+							<div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Fee</div>
+							<div className="mt-3 text-3xl font-bold text-foreground">
+								{testConfig?.currency === 'INR' ? '₹' : testConfig?.currency === 'USD' ? '$' : '€'}
+								{testConfig?.price || 100}
+							</div>
+						</div>
+						<div className="public-flow-stat-card">
+							<div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Duration</div>
+							<div className="mt-3 text-lg font-semibold text-foreground">
+								{testConfig?.duration || '45 minutes'}
+							</div>
+						</div>
+						<div className="public-flow-stat-card">
+							<div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Subjects</div>
+							<div className="mt-3 text-sm font-medium leading-6 text-foreground">
+								{(testConfig?.subjects || ['Mathematics', 'Science', 'English']).join(', ')}
+							</div>
+						</div>
 					</div>
 				</div>
 
@@ -709,32 +761,42 @@ export default function TalentTestRegisterPage() {
 						</div>
 					</form>
 
-					{/* Benefits Reminder */}
-					<div className="public-flow-card-soft mt-8 space-y-3">
-						<h3 className="font-semibold text-foreground">What you&apos;ll get:</h3>
-						<ul className="space-y-3 text-sm text-muted-foreground">
-							{(testConfig?.features && testConfig.features.length > 0
-								? testConfig.features
-								: [
-									'Instant hall ticket generation via WhatsApp',
-									'Comprehensive STEM assessment for your class level',
-									'Detailed performance report with error-type analysis',
-									'Study materials and previous year papers',
-									'Certificates and awards for top performers',
-									'Eligibility for mentorship programs with STEM experts',
-								]
-							).map((item, idx) => (
-								<li key={idx} className="flex items-start gap-2">
-									<span className="mt-0.5 text-primary">✓</span>
-									<span>{item}</span>
-								</li>
-							))}
-						</ul>
+					<div className="mt-8 grid gap-4 md:grid-cols-2">
+						<div className="public-flow-card-soft space-y-3">
+							<h3 className="font-semibold text-foreground">What you&apos;ll get</h3>
+							<ul className="space-y-3 text-sm text-muted-foreground">
+								{(testConfig?.features && testConfig.features.length > 0
+									? testConfig.features
+									: [
+										'Instant hall ticket generation via WhatsApp',
+										'Comprehensive STEM assessment for your class level',
+										'Detailed performance report with error-type analysis',
+										'Study materials and previous year papers',
+										'Certificates and awards for top performers',
+										'Eligibility for mentorship programs with STEM experts',
+									]
+								).map((item, idx) => (
+									<li key={idx} className="flex items-start gap-2">
+										<span className="mt-0.5 text-primary">✓</span>
+										<span>{item}</span>
+									</li>
+								))}
+							</ul>
+						</div>
+
+						<div className="public-flow-card space-y-3">
+							<h3 className="font-semibold text-foreground">Before you pay</h3>
+							<ul className="space-y-3 text-sm text-muted-foreground">
+								<li>Keep the student name exactly as it appears on official records.</li>
+								<li>Select the correct school, class, and section so the hall ticket is generated correctly.</li>
+								<li>Use an active phone number because payment confirmations and hall-ticket updates are sent there.</li>
+							</ul>
+						</div>
 					</div>
 				</div>
 
 				{/* Help Section */}
-				<div className="mt-8 text-center">
+				<div className="public-flow-card-soft mt-8 text-center">
 					<p className="text-sm text-muted-foreground">
 						Need help? Contact us at{' '}
 						<a href="tel:+919876543210" className="font-semibold text-primary transition-colors hover:text-foreground">
@@ -744,7 +806,7 @@ export default function TalentTestRegisterPage() {
 					</p>
 					<Link
 						href="/talent-test"
-						className="public-flow-text-link mt-3"
+						className="public-flow-text-link mt-4"
 					>
 						← Back to Talent Test Details
 					</Link>

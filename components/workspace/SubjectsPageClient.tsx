@@ -102,18 +102,19 @@ export default function SubjectsPageClient({
   return (
     <PageShell width="content">
       <PageHero
+        variant="directory"
         eyebrow="Curriculum"
         title="Subjects"
         description="Browse, update, and organize subject definitions and the tags used across your paper-authoring flow."
         actions={
-          <Button asChild className="gap-2">
+          <Button asChild className="app-button-page">
             <AppPrefetchLink
               href="/workspace/subjects/create"
               prefetchOnMount
               relatedApiPrefetches={["/api/tags"]}
             >
               <Plus className="h-4 w-4" />
-              Add Subject
+              Create Subject
             </AppPrefetchLink>
           </Button>
         }
@@ -165,9 +166,11 @@ export default function SubjectsPageClient({
               title="No subjects yet"
               description="Create your first subject to start organizing curriculum data and tag-linked authoring flows."
               action={
-                <AppPrefetchLink href="/workspace/subjects/create">
-                  <Button variant="outline">Create your first subject</Button>
-                </AppPrefetchLink>
+                <Button asChild variant="outline" className="app-button-page">
+                  <AppPrefetchLink href="/workspace/subjects/create">
+                    Create your first subject
+                  </AppPrefetchLink>
+                </Button>
               }
             />
           ) : (

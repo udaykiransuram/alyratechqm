@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 
 import { Trash2 } from "lucide-react";
@@ -25,16 +26,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { SearchableCommandOption } from "@/components/ui/searchable-command-select";
 import SectionState from "@/components/ui/section-state";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -43,6 +38,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+const SearchableCommandSelect = dynamic(
+  () =>
+    import("@/components/ui/searchable-command-select").then(
+      (module) => module.SearchableCommandSelect,
+    ),
+  {
+    ssr: false,
+    loading: () => <div className="h-11 rounded-xl border border-border/60 bg-muted/30" />,
+  },
+);
 
 type ManageSectionsClientProps = {
   initialClasses: WorkspaceClassItem[];
@@ -83,6 +89,20 @@ export default function ManageSectionsClient({
       (section) => getSectionClass(section)?._id === sectionFilterClassId,
     );
   }, [sections, sectionFilterClassId]);
+  const sectionClassOptions = useMemo<SearchableCommandOption[]>(
+    () => [
+      {
+        value: "all",
+        label: "All classes",
+        description: "Review sections across every class in the school.",
+      },
+      ...classes.map((classItem) => ({
+        value: classItem._id,
+        label: classItem.name,
+      })),
+    ],
+    [classes],
+  );
 
   const handleArchiveSection = async (sectionId: string) => {
     setArchivingSectionId(sectionId);
@@ -115,11 +135,12 @@ export default function ManageSectionsClient({
   return (
     <PageShell width="wide" padding="relaxed">
       <PageHero
+        variant="directory"
         eyebrow="Academic Setup"
         title="Manage Sections"
         description="Review and archive sections from the directory page, while moving section creation and bulk import into a dedicated setup route."
         actions={
-          <Button asChild>
+          <Button asChild className="app-button-page">
             <AppPrefetchLink href="/workspace/manage/sections/create" prefetchOnMount>
               Create Sections
             </AppPrefetchLink>
@@ -183,23 +204,17 @@ export default function ManageSectionsClient({
                 </div>
                 <div className="app-filter-summary-actions">
                   <div className="w-full sm:w-[260px]">
-                    <Select
+                    <SearchableCommandSelect
                       value={sectionFilterClassId}
+                      options={sectionClassOptions}
                       onValueChange={setSectionFilterClassId}
+                      placeholder="Filter by class"
+                      searchPlaceholder="Search classes..."
+                      emptyText="No classes found."
+                      onClear={() => setSectionFilterClassId("all")}
+                      showCloseAction
                       disabled={Boolean(archivingSectionId)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Filter by class" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Classes</SelectItem>
-                        {classes.map((classItem) => (
-                          <SelectItem key={classItem._id} value={classItem._id}>
-                            {classItem.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
                 </div>
               </div>
@@ -217,7 +232,7 @@ export default function ManageSectionsClient({
                       : "Switch the filter or create the first section for the selected class."
                   }
                   action={
-                    <Button asChild>
+                    <Button asChild className="app-button-page">
                       <AppPrefetchLink href="/workspace/manage/sections/create">
                         Go to Create Sections
                       </AppPrefetchLink>

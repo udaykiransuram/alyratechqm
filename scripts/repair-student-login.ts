@@ -74,7 +74,7 @@ Diagnose and repair a single student login.
 Options:
   --school=<schoolKey>           Required school key
   --roll=<rollNumber>            Required student roll number
-  --commit                       Reset password to roll number and clear auth state
+  --commit                       Reset password to the saved phone number digits and clear auth state
   --help                         Show this help text
 `);
 }
@@ -89,11 +89,6 @@ async function main() {
   if (!args.schoolKey || !args.rollNumber) {
     printHelp();
     throw new Error("Both --school and --roll are required.");
-  }
-
-  const defaultPassword = getDefaultStudentPassword(args.rollNumber);
-  if (!defaultPassword) {
-    throw new Error("Roll number is required to repair a student login.");
   }
 
   await connectDB();
@@ -111,7 +106,7 @@ async function main() {
     rollNumber: buildStudentRollNumberMatcher(args.rollNumber),
   })
     .select(
-      "_id name email rollNumber passwordHash isArchived archivedAt +activeStudentSessionId +activeStudentSessionLastSeenAt",
+      "_id name email rollNumber mobileNumber passwordHash isArchived archivedAt +activeStudentSessionId +activeStudentSessionLastSeenAt",
     )
     .lean();
 
@@ -127,17 +122,18 @@ async function main() {
   );
 
   for (const student of matches) {
+    const defaultPassword = getDefaultStudentPassword(student?.mobileNumber);
     const passwordHash = String(student?.passwordHash || "");
-    let passwordMatchesRollNumber = false;
+    let passwordMatchesPhoneNumber = false;
 
-    if (passwordHash) {
+    if (defaultPassword && passwordHash) {
       try {
-        passwordMatchesRollNumber = await bcrypt.compare(
+        passwordMatchesPhoneNumber = await bcrypt.compare(
           defaultPassword,
           passwordHash,
         );
       } catch {
-        passwordMatchesRollNumber = false;
+        passwordMatchesPhoneNumber = false;
       }
     }
 
@@ -151,7 +147,7 @@ async function main() {
     ).catch(() => null);
 
     console.log(
-      `[student-login-repair] student=${String(student._id)} name=${JSON.stringify(String(student?.name || ""))} archived=${student?.isArchived === true ? "yes" : "no"} password-hash=${passwordHash ? "yes" : "no"} password-matches-roll=${passwordMatchesRollNumber ? "yes" : "no"} db-session=${dbSessionId ? "yes" : "no"} db-session-fresh=${dbSessionFresh ? "yes" : "no"} redis-session=${redisSessionId ? "yes" : "no"}`,
+      `[student-login-repair] student=${String(student._id)} name=${JSON.stringify(String(student?.name || ""))} archived=${student?.isArchived === true ? "yes" : "no"} password-hash=${passwordHash ? "yes" : "no"} password-matches-phone=${passwordMatchesPhoneNumber ? "yes" : "no"} db-session=${dbSessionId ? "yes" : "no"} db-session-fresh=${dbSessionFresh ? "yes" : "no"} redis-session=${redisSessionId ? "yes" : "no"}`,
     );
   }
 
@@ -166,9 +162,16 @@ async function main() {
   }
 
   const student = activeMatches[0];
+  const defaultPassword = getDefaultStudentPassword(student?.mobileNumber);
+  if (!defaultPassword) {
+    throw new Error(
+      "The active student is missing a usable phone number, so the default password cannot be repaired.",
+    );
+  }
+
   if (!args.commit) {
     console.log(
-      "[student-login-repair] dry-run only. Re-run with --commit to reset the password to the roll number and clear auth state.",
+      "[student-login-repair] dry-run only. Re-run with --commit to reset the password to the saved phone number digits and clear auth state.",
     );
     return;
   }
@@ -197,7 +200,7 @@ async function main() {
   );
 
   console.log(
-    `[student-login-repair] repaired ${args.rollNumber}: password reset to roll number, active session cleared, login rate limit cleared.`,
+    `[student-login-repair] repaired ${args.rollNumber}: password reset to the saved phone number digits, active session cleared, login rate limit cleared.`,
   );
 }
 

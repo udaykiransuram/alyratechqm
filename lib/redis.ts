@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash } from "crypto";
 
 import {
   ATTEMPT_LOCK_TTL_SECONDS,
@@ -22,6 +22,11 @@ export type RedisRateLimitResult = {
   count: number;
   limit: number;
 };
+
+export type StudentSessionValidationResult =
+  | "valid"
+  | "missing"
+  | "mismatch";
 
 const REDIS_FAILURE_BACKOFF_MS = 30_000;
 
@@ -326,6 +331,46 @@ export async function refreshStudentSessionIfMatch(
   }
 
   return Number(result || 0) === 1;
+}
+
+export async function validateAndRefreshStudentSession(
+  schoolKey: string,
+  studentId: string,
+  sessionId: string,
+): Promise<StudentSessionValidationResult | null> {
+  if (!isRedisConfigured()) {
+    return null;
+  }
+
+  const result = await runRedisEval<number>(
+    [
+      "local current = redis.call('GET', KEYS[1])",
+      "if not current then",
+      "  return -1",
+      "end",
+      "if current ~= ARGV[1] then",
+      "  return 0",
+      "end",
+      "redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))",
+      "return 1",
+    ].join("\n"),
+    [buildStudentSessionKey(schoolKey, studentId)],
+    [sessionId, STUDENT_SESSION_TTL_SECONDS],
+  );
+
+  if (result === null) {
+    return null;
+  }
+
+  if (Number(result) === 1) {
+    return "valid";
+  }
+
+  if (Number(result) === 0) {
+    return "mismatch";
+  }
+
+  return "missing";
 }
 
 export async function clearStudentSessionIfMatch(

@@ -51,9 +51,7 @@ export default function BulkUploadPanel({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
             <CardTitle>{title}</CardTitle>
-            <p className="text-sm leading-6 text-muted-foreground">
-              {description}
-            </p>
+            <p className="app-form-section-copy">{description}</p>
           </div>
           {onDownloadTemplate ? (
             <Button
@@ -79,9 +77,7 @@ export default function BulkUploadPanel({
             disabled={disabled || loading}
             className="app-form-file"
           />
-          {loading ? (
-            <p className="text-sm text-muted-foreground">{loadingLabel}</p>
-          ) : null}
+          {loading ? <p className="app-field-note">{loadingLabel}</p> : null}
         </div>
 
         {feedback?.message ? (
@@ -92,7 +88,7 @@ export default function BulkUploadPanel({
 
         {tips.length > 0 ? (
           <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-            <p className="text-sm font-medium text-foreground">Upload notes</p>
+            <p className="app-form-section-title">Upload notes</p>
             <ul className="mt-2 space-y-2 text-sm leading-6 text-muted-foreground">
               {tips.map((tip) => (
                 <li key={tip}>{tip}</li>

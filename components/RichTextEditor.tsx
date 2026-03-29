@@ -16,6 +16,16 @@ import MathExtension from '@/extensions/MathExtension';
 import { Toolbar } from './Toolbar';
 import MathModal from './MathModal';
 import { Spinner } from './ui/spinner';
+import { useToast } from './ui/use-toast';
+
+const MAX_IMAGE_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+]);
 
 // --- FIX: Correctly type the custom event listener ---
 declare module '@tiptap/core' {
@@ -37,6 +47,42 @@ interface EditMathPayload {
   latex: string;
 }
 
+function normalizeImageFiles(fileList: FileList | File[] | null | undefined) {
+  return Array.from(fileList || []).filter((file) =>
+    String(file.type || '').toLowerCase().startsWith('image/'),
+  );
+}
+
+function getClipboardImageFiles(dataTransfer: DataTransfer | null | undefined) {
+  if (!dataTransfer) return [];
+
+  const filesFromItems = Array.from(dataTransfer.items || [])
+    .filter((item) => item.kind === 'file' && String(item.type || '').toLowerCase().startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+
+  if (filesFromItems.length > 0) {
+    return filesFromItems;
+  }
+
+  return normalizeImageFiles(dataTransfer.files);
+}
+
+function getImageAltText(fileName: string) {
+  return String(fileName || '')
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[-_]+/g, ' ')
+    .trim();
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return 'Something went wrong while uploading the image.';
+}
+
 // --- Component Props and Payloads ---
 
 // --- The Component ---
@@ -44,6 +90,9 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
   const [isMathModalOpen, setIsMathModalOpen] = useState(false);
   // --- FIX: Add state to track the node being edited ---
   const [editingMath, setEditingMath] = useState<EditMathPayload | null>(null);
+  const [uploadingImageCount, setUploadingImageCount] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   // --- FIX: Create a stable ref for the onChange handler ---
   const onChangeRef = useRef(onChange);
@@ -53,6 +102,77 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
 
   // --- CHANGE: Add key to force remount on reset ---
   const editorMinHeightClass = compact ? 'min-h-[160px]' : 'min-h-[210px]';
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+
+  const uploadImageFile = useCallback(async (file: File) => {
+    const mimeType = String(file.type || '').toLowerCase();
+
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
+      throw new Error('Only PNG, JPEG, WEBP, GIF, and AVIF images are supported.');
+    }
+
+    if (file.size > MAX_IMAGE_UPLOAD_SIZE_BYTES) {
+      throw new Error('Images must be 5 MB or smaller.');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file, file.name || 'question-image');
+
+    const response = await fetch('/api/questions/images', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok || !payload?.success || !payload?.url) {
+      throw new Error(payload?.message || 'Failed to upload the image.');
+    }
+
+    return String(payload.url);
+  }, []);
+
+  const uploadImagesToEditor = useCallback(async (files: File[]) => {
+    if (!files.length) return;
+
+    const currentEditor = editorRef.current;
+    if (!currentEditor) return;
+
+    setUploadingImageCount((count) => count + files.length);
+
+    const failures: string[] = [];
+
+    try {
+      for (const file of files) {
+        try {
+          const src = await uploadImageFile(file);
+          currentEditor
+            .chain()
+            .focus()
+            .setImage({
+              src,
+              alt: getImageAltText(file.name),
+            })
+            .run();
+        } catch (error) {
+          failures.push(getErrorMessage(error));
+        }
+      }
+    } finally {
+      setUploadingImageCount((count) => Math.max(0, count - files.length));
+    }
+
+    if (failures.length > 0) {
+      toast({
+        title: 'Image upload failed',
+        description:
+          failures.length === 1
+            ? failures[0]
+            : `${failures.length} image uploads failed. ${failures[0]}`,
+        variant: 'destructive',
+      });
+    }
+  }, [toast, uploadImageFile]);
 
   const editor = useEditor({
     extensions: [
@@ -64,7 +184,13 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
       Color,
       TaskList,
       TaskItem.configure({ nested: true }),
-      Image.configure({ allowBase64: true }),
+      Image.configure({
+        allowBase64: true,
+        HTMLAttributes: {
+          loading: 'lazy',
+          decoding: 'async',
+        },
+      }),
       MathExtension,
     ],
     content: initialContent || '',
@@ -74,6 +200,16 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
         // This will apply the typography plugin's styles.
         class: `prose dark:prose-invert max-w-none ${editorMinHeightClass} w-full rounded-b-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`,
       },
+      handlePaste: (_view, event) => {
+        const imageFiles = getClipboardImageFiles(event.clipboardData);
+        if (!imageFiles.length) {
+          return false;
+        }
+
+        event.preventDefault();
+        void uploadImagesToEditor(imageFiles);
+        return true;
+      },
     },
     onUpdate: ({ editor }) => {
       // Use the stable ref
@@ -81,7 +217,11 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
     },
     // FIX: Add these to prevent re-renders and SSR errors
     immediatelyRender: false,
-  }, [editorKey]); // <-- ADD editorKey as dependency
+  }, [editorKey, editorMinHeightClass, uploadImagesToEditor]); // <-- ADD editorKey as dependency
+
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
   useEffect(() => {
     if (editor && initialContent && initialContent !== editor.getHTML()) {
@@ -119,11 +259,17 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
 
   const handleAddImage = useCallback(() => {
     if (!editor) return;
-    const url = window.prompt('Image URL');
-    if (url) {
-      editor.chain().focus().setImage({ src: url }).run();
+    const url = window.prompt('Paste an image URL.');
+    if (url === null) return;
+
+    if (url.trim()) {
+      editor.chain().focus().setImage({ src: url.trim(), alt: '' }).run();
     }
   }, [editor]);
+
+  const handleUploadImage = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
 
   const handleOpenMathModal = useCallback(() => {
     // --- FIX: When opening for a NEW equation, clear any editing state ---
@@ -159,6 +305,17 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
     editor?.commands.focus();
   }, [editor]);
 
+  const handleFileInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = normalizeImageFiles(event.target.files);
+    event.target.value = '';
+
+    if (!files.length) {
+      return;
+    }
+
+    void uploadImagesToEditor(files);
+  }, [uploadImagesToEditor]);
+
   if (!editor) {
     return (
       <div className={`flex items-center justify-center rounded-lg border bg-muted p-4 ${compact ? 'min-h-[160px]' : 'min-h-[210px]'}`}>
@@ -169,13 +326,28 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
 
   return (
     <div className="flex flex-col justify-stretch">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+        className="sr-only"
+        onChange={handleFileInputChange}
+      />
       {/* --- FIX: Pass all the required props to the Toolbar --- */}
       <Toolbar
         editor={editor}
         onSetLink={handleSetLink}
         onAddImage={handleAddImage}
+        onUploadImage={handleUploadImage}
         onOpenMathModal={handleOpenMathModal}
       />
+      {!compact || uploadingImageCount > 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {uploadingImageCount > 0
+            ? `Uploading ${uploadingImageCount} image${uploadingImageCount === 1 ? '' : 's'}...`
+            : 'Paste screenshots directly, use the upload button for your device, or insert an image URL.'}
+        </p>
+      ) : null}
       <EditorContent editor={editor} />
       <MathModal
         open={isMathModalOpen}

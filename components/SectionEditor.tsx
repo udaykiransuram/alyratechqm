@@ -97,12 +97,11 @@ export function SectionEditor({
         <div className="flex flex-col gap-3 border-t border-border/60 pt-3.5 sm:flex-row sm:items-center">
           <Button
             variant="outline"
-            size="sm"
-            className="app-button-compact"
+            className="app-button-inline"
             onClick={onAddQuestions}
             disabled={!canAddQuestions}
           >
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="h-4 w-4" />
             Add / Manage Questions
           </Button>
           {!canAddQuestions ? (

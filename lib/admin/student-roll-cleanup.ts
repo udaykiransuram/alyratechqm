@@ -5,13 +5,17 @@ import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import School from "@/models/School";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
-import { normalizeRollNumber } from "@/lib/user-credentials";
+import {
+  getDefaultStudentPassword,
+  normalizeRollNumber,
+} from "@/lib/user-credentials";
 
 type LeanStudent = {
   _id: any;
   name?: string;
   email?: string;
   rollNumber?: string;
+  mobileNumber?: string;
   class?: any;
   academicSection?: any;
   passwordHash?: string;
@@ -75,7 +79,7 @@ export type StudentRollUpdateResult = {
   userId: string;
   fromRollNumber: string;
   toRollNumber: string;
-  passwordResetToRollNumber: boolean;
+  passwordResetToDefaultPassword: boolean;
 };
 
 export type ApplyStudentRollUpdatesResult = {
@@ -480,7 +484,7 @@ export async function applyStudentRollNumberUpdates({
     role: "student",
     ...buildArchiveFilter(false),
   })
-    .select("rollNumber passwordHash")
+    .select("rollNumber mobileNumber passwordHash")
     .lean()) as LeanStudent[];
 
   const activeStudentById = new Map(
@@ -502,6 +506,7 @@ export async function applyStudentRollNumberUpdates({
       return {
         ...update,
         currentRollNumber,
+        currentMobileNumber: String(currentStudent.mobileNumber || ""),
         currentPasswordHash: String(currentStudent.passwordHash || ""),
       };
     })
@@ -509,6 +514,7 @@ export async function applyStudentRollNumberUpdates({
     userId: string;
     newRollNumber: string;
     currentRollNumber: string;
+    currentMobileNumber: string;
     currentPasswordHash: string;
   }>;
 
@@ -549,17 +555,14 @@ export async function applyStudentRollNumberUpdates({
 
   for (const update of updateCandidates) {
     let nextPasswordHash: string | undefined;
-    let passwordResetToRollNumber = false;
+    let passwordResetToDefaultPassword = false;
+    const defaultStudentPassword = getDefaultStudentPassword(
+      update.currentMobileNumber,
+    );
 
-    if (!update.currentPasswordHash) {
-      nextPasswordHash = await bcrypt.hash(update.newRollNumber, 10);
-      passwordResetToRollNumber = true;
-    } else if (
-      update.currentRollNumber &&
-      await bcrypt.compare(update.currentRollNumber, update.currentPasswordHash)
-    ) {
-      nextPasswordHash = await bcrypt.hash(update.newRollNumber, 10);
-      passwordResetToRollNumber = true;
+    if (!update.currentPasswordHash && defaultStudentPassword) {
+      nextPasswordHash = await bcrypt.hash(defaultStudentPassword, 10);
+      passwordResetToDefaultPassword = true;
     }
 
     const updatePayload: Record<string, unknown> = {
@@ -582,7 +585,7 @@ export async function applyStudentRollNumberUpdates({
       userId: update.userId,
       fromRollNumber: update.currentRollNumber,
       toRollNumber: update.newRollNumber,
-      passwordResetToRollNumber,
+      passwordResetToDefaultPassword,
     });
   }
 
@@ -590,7 +593,7 @@ export async function applyStudentRollNumberUpdates({
     schoolKey: normalizedSchoolKey,
     updatedCount: updatedUsers.length,
     passwordResetCount: updatedUsers.filter(
-      (user) => user.passwordResetToRollNumber,
+      (user) => user.passwordResetToDefaultPassword,
     ).length,
     updatedUsers,
   };

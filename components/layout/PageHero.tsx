@@ -8,6 +8,12 @@ type PageHeroStat = {
   meta?: ReactNode;
 };
 
+export type PageHeroVariant =
+  | "overview"
+  | "directory"
+  | "editor"
+  | "operations";
+
 type PageHeroProps = {
   eyebrow?: ReactNode;
   title: ReactNode;
@@ -18,6 +24,7 @@ type PageHeroProps = {
   toolbar?: ReactNode;
   children?: ReactNode;
   className?: string;
+  variant?: PageHeroVariant;
 };
 
 export default function PageHero({
@@ -30,11 +37,14 @@ export default function PageHero({
   toolbar,
   children,
   className,
+  variant = "directory",
 }: PageHeroProps) {
   const toolbarContent = toolbar ?? children;
 
   return (
-    <section className={cn("app-page-hero", className)}>
+    <section
+      className={cn("app-page-hero", `app-page-hero-${variant}`, className)}
+    >
       <div className="app-page-hero-body">
         <div className="app-page-hero-header">
           <div className="app-page-hero-copy">
@@ -50,7 +60,7 @@ export default function PageHero({
         {meta ? <div className="app-page-meta">{meta}</div> : null}
 
         {stats?.length ? (
-          <div className="app-metric-grid">
+          <div className={cn("app-metric-grid", `app-metric-grid-${variant}`)}>
             {stats.map((stat, index) => (
               <div
                 key={`${String(stat.label)}-${index}`}
@@ -66,7 +76,9 @@ export default function PageHero({
           </div>
         ) : null}
 
-        {toolbarContent ? <div className="space-y-3">{toolbarContent}</div> : null}
+        {toolbarContent ? (
+          <div className="app-page-hero-toolbar">{toolbarContent}</div>
+        ) : null}
       </div>
     </section>
   );

@@ -78,11 +78,11 @@ export function getAuthErrorMessage(
   }
 
   if (normalizedError === "StudentSignInFailed") {
-    return "We couldn't sign in with that roll number and password. If this is your first login, try using the roll number as the password.";
+    return "We couldn't sign in with that roll number and password. If this is your first login, try using the saved phone-number digits exactly as stored (including country code digits, if saved).";
   }
 
   if (normalizedError === "StudentPasswordNotProvisioned") {
-    return "This student account does not have a password yet. Ask your school admin to reset it to the roll number, then try again.";
+    return "This student account does not have a password yet. Ask your school admin to reset it to the saved phone-number digits (including country code digits, if saved), then try again.";
   }
 
   if (normalizedError === "StudentAlreadySignedIn") {

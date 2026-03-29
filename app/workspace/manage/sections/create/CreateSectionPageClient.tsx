@@ -274,12 +274,13 @@ export default function CreateSectionPageClient({
   return (
     <PageShell width="wide" padding="relaxed">
       <PageHero
+        variant="editor"
         eyebrow="Academic Setup"
         title="Create Sections"
         description="Add one section at a time or import many sections in bulk, all from a dedicated class-linked setup page."
         actions={
-          <Button type="button" variant="outline" onClick={navigateBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <Button type="button" variant="outline" onClick={navigateBack} className="app-button-back">
+            <ArrowLeft className="h-4 w-4" />
             Back to Sections
           </Button>
         }
@@ -367,7 +368,7 @@ export default function CreateSectionPageClient({
                     />
                   </div>
 
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
                     {isSubmitting ? "Creating..." : "Create Section"}
                   </Button>
                 </form>

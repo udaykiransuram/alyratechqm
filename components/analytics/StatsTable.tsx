@@ -102,7 +102,7 @@ export default function StatsTable({
       <button
         type="button"
         onClick={() => handleOpenModal(title, questionIds, groupNode)}
-        className="analytics-inline-link-button"
+        className="analytics-inline-link-button analytics-table-link-number"
         title="View students"
       >
         {count}
@@ -158,7 +158,7 @@ export default function StatsTable({
         <React.Fragment key={row.key}>
           <tr className="analytics-row">
             <td
-              className="analytics-td"
+              className="analytics-td analytics-table-group-cell"
               style={{ paddingLeft: `${level * 24 + 16}px` }}
             >
               {getGroupLabel(row.key, row, groupBy[level])}
@@ -192,7 +192,7 @@ export default function StatsTable({
                 )}
               </td>
             ) : null}
-            <td className="analytics-td-center font-medium text-emerald-600">
+            <td className="analytics-td-center analytics-table-measure-cell font-medium text-emerald-600">
               {renderClickableNumber(
                 row.correct,
                 'Correct Questions',
@@ -201,7 +201,7 @@ export default function StatsTable({
                 'correctStudents',
               )}
             </td>
-            <td className="analytics-td-center font-medium text-rose-600">
+            <td className="analytics-td-center analytics-table-measure-cell font-medium text-rose-600">
               {renderClickableNumber(
                 row.incorrect,
                 'Incorrect Questions',
@@ -210,7 +210,7 @@ export default function StatsTable({
                 'incorrectStudents',
               )}
             </td>
-            <td className="analytics-td-center font-medium text-amber-600">
+            <td className="analytics-td-center analytics-table-measure-cell font-medium text-amber-600">
               {renderClickableNumber(
                 row.unattempted,
                 'Unattempted Questions',

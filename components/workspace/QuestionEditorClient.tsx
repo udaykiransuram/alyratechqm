@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, PlusCircle, X } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import EditorLoadingState from "@/components/ui/editor-loading-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +44,7 @@ function QuestionMetadataSkeleton() {
   return (
     <Card className="app-surface overflow-hidden shadow-none">
       <CardHeader className="app-section-header">
-        <CardTitle className="text-base">Metadata</CardTitle>
+        <CardTitle>Metadata</CardTitle>
       </CardHeader>
       <CardContent className="app-section-body space-y-4">
         <div className="space-y-2">
@@ -423,26 +424,28 @@ export default function QuestionEditorClient({
 
   if (isEditMode && !initialQuestion) {
     return (
-      <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+      <PageShell width="wide" padding="standard">
         <PageHero
+          variant="editor"
           eyebrow="Question Bank"
           title="Edit Question"
           description="The requested question could not be loaded."
           actions={
-            <Button variant="outline" onClick={navigateBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
+            <Button variant="outline" onClick={navigateBack} className="app-button-back">
+              <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
           }
         />
         <div className="app-empty-state">Question not found.</div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+    <PageShell width="wide" padding="standard">
       <PageHero
+        variant="editor"
         eyebrow="Question Bank"
         title={pageTitle}
         description={pageDescription}
@@ -451,7 +454,7 @@ export default function QuestionEditorClient({
             type="button"
             variant="outline"
             onClick={navigateBack}
-            className={isEditMode ? undefined : "gap-2"}
+            className="app-button-back"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
@@ -498,7 +501,12 @@ export default function QuestionEditorClient({
         <div className="app-editor-main">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle>Question Content</CardTitle>
+              <div className="space-y-1">
+                <CardTitle>Question Content</CardTitle>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Write the main prompt exactly as learners should see it in the paper.
+                </p>
+              </div>
             </CardHeader>
             <CardContent className="app-section-body">
               <RichTextEditor
@@ -512,7 +520,12 @@ export default function QuestionEditorClient({
           {type === "single" || type === "multiple" ? (
             <Card className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
-                <CardTitle>Answer Options</CardTitle>
+                <div className="space-y-1">
+                  <CardTitle>Answer Options</CardTitle>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Add clear options and mark the correct answer set before saving the question.
+                  </p>
+                </div>
               </CardHeader>
               <CardContent className="app-section-body space-y-3">
                 {options.map((option, index) => (
@@ -550,8 +563,8 @@ export default function QuestionEditorClient({
                 ))}
               </CardContent>
               <CardFooter className="app-section-body border-t border-border/60 pt-3.5">
-                <Button variant="outline" onClick={handleAddOption} className="w-full">
-                  <PlusCircle className="mr-2 h-4 w-4" />
+                <Button variant="outline" onClick={handleAddOption} className="app-button-inline w-full">
+                  <PlusCircle className="h-4 w-4" />
                   Add Option
                 </Button>
               </CardFooter>
@@ -561,7 +574,12 @@ export default function QuestionEditorClient({
           {type === "matrix-match" ? (
             <Card className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
-                <CardTitle>Matrix Configuration</CardTitle>
+                <div className="space-y-1">
+                  <CardTitle>Matrix Configuration</CardTitle>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Define the row-column matching structure so the final interaction stays easy to evaluate.
+                  </p>
+                </div>
               </CardHeader>
               <CardContent className="app-section-body">
                 <MatrixMatchConfigurator
@@ -579,7 +597,12 @@ export default function QuestionEditorClient({
           {type === "descriptive" ? (
             <Card className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
-                <CardTitle>Written Response</CardTitle>
+                <div className="space-y-1">
+                  <CardTitle>Written Response</CardTitle>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Descriptive questions do not need options, but they still benefit from a strong explanation and precise metadata.
+                  </p>
+                </div>
               </CardHeader>
               <CardContent className="app-section-body" />
             </Card>
@@ -587,7 +610,12 @@ export default function QuestionEditorClient({
 
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle>Explanation</CardTitle>
+              <div className="space-y-1">
+                <CardTitle>Explanation</CardTitle>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Capture the reasoning, marking guidance, or teacher-facing explanation that should travel with this question.
+                </p>
+              </div>
             </CardHeader>
             <CardContent className="app-section-body">
               <RichTextEditor
@@ -620,7 +648,12 @@ export default function QuestionEditorClient({
 
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle>Marks</CardTitle>
+              <div className="space-y-1">
+                <CardTitle>Marks</CardTitle>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Set the score value that will carry through paper-building and reporting.
+                </p>
+              </div>
             </CardHeader>
             <CardContent className="app-section-body">
               <div className="app-field-group">
@@ -642,7 +675,12 @@ export default function QuestionEditorClient({
 
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle>Question Type</CardTitle>
+              <div className="space-y-1">
+                <CardTitle>Question Type</CardTitle>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Choose the learner response model early so the authoring form stays predictable.
+                </p>
+              </div>
             </CardHeader>
             <CardContent className="app-section-body">
               {isEditMode ? (
@@ -654,28 +692,32 @@ export default function QuestionEditorClient({
                   <Button
                     variant={type === "single" ? "default" : "outline"}
                     onClick={() => setType("single")}
-                    className="w-full"
+                    size="sm"
+                    className="h-10 w-full"
                   >
                     Single
                   </Button>
                   <Button
                     variant={type === "multiple" ? "default" : "outline"}
                     onClick={() => setType("multiple")}
-                    className="w-full"
+                    size="sm"
+                    className="h-10 w-full"
                   >
                     Multiple
                   </Button>
                   <Button
                     variant={type === "matrix-match" ? "default" : "outline"}
                     onClick={() => setType("matrix-match")}
-                    className="w-full"
+                    size="sm"
+                    className="h-10 w-full"
                   >
                     Matrix
                   </Button>
                   <Button
                     variant={type === "descriptive" ? "default" : "outline"}
                     onClick={() => setType("descriptive")}
-                    className="w-full"
+                    size="sm"
+                    className="h-10 w-full"
                   >
                     Descriptive
                   </Button>
@@ -686,7 +728,12 @@ export default function QuestionEditorClient({
 
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle>Actions</CardTitle>
+              <div className="space-y-1">
+                <CardTitle>Actions</CardTitle>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Save once the content, answer logic, and metadata are all anchored.
+                </p>
+              </div>
             </CardHeader>
             <CardContent className="app-section-body">
               <Button size="lg" className="w-full" disabled={loading} onClick={handleSave}>
@@ -702,6 +749,6 @@ export default function QuestionEditorClient({
           </Card>
         </aside>
       </div>
-    </div>
+    </PageShell>
   );
 }

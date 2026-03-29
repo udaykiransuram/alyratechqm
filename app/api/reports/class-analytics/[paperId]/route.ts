@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { appendBenchmarkSheetsToWorkbook } from "@/lib/analytics/benchmarkExport";
 import { requireTenantSession } from "@/lib/api-auth";
+import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -99,9 +100,11 @@ export async function GET(
   const { paperId } = await params;
 
   try {
-    const origin = new URL(req.url).origin;
+    const origin = getTrustedInternalOrigin();
+    const classId = req.nextUrl.searchParams.get("classId")?.trim() || "";
     const academicSectionId =
       req.nextUrl.searchParams.get("academicSectionId")?.trim() || "";
+    const subjectId = req.nextUrl.searchParams.get("subjectId")?.trim() || "";
     const requestedGroupBy = req.nextUrl.searchParams
       .get("groupBy")
       ?.split(",")
@@ -141,17 +144,18 @@ export async function GET(
     if (requestCookie) {
       sharedHeaders.cookie = requestCookie;
     }
-    const requestAuthorization = req.headers.get("authorization");
-    if (requestAuthorization) {
-      sharedHeaders.authorization = requestAuthorization;
-    }
-
     const groupFieldsUrl = new URL(
       `/api/analytics/class-tag-report/${encodeURIComponent(paperId)}`,
       origin,
     );
     groupFieldsUrl.searchParams.set("groupFields", "1");
     groupFieldsUrl.searchParams.set("school", schoolKey);
+    if (classId) {
+      groupFieldsUrl.searchParams.set("classId", classId);
+    }
+    if (subjectId) {
+      groupFieldsUrl.searchParams.set("subjectId", subjectId);
+    }
 
     const groupFieldsRes = await fetch(groupFieldsUrl.toString(), {
       headers: sharedHeaders,
@@ -188,19 +192,14 @@ export async function GET(
     if (selectedGroupBy.length > 0) {
       analyticsUrl.searchParams.set("groupBy", selectedGroupBy.join(","));
     }
+    if (classId) {
+      analyticsUrl.searchParams.set("classId", classId);
+    }
     if (academicSectionId) {
       analyticsUrl.searchParams.set("academicSectionId", academicSectionId);
     }
-
-    const analyticsRes = await fetch(analyticsUrl.toString(), {
-      headers: sharedHeaders,
-      cache: "no-store",
-    });
-    const analyticsData = await analyticsRes.json();
-    if (!analyticsRes.ok || analyticsData?.success === false) {
-      throw new Error(
-        analyticsData?.message || "Failed to load class analytics data.",
-      );
+    if (subjectId) {
+      analyticsUrl.searchParams.set("subjectId", subjectId);
     }
 
     const benchmarkUrl = new URL(
@@ -212,30 +211,62 @@ export async function GET(
     if (selectedGroupBy.length > 0) {
       benchmarkUrl.searchParams.set("groupBy", selectedGroupBy.join(","));
     }
+    if (classId) {
+      benchmarkUrl.searchParams.set("classId", classId);
+    }
     if (academicSectionId) {
       benchmarkUrl.searchParams.set("academicSectionId", academicSectionId);
     }
+    if (subjectId) {
+      benchmarkUrl.searchParams.set("subjectId", subjectId);
+    }
     requestedTags.forEach((tag) => benchmarkUrl.searchParams.append("tag", tag));
 
-    let benchmarkData: any = null;
-    try {
-      const benchmarkRes = await fetch(benchmarkUrl.toString(), {
-        headers: sharedHeaders,
-        cache: "no-store",
-      });
-      const data = await benchmarkRes.json();
-      if (benchmarkRes.ok && data?.success !== false) {
-        benchmarkData = data;
-      }
-    } catch {
-      benchmarkData = null;
-    }
+    const [analyticsData, benchmarkData] = await Promise.all([
+      (async () => {
+        const analyticsRes = await fetch(analyticsUrl.toString(), {
+          headers: sharedHeaders,
+          cache: "no-store",
+        });
+        const data = await analyticsRes.json();
+        if (!analyticsRes.ok || data?.success === false) {
+          throw new Error(
+            data?.message || "Failed to load class analytics data.",
+          );
+        }
+        return data;
+      })(),
+      (async () => {
+        try {
+          const benchmarkRes = await fetch(benchmarkUrl.toString(), {
+            headers: sharedHeaders,
+            cache: "no-store",
+          });
+          const data = await benchmarkRes.json();
+          if (benchmarkRes.ok && data?.success !== false) {
+            return data;
+          }
+        } catch {}
+
+        return null;
+      })(),
+    ]);
 
     const academicSectionLabel = academicSectionId
       ? groupFieldsData?.filters?.academicSections?.find(
           (option: any) => String(option?.value || "") === academicSectionId,
         )?.label || "Selected class section"
       : "All class sections";
+    const classLabel = classId
+      ? groupFieldsData?.filters?.classes?.find(
+          (option: any) => String(option?.value || "") === classId,
+        )?.label || "Selected class"
+      : "All classes";
+    const subjectLabel = subjectId
+      ? groupFieldsData?.filters?.subjects?.find(
+          (option: any) => String(option?.value || "") === subjectId,
+        )?.label || "Selected subject"
+      : "All subjects";
 
     const summaryRows = flattenStatsRows(
       analyticsData?.stats || {},
@@ -260,7 +291,9 @@ export async function GET(
       workbook,
       XLSX.utils.json_to_sheet([
         { Field: "Paper", Value: analyticsData?.paper || "Question Paper" },
+        { Field: "Class Scope", Value: classLabel },
         { Field: "Section Scope", Value: academicSectionLabel },
+        { Field: "Subject Scope", Value: subjectLabel },
         {
           Field: "Grouping",
           Value:
@@ -319,8 +352,11 @@ export async function GET(
     const safePaperTitle = sanitizeFilePart(
       String(analyticsData?.paper || "class_analytics"),
     );
+    const safeClassLabel = sanitizeFilePart(classLabel);
     const safeSectionLabel = sanitizeFilePart(academicSectionLabel);
     const fileName = `${safePaperTitle || "class_analytics"}${
+      safeClassLabel ? `_${safeClassLabel}` : ""
+    }${
       safeSectionLabel ? `_${safeSectionLabel}` : ""
     }_class_analytics.xlsx`;
 

@@ -5,6 +5,7 @@ import { ArrowLeft, PlusCircle } from 'lucide-react';
 import { useParams } from 'next/navigation';
 
 import PageHero from '@/components/layout/PageHero';
+import PageShell from '@/components/layout/PageShell';
 import { CreateTagTypeModal } from '@/components/CreateTagTypeModal';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
 import { buildPartialLoadMessage, fetchApiJson, resolveClientSchoolKey } from '@/lib/client/api';
@@ -161,20 +162,21 @@ export default function EditTagPage() {
 
   if (pageError) {
     return (
-      <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+      <PageShell width="wide" padding="standard">
         <PageHero
+          variant="editor"
           eyebrow="Curriculum"
           title="Edit Tag"
           description="The requested tag could not be loaded for editing."
           actions={
-            <Button variant="outline" onClick={navigateBack} className="gap-2">
+            <Button variant="outline" onClick={navigateBack} className="app-button-back">
               <ArrowLeft className="h-4 w-4" />
               Back to Tags
             </Button>
           }
         />
         <div className="app-feedback app-feedback-error">{pageError}</div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -189,13 +191,14 @@ export default function EditTagPage() {
         }}
       />
 
-      <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+      <PageShell width="wide" padding="standard">
         <PageHero
+          variant="editor"
           eyebrow="Curriculum"
           title="Edit Tag"
           description="Update the tag details and subject associations without leaving the dedicated tag management flow."
           actions={
-            <Button variant="outline" onClick={navigateBack} disabled={isSaving} className="gap-2">
+            <Button variant="outline" onClick={navigateBack} disabled={isSaving} className="app-button-back">
               <ArrowLeft className="h-4 w-4" />
               Back to Tags
             </Button>
@@ -294,7 +297,7 @@ export default function EditTagPage() {
           </div>
 
                   </div>
-      </div>
+      </PageShell>
     </>
   );
 }

@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import { requireTenantSession } from "@/lib/api-auth";
 import { expireActiveDeliveryAttempt } from "@/lib/reports/dispatchAttempts";
 import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
+import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
 
 function normalizeMobileNumber(input: string): string {
   const digits = String(input || "").replace(/\D/g, "");
@@ -32,7 +33,7 @@ export async function POST(
 ) {
   await connectDB();
   const auth = await requireTenantSession(req, {
-    allowRoles: ["admin", "teacher"],
+    allowRoles: ["admin"],
   });
   if (!auth.ok) return auth.response;
   const { id } = await params;
@@ -80,12 +81,12 @@ export async function POST(
   await job.save();
 
   let workerResult = null;
-  try {
-    workerResult = await runReportDispatchWorker({
-      origin: req.nextUrl.origin,
-      schoolKey,
-      jobIds: [String(job._id)],
-    });
+    try {
+      workerResult = await runReportDispatchWorker({
+      origin: getTrustedInternalOrigin(),
+        schoolKey,
+        jobIds: [String(job._id)],
+      });
   } catch (error) {
     console.error("Failed to auto-trigger report worker", error);
   }

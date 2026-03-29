@@ -6,11 +6,20 @@ import { buildArchiveFilter } from "@/lib/archive";
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
+import { syncExamRuntimeMongoProjectionsForPaperWithCooldown } from "@/lib/exam-runtime-sync-cache";
 import { normalizeMatrixSelections } from "@/lib/question-paper/grading";
+import { resolvePaperSubjectIds } from "@/lib/question-paper/subjects";
+import {
+  isSectionInScope,
+  resolveScopedPaperAccess,
+  resolveTeacherPaperScope,
+  toUniqueScopeIds,
+} from "@/lib/question-paper/access";
 import {
   findStudentsByRollNumber,
+  getDefaultStudentPassword,
   normalizeRollNumber,
+  validateStudentDefaultPasswordSource,
 } from "@/lib/user-credentials";
 import bcrypt from "bcryptjs";
 
@@ -382,11 +391,13 @@ async function resolveStudentDocument({
   paperDoc,
   UserModel,
   AcademicSectionModel,
+  allowCreateStudent,
 }: {
   bodyStudent: any;
   paperDoc: any;
   UserModel: any;
   AcademicSectionModel: any;
+  allowCreateStudent: boolean;
 }) {
   const paperClassId = normalizeId(paperDoc?.class?._id || paperDoc?.class);
   const assignedAcademicSectionIds = new Set(
@@ -493,6 +504,20 @@ async function resolveStudentDocument({
     }
 
     if (!studentDoc) {
+      if (!allowCreateStudent) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              success: false,
+              message:
+                "Teachers can upload responses only for existing students. Create the student profile first.",
+            },
+            { status: 403 },
+          ),
+        } as const;
+      }
+
       const mobileNumber = String(
         bodyStudent.mobileNumber ??
           bodyStudent.phone ??
@@ -514,11 +539,26 @@ async function resolveStudentDocument({
           ),
         } as const;
       }
+      const studentPasswordSourceValidation =
+        validateStudentDefaultPasswordSource(mobileNumber);
+      if (!studentPasswordSourceValidation.ok) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              success: false,
+              message: studentPasswordSourceValidation.message,
+            },
+            { status: 400 },
+          ),
+        } as const;
+      }
+      const defaultStudentPassword = getDefaultStudentPassword(mobileNumber);
 
       studentDoc = await UserModel.create({
         name: String(bodyStudent.name || requestedRollNumber || "Student").trim(),
         mobileNumber,
-        passwordHash: await bcrypt.hash(requestedRollNumber, 10),
+        passwordHash: await bcrypt.hash(String(defaultStudentPassword), 10),
         rollNumber: requestedRollNumber,
         class: classId || undefined,
         academicSection: academicSectionId || undefined,
@@ -658,14 +698,75 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let teacherScope: ReturnType<typeof resolveTeacherPaperScope> | null = null;
+    if (auth.session.user.role === "teacher") {
+      const scopedUser = await UserModel.findById(auth.session.user.id)
+        .select(
+          "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
+        )
+        .lean();
+
+      teacherScope = resolveTeacherPaperScope(
+        scopedUser,
+        normalizeId(paperDoc?.class?._id || paperDoc?.class),
+        resolvePaperSubjectIds(paperDoc),
+        toUniqueScopeIds(paperDoc?.assignedAcademicSections),
+      );
+
+      if (
+        !teacherScope.hasClassAccess ||
+        !teacherScope.hasSubjectAccess ||
+        !teacherScope.hasSectionAccess
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "You do not have access to upload responses for this question paper.",
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     const studentResolution = await resolveStudentDocument({
       bodyStudent: body?.student,
       paperDoc,
       UserModel,
       AcademicSectionModel,
+      allowCreateStudent: auth.session.user.role === "admin",
     });
     if (!studentResolution.ok) {
       return studentResolution.response;
+    }
+
+    if (teacherScope) {
+      const studentSectionId = normalizeId(
+        studentResolution.studentDoc?.academicSection,
+      );
+      if (!studentSectionId && teacherScope.allowedSectionIds !== null) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Teacher-scoped uploads require the student to belong to an assigned section.",
+          },
+          { status: 403 },
+        );
+      }
+      if (
+        studentSectionId &&
+        !isSectionInScope(studentSectionId, teacherScope.allowedSectionIds)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "You do not have access to upload responses for this student's section.",
+          },
+          { status: 403 },
+        );
+      }
     }
 
     const normalizedStartedAt = normalizeDate(body?.startedAt, new Date());
@@ -784,6 +885,14 @@ export async function GET(req: NextRequest) {
       "Subject",
       "Class",
     ]);
+    const isTeacherSession = auth.session.user.role === "teacher";
+    const scopedUser = isTeacherSession
+      ? await UserModel.findById(auth.session.user.id)
+          .select(
+            "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
+          )
+          .lean()
+      : null;
 
     const url = req.nextUrl;
     const paperId = url.searchParams.get("paper");
@@ -813,7 +922,64 @@ export async function GET(req: NextRequest) {
     }
 
     if (studentId) {
-      const responses = await QPRModel.find({ student: studentId })
+      let scopedStudentSectionId = "";
+      if (isTeacherSession) {
+        const studentDoc = await UserModel.findOne({
+          _id: studentId,
+          role: "student",
+          ...buildArchiveFilter(false),
+        })
+          .select("class academicSection")
+          .lean();
+        if (!studentDoc) {
+          return NextResponse.json(
+            { success: false, message: "Student not found" },
+            { status: 404 },
+          );
+        }
+        const classScope = resolveScopedPaperAccess(
+          scopedUser,
+          normalizeId(studentDoc?.class),
+          [],
+        );
+        if (!classScope.hasClassAccess) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "You do not have access to this student.",
+            },
+            { status: 403 },
+          );
+        }
+        const teacherSectionIds = toUniqueScopeIds(scopedUser?.academicSectionIds);
+        const hasAllSections = Boolean(scopedUser?.hasAllSections);
+        scopedStudentSectionId = normalizeId(studentDoc?.academicSection);
+        if (!scopedStudentSectionId && !hasAllSections) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "Teacher-scoped access requires the student to belong to an assigned section.",
+            },
+            { status: 403 },
+          );
+        }
+        if (
+          scopedStudentSectionId &&
+          !hasAllSections &&
+          !teacherSectionIds.includes(scopedStudentSectionId)
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "You do not have access to this student's section.",
+            },
+            { status: 403 },
+          );
+        }
+      }
+
+      let responses = await QPRModel.find({ student: studentId })
         .populate({
           path: "paper",
           model: QPModel,
@@ -830,6 +996,33 @@ export async function GET(req: NextRequest) {
           ],
         })
         .lean();
+
+      if (isTeacherSession) {
+        responses = responses.filter((response: any) => {
+          const paper = response?.paper;
+          const paperScope = resolveTeacherPaperScope(
+            scopedUser,
+            normalizeId(paper?.class),
+            resolvePaperSubjectIds(paper),
+            toUniqueScopeIds(paper?.assignedAcademicSections),
+          );
+          if (
+            !paperScope.hasClassAccess ||
+            !paperScope.hasSubjectAccess ||
+            !paperScope.hasSectionAccess
+          ) {
+            return false;
+          }
+
+          if (!scopedStudentSectionId) {
+            return paperScope.allowedSectionIds === null;
+          }
+          return isSectionInScope(
+            scopedStudentSectionId,
+            paperScope.allowedSectionIds,
+          );
+        });
+      }
 
       responses.sort((a: any, b: any) => {
         const aDate = a.submittedAt
@@ -864,18 +1057,53 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    await syncExamRuntimeMongoProjectionsForPaper(
+    let paperScope: ReturnType<typeof resolveTeacherPaperScope> | null = null;
+    if (isTeacherSession) {
+      paperScope = resolveTeacherPaperScope(
+        scopedUser,
+        normalizeId((paper as any)?.class),
+        resolvePaperSubjectIds(paper),
+        toUniqueScopeIds((paper as any)?.assignedAcademicSections),
+      );
+      if (
+        !paperScope.hasClassAccess ||
+        !paperScope.hasSubjectAccess ||
+        !paperScope.hasSectionAccess
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "You do not have access to responses for this question paper.",
+          },
+          { status: 403 },
+        );
+      }
+      if (
+        academicSectionId &&
+        !isSectionInScope(academicSectionId, paperScope.allowedSectionIds)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "You do not have access to responses for the selected section.",
+          },
+          { status: 403 },
+        );
+      }
+    }
+
+    void syncExamRuntimeMongoProjectionsForPaperWithCooldown(
       schoolKey,
       String(paperId || ""),
-    ).catch(
-      (error) => {
-        console.error(
-          "Failed to sync exam runtime attempts into Mongo projections for question paper responses:",
-          error,
-        );
-        return new Map<string, string>();
-      },
-    );
+      { minIntervalMs: 60_000 },
+    ).catch((error) => {
+      console.error(
+        "Failed to sync exam runtime attempts into Mongo projections for question paper responses:",
+        error,
+      );
+      return new Map<string, string>();
+    });
 
     const resolvedAcademicSections = Array.isArray((paper as any).assignedAcademicSections)
       ? (paper as any).assignedAcademicSections
@@ -906,21 +1134,41 @@ export async function GET(req: NextRequest) {
               )
           : [];
 
+    const scopedAcademicSections =
+      paperScope?.allowedSectionIds === null || !paperScope
+        ? academicSections
+        : academicSections.filter((section: any) =>
+            paperScope.allowedSectionIds!.includes(String(section.id || "")),
+          );
+
     if (summaryMode) {
-      let filteredStudentIds: any[] | null = null;
+      const responseQuery: any = { paper: paperId };
+      let effectiveSectionIds: string[] | null = null;
+
       if (academicSectionId) {
-        const studentsInSection = await UserModel.find({
-          role: "student",
-          academicSection: new mongoose.Types.ObjectId(academicSectionId),
-        })
-          .select("_id")
-          .lean();
-        filteredStudentIds = studentsInSection.map((student: any) => student._id);
+        effectiveSectionIds = [academicSectionId];
+      } else if (paperScope && paperScope.allowedSectionIds !== null) {
+        effectiveSectionIds = paperScope.allowedSectionIds;
       }
 
-      const responseQuery: any = { paper: paperId };
-      if (filteredStudentIds) {
-        responseQuery.student = { $in: filteredStudentIds };
+      if (effectiveSectionIds !== null) {
+        const scopedStudentIds =
+          effectiveSectionIds.length > 0
+            ? await UserModel.find({
+                role: "student",
+                academicSection: {
+                  $in: effectiveSectionIds
+                    .filter((id: string) => mongoose.Types.ObjectId.isValid(id))
+                    .map((id: string) => new mongoose.Types.ObjectId(id)),
+                },
+              })
+                .select("_id")
+                .lean()
+                .then((students: any[]) =>
+                  students.map((student: any) => student._id),
+                )
+            : [];
+        responseQuery.student = { $in: scopedStudentIds };
       }
 
       const totalCount = await QPRModel.countDocuments(responseQuery);
@@ -953,7 +1201,7 @@ export async function GET(req: NextRequest) {
         page,
         pages,
         limit,
-        academicSections,
+        academicSections: scopedAcademicSections,
       });
     }
 
@@ -970,7 +1218,29 @@ export async function GET(req: NextRequest) {
       });
     });
 
-    const responses = await QPRModel.find({ paper: paperId }).lean();
+    const fullResponseQuery: any = { paper: paperId };
+    if (academicSectionId || (paperScope && paperScope.allowedSectionIds !== null)) {
+      const effectiveSectionIds = academicSectionId
+        ? [academicSectionId]
+        : paperScope?.allowedSectionIds || [];
+      const scopedStudentIds =
+        effectiveSectionIds.length > 0
+          ? await UserModel.find({
+              role: "student",
+              academicSection: {
+                $in: effectiveSectionIds
+                  .filter((id: string) => mongoose.Types.ObjectId.isValid(id))
+                  .map((id: string) => new mongoose.Types.ObjectId(id)),
+              },
+            })
+              .select("_id")
+              .lean()
+              .then((students: any[]) => students.map((student: any) => student._id))
+          : [];
+      fullResponseQuery.student = { $in: scopedStudentIds };
+    }
+
+    const responses = await QPRModel.find(fullResponseQuery).lean();
 
     const hydratedResponses = await hydrateResponsesWithStudents({
       responses,

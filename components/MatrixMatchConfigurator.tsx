@@ -53,8 +53,12 @@ const MatrixMatchConfigurator = ({
               </Button>
             </div>
           ))}
-          <Button variant="outline" onClick={() => setRows([...rows, ''])} className="w-full mt-2">
-            <PlusCircle className="mr-2 h-4 w-4" />
+          <Button
+            variant="outline"
+            onClick={() => setRows([...rows, ''])}
+            className="app-button-inline mt-2 w-full"
+          >
+            <PlusCircle className="h-4 w-4" />
             Add Row
           </Button>
         </div>
@@ -88,8 +92,12 @@ const MatrixMatchConfigurator = ({
               </Button>
             </div>
           ))}
-          <Button variant="outline" onClick={() => setCols([...cols, ''])} className="w-full mt-2">
-            <PlusCircle className="mr-2 h-4 w-4" />
+          <Button
+            variant="outline"
+            onClick={() => setCols([...cols, ''])}
+            className="app-button-inline mt-2 w-full"
+          >
+            <PlusCircle className="h-4 w-4" />
             Add Column
           </Button>
         </div>

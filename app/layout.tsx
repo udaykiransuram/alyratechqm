@@ -12,9 +12,10 @@ import {
 import "./globals.css";
 import AppChrome from "@/components/layout/AppChrome";
 
-// Use a locally bundled font to avoid external network fetches during CI/e2e builds
-// This prevents build failures when Google Fonts is unreachable.
-const inter = localFont({
+// Keep the workspace font self-hosted. The current repo only includes Roboto,
+// so it remains the bundled fallback until the intended Plus Jakarta Sans asset
+// is added locally.
+const workspaceSans = localFont({
   src: "../fonts/Roboto-Regular.ttf",
   variable: "--font-sans",
   weight: "400",
@@ -64,8 +65,8 @@ export default function RootLayout({
       </head>
       <body
         className={cn(
-          "min-h-screen bg-background font-sans antialiased",
-          inter.variable,
+          "min-h-screen bg-background antialiased",
+          workspaceSans.variable,
         )}
       >
         <AppChrome>{children}</AppChrome>

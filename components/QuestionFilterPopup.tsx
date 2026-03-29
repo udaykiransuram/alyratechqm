@@ -181,7 +181,8 @@ export function QuestionFilterPopup({
         className="flex h-[100dvh] w-screen max-w-none flex-col overflow-hidden p-0 sm:h-[min(92vh,860px)] sm:max-h-[min(92vh,860px)] sm:w-[min(96vw,1320px)] sm:max-w-[1320px]"
         onInteractOutside={(event) => {
           if (
-            (event.target as HTMLElement).closest('.tag-popover-content') ||
+            (event.target as HTMLElement).closest('.app-selection-popover') ||
+            (event.target as HTMLElement).closest('.app-select-popover') ||
             (event.target as HTMLElement).closest('[data-tag-popover]')
           ) {
             event.preventDefault();
@@ -201,13 +202,12 @@ export function QuestionFilterPopup({
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <h3 className="text-base font-semibold text-foreground">Question Bank Filters</h3>
-                  <p className="text-sm text-muted-foreground">Class and subject filters are optional. You can browse across the whole bank, mix questions from different classes, and assign the final paper scope later.</p>
+                  <p className="text-sm text-muted-foreground">Use class to narrow the source level of bank questions, then refine by subject, tags, and search. The paper details still decide which class sections receive the final paper.</p>
                 </div>
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="h-8 rounded-xl px-2.5 text-xs"
+                  className="app-button-filter"
                   onClick={handleClearFilters}
                   disabled={!hasActiveFilters}
                 >
@@ -216,7 +216,12 @@ export function QuestionFilterPopup({
               </div>
             </div>
 
-            <div className="app-section-body min-h-0 space-y-3.5 overflow-y-auto">
+            <div
+              className="app-section-body app-scroll-area min-h-0 space-y-3.5 overflow-y-auto overscroll-contain pr-1"
+              onWheelCapture={(event) => {
+                event.stopPropagation();
+              }}
+            >
               <div className="app-field-group">
                 <Label htmlFor="question-filter-search" className="app-field-label">
                   Search Content
@@ -264,7 +269,8 @@ export function QuestionFilterPopup({
                   <Button
                     type="button"
                     variant={questionTagMatchMode === 'any' ? 'default' : 'outline'}
-                    className="app-button-compact w-full"
+                    size="sm"
+                    className="h-10 w-full"
                     onClick={() => setQuestionTagMatchMode('any')}
                     disabled={selectedTags.length === 0}
                   >
@@ -273,7 +279,8 @@ export function QuestionFilterPopup({
                   <Button
                     type="button"
                     variant={questionTagMatchMode === 'all' ? 'default' : 'outline'}
-                    className="app-button-compact w-full"
+                    size="sm"
+                    className="h-10 w-full"
                     onClick={() => setQuestionTagMatchMode('all')}
                     disabled={selectedTags.length === 0}
                   >
@@ -349,7 +356,12 @@ export function QuestionFilterPopup({
               </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
+            <div
+              className="app-scroll-area min-h-0 flex-1 overflow-y-auto px-4 py-3 pr-3 sm:px-5 sm:py-4 sm:pr-4"
+              onWheelCapture={(event) => {
+                event.stopPropagation();
+              }}
+            >
               {loadingQuestions ? (
                 <div className="app-empty-state flex h-full min-h-[280px] items-center justify-center">
                   <div className="app-status-row">
@@ -421,10 +433,12 @@ export function QuestionFilterPopup({
           <span className="mr-auto text-left text-sm text-muted-foreground">
             {selectedCount} question(s) selected
           </span>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" className="app-button-filter" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleConfirmQuestions}>Add Selected Questions</Button>
+          <Button className="app-button-inline" onClick={handleConfirmQuestions}>
+            Add Selected Questions
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

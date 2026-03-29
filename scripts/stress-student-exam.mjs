@@ -33,6 +33,7 @@ function printHelp() {
       '  --submit=<true|false>         Submit after save rounds (default: true)',
       '  --heartbeat=<true|false>      Hit the student heartbeat during the flow (default: true)',
       '  --list-first=<true|false>     Hit /api/student/tests before detail/start (default: true)',
+      '  --warmup=<true|false>         Prewarm auth and test routes before measuring (default: true)',
       '  --timeout-ms=<ms>             Per-request timeout (default: 15000)',
       '  --out=<jsonFile>              Write JSON summary to a file',
       '  --help                        Show this help text',
@@ -353,21 +354,23 @@ async function runRequest(context, metrics, studentLabel, step, url, options = {
     const text = await response.text();
     const data = parseMaybeJson(text);
 
-    metrics.push({
-      student: studentLabel,
-      step,
-      durationMs,
-      ok:
-        response.ok() &&
-        !(
-          data &&
-          typeof data === 'object' &&
-          'success' in data &&
-          data.success === false
-        ),
-      status: response.status(),
-      message: extractMessage(data),
-    });
+    if (Array.isArray(metrics)) {
+      metrics.push({
+        student: studentLabel,
+        step,
+        durationMs,
+        ok:
+          response.ok() &&
+          !(
+            data &&
+            typeof data === 'object' &&
+            'success' in data &&
+            data.success === false
+          ),
+        status: response.status(),
+        message: extractMessage(data),
+      });
+    }
 
     return {
       response,
@@ -377,14 +380,16 @@ async function runRequest(context, metrics, studentLabel, step, url, options = {
     };
   } catch (error) {
     const durationMs = Math.round(performance.now() - startedAt);
-    metrics.push({
-      student: studentLabel,
-      step,
-      durationMs,
-      ok: false,
-      status: 0,
-      message: error instanceof Error ? error.message : String(error),
-    });
+    if (Array.isArray(metrics)) {
+      metrics.push({
+        student: studentLabel,
+        step,
+        durationMs,
+        ok: false,
+        status: 0,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     throw error;
   }
 }
@@ -586,6 +591,130 @@ async function listStudentTests(
   }
 
   return matchedTest;
+}
+
+async function prewarmOnlineTestRoutes({
+  baseUrl,
+  schoolKey,
+  paperId,
+  student,
+  timeoutMs,
+  heartbeatEnabled,
+  listFirstEnabled,
+}) {
+  console.log('\nPrewarming auth and online-test routes (not measured)...');
+
+  const createContext = () =>
+    request.newContext({
+      baseURL: baseUrl,
+      extraHTTPHeaders: {
+        Accept: 'application/json',
+        'x-school-key': schoolKey,
+      },
+      ignoreHTTPSErrors: true,
+    });
+
+  const authenticatedContext = await createContext();
+  let signedIn = false;
+
+  try {
+    await signInStudent({
+      context: authenticatedContext,
+      baseUrl,
+      schoolKey,
+      student,
+      metrics: null,
+      timeoutMs,
+    });
+    signedIn = true;
+
+    if (heartbeatEnabled) {
+      await heartbeatStudent(authenticatedContext, null, student.label, timeoutMs);
+    }
+
+    if (listFirstEnabled) {
+      await listStudentTests(
+        authenticatedContext,
+        null,
+        student.label,
+        paperId,
+        timeoutMs,
+      );
+    }
+
+    const detailResult = await runRequest(
+      authenticatedContext,
+      null,
+      student.label,
+      'warmup.test.detail',
+      `/api/student/tests/${paperId}`,
+      {
+        method: 'GET',
+        timeoutMs,
+      },
+    );
+    ensureApiSuccess(detailResult, 'Failed to warm the online test detail route.');
+  } finally {
+    if (signedIn) {
+      await signOutStudent({
+        context: authenticatedContext,
+        baseUrl,
+        student,
+        metrics: null,
+        timeoutMs,
+      }).catch(() => undefined);
+    }
+
+    await authenticatedContext.dispose().catch(() => undefined);
+  }
+
+  const anonymousContext = await createContext();
+
+  try {
+    await runRequest(
+      anonymousContext,
+      null,
+      'warmup',
+      'warmup.test.start',
+      `/api/student/tests/${paperId}/attempt`,
+      {
+        method: 'POST',
+        timeoutMs,
+      },
+    );
+    await runRequest(
+      anonymousContext,
+      null,
+      'warmup',
+      'warmup.test.save',
+      `/api/student/tests/${paperId}/attempt`,
+      {
+        method: 'PATCH',
+        data: {
+          sectionAnswers: [],
+        },
+        timeoutMs,
+      },
+    );
+    await runRequest(
+      anonymousContext,
+      null,
+      'warmup',
+      'warmup.test.submit',
+      `/api/student/tests/${paperId}/submit`,
+      {
+        method: 'POST',
+        data: {
+          sectionAnswers: [],
+        },
+        timeoutMs,
+      },
+    );
+  } finally {
+    await anonymousContext.dispose().catch(() => undefined);
+  }
+
+  await sleep(250);
 }
 
 async function runStudentFlow({
@@ -831,6 +960,7 @@ async function main() {
   const submitEnabled = parseBoolean(args.submit, true);
   const heartbeatEnabled = parseBoolean(args.heartbeat, true);
   const listFirstEnabled = parseBoolean(args['list-first'], true);
+  const warmupEnabled = parseBoolean(args.warmup, true);
   const timeoutMs = parsePositiveInteger(args['timeout-ms'], 15_000);
   const outputPath = String(args.out || '').trim();
 
@@ -844,9 +974,6 @@ async function main() {
     throw new Error('Student list is empty.');
   }
 
-  const metrics = [];
-  const startedAt = performance.now();
-
   console.log(
     [
       `Student exam stress run started`,
@@ -859,8 +986,24 @@ async function main() {
       `  submit: ${submitEnabled ? 'yes' : 'no'}`,
       `  heartbeat: ${heartbeatEnabled ? 'yes' : 'no'}`,
       `  list-first: ${listFirstEnabled ? 'yes' : 'no'}`,
+      `  warmup: ${warmupEnabled ? 'yes' : 'no'}`,
     ].join('\n'),
   );
+
+  if (warmupEnabled) {
+    await prewarmOnlineTestRoutes({
+      baseUrl,
+      schoolKey,
+      paperId,
+      student: students[0],
+      timeoutMs,
+      heartbeatEnabled,
+      listFirstEnabled,
+    });
+  }
+
+  const metrics = [];
+  const startedAt = performance.now();
 
   const results = await runWithConcurrency(
     students,
@@ -945,6 +1088,7 @@ async function main() {
             submitEnabled,
             heartbeatEnabled,
             listFirstEnabled,
+            warmupEnabled,
             timeoutMs,
           },
           summary,

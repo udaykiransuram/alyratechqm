@@ -33,7 +33,7 @@ const ChartCard = ({
   children: React.ReactNode;
 }) => (
   <div className="analytics-card flex h-full flex-col overflow-hidden">
-    <div className="analytics-card-header border-l-4 border-[hsl(var(--accent-blue))] bg-gradient-to-r from-[hsl(var(--accent-blue))/0.08] to-transparent">
+    <div className="analytics-card-header analytics-card-header-highlight">
       <h3 className="analytics-card-title">{title}</h3>
     </div>
     <div className="analytics-card-body flex-grow p-4 sm:p-5">{children}</div>
@@ -45,7 +45,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     const pld = payload[0];
     const students = pld.payload.students || [];
     return (
-      <div className="min-w-[220px] max-w-xs rounded-xl border border-border/60 bg-background/95 p-3 shadow-xl backdrop-blur supports-[backdrop-filter]:bg-background/90">
+      <div className="analytics-chart-tooltip">
         <p className="mb-1 font-semibold text-foreground">{label}</p>
         <div className="mb-2 flex items-center gap-2">
           <span

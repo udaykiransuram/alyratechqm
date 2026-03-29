@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { connectDB } from '@/lib/db';
+import { hashRegistrationLookupToken } from '@/lib/security/registration-security';
 import Registration from '@/models/Registration';
 
 export const dynamic = 'force-dynamic';
@@ -9,21 +10,46 @@ type SuccessPageProps = {
   params: Promise<{
     orderId: string;
   }>;
+  searchParams: Promise<{
+    token?: string;
+  }>;
 };
 
 type RegistrationDoc = {
-  studentName?: string;
-  phone?: string;
   amount?: number;
   currency?: string;
   hallTicket?: string;
+  successLookupTokenHash?: string;
 };
 
-export default async function SuccessPage({ params }: SuccessPageProps) {
+export default async function SuccessPage({ params, searchParams }: SuccessPageProps) {
   const { orderId } = await params;
+  const { token } = await searchParams;
+  const providedToken = String(token || '').trim();
+
+  if (!providedToken) {
+    return (
+      <div className="public-flow-page flex items-center justify-center">
+        <div className="public-flow-shell-narrow">
+          <div className="public-flow-surface mx-auto max-w-xl text-center">
+            <div className="public-flow-badge mb-5">Secure Link Required</div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Invalid or expired success link
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+              Use the exact payment completion link sent by the payment provider.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   await connectDB();
+  const tokenHash = hashRegistrationLookupToken(providedToken);
   const registration = await Registration.findOne({
     orderId,
+    successLookupTokenHash: tokenHash,
   }).lean<RegistrationDoc>();
 
   if (!registration) {
@@ -67,18 +93,7 @@ export default async function SuccessPage({ params }: SuccessPageProps) {
             Registration Successful
           </h1>
           <p className="mt-4 text-base text-muted-foreground sm:text-lg">
-            Thank you,{' '}
-            <span className="font-semibold text-foreground">
-              {String(registration.studentName || 'Student')}
-            </span>
-            .
-          </p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
-            Your payment was received. We&apos;ll contact you at{' '}
-            <span className="font-semibold text-foreground">
-              {String(registration.phone || 'your registered number')}
-            </span>
-            .
+            Your payment was received and your registration is now active.
           </p>
           {amountLabel ? (
             <p className="mt-4 text-sm text-muted-foreground">

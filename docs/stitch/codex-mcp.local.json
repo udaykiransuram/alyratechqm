@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "stitch": {
+      "command": "node",
+      "args": [
+        "--env-file-if-exists=.env",
+        "--env-file-if-exists=.env.local",
+        "scripts/stitch-mcp-server.mjs"
+      ],
+      "cwd": "/Users/udaysuram/Downloads/talent-test-registration"
+    }
+  }
+}
