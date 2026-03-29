@@ -461,9 +461,10 @@ export default function QuestionsDirectoryClient({
   }, [appliedFilters, page, pushWithFilters, router, rows, schoolKey, toast]);
 
   return (
-    <PageShell width="wide" padding="standard">
+    <PageShell width="wide" padding="standard" className="app-directory-stack">
       <PageHero
         variant="directory"
+        density="compact"
         eyebrow="Question Bank"
         title="Questions"
         description="Search, filter, and review the question bank from one directory built for assessment authorship and quick paper-building."
@@ -529,7 +530,7 @@ export default function QuestionsDirectoryClient({
 
       {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
 
-      <div className="app-filter-panel">
+      <div className="app-filter-panel app-filter-panel-tight">
         <div className="app-filter-panel-header">
           <div className="app-filter-panel-heading">
             <div className="app-filter-panel-copy">
@@ -642,7 +643,7 @@ export default function QuestionsDirectoryClient({
                 emptyText="No matching tags found."
                 noOptionsText="No tags available."
                 maxVisibleBadges={3}
-                triggerClassName="h-11 rounded-xl px-3.5"
+                triggerClassName="h-10 rounded-xl px-3"
               />
 
               {draftFilters.selectedTagIds.length > 1 ? (
@@ -654,7 +655,7 @@ export default function QuestionsDirectoryClient({
                         ? "default"
                         : "outline"
                     }
-                    className="app-button-filter"
+                    className="app-button-compact"
                     onClick={() =>
                       setDraftFilters((current) => ({
                         ...current,
@@ -671,7 +672,7 @@ export default function QuestionsDirectoryClient({
                         ? "default"
                         : "outline"
                     }
-                    className="app-button-filter"
+                    className="app-button-compact"
                     onClick={() =>
                       setDraftFilters((current) => ({
                         ...current,
@@ -692,7 +693,7 @@ export default function QuestionsDirectoryClient({
                 {hasAnyAppliedFilters ? "Filtered bank ready" : "Browsing the full bank"}
               </p>
               <p className="app-filter-summary-note">
-                Apply filters to refresh the directory. Pagination now runs server-side for the current page.
+                Apply filters to refresh the current server-side page.
               </p>
             </div>
             <div className="app-filter-summary-actions">
@@ -731,14 +732,14 @@ export default function QuestionsDirectoryClient({
         </div>
       </div>
 
-      <div className="app-toolbar">
+      <div className="app-toolbar app-toolbar-compact">
         <div className="app-toolbar-row">
           <div className="app-toolbar-copy">
             <p className="app-toolbar-title">
               Showing {rows.length} question{rows.length === 1 ? "" : "s"} on this page
             </p>
             <p className="app-toolbar-note">
-              Archive Loaded only affects the currently visible page.
+              Archive Loaded affects only this visible page.
             </p>
           </div>
           <div className="app-toolbar-actions">

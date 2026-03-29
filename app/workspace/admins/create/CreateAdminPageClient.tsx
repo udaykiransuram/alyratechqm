@@ -1,21 +1,26 @@
 "use client";
 
 import { useMemo, useState, type ChangeEvent } from "react";
-import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import MultiSelectChecklist from "@/components/multi-select-checklist";
 import BulkUploadPanel from "@/components/workspace/BulkUploadPanel";
+import {
+  WorkspaceCreateModeToggle,
+  type WorkspaceCreateMode,
+} from "@/components/workspace/WorkspaceCreateGuideCard";
+import WorkspaceCreateShell from "@/components/workspace/WorkspaceCreateShell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import PageHero from "@/components/layout/PageHero";
-import PageShell from "@/components/layout/PageShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
 import { downloadCsvTemplate, parseUploadFile } from "@/lib/client/bulk-upload";
 import {
+  buildWorkspaceBulkStructureSummary,
   buildWorkspaceUserBulkRows,
   WORKSPACE_USER_BULK_TEMPLATES,
 } from "@/lib/client/workspace-user-bulk";
@@ -74,6 +79,7 @@ export default function CreateAdminPageClient({
     message: string;
     variant: FeedbackNoticeVariant;
   } | null>(null);
+  const [createMode, setCreateMode] = useState<WorkspaceCreateMode>("single");
 
   const availableSections = useMemo(() => {
     if (form.hasAllClasses) {
@@ -226,6 +232,7 @@ export default function CreateAdminPageClient({
       });
 
       const results = Array.isArray(data.results) ? data.results : [];
+      const structureSummary = buildWorkspaceBulkStructureSummary(data);
       const failed = results.filter((result: any) => !result.success);
       const created = results.filter((result: any) => result.success && !result.existed);
       const existing = results.filter((result: any) => result.existed);
@@ -233,6 +240,7 @@ export default function CreateAdminPageClient({
       setBulkFeedback({
         message: [
           "Bulk upload complete.",
+          ...structureSummary,
           `Created: ${created.length}.`,
           `Existing: ${existing.length}.`,
           `Failed after upload: ${failed.length}.`,
@@ -264,129 +272,102 @@ export default function CreateAdminPageClient({
   };
 
   return (
-    <PageShell width="wide" padding="standard">
-      <PageHero
-        variant="editor"
-        eyebrow="People"
-        title="Create Admin"
-        description="Create a school-admin account and decide whether it should keep full-school access or operate within a restricted scope."
-        actions={
-          <Button type="button" variant="outline" onClick={navigateBack} className="app-button-back">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Admins
-          </Button>
-        }
-        meta={
-          <>
-            <span className="app-meta-chip">School admin access</span>
-            <span className="app-meta-chip">Full or restricted scope</span>
-          </>
-        }
-        stats={[
-          {
-            label: "Class scope",
-            value: form.hasAllClasses ? "All" : String(form.classIds.length),
-            meta: form.hasAllClasses
-              ? "Admin will see every class."
-              : "Admin is limited to the selected classes.",
-          },
-          {
-            label: "Section scope",
-            value: form.hasAllSections ? "All" : String(form.academicSectionIds.length),
-            meta: form.hasAllSections
-              ? "Section access is broad inside the allowed class scope."
-              : "Only selected sections are enabled.",
-          },
-          {
-            label: "Subject scope",
-            value: form.hasAllSubjects ? "All" : String(form.subjectIds.length),
-            meta: form.hasAllSubjects
-              ? "Admin will see every subject."
-              : "Only selected subjects are enabled.",
-          },
-          {
-            label: "Form state",
-            value: loading ? "Saving" : "Ready",
-            meta: "This page now opens with server-loaded scope data.",
-          },
-        ]}
+    <WorkspaceCreateShell
+      eyebrow="People"
+      title="Create Admin"
+      description="Create one admin or switch to bulk upload."
+      backLabel="Back to Admins"
+      onBack={navigateBack}
+      mainClassName="space-y-4"
+      badges={
+        <>
+          <span className="app-meta-chip">School admin access</span>
+          <span className="app-meta-chip">
+            Class scope: {form.hasAllClasses ? "All" : form.classIds.length}
+          </span>
+          <span className="app-meta-chip">
+            Subject scope: {form.hasAllSubjects ? "All" : form.subjectIds.length}
+          </span>
+        </>
+      }
+    >
+      <WorkspaceCreateModeToggle
+        value={createMode}
+        onChange={setCreateMode}
+        singleLabel="Single admin"
+        bulkLabel="Bulk admins"
       />
 
       {message ? (
         <FeedbackNotice variant={message.variant}>{message.message}</FeedbackNotice>
       ) : null}
 
-      <div className="app-editor-grid">
-        <div className="app-editor-main">
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <CardTitle>Admin Profile</CardTitle>
-            </CardHeader>
-            <CardContent className="app-section-body">
-              <form onSubmit={handleSubmit} className="space-y-5">
+      {createMode === "single" ? (
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header space-y-2.5">
+            <CardTitle>Create Admin Account</CardTitle>
+          </CardHeader>
+          <CardContent className="app-section-body">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="app-section space-y-4">
+                <p className="app-form-section-title">Identity and login</p>
+
                 <div className="app-field-group">
-                  <label className="app-field-label" htmlFor="name">
-                    Name
-                  </label>
-                  <input
+                  <Label htmlFor="name">Admin name</Label>
+                  <Input
                     id="name"
                     name="name"
-                    placeholder="Enter name"
+                    placeholder="Enter admin name"
                     value={form.name}
                     onChange={handleChange}
                     required
-                    className="app-form-input"
                   />
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="email">
-                      Email
-                    </label>
-                    <input
+                    <Label htmlFor="email">Email</Label>
+                    <Input
                       id="email"
                       name="email"
                       placeholder="Enter email"
                       value={form.email}
                       onChange={handleChange}
                       type="email"
-                      className="app-form-input"
                     />
                   </div>
+
                   <div className="app-field-group">
-                    <label className="app-field-label" htmlFor="mobileNumber">
-                      Phone Number
-                    </label>
-                    <input
+                    <Label htmlFor="mobileNumber">Phone number</Label>
+                    <Input
                       id="mobileNumber"
                       name="mobileNumber"
                       placeholder="Enter phone number"
                       value={form.mobileNumber}
                       onChange={handleChange}
                       required
-                      className="app-form-input"
                     />
                   </div>
                 </div>
 
                 <div className="app-field-group">
-                  <label className="app-field-label" htmlFor="password">
-                    Password
-                  </label>
-                  <input
+                  <Label htmlFor="password">Password</Label>
+                  <Input
                     id="password"
                     name="password"
                     placeholder="Create password"
                     value={form.password}
                     onChange={handleChange}
                     type="password"
-                    className="app-form-input"
                   />
                 </div>
+              </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+              <div className="app-section space-y-4">
+                <p className="app-form-section-title">Academic access</p>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <label className={`app-toggle-card ${form.hasAllClasses ? "app-toggle-card-active" : ""}`}>
                     <Checkbox
                       checked={form.hasAllClasses}
                       onCheckedChange={(checked) =>
@@ -394,9 +375,12 @@ export default function CreateAdminPageClient({
                       }
                       className="mt-0.5"
                     />
-                    <span>All Classes</span>
+                    <span className="app-toggle-card-copy">
+                      <span className="app-toggle-card-title">All Classes</span>
+                    </span>
                   </label>
-                  <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+
+                  <label className={`app-toggle-card ${form.hasAllSections ? "app-toggle-card-active" : ""}`}>
                     <Checkbox
                       checked={form.hasAllSections}
                       onCheckedChange={(checked) =>
@@ -404,9 +388,12 @@ export default function CreateAdminPageClient({
                       }
                       className="mt-0.5"
                     />
-                    <span>All Sections</span>
+                    <span className="app-toggle-card-copy">
+                      <span className="app-toggle-card-title">All Sections</span>
+                    </span>
                   </label>
-                  <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm font-medium text-foreground">
+
+                  <label className={`app-toggle-card ${form.hasAllSubjects ? "app-toggle-card-active" : ""}`}>
                     <Checkbox
                       checked={form.hasAllSubjects}
                       onCheckedChange={(checked) =>
@@ -414,13 +401,15 @@ export default function CreateAdminPageClient({
                       }
                       className="mt-0.5"
                     />
-                    <span>All Subjects</span>
+                    <span className="app-toggle-card-copy">
+                      <span className="app-toggle-card-title">All Subjects</span>
+                    </span>
                   </label>
                 </div>
 
                 {!form.hasAllClasses ? (
                   <div className="app-field-group">
-                    <label className="app-field-label">Classes</label>
+                    <Label>Classes</Label>
                     <MultiSelectChecklist
                       items={initialClasses.map((classItem) => ({
                         id: classItem._id,
@@ -428,13 +417,16 @@ export default function CreateAdminPageClient({
                       }))}
                       selectedIds={form.classIds}
                       onChange={(ids) => updateSelection("classIds", ids)}
+                      className="p-2.5"
+                      listClassName="max-h-44 p-2"
+                      itemClassName="px-2.5 py-2"
                     />
                   </div>
                 ) : null}
 
                 {!form.hasAllSections ? (
                   <div className="app-field-group">
-                    <label className="app-field-label">Sections</label>
+                    <Label>Sections</Label>
                     <MultiSelectChecklist
                       items={availableSections.map((section) => ({
                         id: section._id,
@@ -453,10 +445,13 @@ export default function CreateAdminPageClient({
                       }))}
                       selectedIds={form.academicSectionIds}
                       onChange={(ids) => updateSelection("academicSectionIds", ids)}
+                      className="p-2.5"
+                      listClassName="max-h-44 p-2"
+                      itemClassName="px-2.5 py-2"
                       emptyContent={
                         form.hasAllClasses
-                          ? "No sections have been created yet."
-                          : "Select one or more classes to choose sections."
+                          ? "No sections created yet."
+                          : "Select classes first."
                       }
                     />
                   </div>
@@ -464,7 +459,7 @@ export default function CreateAdminPageClient({
 
                 {!form.hasAllSubjects ? (
                   <div className="app-field-group">
-                    <label className="app-field-label">Subjects</label>
+                    <Label>Subjects</Label>
                     <MultiSelectChecklist
                       items={initialSubjects.map((subject) => ({
                         id: subject._id,
@@ -472,32 +467,33 @@ export default function CreateAdminPageClient({
                       }))}
                       selectedIds={form.subjectIds}
                       onChange={(ids) => updateSelection("subjectIds", ids)}
+                      className="p-2.5"
+                      listClassName="max-h-44 p-2"
+                      itemClassName="px-2.5 py-2"
                     />
                   </div>
                 ) : null}
+              </div>
 
-                <Button type="submit" size="lg" className="w-full" disabled={loading}>
-                  {loading ? "Saving..." : "Create Admin"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="app-editor-aside">
-          <BulkUploadPanel
-            title="Bulk Upload Admins"
-            description="Upload a CSV or Excel sheet using the admin template to create multiple admin accounts with full or restricted scope."
-            inputId="bulk-upload-admins"
-            onFileChange={handleBulkUpload}
-            onDownloadTemplate={downloadTemplate}
-            loading={bulkLoading}
-            loadingLabel="Uploading admins..."
-            feedback={bulkFeedback}
-            tips={WORKSPACE_USER_BULK_TEMPLATES.admin.tips}
-          />
-        </div>
-      </div>
-    </PageShell>
+              <Button type="submit" size="xl" className="w-full" disabled={loading}>
+                {loading ? "Saving..." : "Create Admin"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      ) : (
+        <BulkUploadPanel
+          title="Bulk Upload Admins"
+          inputId="bulk-upload-admins"
+          onFileChange={handleBulkUpload}
+          onDownloadTemplate={downloadTemplate}
+          loading={bulkLoading}
+          loadingLabel="Uploading admins..."
+          compact
+          feedback={bulkFeedback}
+          tips={WORKSPACE_USER_BULK_TEMPLATES.admin.tips}
+        />
+      )}
+    </WorkspaceCreateShell>
   );
 }

@@ -6,7 +6,10 @@ import { GraduationCap, ShieldCheck, Users } from "lucide-react";
 
 import MultiSelectChecklist from "@/components/multi-select-checklist";
 import BulkUploadPanel from "@/components/workspace/BulkUploadPanel";
-import WorkspaceCreateGuideCard from "@/components/workspace/WorkspaceCreateGuideCard";
+import {
+  WorkspaceCreateModeToggle,
+  type WorkspaceCreateMode,
+} from "@/components/workspace/WorkspaceCreateGuideCard";
 import WorkspaceCreateShell from "@/components/workspace/WorkspaceCreateShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +35,7 @@ import {
   parseUploadFile,
 } from "@/lib/client/bulk-upload";
 import {
+  buildWorkspaceBulkStructureSummary,
   buildWorkspaceUserBulkRows,
   WORKSPACE_USER_BULK_TEMPLATES,
 } from "@/lib/client/workspace-user-bulk";
@@ -57,21 +61,18 @@ const rolePresets = [
     value: "admin" as const,
     title: "Admin",
     note: "Full-school or restricted operations",
-    description: "School-wide operators with full or restricted academic scope.",
     icon: ShieldCheck,
   },
   {
     value: "teacher" as const,
     title: "Teacher",
     note: "Class and subject-scoped access",
-    description: "Teaching accounts scoped by classes, sections, and subjects.",
     icon: Users,
   },
   {
     value: "student" as const,
     title: "Student",
     note: "Roll-number sign-in for tests",
-    description: "Learners who sign in with roll number and can take online tests.",
     icon: GraduationCap,
   },
 ];
@@ -165,71 +166,12 @@ export default function CreateUserPageClient({
     message: string;
     variant: FeedbackNoticeVariant;
   } | null>(null);
+  const [createMode, setCreateMode] = useState<WorkspaceCreateMode>("single");
 
   const activeRolePreset = useMemo(
     () => rolePresets.find((preset) => preset.value === formData.role) || rolePresets[1],
     [formData.role],
   );
-
-  const roleGuidance =
-    formData.role === "student"
-      ? "Students sign in with their roll number, and the first password defaults to the saved phone-number digits exactly as stored (including country code digits, if saved)."
-      : formData.role === "admin"
-        ? "Admins can stay school-wide or be narrowed to selected classes, sections, and subjects."
-        : "Teachers need at least one class and one subject, with optional all-section access.";
-
-  const bulkUploadDescription =
-    formData.role === "student"
-      ? "Import students with class, section, roll number, and contact details."
-      : formData.role === "admin"
-        ? "Import admins in bulk and decide whether they stay school-wide or use a narrower academic scope."
-        : "Import teachers in bulk with the class, section, and subject scope they need.";
-
-  const createGuideItems =
-    formData.role === "student"
-      ? [
-          {
-            title: "Roll number becomes login",
-            note: "Students use the roll number as the username, while the first password uses saved phone-number digits exactly as stored.",
-          },
-          {
-            title: "Class comes first",
-            note: "Pick the class before the section so placement and test eligibility stay accurate.",
-          },
-          {
-            title: "Bulk import is ready",
-            note: "Use the template when a whole class needs to be created together.",
-          },
-        ]
-      : formData.role === "admin"
-        ? [
-            {
-              title: "Admins can stay school-wide",
-              note: "Leave everything open when this admin should operate across the full school.",
-            },
-            {
-              title: "Narrow scope only when needed",
-              note: "Use classes, sections, and subjects only when the admin should stay restricted.",
-            },
-            {
-              title: "Keep leadership covered",
-              note: "Make sure each school always has at least one active admin who can manage users.",
-            },
-          ]
-        : [
-            {
-              title: "Choose classes and subjects",
-              note: "Teachers need at least one class and one subject before the account is useful.",
-            },
-            {
-              title: "Keep all sections on when possible",
-              note: "Only narrow section access when the teacher should not see every section in the selected classes.",
-            },
-            {
-              title: "Bulk import handles bigger teams",
-              note: "Use the template when you need to assign multiple teachers in one go.",
-            },
-          ];
 
   const availableSections = useMemo(() => {
     if (formData.role === "student") {
@@ -491,12 +433,14 @@ export default function CreateUserPageClient({
       });
 
       const results = Array.isArray(data.results) ? data.results : [];
+      const structureSummary = buildWorkspaceBulkStructureSummary(data);
       const failed = results.filter((result: any) => !result.success);
       const created = results.filter((result: any) => result.success && !result.existed);
       const existing = results.filter((result: any) => result.existed);
 
       const summary = [
         `Bulk upload complete for ${activeRolePreset.title.toLowerCase()}s.`,
+        ...structureSummary,
         `Created: ${created.length}.`,
         `Existing: ${existing.length}.`,
         `Failed after upload: ${failed.length}.`,
@@ -539,413 +483,369 @@ export default function CreateUserPageClient({
     <WorkspaceCreateShell
       eyebrow="School workspace"
       title="Create users"
-      description="Use one focused screen to create students, teachers, or school admins without leaving the active school context."
+      description="Create one user or switch to bulk upload."
       backLabel="Back to Users"
       onBack={navigateBack}
+      mainClassName="space-y-4"
       badges={
         <>
           <span className="app-meta-chip">{`Role: ${activeRolePreset.title}`}</span>
           <span className="app-meta-chip">
             {currentSchoolKey ? `School: ${currentSchoolKey}` : "No school selected"}
           </span>
-          <span className="app-meta-chip">Bulk import ready</span>
-        </>
-      }
-      aside={
-        <>
-          <WorkspaceCreateGuideCard
-            title={`${activeRolePreset.title} setup`}
-            description={activeRolePreset.description}
-            items={createGuideItems}
-          />
-
-          <BulkUploadPanel
-            title={`Bulk Upload ${activeRolePreset.title}s`}
-            description={bulkUploadDescription}
-            inputId="bulk-upload-users"
-            onFileChange={handleBulkUpload}
-            onDownloadTemplate={downloadTemplate}
-            templateLabel={`Download ${activeRolePreset.title} Template`}
-            loading={isBulkUploading}
-            loadingLabel="Uploading users..."
-            disabled={initialClasses.length === 0 && formData.role !== "admin"}
-            feedback={bulkFeedback}
-            tips={WORKSPACE_USER_BULK_TEMPLATES[formData.role].tips}
-          />
         </>
       }
     >
+      <Card className="app-surface overflow-hidden">
+        <CardContent className="app-section-body space-y-3">
+          <p className="app-form-section-title">Account role</p>
+          <div className="app-role-switcher">
+            <div className="app-role-switcher-grid">
+              {rolePresets.map((preset) => {
+                const Icon = preset.icon;
+                const isActive = formData.role === preset.value;
+
+                return (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => handleRoleChange(preset.value)}
+                    className={cn(
+                      "app-role-switcher-button",
+                      isActive && "app-role-switcher-button-active",
+                    )}
+                    aria-pressed={isActive}
+                  >
+                    <div className="app-role-switcher-icon">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="app-role-switcher-copy">
+                      <div className="app-role-switcher-title">{preset.title}</div>
+                      <div className="app-role-switcher-note">{preset.note}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <WorkspaceCreateModeToggle
+        value={createMode}
+        onChange={setCreateMode}
+        singleLabel={`Single ${activeRolePreset.title.toLowerCase()}`}
+        bulkLabel={`Bulk ${activeRolePreset.title.toLowerCase()}s`}
+      />
+
       {feedback ? (
         <FeedbackNotice variant={feedback.variant}>{feedback.message}</FeedbackNotice>
       ) : null}
 
-      <Card className="app-surface overflow-hidden">
-        <CardHeader className="app-section-header space-y-2.5">
-          <CardTitle>Create individual user</CardTitle>
-          <p className="text-sm leading-6 text-muted-foreground">
-            Choose the role first, then enter identity details and the right school scope.
-          </p>
-        </CardHeader>
-        <CardContent className="app-section-body">
-          <form onSubmit={handleCreateUser} className="space-y-6">
-            <div className="space-y-3">
-              <div className="app-form-section-heading">
-                <p className="app-form-section-title">Account role</p>
-                <p className="app-form-section-copy">
-                  Switch roles here to reveal only the fields that matter for this account type.
-                </p>
-              </div>
-
-              <div className="app-role-switcher">
-                <div className="app-role-switcher-grid">
-                  {rolePresets.map((preset) => {
-                    const Icon = preset.icon;
-                    const isActive = formData.role === preset.value;
-
-                    return (
-                      <button
-                        key={preset.value}
-                        type="button"
-                        onClick={() => handleRoleChange(preset.value)}
-                        className={cn(
-                          "app-role-switcher-button",
-                          isActive && "app-role-switcher-button-active",
-                        )}
-                        aria-pressed={isActive}
-                      >
-                        <div className="app-role-switcher-icon">
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="app-role-switcher-copy">
-                          <div className="app-role-switcher-title">{preset.title}</div>
-                          <div className="app-role-switcher-note">{preset.note}</div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="app-form-callout">
-                <p className="font-semibold text-foreground">{`${activeRolePreset.title} accounts`}</p>
-                <p className="mt-1.5">{roleGuidance}</p>
-              </div>
-            </div>
-
-            <div className="app-section space-y-4">
-              <div className="app-form-section-heading">
+      {createMode === "single" ? (
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header space-y-2.5">
+            <CardTitle>{`Create ${activeRolePreset.title}`}</CardTitle>
+          </CardHeader>
+          <CardContent className="app-section-body">
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div className="app-section space-y-4">
                 <p className="app-form-section-title">Basic details</p>
-                <p className="app-form-section-copy">
-                  These are the core identity and contact fields visible to the school team.
-                </p>
-              </div>
 
-              <div className="app-field-group">
-                <Label htmlFor="create-name">Full Name</Label>
-                <Input
-                  id="create-name"
-                  name="name"
-                  placeholder="Full Name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
                 <div className="app-field-group">
-                  <Label htmlFor="create-email">Email</Label>
+                  <Label htmlFor="create-name">Full Name</Label>
                   <Input
-                    id="create-email"
-                    name="email"
-                    type="email"
-                    placeholder={
-                      formData.role === "student"
-                        ? "Email address (optional)"
-                        : "Email address"
-                    }
-                    value={formData.email}
-                    onChange={handleInputChange}
-                  />
-                </div>
-                <div className="app-field-group">
-                  <Label htmlFor="create-mobile">Phone Number</Label>
-                  <Input
-                    id="create-mobile"
-                    name="mobileNumber"
-                    placeholder="Phone number"
-                    value={formData.mobileNumber}
+                    id="create-name"
+                    name="name"
+                    placeholder="Full Name"
+                    value={formData.name}
                     onChange={handleInputChange}
                     required
                   />
                 </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="app-field-group">
+                    <Label htmlFor="create-email">Email</Label>
+                    <Input
+                      id="create-email"
+                      name="email"
+                      type="email"
+                      placeholder={
+                        formData.role === "student"
+                          ? "Email address (optional)"
+                          : "Email address"
+                      }
+                      value={formData.email}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                  <div className="app-field-group">
+                    <Label htmlFor="create-mobile">Phone Number</Label>
+                    <Input
+                      id="create-mobile"
+                      name="mobileNumber"
+                      placeholder="Phone number"
+                      value={formData.mobileNumber}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {formData.role === "student" ? (
+                  <div className="app-form-callout">
+                    <p className="font-semibold text-foreground">Student sign-in</p>
+                    <p className="mt-1.5">
+                      Username uses the roll number. The first password uses the saved phone
+                      digits.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="app-field-group">
+                    <Label htmlFor="create-password">Password</Label>
+                    <Input
+                      id="create-password"
+                      name="password"
+                      type="password"
+                      placeholder="Set the first password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                )}
               </div>
 
               {formData.role === "student" ? (
-                <div className="app-form-callout">
-                <p className="font-semibold text-foreground">Student sign-in</p>
-                <p className="mt-1.5">
-                    Username is the roll number. The initial password is the saved phone-number digits exactly as stored, including country code digits if they were saved.
-                </p>
-                <p className="mt-1.5">
-                  If the student later changes the password or cannot sign in, admins can use the student detail/edit credentials panel to reset to phone digits or issue a temporary password.
-                </p>
-              </div>
-              ) : (
-                <div className="app-field-group">
-                  <Label htmlFor="create-password">Password</Label>
-                  <Input
-                    id="create-password"
-                    name="password"
-                    type="password"
-                    placeholder="Set the first password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                  />
-                </div>
-              )}
-            </div>
-
-            {formData.role === "student" ? (
-              <div className="app-section space-y-4">
-                <div className="app-form-section-heading">
+                <div className="app-section space-y-4">
                   <p className="app-form-section-title">Student placement</p>
-                  <p className="app-form-section-copy">
-                    Choose class placement and the roll number the student will use to sign in.
-                  </p>
-                </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="create-student-class">Class</Label>
-                    <Select value={formData.classId} onValueChange={handleClassChange}>
-                      <SelectTrigger id="create-student-class">
-                        <SelectValue placeholder="Select class" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {initialClasses.map((classItem) => (
-                          <SelectItem key={classItem._id} value={classItem._id}>
-                            {classItem.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="create-student-class">Class</Label>
+                      <Select value={formData.classId} onValueChange={handleClassChange}>
+                        <SelectTrigger id="create-student-class">
+                          <SelectValue placeholder="Select class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {initialClasses.map((classItem) => (
+                            <SelectItem key={classItem._id} value={classItem._id}>
+                              {classItem.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="create-roll-number">Roll Number / Username</Label>
-                    <Input
-                      id="create-roll-number"
-                      name="rollNumber"
-                      placeholder="Roll number"
-                      value={formData.rollNumber}
-                      onChange={handleInputChange}
-                    />
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-roll-number">Roll Number / Username</Label>
+                      <Input
+                        id="create-roll-number"
+                        name="rollNumber"
+                        placeholder="Roll number"
+                        value={formData.rollNumber}
+                        onChange={handleInputChange}
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="create-student-section">Section</Label>
-                    <Select
-                      value={formData.academicSection || "none"}
-                      onValueChange={(value) =>
-                        setFormData((currentState) => ({
-                          ...currentState,
-                          academicSection: value === "none" ? "" : value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger id="create-student-section">
-                        <SelectValue placeholder="Select section" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No Section</SelectItem>
-                        {availableSections.map((section) => (
-                          <SelectItem key={section._id} value={section._id}>
-                            {section.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="create-enrolled-at">Enrolled At</Label>
-                    <Input
-                      id="create-enrolled-at"
-                      name="enrolledAt"
-                      type="date"
-                      value={formData.enrolledAt}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="app-section space-y-4">
-                <div className="app-form-section-heading">
-                  <p className="app-form-section-title">Academic access</p>
-                  <p className="app-form-section-copy">
-                    Keep access school-wide, or narrow it to the exact classes, sections, and subjects this user should handle.
-                  </p>
-                </div>
-
-                {formData.role === "admin" ? (
-                  <div className="space-y-2">
-                    <div className="app-toggle-grid">
-                      <label
-                        className={cn(
-                          "app-toggle-card",
-                          formData.hasAllClasses && "app-toggle-card-active",
-                        )}
+                    <div className="space-y-2">
+                      <Label htmlFor="create-student-section">Section</Label>
+                      <Select
+                        value={formData.academicSection || "none"}
+                        onValueChange={(value) =>
+                          setFormData((currentState) => ({
+                            ...currentState,
+                            academicSection: value === "none" ? "" : value,
+                          }))
+                        }
                       >
-                        <Checkbox
-                          checked={formData.hasAllClasses}
-                          onCheckedChange={(checked) =>
-                            setFormData((currentState) => ({
-                              ...currentState,
-                              hasAllClasses: checked === true,
-                            }))
-                          }
-                        />
-                        <span className="app-toggle-card-copy">
-                          <span className="app-toggle-card-title">All Classes</span>
-                          <span className="app-toggle-card-note">
-                            Skip manual class selection and keep class coverage school-wide.
-                          </span>
-                        </span>
-                      </label>
-                      <label
-                        className={cn(
-                          "app-toggle-card",
-                          formData.hasAllSubjects && "app-toggle-card-active",
-                        )}
-                      >
-                        <Checkbox
-                          checked={formData.hasAllSubjects}
-                          onCheckedChange={(checked) =>
-                            setFormData((currentState) => ({
-                              ...currentState,
-                              hasAllSubjects: checked === true,
-                            }))
-                          }
-                        />
-                        <span className="app-toggle-card-copy">
-                          <span className="app-toggle-card-title">All Subjects</span>
-                          <span className="app-toggle-card-note">
-                            Keep every subject available instead of narrowing to a smaller set.
-                          </span>
-                        </span>
-                      </label>
+                        <SelectTrigger id="create-student-section">
+                          <SelectValue placeholder="Select section" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No Section</SelectItem>
+                          {availableSections.map((section) => (
+                            <SelectItem key={section._id} value={section._id}>
+                              {section.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="create-enrolled-at">Enrolled At</Label>
+                      <Input
+                        id="create-enrolled-at"
+                        name="enrolledAt"
+                        type="date"
+                        value={formData.enrolledAt}
+                        onChange={handleInputChange}
+                      />
                     </div>
                   </div>
-                ) : null}
+                </div>
+              ) : (
+                <div className="app-section space-y-4">
+                  <p className="app-form-section-title">Academic access</p>
 
-                <label
-                  className={cn(
-                    "app-toggle-card",
-                    formData.hasAllSections && "app-toggle-card-active",
-                  )}
-                >
-                  <Checkbox
-                    checked={formData.hasAllSections}
-                    onCheckedChange={(checked) =>
-                      setFormData((currentState) => ({
-                        ...currentState,
-                        hasAllSections: checked === true,
-                        academicSectionIds:
-                          checked === true ? [] : currentState.academicSectionIds,
-                      }))
-                    }
-                  />
-                  <span className="app-toggle-card-copy">
-                    <span className="app-toggle-card-title">All Sections</span>
-                    <span className="app-toggle-card-note">
-                      Use every section inside the chosen classes without selecting them one by one.
-                    </span>
-                  </span>
-                </label>
-
-                {!formData.hasAllClasses ? (
-                  <div className="space-y-2">
-                    <Label>Classes</Label>
-                    <MultiSelectChecklist
-                      items={initialClasses.map((classItem) => ({
-                        id: classItem._id,
-                        label: classItem.name,
-                      }))}
-                      selectedIds={formData.classIds}
-                      onChange={(ids) => setCreateMultiValues("classIds", ids)}
-                      helperText={
-                        formData.role === "admin"
-                          ? "Pick classes only when this admin should not see the whole school."
-                          : "Teachers need at least one class so their papers, analytics, and student workflows stay relevant."
-                      }
-                    />
-                  </div>
-                ) : null}
-
-                {!formData.hasAllSections ? (
-                  <div className="space-y-2">
-                    <Label>Sections</Label>
-                    <MultiSelectChecklist
-                      items={availableSections.map((section) => ({
-                        id: section._id,
-                        label: (
-                          <span>
-                            {section.name}
-                            <span className="ml-1 text-xs text-muted-foreground">
-                              (
-                              {initialClasses.find(
-                                (classItem) => classItem._id === getSectionClassId(section),
-                              )?.name || "Class"}
-                              )
-                            </span>
+                  {formData.role === "admin" ? (
+                    <div className="space-y-2">
+                      <div className="app-toggle-grid">
+                        <label
+                          className={cn(
+                            "app-toggle-card",
+                            formData.hasAllClasses && "app-toggle-card-active",
+                          )}
+                        >
+                          <Checkbox
+                            checked={formData.hasAllClasses}
+                            onCheckedChange={(checked) =>
+                              setFormData((currentState) => ({
+                                ...currentState,
+                                hasAllClasses: checked === true,
+                              }))
+                            }
+                          />
+                          <span className="app-toggle-card-copy">
+                            <span className="app-toggle-card-title">All Classes</span>
                           </span>
-                        ),
-                      }))}
-                      selectedIds={formData.academicSectionIds}
-                      onChange={(ids) => setCreateMultiValues("academicSectionIds", ids)}
-                      emptyContent={
-                        formData.role === "admin" && formData.hasAllClasses
-                          ? "No sections created yet."
-                          : "Select classes first."
-                      }
-                      helperText={
-                        formData.role === "admin" && formData.hasAllClasses
-                          ? "All sections in the school are available here."
-                          : "Only sections connected to the selected classes appear here."
+                        </label>
+                        <label
+                          className={cn(
+                            "app-toggle-card",
+                            formData.hasAllSubjects && "app-toggle-card-active",
+                          )}
+                        >
+                          <Checkbox
+                            checked={formData.hasAllSubjects}
+                            onCheckedChange={(checked) =>
+                              setFormData((currentState) => ({
+                                ...currentState,
+                                hasAllSubjects: checked === true,
+                              }))
+                            }
+                          />
+                          <span className="app-toggle-card-copy">
+                            <span className="app-toggle-card-title">All Subjects</span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <label
+                    className={cn(
+                      "app-toggle-card",
+                      formData.hasAllSections && "app-toggle-card-active",
+                    )}
+                  >
+                    <Checkbox
+                      checked={formData.hasAllSections}
+                      onCheckedChange={(checked) =>
+                        setFormData((currentState) => ({
+                          ...currentState,
+                          hasAllSections: checked === true,
+                          academicSectionIds:
+                            checked === true ? [] : currentState.academicSectionIds,
+                        }))
                       }
                     />
-                  </div>
-                ) : null}
+                    <span className="app-toggle-card-copy">
+                      <span className="app-toggle-card-title">All Sections</span>
+                    </span>
+                  </label>
 
-                {!formData.hasAllSubjects ? (
-                  <div className="space-y-2">
-                    <Label>Subjects</Label>
-                    <MultiSelectChecklist
-                      items={initialSubjects.map((subject) => ({
-                        id: subject._id,
-                        label: subject.name,
-                      }))}
-                      selectedIds={formData.subjectIds}
-                      onChange={(ids) => setCreateMultiValues("subjectIds", ids)}
-                      helperText={
-                        formData.role === "admin"
-                          ? "Pick subjects only when this admin should stay subject-scoped."
-                          : "Teachers need at least one subject to work inside papers, questions, and analytics."
-                      }
-                    />
-                  </div>
-                ) : null}
-              </div>
-            )}
+                  {!formData.hasAllClasses ? (
+                    <div className="space-y-2">
+                      <Label>Classes</Label>
+                      <MultiSelectChecklist
+                        items={initialClasses.map((classItem) => ({
+                          id: classItem._id,
+                          label: classItem.name,
+                        }))}
+                        selectedIds={formData.classIds}
+                        onChange={(ids) => setCreateMultiValues("classIds", ids)}
+                        className="p-2.5"
+                        listClassName="max-h-44 p-2"
+                        itemClassName="px-2.5 py-2"
+                      />
+                    </div>
+                  ) : null}
 
-            <Button type="submit" size="xl" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? <Spinner /> : `Create ${activeRolePreset.title}`}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+                  {!formData.hasAllSections ? (
+                    <div className="space-y-2">
+                      <Label>Sections</Label>
+                      <MultiSelectChecklist
+                        items={availableSections.map((section) => ({
+                          id: section._id,
+                          label: (
+                            <span>
+                              {section.name}
+                              <span className="ml-1 text-xs text-muted-foreground">
+                                (
+                                {initialClasses.find(
+                                  (classItem) => classItem._id === getSectionClassId(section),
+                                )?.name || "Class"}
+                                )
+                              </span>
+                            </span>
+                          ),
+                        }))}
+                        selectedIds={formData.academicSectionIds}
+                        onChange={(ids) => setCreateMultiValues("academicSectionIds", ids)}
+                        className="p-2.5"
+                        listClassName="max-h-44 p-2"
+                        itemClassName="px-2.5 py-2"
+                        emptyContent={
+                          formData.role === "admin" && formData.hasAllClasses
+                            ? "No sections created yet."
+                            : "Select classes first."
+                        }
+                      />
+                    </div>
+                  ) : null}
+
+                  {!formData.hasAllSubjects ? (
+                    <div className="space-y-2">
+                      <Label>Subjects</Label>
+                      <MultiSelectChecklist
+                        items={initialSubjects.map((subject) => ({
+                          id: subject._id,
+                          label: subject.name,
+                        }))}
+                        selectedIds={formData.subjectIds}
+                        onChange={(ids) => setCreateMultiValues("subjectIds", ids)}
+                        className="p-2.5"
+                        listClassName="max-h-44 p-2"
+                        itemClassName="px-2.5 py-2"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              <Button type="submit" size="xl" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? <Spinner /> : `Create ${activeRolePreset.title}`}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      ) : (
+        <BulkUploadPanel
+          title={`Bulk upload ${activeRolePreset.title.toLowerCase()}s`}
+          inputId="bulk-upload-users"
+          onFileChange={handleBulkUpload}
+          onDownloadTemplate={downloadTemplate}
+          templateLabel={`Download ${activeRolePreset.title} Template`}
+          loading={isBulkUploading}
+          loadingLabel="Uploading users..."
+          disabled={initialClasses.length === 0 && formData.role !== "admin"}
+          compact
+          feedback={bulkFeedback}
+          tips={WORKSPACE_USER_BULK_TEMPLATES[formData.role].tips}
+        />
+      )}
     </WorkspaceCreateShell>
   );
 }

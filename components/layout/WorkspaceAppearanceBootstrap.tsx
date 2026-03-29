@@ -14,13 +14,40 @@ import {
   APP_SCHOOL_SELECTION_CHANGE_EVENT,
   getSchoolKeyFromCookie,
 } from "@/lib/client/school";
-import { fetchApiJson } from "@/lib/client/api";
+import {
+  fetchApiJson,
+  getApiRequestErrorCode,
+  isApiRequestError,
+} from "@/lib/client/api";
 
 type WorkspaceAppearanceResponse = {
   success?: boolean;
   schoolKey?: string;
   appearance?: WorkspaceAppearanceState;
 };
+
+function shouldSilenceWorkspaceAppearanceError(error: unknown) {
+  if (!isApiRequestError(error)) {
+    return false;
+  }
+
+  if (error.httpStatus === 401 || error.httpStatus === 403) {
+    return true;
+  }
+
+  const code = getApiRequestErrorCode(error);
+  if (code === "SessionInvalidated" || code === "StudentSessionExpired") {
+    return true;
+  }
+
+  const message = String(error.message || "").toLowerCase();
+  return (
+    message.includes("active session permissions") ||
+    message.includes("authentication required") ||
+    message.includes("school workspace session required") ||
+    message.includes("forbidden")
+  );
+}
 
 export default function WorkspaceAppearanceBootstrap({
   enabled = true,
@@ -77,7 +104,11 @@ export default function WorkspaceAppearanceBootstrap({
           response.appearance || readStoredWorkspaceAppearance(normalizedSchoolKey);
         persistWorkspaceAppearance(nextAppearance, normalizedSchoolKey);
       } catch (error) {
-        if (!cancelled) {
+        if (cancelled || shouldSilenceWorkspaceAppearanceError(error)) {
+          return;
+        }
+
+        if (process.env.NODE_ENV !== "production") {
           console.error("Failed to bootstrap workspace appearance:", error);
         }
       }

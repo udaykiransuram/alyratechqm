@@ -237,7 +237,7 @@ export default function ReportJobsPageClient({
         variant="operations"
         eyebrow="School Workspace"
         title="Report Delivery Queue"
-        description="Track dispatch jobs, refresh delivery state, and run the worker manually when queued or failed report delivery needs attention."
+        description="Track dispatch jobs, refresh delivery state, and run the worker manually."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -263,11 +263,9 @@ export default function ReportJobsPageClient({
             <span className="app-meta-chip">
               {schoolKey ? `School: ${schoolKey}` : "No school selected"}
             </span>
-            <span className="app-meta-chip">WhatsApp delivery tracking</span>
             <span className="app-meta-chip">
               {summary.awaitingAck} waiting for provider ack
             </span>
-            <span className="app-meta-chip">Manual worker fallback</span>
           </>
         }
         stats={[
@@ -299,7 +297,7 @@ export default function ReportJobsPageClient({
         ]}
       />
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
         {notice ? <div className="app-feedback app-feedback-success">{notice}</div> : null}
 

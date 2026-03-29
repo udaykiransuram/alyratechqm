@@ -25,6 +25,7 @@ const StudentEditDialog = dynamic(
 type StudentItem = {
   _id: string;
   name: string;
+  fatherName?: string;
   email?: string;
   rollNumber?: string;
   enrolledAt?: string;
@@ -57,6 +58,7 @@ type AcademicSectionItem = {
 type StudentEditDraft = {
   _id: string;
   name: string;
+  fatherName: string;
   classId: string;
   academicSectionId: string;
   rollNumber: string;
@@ -168,7 +170,6 @@ export default function StudentsPageClient({
       {
         value: "all",
         label: "All classes",
-        description: "View students grouped across every class.",
       },
       ...classes.map((classItem) => ({
         value: classItem._id,
@@ -183,7 +184,6 @@ export default function StudentsPageClient({
       {
         value: "all",
         label: "All sections",
-        description: "Keep the grouped student list scoped to every section.",
       },
       ...availableSections.map((section) => ({
         value: section._id,
@@ -267,9 +267,18 @@ export default function StudentsPageClient({
   };
 
   const exportCSV = (group: StudentGroup) => {
-    const headers = ["Name", "Class", "Section", "Roll Number", "Email", "Enrolled At"];
+    const headers = [
+      "Name",
+      "Father Name",
+      "Class",
+      "Section",
+      "Roll Number",
+      "Email",
+      "Enrolled At",
+    ];
     const rows = group.students.map((student) => [
       escapeCSV(student.name || ""),
+      escapeCSV(student.fatherName || ""),
       escapeCSV(group.className || ""),
       escapeCSV(student.academicSectionName || group.academicSectionName || ""),
       escapeCSV(student.rollNumber || ""),
@@ -304,6 +313,7 @@ export default function StudentsPageClient({
     setEditStudent({
       _id: student._id,
       name: student.name,
+      fatherName: student.fatherName || "",
       classId: groupClassId,
       academicSectionId: student.academicSectionId || "",
       rollNumber: student.rollNumber || "",
@@ -336,7 +346,7 @@ export default function StudentsPageClient({
         variant="directory"
         eyebrow="People"
         title="Students"
-        description="Browse students by class and section, then update assignments and enrollment details from one learner directory."
+        description="Browse students by class and section, then update assignments and enrollment details."
         actions={
           <Button asChild className="app-button-page">
             <AppPrefetchLink
@@ -372,7 +382,7 @@ export default function StudentsPageClient({
           {
             label: "Search query",
             value: appliedQuery || "None",
-            meta: "Name, email, and roll-number search across student groups.",
+            meta: "Name, father name, email, and roll-number search across student groups.",
           },
           {
             label: "Edit mode",
@@ -387,10 +397,6 @@ export default function StudentsPageClient({
           <div className="app-filter-panel-heading">
             <div className="app-filter-panel-copy">
               <CardTitle className="app-filter-panel-title">Student Filters</CardTitle>
-              <p className="app-filter-panel-note">
-                Search across student groups, narrow by class and section, or include empty
-                groups when reviewing setup coverage.
-              </p>
             </div>
             <div className="app-filter-panel-chips">
               <span className="app-meta-chip">
@@ -410,7 +416,7 @@ export default function StudentsPageClient({
             className="app-filter-grid xl:grid-cols-[minmax(0,1fr)_11rem_minmax(18rem,1.35fr)_auto_auto]"
           >
             <Input
-              placeholder="Search by name, email, or roll number"
+              placeholder="Search by name, father name, email, or roll number"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -464,10 +470,6 @@ export default function StudentsPageClient({
                 {totalStudents} student{totalStudents === 1 ? "" : "s"} across {totalGroups} group
                 {totalGroups === 1 ? "" : "s"}
               </p>
-              <p className="app-filter-summary-note">
-                Students remain grouped by class and section so exports and quick edits stay
-                predictable.
-              </p>
             </div>
             <div className="app-filter-summary-actions">
               <Button
@@ -501,7 +503,7 @@ export default function StudentsPageClient({
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           <ListPagination
             page={groupPage}
             totalPages={groupPages}

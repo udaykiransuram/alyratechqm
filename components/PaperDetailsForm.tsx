@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen } from 'lucide-react';
 import MultiSelectChecklist from '@/components/multi-select-checklist';
+import { cn } from '@/lib/utils';
 
 interface AcademicSectionItem {
   _id: string;
@@ -143,6 +144,7 @@ export function PaperDetailsForm({
   availableAcademicSections,
   assignedAcademicSectionIds,
   setAssignedAcademicSectionIds,
+  compact = false,
   initialDataLoading,
 }: PaperDetailsFormProps) {
   const [examDateInput, setExamDateInput] = useState(() =>
@@ -217,7 +219,7 @@ export function PaperDetailsForm({
           Paper Details
         </CardTitle>
       </CardHeader>
-      <CardContent className="app-section-body space-y-4">
+      <CardContent className={cn("app-section-body space-y-4", compact && "space-y-3.5")}>
         <div className="app-field-group">
           <Label htmlFor="paper-title" className="app-field-label">Paper Title</Label>
           <Input
@@ -228,7 +230,7 @@ export function PaperDetailsForm({
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className={cn("grid gap-4 sm:grid-cols-2", compact && "gap-3")}>
           <div className="app-field-group">
             <Label htmlFor="class" className="app-field-label">Class</Label>
             <Select value={classId} onValueChange={setClassId}>
@@ -281,6 +283,9 @@ export function PaperDetailsForm({
                 }))}
                 selectedIds={assignedAcademicSectionIds}
                 onChange={setAssignedAcademicSectionIds}
+                className={compact ? "p-2.5" : undefined}
+                listClassName={compact ? "max-h-40 p-2" : undefined}
+                itemClassName={compact ? "px-2.5 py-2" : undefined}
               />
             )}
           </div>
@@ -319,7 +324,7 @@ export function PaperDetailsForm({
             />
           </div>
 
-          <div className="app-field-group sm:col-span-2">
+          <div className={cn("app-field-group", compact ? "" : "sm:col-span-2")}>
             <Label htmlFor="passingMarks" className="app-field-label">Passing Marks</Label>
             <Input
               id="passingMarks"
@@ -331,7 +336,12 @@ export function PaperDetailsForm({
             />
           </div>
 
-          <div className="app-field-group sm:col-span-2 rounded-2xl border border-border/60 bg-muted/20 p-4">
+          <div
+            className={cn(
+              "app-field-group sm:col-span-2 rounded-2xl border border-border/60 bg-muted/20 p-4",
+              compact && "p-3.5",
+            )}
+          >
             <div className="space-y-1">
               <p className="app-form-section-title">Delivery Mode</p>
               <p className="app-form-section-copy">
@@ -362,7 +372,7 @@ export function PaperDetailsForm({
             </div>
 
             {onlineEnabled ? (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className={cn("mt-4 grid gap-4 sm:grid-cols-2", compact && "mt-3 gap-3")}>
                 <div className="app-online-window-card">
                   <div className="app-field-group">
                     <Label htmlFor="onlineStartsAt" className="app-field-label">
@@ -535,7 +545,7 @@ export function PaperDetailsForm({
             value={instructions}
             onChange={e => setInstructions(e.target.value)}
             placeholder="Add any instructions for the students..."
-            className="min-h-[110px]"
+            className={cn(compact ? "min-h-[88px]" : "min-h-[110px]")}
           />
         </div>
       </CardContent>

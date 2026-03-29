@@ -136,12 +136,13 @@ export default function ManageClassesClient({
   };
 
   return (
-    <PageShell width="wide" padding="relaxed">
+    <PageShell width="wide" padding="standard" className="app-directory-stack">
       <PageHero
         variant="directory"
+        density="compact"
         eyebrow="Academic Setup"
         title="Manage Classes"
-        description="Review the class structure already configured for this school and move class creation into a dedicated setup page."
+        description="Review and archive classes from the directory page."
         actions={
           <Button asChild className="app-button-page">
             <AppPrefetchLink href="/workspace/manage/classes/create" prefetchOnMount>
@@ -183,7 +184,12 @@ export default function ManageClassesClient({
 
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
-          <CardTitle>Existing Classes</CardTitle>
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <CardTitle>Existing Classes</CardTitle>
+            <div className="app-chip-cloud-tight">
+              <span className="app-meta-chip">{classes.length} classes</span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="app-section-body">
           {error ? (
@@ -205,7 +211,7 @@ export default function ManageClassesClient({
               }
             />
           ) : (
-            <div className="app-table-wrap">
+            <div className="app-table-wrap app-table-dense">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -216,13 +222,16 @@ export default function ManageClassesClient({
                 <TableBody>
                   {classes.map((classItem) => (
                     <TableRow key={classItem._id}>
-                      <TableCell className="font-medium">{classItem.name}</TableCell>
+                      <TableCell>
+                        <div className="app-table-cell-title">{classItem.name}</div>
+                      </TableCell>
                       <TableCell className="text-right">
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
                               variant="ghost"
-                              size="icon"
+                              size="sm"
+                              className="app-button-compact"
                               disabled={Boolean(archivingClassId)}
                             >
                               <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />

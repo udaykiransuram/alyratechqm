@@ -8,6 +8,7 @@ export interface IUser extends Document {
   passwordHash: string; // Never store plain-text passwords
   role: "admin" | "teacher" | "student";
   mobileNumber: string;
+  fatherName?: string;
   class?: Types.ObjectId;
   academicSection?: Types.ObjectId;
   classIds?: Types.ObjectId[];
@@ -29,6 +30,7 @@ const UserSchema: Schema<IUser> = new Schema(
     email: { type: String, required: false, unique: true, sparse: true },
     passwordHash: { type: String, required: false },
     mobileNumber: { type: String, required: true, trim: true },
+    fatherName: { type: String, required: false, trim: true },
     role: {
       type: String,
       required: true,
@@ -149,6 +151,8 @@ UserSchema.pre("validate", function (next) {
     this.hasAllClasses = false;
     this.hasAllSections = false;
     this.hasAllSubjects = false;
+  } else {
+    this.fatherName = undefined;
   }
 
   next();
@@ -169,6 +173,7 @@ if (
   (!existingUserModel.schema.path("academicSection") ||
     !existingUserModel.schema.path("academicSectionIds") ||
     !existingUserModel.schema.path("classIds") ||
+    !existingUserModel.schema.path("fatherName") ||
     !existingUserModel.schema.path("hasAllSections") ||
     !existingUserModel.schema.path("activeStudentSessionId") ||
     !existingUserModel.schema.path("activeStudentSessionLastSeenAt") ||

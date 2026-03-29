@@ -210,8 +210,7 @@ export default function StudentTestActiveAttemptView({
     >
       <div className="app-exam-focus-topbar">
         <div className="app-exam-focus-topbar-copy">
-          <p className="app-kicker">Test session</p>
-          <h1 className="text-[1.35rem] font-semibold leading-tight tracking-[-0.026em] text-foreground sm:text-[1.6rem]">
+          <h1 className="text-[1.25rem] font-semibold leading-tight tracking-[-0.024em] text-foreground sm:text-[1.45rem]">
             {paper.title}
           </h1>
           <p className="app-copy-muted">
@@ -219,7 +218,7 @@ export default function StudentTestActiveAttemptView({
               `${questionList.length} questions`}
           </p>
           {paperSubjects.length > 0 ? (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
               {paperSubjects.map((subject) => (
                 <span key={subject._id} className="app-meta-chip">
                   {subject.name || subject._id}
@@ -236,18 +235,16 @@ export default function StudentTestActiveAttemptView({
             {answeredCount}/{questionList.length} answered
           </span>
           <span className="app-meta-chip">
-            Question {Math.min(currentIndex + 1, questionList.length)} of {questionList.length}
+            Q {Math.min(currentIndex + 1, questionList.length)} / {questionList.length}
           </span>
-          <span className="app-meta-chip">
-            Status {saveStatusLabel}
-          </span>
+          <span className="app-meta-chip">Save: {saveStatusLabel}</span>
         </div>
         <div className="app-exam-focus-topbar-actions">
           <Button
             type="button"
             variant="outline"
-            size="md"
-            className="app-student-action-compact"
+            size="sm"
+            className="app-button-compact"
             onClick={() => void onSaveAttempt(true)}
             disabled={isSaving || isSubmitting}
           >
@@ -257,8 +254,8 @@ export default function StudentTestActiveAttemptView({
           <Button
             type="button"
             variant="outline"
-            size="md"
-            className="app-student-action-compact"
+            size="sm"
+            className="app-button-compact"
             onClick={() => void onToggleFullscreen()}
           >
             {isFullscreen ? (
@@ -275,8 +272,8 @@ export default function StudentTestActiveAttemptView({
           >
             <AlertDialogTrigger asChild>
               <Button
-                size="md"
-                className="app-student-action-compact"
+                size="sm"
+                className="app-button-compact"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? <Spinner /> : "Submit Test"}
@@ -321,7 +318,7 @@ export default function StudentTestActiveAttemptView({
 
       {pendingSubmitRetry ? (
         <FeedbackNotice variant="warning">
-          Submission is pending because your connection is unstable. Keep this tab open and we will continue retrying automatically.
+          Submission is pending due to connection issues. Keep this tab open while we retry.
         </FeedbackNotice>
       ) : null}
 
@@ -346,7 +343,7 @@ export default function StudentTestActiveAttemptView({
                 </span>
               </div>
             </CardHeader>
-            <CardContent className="app-section-body space-y-3.5">
+            <CardContent className="app-section-body space-y-3">
               <div className="flex items-center justify-between rounded-[1rem] border border-border/60 bg-[hsl(var(--app-surface-2)/0.58)] px-3 py-2 app-copy-meta font-medium">
                 <span>{unansweredCount} unanswered</span>
                 <span>
@@ -354,8 +351,8 @@ export default function StudentTestActiveAttemptView({
                 </span>
               </div>
               {subjectProgress.length > 1 ? (
-                <div className="rounded-[1.1rem] border border-border/60 bg-muted/15 p-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <div className="rounded-[1.1rem] border border-border/60 bg-muted/15 p-2.5">
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Subject progress
                   </p>
                   <div className="space-y-2">
@@ -415,7 +412,7 @@ export default function StudentTestActiveAttemptView({
               </div>
 
               {paper.instructions ? (
-                <details className="rounded-[1.35rem] border border-border/60 bg-muted/15 px-4 py-3">
+                <details className="rounded-[1.2rem] border border-border/60 bg-muted/15 px-3.5 py-2.5">
                   <summary className="app-title-sm cursor-pointer">
                     View instructions
                   </summary>
@@ -435,7 +432,7 @@ export default function StudentTestActiveAttemptView({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="space-y-1.5">
                     <p className="app-spotlight-label">{currentQuestion.sectionName}</p>
-                    <CardTitle className="text-2xl tracking-tight">
+                    <CardTitle className="text-xl tracking-tight sm:text-2xl">
                       Question {currentIndex + 1} of {questionList.length}
                     </CardTitle>
                     {currentQuestion.sectionDescription ? (
@@ -471,7 +468,7 @@ export default function StudentTestActiveAttemptView({
 
                 {currentQuestion.question.type === "single" ||
                 currentQuestion.question.type === "multiple" ? (
-                  <div className="space-y-3.5">
+                  <div className="space-y-3">
                     {currentQuestion.question.options.map((option, optionIndex) => {
                       const selected =
                         currentAnswer.selectedOptions.includes(optionIndex);
@@ -541,7 +538,7 @@ export default function StudentTestActiveAttemptView({
                         )
                       }
                       placeholder="Write your answer here..."
-                      className="min-h-[240px]"
+                      className="min-h-[220px]"
                     />
                   </div>
                 ) : null}
@@ -655,7 +652,7 @@ export default function StudentTestActiveAttemptView({
             </Card>
           ) : (
             <Card className="app-surface">
-              <CardContent className="app-empty-state py-12">
+              <CardContent className="app-empty-state py-10">
                 No questions are available in this paper.
               </CardContent>
             </Card>

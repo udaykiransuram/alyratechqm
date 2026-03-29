@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { buildRestoreUpdate } from "@/lib/archive";
+import { recordTenantAudit } from "@/lib/audit";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { requireTenantSession } from "@/lib/api-auth";
@@ -21,6 +23,726 @@ function normalizeIds(value: unknown) {
 
 function normalizeId(value: unknown) {
   return value ? String(value).trim() : "";
+}
+
+function toUploadLookupKey(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function splitUploadTokens(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+
+  return String(value ?? "")
+    .split(/[|\n;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseClassSectionToken(value: string) {
+  const match = String(value || "").match(/^(.+?)(?::|>|\/)(.+)$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    classToken: String(match[1] || "").trim(),
+    sectionToken: String(match[2] || "").trim(),
+  };
+}
+
+function buildSectionLookupKey(classId: string, sectionName: string) {
+  return `${classId}::${toUploadLookupKey(sectionName)}`;
+}
+
+type CachedClassRecord = {
+  _id: string;
+  name: string;
+  description?: string;
+  isArchived?: boolean;
+};
+
+type CachedSectionRecord = {
+  _id: string;
+  name: string;
+  classId: string;
+  description?: string;
+  isActive?: boolean;
+  isArchived?: boolean;
+};
+
+type StructureChangeItem = {
+  _id: string;
+  name: string;
+  classId?: string;
+  className?: string;
+};
+
+type StructureState = {
+  classById: Map<string, CachedClassRecord>;
+  classByLookupKey: Map<string, CachedClassRecord>;
+  sectionById: Map<string, CachedSectionRecord>;
+  sectionByClassLookupKey: Map<string, CachedSectionRecord>;
+  sectionsByLookupKey: Map<string, CachedSectionRecord[]>;
+  createdClasses: StructureChangeItem[];
+  restoredClasses: StructureChangeItem[];
+  createdSections: StructureChangeItem[];
+  restoredSections: StructureChangeItem[];
+  createdClassIds: Set<string>;
+  restoredClassIds: Set<string>;
+  createdSectionIds: Set<string>;
+  restoredSectionIds: Set<string>;
+};
+
+function createStructureState(): StructureState {
+  return {
+    classById: new Map(),
+    classByLookupKey: new Map(),
+    sectionById: new Map(),
+    sectionByClassLookupKey: new Map(),
+    sectionsByLookupKey: new Map(),
+    createdClasses: [],
+    restoredClasses: [],
+    createdSections: [],
+    restoredSections: [],
+    createdClassIds: new Set(),
+    restoredClassIds: new Set(),
+    createdSectionIds: new Set(),
+    restoredSectionIds: new Set(),
+  };
+}
+
+function rememberClass(state: StructureState, rawClass: any) {
+  const classRecord: CachedClassRecord = {
+    _id: String(rawClass?._id || ""),
+    name: String(rawClass?.name || "").trim(),
+    description: rawClass?.description
+      ? String(rawClass.description).trim()
+      : undefined,
+    isArchived: Boolean(rawClass?.isArchived),
+  };
+
+  if (!classRecord._id || !classRecord.name) {
+    return null;
+  }
+
+  state.classById.set(classRecord._id, classRecord);
+  state.classByLookupKey.set(toUploadLookupKey(classRecord.name), classRecord);
+  return classRecord;
+}
+
+function rememberSection(state: StructureState, rawSection: any) {
+  const classId = String(
+    rawSection?.class?._id || rawSection?.class || rawSection?.classId || "",
+  );
+  const sectionRecord: CachedSectionRecord = {
+    _id: String(rawSection?._id || ""),
+    name: String(rawSection?.name || "").trim(),
+    classId,
+    description: rawSection?.description
+      ? String(rawSection.description).trim()
+      : undefined,
+    isActive:
+      typeof rawSection?.isActive === "boolean"
+        ? rawSection.isActive
+        : undefined,
+    isArchived: Boolean(rawSection?.isArchived),
+  };
+
+  if (!sectionRecord._id || !sectionRecord.name || !sectionRecord.classId) {
+    return null;
+  }
+
+  state.sectionById.set(sectionRecord._id, sectionRecord);
+  state.sectionByClassLookupKey.set(
+    buildSectionLookupKey(sectionRecord.classId, sectionRecord.name),
+    sectionRecord,
+  );
+
+  const lookupKey = toUploadLookupKey(sectionRecord.name);
+  const existing = state.sectionsByLookupKey.get(lookupKey) || [];
+  state.sectionsByLookupKey.set(
+    lookupKey,
+    [...existing.filter((item) => item._id !== sectionRecord._id), sectionRecord],
+  );
+
+  return sectionRecord;
+}
+
+function pushStructureChange(
+  target: StructureChangeItem[],
+  seen: Set<string>,
+  item: StructureChangeItem,
+) {
+  if (!item._id || seen.has(item._id)) {
+    return;
+  }
+
+  seen.add(item._id);
+  target.push(item);
+}
+
+async function restoreClassRecord({
+  record,
+  ClassModel,
+  schoolKey,
+  request,
+  state,
+}: {
+  record: CachedClassRecord;
+  ClassModel: any;
+  schoolKey: string;
+  request: NextRequest;
+  state: StructureState;
+}) {
+  if (!record.isArchived) {
+    return record;
+  }
+
+  const restored = await ClassModel.findByIdAndUpdate(
+    record._id,
+    {
+      ...buildRestoreUpdate(),
+    },
+    { new: true, runValidators: true },
+  )
+    .select("name description isArchived")
+    .lean();
+
+  const nextRecord = rememberClass(state, restored || record) || record;
+
+  pushStructureChange(
+    state.restoredClasses,
+    state.restoredClassIds,
+    {
+      _id: nextRecord._id,
+      name: nextRecord.name,
+    },
+  );
+
+  await recordTenantAudit({
+    schoolKey,
+    req: request,
+    entityType: "class",
+    entityId: nextRecord._id,
+    entityLabel: nextRecord.name,
+    action: "restored",
+    summary: `Restored class ${nextRecord.name}.`,
+    details: { via: "user_bulk_upload" },
+  });
+
+  return nextRecord;
+}
+
+async function createClassRecord({
+  name,
+  ClassModel,
+  schoolKey,
+  request,
+  state,
+}: {
+  name: string;
+  ClassModel: any;
+  schoolKey: string;
+  request: NextRequest;
+  state: StructureState;
+}) {
+  const created = await ClassModel.create({
+    name,
+  });
+  const nextRecord = rememberClass(state, created.toObject()) || {
+    _id: String(created._id),
+    name: String(created.name || "").trim(),
+  };
+
+  pushStructureChange(
+    state.createdClasses,
+    state.createdClassIds,
+    {
+      _id: nextRecord._id,
+      name: nextRecord.name,
+    },
+  );
+
+  await recordTenantAudit({
+    schoolKey,
+    req: request,
+    entityType: "class",
+    entityId: nextRecord._id,
+    entityLabel: nextRecord.name,
+    action: "created",
+    summary: `Created class ${nextRecord.name}.`,
+    details: { via: "user_bulk_upload" },
+  });
+
+  return nextRecord;
+}
+
+async function ensureClassRecord(
+  value: unknown,
+  context: {
+    ClassModel: any;
+    schoolKey: string;
+    request: NextRequest;
+    state: StructureState;
+  },
+) {
+  const token = String(value || "").trim();
+  if (!token) {
+    return {
+      ok: false,
+      message: "Class name is required.",
+    } as const;
+  }
+
+  const directMatch = context.state.classById.get(token);
+  if (directMatch) {
+    return {
+      ok: true,
+      record: await restoreClassRecord({
+        record: directMatch,
+        ...context,
+      }),
+    } as const;
+  }
+
+  const lookupMatch = context.state.classByLookupKey.get(
+    toUploadLookupKey(token),
+  );
+  if (lookupMatch) {
+    return {
+      ok: true,
+      record: await restoreClassRecord({
+        record: lookupMatch,
+        ...context,
+      }),
+    } as const;
+  }
+
+  return {
+    ok: true,
+    record: await createClassRecord({
+      name: token,
+      ...context,
+    }),
+  } as const;
+}
+
+async function restoreSectionRecord({
+  record,
+  AcademicSectionModel,
+  schoolKey,
+  request,
+  state,
+}: {
+  record: CachedSectionRecord;
+  AcademicSectionModel: any;
+  schoolKey: string;
+  request: NextRequest;
+  state: StructureState;
+}) {
+  if (!record.isArchived) {
+    return record;
+  }
+
+  const restored = await AcademicSectionModel.findByIdAndUpdate(
+    record._id,
+    {
+      ...buildRestoreUpdate(),
+      isActive: typeof record.isActive === "boolean" ? record.isActive : true,
+    },
+    { new: true, runValidators: true },
+  )
+    .select("name class description isActive isArchived")
+    .lean();
+
+  const nextRecord = rememberSection(state, restored || record) || record;
+  const className = state.classById.get(nextRecord.classId)?.name || "";
+
+  pushStructureChange(
+    state.restoredSections,
+    state.restoredSectionIds,
+    {
+      _id: nextRecord._id,
+      name: nextRecord.name,
+      classId: nextRecord.classId,
+      className,
+    },
+  );
+
+  await recordTenantAudit({
+    schoolKey,
+    req: request,
+    entityType: "academic_section",
+    entityId: nextRecord._id,
+    entityLabel: nextRecord.name,
+    action: "restored",
+    summary: `Restored section ${nextRecord.name}.`,
+    details: {
+      classId: nextRecord.classId,
+      className,
+      via: "user_bulk_upload",
+    },
+  });
+
+  return nextRecord;
+}
+
+async function createSectionRecord({
+  classRecord,
+  name,
+  AcademicSectionModel,
+  schoolKey,
+  request,
+  state,
+}: {
+  classRecord: CachedClassRecord;
+  name: string;
+  AcademicSectionModel: any;
+  schoolKey: string;
+  request: NextRequest;
+  state: StructureState;
+}) {
+  const created = await AcademicSectionModel.create({
+    name,
+    class: classRecord._id,
+    isActive: true,
+  });
+  const nextRecord = rememberSection(state, created.toObject()) || {
+    _id: String(created._id),
+    name: String(created.name || "").trim(),
+    classId: classRecord._id,
+  };
+
+  pushStructureChange(
+    state.createdSections,
+    state.createdSectionIds,
+    {
+      _id: nextRecord._id,
+      name: nextRecord.name,
+      classId: nextRecord.classId,
+      className: classRecord.name,
+    },
+  );
+
+  await recordTenantAudit({
+    schoolKey,
+    req: request,
+    entityType: "academic_section",
+    entityId: nextRecord._id,
+    entityLabel: nextRecord.name,
+    action: "created",
+    summary: `Created section ${nextRecord.name}.`,
+    details: {
+      classId: classRecord._id,
+      className: classRecord.name,
+      via: "user_bulk_upload",
+    },
+  });
+
+  return nextRecord;
+}
+
+async function ensureSectionForClass({
+  classRecord,
+  name,
+  AcademicSectionModel,
+  schoolKey,
+  request,
+  state,
+}: {
+  classRecord: CachedClassRecord;
+  name: string;
+  AcademicSectionModel: any;
+  schoolKey: string;
+  request: NextRequest;
+  state: StructureState;
+}) {
+  const normalizedName = String(name || "").trim();
+  if (!normalizedName) {
+    return {
+      ok: false,
+      message: "Section name is required.",
+    } as const;
+  }
+
+  const lookupMatch = state.sectionByClassLookupKey.get(
+    buildSectionLookupKey(classRecord._id, normalizedName),
+  );
+  if (lookupMatch) {
+    return {
+      ok: true,
+      record: await restoreSectionRecord({
+        record: lookupMatch,
+        AcademicSectionModel,
+        schoolKey,
+        request,
+        state,
+      }),
+    } as const;
+  }
+
+  return {
+    ok: true,
+    record: await createSectionRecord({
+      classRecord,
+      name: normalizedName,
+      AcademicSectionModel,
+      schoolKey,
+      request,
+      state,
+    }),
+  } as const;
+}
+
+async function ensureSectionRecord({
+  value,
+  classScopeIds,
+  classContextMessage,
+  ClassModel,
+  AcademicSectionModel,
+  schoolKey,
+  request,
+  state,
+}: {
+  value: unknown;
+  classScopeIds: string[];
+  classContextMessage: string;
+  ClassModel: any;
+  AcademicSectionModel: any;
+  schoolKey: string;
+  request: NextRequest;
+  state: StructureState;
+}) {
+  const token = String(value || "").trim();
+  if (!token) {
+    return {
+      ok: true,
+      record: null,
+    } as const;
+  }
+
+  const directMatch = state.sectionById.get(token);
+  if (directMatch) {
+    const nextRecord = await restoreSectionRecord({
+      record: directMatch,
+      AcademicSectionModel,
+      schoolKey,
+      request,
+      state,
+    });
+
+    if (
+      classScopeIds.length > 0 &&
+      !classScopeIds.includes(nextRecord.classId)
+    ) {
+      return {
+        ok: false,
+        message: `Section "${nextRecord.name}" ${classContextMessage}`,
+      } as const;
+    }
+
+    return {
+      ok: true,
+      record: nextRecord,
+    } as const;
+  }
+
+  const parsed = parseClassSectionToken(token);
+  if (parsed?.classToken) {
+    const classResult = await ensureClassRecord(parsed.classToken, {
+      ClassModel,
+      schoolKey,
+      request,
+      state,
+    });
+    if (!classResult.ok) {
+      return classResult;
+    }
+
+    if (
+      classScopeIds.length > 0 &&
+      !classScopeIds.includes(classResult.record._id)
+    ) {
+      return {
+        ok: false,
+        message: `Section "${token}" ${classContextMessage}`,
+      } as const;
+    }
+
+    return ensureSectionForClass({
+      classRecord: classResult.record,
+      name: parsed.sectionToken,
+      AcademicSectionModel,
+      schoolKey,
+      request,
+      state,
+    });
+  }
+
+  const candidateSections = (state.sectionsByLookupKey.get(
+    toUploadLookupKey(token),
+  ) || []).filter((sectionRecord) =>
+    classScopeIds.length > 0
+      ? classScopeIds.includes(sectionRecord.classId)
+      : true,
+  );
+
+  if (candidateSections.length === 1) {
+    return {
+      ok: true,
+      record: await restoreSectionRecord({
+        record: candidateSections[0],
+        AcademicSectionModel,
+        schoolKey,
+        request,
+        state,
+      }),
+    } as const;
+  }
+
+  if (classScopeIds.length === 1) {
+    const classRecord = state.classById.get(classScopeIds[0]);
+    if (!classRecord) {
+      return {
+        ok: false,
+        message: "Selected class was not found while resolving sections.",
+      } as const;
+    }
+
+    return ensureSectionForClass({
+      classRecord,
+      name: token,
+      AcademicSectionModel,
+      schoolKey,
+      request,
+      state,
+    });
+  }
+
+  if (candidateSections.length > 1) {
+    return {
+      ok: false,
+      message: `Section "${token}" matches multiple classes. Use "Class Name:Section Name".`,
+    } as const;
+  }
+
+  return {
+    ok: false,
+    message: `Section "${token}" needs a class prefix like "Class Name:Section Name" so it can be created in the right class.`,
+  } as const;
+}
+
+async function resolveClassTokens(
+  values: unknown,
+  context: {
+    ClassModel: any;
+    schoolKey: string;
+    request: NextRequest;
+    state: StructureState;
+  },
+) {
+  const ids = new Set<string>();
+
+  for (const token of splitUploadTokens(values)) {
+    const classResult = await ensureClassRecord(token, context);
+    if (!classResult.ok) {
+      return classResult;
+    }
+    ids.add(classResult.record._id);
+  }
+
+  return {
+    ok: true,
+    ids: Array.from(ids),
+  } as const;
+}
+
+async function resolveSectionTokens({
+  values,
+  classScopeIds,
+  classContextMessage,
+  ClassModel,
+  AcademicSectionModel,
+  schoolKey,
+  request,
+  state,
+}: {
+  values: unknown;
+  classScopeIds: string[];
+  classContextMessage: string;
+  ClassModel: any;
+  AcademicSectionModel: any;
+  schoolKey: string;
+  request: NextRequest;
+  state: StructureState;
+}) {
+  const ids = new Set<string>();
+
+  for (const token of splitUploadTokens(values)) {
+    const normalizedToken = String(token || "").trim();
+    const hasDirectSectionMatch = state.sectionById.has(normalizedToken);
+    const isClassScopedToken = Boolean(parseClassSectionToken(normalizedToken));
+
+    if (
+      normalizedToken &&
+      !hasDirectSectionMatch &&
+      !isClassScopedToken &&
+      classScopeIds.length > 1
+    ) {
+      for (const classId of classScopeIds) {
+        const classRecord = state.classById.get(classId);
+        if (!classRecord) {
+          return {
+            ok: false,
+            message: "Selected class was not found while resolving sections.",
+          } as const;
+        }
+
+        const sectionResult = await ensureSectionForClass({
+          classRecord,
+          name: normalizedToken,
+          AcademicSectionModel,
+          schoolKey,
+          request,
+          state,
+        });
+        if (!sectionResult.ok) {
+          return sectionResult;
+        }
+        if (sectionResult.record?._id) {
+          ids.add(sectionResult.record._id);
+        }
+      }
+      continue;
+    }
+
+    const sectionResult = await ensureSectionRecord({
+      value: normalizedToken,
+      classScopeIds,
+      classContextMessage,
+      ClassModel,
+      AcademicSectionModel,
+      schoolKey,
+      request,
+      state,
+    });
+    if (!sectionResult.ok) {
+      return sectionResult;
+    }
+    if (sectionResult.record?._id) {
+      ids.add(sectionResult.record._id);
+    }
+  }
+
+  return {
+    ok: true,
+    ids: Array.from(ids),
+  } as const;
 }
 
 function resolveUserScope({
@@ -124,7 +846,8 @@ export async function POST(request: NextRequest) {
     const {
       User,
       AcademicSection: AcademicSectionModel,
-    } = await getTenantModels(schoolKey, ["User", "AcademicSection"]);
+      Class: ClassModel,
+    } = await getTenantModels(schoolKey, ["User", "AcademicSection", "Class"]);
 
     const payload = await request.json();
     const students = Array.isArray(payload?.users)
@@ -136,6 +859,23 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    const structureState = createStructureState();
+    const [existingClasses, existingSections] = await Promise.all([
+      ClassModel.find({})
+        .select("name description isArchived")
+        .lean(),
+      AcademicSectionModel.find({})
+        .select("name class description isActive isArchived")
+        .lean(),
+    ]);
+
+    existingClasses.forEach((classRecord: any) => {
+      rememberClass(structureState, classRecord);
+    });
+    existingSections.forEach((sectionRecord: any) => {
+      rememberSection(structureState, sectionRecord);
+    });
 
     const results: any[] = [];
     for (const student of students) {
@@ -150,6 +890,7 @@ export async function POST(request: NextRequest) {
         ? String(normalizedStudent.password)
         : undefined;
       const role = String(normalizedStudent.role || "").trim();
+      const fatherName = String(normalizedStudent.fathername || "").trim();
       const classId = normalizeId(normalizedStudent.classid ?? normalizedStudent.class);
       const academicSectionId = normalizeId(
         normalizedStudent.academicsectionid ??
@@ -230,11 +971,106 @@ export async function POST(request: NextRequest) {
         });
         continue;
       }
-      if (role === "student" && classId && academicSectionId) {
+
+      const structureContext = {
+        ClassModel,
+        AcademicSectionModel,
+        schoolKey,
+        request,
+        state: structureState,
+      };
+      let resolvedClassId = classId;
+      let resolvedAcademicSectionId = academicSectionId;
+      let resolvedScopedClassIds = scopedClassIds;
+      let resolvedScopedAcademicSectionIds = scopedAcademicSectionIds;
+
+      if (role === "student") {
+        const classResolution = await ensureClassRecord(classId, {
+          ClassModel,
+          schoolKey,
+          request,
+          state: structureState,
+        });
+        if (!classResolution.ok) {
+          results.push({
+            success: false,
+            message: classResolution.message,
+            student,
+          });
+          continue;
+        }
+
+        resolvedClassId = classResolution.record._id;
+
+        if (academicSectionId) {
+          const sectionResolution = await ensureSectionRecord({
+            value: academicSectionId,
+            classScopeIds: [resolvedClassId],
+            classContextMessage:
+              "does not belong to the selected class.",
+            ...structureContext,
+          });
+          if (!sectionResolution.ok) {
+            results.push({
+              success: false,
+              message: sectionResolution.message,
+              student,
+            });
+            continue;
+          }
+
+          resolvedAcademicSectionId = sectionResolution.record?._id || "";
+        } else {
+          resolvedAcademicSectionId = "";
+        }
+      } else {
+        if (!(role === "admin" && allowAllClasses)) {
+          const classResolution = await resolveClassTokens(normalizedClassIds, {
+            ClassModel,
+            schoolKey,
+            request,
+            state: structureState,
+          });
+          if (!classResolution.ok) {
+            results.push({
+              success: false,
+              message: classResolution.message,
+              student,
+            });
+            continue;
+          }
+          resolvedScopedClassIds = classResolution.ids;
+        } else {
+          resolvedScopedClassIds = [];
+        }
+
+        if (!allowAllSections) {
+          const sectionResolution = await resolveSectionTokens({
+            values: normalizedAcademicSectionIds,
+            classScopeIds: resolvedScopedClassIds,
+            classContextMessage:
+              "does not belong to the classes listed in this row.",
+            ...structureContext,
+          });
+          if (!sectionResolution.ok) {
+            results.push({
+              success: false,
+              message: sectionResolution.message,
+              student,
+            });
+            continue;
+          }
+          resolvedScopedAcademicSectionIds = sectionResolution.ids;
+        } else {
+          resolvedScopedAcademicSectionIds = [];
+        }
+      }
+
+      if (role === "student" && resolvedClassId && resolvedAcademicSectionId) {
         const sectionValidation = await validateStudentAcademicSection(
           AcademicSectionModel,
-          classId,
-          academicSectionId,
+          resolvedClassId,
+          resolvedAcademicSectionId,
         );
         if (!sectionValidation.ok) {
           results.push({
@@ -257,8 +1093,8 @@ export async function POST(request: NextRequest) {
             existingStudents.length === 1 &&
             isSameStudentPlacement(
               existingStudents[0],
-              classId,
-              academicSectionId,
+              resolvedClassId,
+              resolvedAcademicSectionId,
             )
           ) {
             results.push({
@@ -323,16 +1159,19 @@ export async function POST(request: NextRequest) {
         passwordHash,
         role,
         mobileNumber: String(finalMobileNumber).trim(),
-        class: role === "student" ? classId || undefined : undefined,
+        fatherName: role === "student" ? fatherName || undefined : undefined,
+        class: role === "student" ? resolvedClassId || undefined : undefined,
         academicSection:
-          role === "student" ? academicSectionId || undefined : undefined,
+          role === "student"
+            ? resolvedAcademicSectionId || undefined
+            : undefined,
         classIds:
           role === "teacher" || role === "admin"
-            ? scopedClassIds
+            ? resolvedScopedClassIds
             : undefined,
         academicSectionIds:
           role === "teacher" || role === "admin"
-            ? scopedAcademicSectionIds
+            ? resolvedScopedAcademicSectionIds
             : undefined,
         subjectIds:
           role === "teacher" || role === "admin"
@@ -353,7 +1192,15 @@ export async function POST(request: NextRequest) {
     }
 
     const successCount = results.filter((result) => result.success).length;
-    return NextResponse.json({ success: true, count: successCount, results });
+    return NextResponse.json({
+      success: true,
+      count: successCount,
+      results,
+      createdClasses: structureState.createdClasses,
+      restoredClasses: structureState.restoredClasses,
+      createdSections: structureState.createdSections,
+      restoredSections: structureState.restoredSections,
+    });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },

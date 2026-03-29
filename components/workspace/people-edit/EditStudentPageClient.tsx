@@ -30,6 +30,7 @@ type AcademicSectionItem = {
 type UserRecord = {
   _id: string;
   name?: string;
+  fatherName?: string;
   email?: string;
   mobileNumber?: string;
   class?: string;
@@ -56,6 +57,7 @@ function getSectionClassId(section: AcademicSectionItem) {
 function buildStudentForm(user: UserRecord | null) {
   return {
     name: user?.name || "",
+    fatherName: user?.fatherName || "",
     email: user?.email || "",
     mobileNumber: user?.mobileNumber || "",
     class: user?.class ? String(user.class) : "",
@@ -124,6 +126,7 @@ export default function EditStudentPageClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim(),
+          fatherName: form.fatherName.trim(),
           role: "student",
           email: form.email.trim(),
           mobileNumber: form.mobileNumber.trim(),
@@ -253,7 +256,19 @@ export default function EditStudentPageClient({
                         className="app-form-input"
                       />
                     </div>
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="app-field-group">
+                        <label className="app-field-label" htmlFor="fatherName">Father Name (Optional)</label>
+                        <input
+                          id="fatherName"
+                          name="fatherName"
+                          placeholder="Enter father name"
+                          value={form.fatherName}
+                          onChange={handleChange}
+                          disabled={saving}
+                          className="app-form-input"
+                        />
+                      </div>
                       <div className="app-field-group">
                         <label className="app-field-label" htmlFor="email">Email (Optional)</label>
                         <input

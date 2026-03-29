@@ -131,11 +131,12 @@ export default function WorkspaceHomePage() {
   return (
     <PageShell
       width="wide"
-      padding="relaxed"
-      className="app-workspace-overview-page"
+      padding="standard"
+      className="app-workspace-overview-page app-directory-stack"
     >
       <PageHero
         variant="overview"
+        density="compact"
         eyebrow="School Operations"
         title="Workspace Overview"
         description="Run academic setup, learner operations, assessments, and reporting from one calmer command surface designed for international-school administration."
@@ -199,7 +200,7 @@ export default function WorkspaceHomePage() {
         ]}
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="app-dashboard-module-grid">
         {workspaceCards.map((card) => {
           const Icon = card.icon;
           return (

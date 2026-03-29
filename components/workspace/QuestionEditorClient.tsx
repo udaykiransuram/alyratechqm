@@ -446,6 +446,7 @@ export default function QuestionEditorClient({
     <PageShell width="wide" padding="standard">
       <PageHero
         variant="editor"
+        density="compact"
         eyebrow="Question Bank"
         title={pageTitle}
         description={pageDescription}
@@ -497,7 +498,7 @@ export default function QuestionEditorClient({
         <div className="app-feedback app-feedback-info">{initialMessage}</div>
       ) : null}
 
-      <div className="app-editor-grid">
+      <div className="app-editor-grid app-editor-grid-composer">
         <div className="app-editor-main">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
@@ -627,7 +628,7 @@ export default function QuestionEditorClient({
           </Card>
         </div>
 
-        <aside className="app-editor-aside xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
+        <aside className="app-editor-aside app-editor-aside-sticky">
           <MetadataSelector
             classes={initialClasses}
             classId={classId}
@@ -649,13 +650,13 @@ export default function QuestionEditorClient({
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <div className="space-y-1">
-                <CardTitle>Marks</CardTitle>
+                <CardTitle>Question Setup</CardTitle>
                 <p className="text-sm leading-6 text-muted-foreground">
-                  Set the score value that will carry through paper-building and reporting.
+                  Set the marks and response model before saving so the rest of the authoring flow stays predictable.
                 </p>
               </div>
             </CardHeader>
-            <CardContent className="app-section-body">
+            <CardContent className="app-section-body space-y-4">
               <div className="app-field-group">
                 <Label htmlFor="marks-input" className="app-field-label">
                   Marks <span className="text-destructive">*</span>
@@ -670,59 +671,50 @@ export default function QuestionEditorClient({
                   required
                 />
               </div>
-            </CardContent>
-          </Card>
 
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <div className="space-y-1">
-                <CardTitle>Question Type</CardTitle>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Choose the learner response model early so the authoring form stays predictable.
-                </p>
+              <div className="space-y-2">
+                <Label className="app-field-label">Question Type</Label>
+                {isEditMode ? (
+                  <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-sm font-medium text-foreground">
+                    {getQuestionTypeLabel(type)}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <Button
+                      variant={type === "single" ? "default" : "outline"}
+                      onClick={() => setType("single")}
+                      size="sm"
+                      className="h-10 w-full"
+                    >
+                      Single
+                    </Button>
+                    <Button
+                      variant={type === "multiple" ? "default" : "outline"}
+                      onClick={() => setType("multiple")}
+                      size="sm"
+                      className="h-10 w-full"
+                    >
+                      Multiple
+                    </Button>
+                    <Button
+                      variant={type === "matrix-match" ? "default" : "outline"}
+                      onClick={() => setType("matrix-match")}
+                      size="sm"
+                      className="h-10 w-full"
+                    >
+                      Matrix
+                    </Button>
+                    <Button
+                      variant={type === "descriptive" ? "default" : "outline"}
+                      onClick={() => setType("descriptive")}
+                      size="sm"
+                      className="h-10 w-full"
+                    >
+                      Descriptive
+                    </Button>
+                  </div>
+                )}
               </div>
-            </CardHeader>
-            <CardContent className="app-section-body">
-              {isEditMode ? (
-                <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-sm font-medium text-foreground">
-                  {getQuestionTypeLabel(type)}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <Button
-                    variant={type === "single" ? "default" : "outline"}
-                    onClick={() => setType("single")}
-                    size="sm"
-                    className="h-10 w-full"
-                  >
-                    Single
-                  </Button>
-                  <Button
-                    variant={type === "multiple" ? "default" : "outline"}
-                    onClick={() => setType("multiple")}
-                    size="sm"
-                    className="h-10 w-full"
-                  >
-                    Multiple
-                  </Button>
-                  <Button
-                    variant={type === "matrix-match" ? "default" : "outline"}
-                    onClick={() => setType("matrix-match")}
-                    size="sm"
-                    className="h-10 w-full"
-                  >
-                    Matrix
-                  </Button>
-                  <Button
-                    variant={type === "descriptive" ? "default" : "outline"}
-                    onClick={() => setType("descriptive")}
-                    size="sm"
-                    className="h-10 w-full"
-                  >
-                    Descriptive
-                  </Button>
-                </div>
-              )}
             </CardContent>
           </Card>
 

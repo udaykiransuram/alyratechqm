@@ -24,7 +24,7 @@ export default function StudentRouteChrome({
   return (
     <>
       <StudentHeader />
-      <main className="min-h-screen pt-[var(--app-header-height)]">
+      <main className="app-route-main app-route-main-student">
         {children}
       </main>
     </>

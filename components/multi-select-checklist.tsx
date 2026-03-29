@@ -61,11 +61,11 @@ export default function MultiSelectChecklist({
   return (
     <div
       className={cn(
-        "space-y-3 rounded-2xl border border-border/70 bg-background/85 p-3 shadow-sm",
+        "space-y-2.5 rounded-2xl border border-border/70 bg-background/85 p-2.5 shadow-sm",
         className,
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2">
         <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {visibleSelectedCount} of {items.length} {countLabel}
         </div>
@@ -94,13 +94,13 @@ export default function MultiSelectChecklist({
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border/60 bg-background/70 px-3 py-4 text-sm text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border/60 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
           {emptyContent || "No options available."}
         </div>
       ) : (
         <div
           className={cn(
-            "max-h-56 space-y-1.5 overflow-y-auto rounded-xl border border-border/60 bg-background p-2.5",
+            "max-h-52 space-y-1.5 overflow-y-auto rounded-xl border border-border/60 bg-background p-2",
             listClassName,
           )}
         >
@@ -110,7 +110,7 @@ export default function MultiSelectChecklist({
               <label
                 key={item.id}
                 className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-sm text-foreground transition-all duration-200",
+                  "flex cursor-pointer items-start gap-3 rounded-xl border px-2.75 py-2.25 text-sm text-foreground transition-all duration-200",
                   checked
                     ? "border-primary/25 bg-primary/5 shadow-sm"
                     : "border-transparent hover:border-border/60 hover:bg-accent/45",
@@ -131,7 +131,7 @@ export default function MultiSelectChecklist({
         </div>
       )}
 
-      {helperText ? <p className="app-field-note px-1">{helperText}</p> : null}
+      {helperText ? <p className="app-field-note px-0.5">{helperText}</p> : null}
     </div>
   );
 }

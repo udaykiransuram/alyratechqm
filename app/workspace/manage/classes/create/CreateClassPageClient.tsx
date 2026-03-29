@@ -7,6 +7,10 @@ import { ArrowLeft } from "lucide-react";
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
 import BulkUploadPanel from "@/components/workspace/BulkUploadPanel";
+import {
+  WorkspaceCreateModeToggle,
+  type WorkspaceCreateMode,
+} from "@/components/workspace/WorkspaceCreateGuideCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FeedbackNotice, {
@@ -62,6 +66,7 @@ export default function CreateClassPageClient({
     message: string;
     variant: FeedbackNoticeVariant;
   } | null>(null);
+  const [createMode, setCreateMode] = useState<WorkspaceCreateMode>("single");
 
   const recentClasses = useMemo(() => classes.slice(0, 8), [classes]);
 
@@ -216,7 +221,7 @@ export default function CreateClassPageClient({
         variant="editor"
         eyebrow="Academic Setup"
         title="Create Classes"
-        description="Add one class at a time or import a whole class list from a spreadsheet."
+        description="Create one class or switch to bulk upload."
         actions={
           <Button type="button" variant="outline" onClick={navigateBack} className="app-button-back">
             <ArrowLeft className="h-4 w-4" />
@@ -226,29 +231,24 @@ export default function CreateClassPageClient({
         meta={
           <>
             <span className="app-meta-chip">Dedicated create route</span>
-            <span className="app-meta-chip">Bulk upload available</span>
+            <span className="app-meta-chip">{classes.length} classes</span>
           </>
         }
         stats={[
           {
             label: "Classes tracked",
             value: String(classes.length),
-            meta: "Current active class records already loaded for review.",
+            meta: "Current active class records.",
           },
           {
-            label: "Single create",
-            value: isSubmitting ? "Saving" : "Ready",
-            meta: "Add one class from the form on this page.",
+            label: "Mode",
+            value: createMode === "single" ? "Single" : "Bulk",
+            meta: createMode === "single" ? "Manual form" : "CSV/Excel upload",
           },
           {
-            label: "Bulk import",
-            value: isBulkUploading ? "Uploading" : "Ready",
-            meta: "Import multiple classes from CSV or Excel.",
-          },
-          {
-            label: "Flow",
-            value: "Create only",
-            meta: "Review and archiving stay on the directory page.",
+            label: "Status",
+            value: isSubmitting || isBulkUploading ? "Working" : "Ready",
+            meta: "Directory review remains on list page.",
           },
         ]}
       />
@@ -257,11 +257,18 @@ export default function CreateClassPageClient({
         <FeedbackNotice variant={feedback.variant}>{feedback.message}</FeedbackNotice>
       ) : null}
 
-      <div className="app-editor-grid">
-        <div className="app-editor-main">
+      <WorkspaceCreateModeToggle
+        value={createMode}
+        onChange={setCreateMode}
+        singleLabel="Single class"
+        bulkLabel="Bulk classes"
+      />
+
+      {createMode === "single" ? (
+        <div className="space-y-4">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle>Create Individual Class</CardTitle>
+              <CardTitle>Create Class</CardTitle>
             </CardHeader>
             <CardContent className="app-section-body">
               <form onSubmit={handleCreateClass} className="space-y-4">
@@ -293,12 +300,12 @@ export default function CreateClassPageClient({
 
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle>Current Class List</CardTitle>
+              <CardTitle>Current Classes</CardTitle>
             </CardHeader>
             <CardContent className="app-section-body">
               {recentClasses.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No classes exist yet. The first one you create will appear here.
+                  No classes yet.
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -312,11 +319,10 @@ export default function CreateClassPageClient({
             </CardContent>
           </Card>
         </div>
-
-        <div className="app-editor-aside">
+      ) : (
+        <div className="space-y-4">
           <BulkUploadPanel
             title="Bulk Upload Classes"
-            description="Use the template to add many classes in one go. Existing archived classes are restored automatically."
             inputId="bulk-upload-classes"
             onFileChange={handleBulkUpload}
             onDownloadTemplate={downloadTemplate}
@@ -328,8 +334,26 @@ export default function CreateClassPageClient({
               "Archived classes with the same name are restored automatically.",
             ]}
           />
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Current Classes</CardTitle>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              {recentClasses.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No classes yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {recentClasses.map((classItem) => (
+                    <span key={classItem._id} className="app-meta-chip">
+                      {classItem.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      )}
     </PageShell>
   );
 }

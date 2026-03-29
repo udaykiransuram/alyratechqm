@@ -216,6 +216,7 @@ export async function POST(req: NextRequest) {
     const email = normalizeEmail(body?.email);
     const password = body?.password ? String(body.password) : undefined;
     const role = String(body?.role || "").trim();
+    const fatherName = String(body?.fatherName || "").trim();
     const classId = normalizeId(body?.classId ?? body?.class);
     const academicSectionId = normalizeId(
       body?.academicSectionId ??
@@ -393,6 +394,7 @@ export async function POST(req: NextRequest) {
             passwordHash,
             role,
             mobileNumber,
+            fatherName: role === "student" ? fatherName || undefined : undefined,
             class: classId || undefined,
             academicSection: academicSectionId || undefined,
             classIds: undefined,
@@ -437,6 +439,7 @@ export async function POST(req: NextRequest) {
             passwordHash,
             role,
             mobileNumber,
+            fatherName: role === "student" ? fatherName || undefined : undefined,
             class: role === "student" ? classId || undefined : undefined,
             academicSection:
               role === "student" ? academicSectionId || undefined : undefined,
@@ -487,6 +490,7 @@ export async function POST(req: NextRequest) {
       passwordHash,
       role,
       mobileNumber,
+      fatherName: role === "student" ? fatherName || undefined : undefined,
       class: role === "student" ? classId || undefined : undefined,
       academicSection:
         role === "student" ? academicSectionId || undefined : undefined,

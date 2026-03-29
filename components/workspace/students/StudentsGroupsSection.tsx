@@ -21,6 +21,7 @@ import {
 type StudentItem = {
   _id: string;
   name: string;
+  fatherName?: string;
   email?: string;
   rollNumber?: string;
   enrolledAt?: string;

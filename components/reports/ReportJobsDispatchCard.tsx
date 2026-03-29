@@ -157,15 +157,9 @@ function ReportJobsDispatchCard({
 }: ReportJobsDispatchCardProps) {
   return (
     <Card className="app-surface overflow-hidden">
-      <CardHeader className="app-section-header space-y-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-1">
-            <CardTitle>Dispatch Queue</CardTitle>
-            <p className="app-form-section-copy">
-              Review delivery status, WhatsApp acknowledgement state, and retry context from one
-              operational queue that matches the rest of the workspace list pages.
-            </p>
-          </div>
+      <CardHeader className="app-section-header">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <CardTitle>Dispatch Queue</CardTitle>
           <div className="app-chip-cloud">
             {isPending ? (
               <span className="app-meta-chip">
@@ -207,16 +201,12 @@ function ReportJobsDispatchCard({
             }
           />
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="app-toolbar">
               <div className="app-toolbar-row">
                 <div className="app-toolbar-copy">
                   <p className="app-toolbar-title">
                     Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page
-                  </p>
-                  <p className="app-toolbar-note">
-                    Use the retry action only after checking the most recent delivery error and
-                    tracked attempt state.
                   </p>
                 </div>
                 <div className="app-toolbar-actions">

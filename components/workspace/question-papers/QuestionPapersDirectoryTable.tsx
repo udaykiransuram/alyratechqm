@@ -34,7 +34,7 @@ import {
 
 function QuestionPaperRowActionsFallback() {
   return (
-    <div className="min-w-[26rem] space-y-2">
+    <div className="min-w-[22rem] space-y-2">
       <div className="h-9 rounded-md border border-border/40 bg-muted/40" />
       <div className="h-9 rounded-md border border-border/30 bg-muted/30" />
     </div>
@@ -246,7 +246,7 @@ export default function QuestionPapersDirectoryTable({
         />
       </div>
 
-      <div className="app-table-wrap rounded-none border-0">
+      <div className="app-table-wrap app-table-dense rounded-none border-0">
         <Table>
           <TableHeader>
             <TableRow>
@@ -261,17 +261,16 @@ export default function QuestionPapersDirectoryTable({
               </TableHead>
               <TableHead className="w-[15rem]">Paper</TableHead>
               <TableHead className="w-[14rem]">Scope</TableHead>
-              <TableHead className="w-[120px]">Questions</TableHead>
-              <TableHead className="w-[120px]">Marks</TableHead>
+              <TableHead className="w-[150px]">Coverage</TableHead>
               <TableHead className="w-[140px]">Created</TableHead>
-              <TableHead className="min-w-[28rem]">Actions</TableHead>
+              <TableHead className="min-w-[24rem]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={6}
                   className="py-8 text-center text-muted-foreground"
                 >
                   No papers match the current search or scope.
@@ -315,7 +314,7 @@ export default function QuestionPapersDirectoryTable({
                     </TableCell>
                     <TableCell>
                       <div className="min-w-[13rem] space-y-2">
-                        <div className="font-medium leading-5">
+                        <div className="app-table-cell-title">
                           {paper.title}
                         </div>
                         <div className="flex flex-wrap gap-1.5">
@@ -402,29 +401,21 @@ export default function QuestionPapersDirectoryTable({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="text-sm font-medium">
-                          {paperQuestionCount}
+                      <div className="app-table-cell-stack">
+                        <div className="app-table-cell-title">
+                          {paperQuestionCount} question{paperQuestionCount === 1 ? "" : "s"}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {paperQuestionCount === 1 ? "question" : "questions"}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="text-sm font-medium">
-                          {paper.totalMarks}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          marks
+                        <div className="app-table-cell-note">
+                          {paper.totalMarks} marks
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      {paper.createdAt
-                        ? new Date(paper.createdAt).toLocaleDateString()
-                        : "-"}
+                      <div className="app-table-cell-title">
+                        {paper.createdAt
+                          ? new Date(paper.createdAt).toLocaleDateString()
+                          : "-"}
+                      </div>
                     </TableCell>
                     <TableCell>
                       {mountRowActions ? (

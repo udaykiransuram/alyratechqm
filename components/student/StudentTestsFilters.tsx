@@ -49,7 +49,6 @@ export default function StudentTestsFilters({
             {
               value: allSubjectsValue,
               label: "All subjects",
-              description: "See tests from every subject in your queue.",
             },
             ...subjectOptions,
           ]}

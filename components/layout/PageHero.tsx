@@ -14,6 +14,8 @@ export type PageHeroVariant =
   | "editor"
   | "operations";
 
+export type PageHeroDensity = "standard" | "compact";
+
 type PageHeroProps = {
   eyebrow?: ReactNode;
   title: ReactNode;
@@ -25,6 +27,7 @@ type PageHeroProps = {
   children?: ReactNode;
   className?: string;
   variant?: PageHeroVariant;
+  density?: PageHeroDensity;
 };
 
 export default function PageHero({
@@ -38,12 +41,18 @@ export default function PageHero({
   children,
   className,
   variant = "directory",
+  density = "standard",
 }: PageHeroProps) {
   const toolbarContent = toolbar ?? children;
 
   return (
     <section
-      className={cn("app-page-hero", `app-page-hero-${variant}`, className)}
+      className={cn(
+        "app-page-hero",
+        `app-page-hero-${variant}`,
+        `app-page-hero-density-${density}`,
+        className,
+      )}
     >
       <div className="app-page-hero-body">
         <div className="app-page-hero-header">

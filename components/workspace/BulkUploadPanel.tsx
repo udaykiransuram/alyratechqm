@@ -8,11 +8,12 @@ import FeedbackNotice, {
   type FeedbackNoticeVariant,
 } from "@/components/ui/feedback-notice";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 type BulkUploadPanelProps = {
   id?: string;
   title: string;
-  description: string;
+  description?: string;
   inputId: string;
   accept?: string;
   loading?: boolean;
@@ -27,6 +28,7 @@ type BulkUploadPanelProps = {
   tips?: string[];
   children?: ReactNode;
   disabled?: boolean;
+  compact?: boolean;
 };
 
 export default function BulkUploadPanel({
@@ -44,14 +46,17 @@ export default function BulkUploadPanel({
   tips = [],
   children,
   disabled = false,
+  compact = false,
 }: BulkUploadPanelProps) {
   return (
     <Card id={id} className="app-surface overflow-hidden">
-      <CardHeader className="app-section-header space-y-3">
+      <CardHeader
+        className={cn("app-section-header", compact ? "space-y-2" : "space-y-3")}
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
+          <div className={cn("space-y-1", compact && "space-y-0.5")}>
             <CardTitle>{title}</CardTitle>
-            <p className="app-form-section-copy">{description}</p>
+            {description ? <p className="app-form-section-copy">{description}</p> : null}
           </div>
           {onDownloadTemplate ? (
             <Button
@@ -66,8 +71,10 @@ export default function BulkUploadPanel({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="app-section-body space-y-4">
-        <div className="space-y-2">
+      <CardContent
+        className={cn("app-section-body", compact ? "space-y-3" : "space-y-4")}
+      >
+        <div className={cn("space-y-2", compact && "space-y-1.5")}>
           <Label htmlFor={inputId}>Upload file</Label>
           <input
             id={inputId}
@@ -87,9 +94,18 @@ export default function BulkUploadPanel({
         ) : null}
 
         {tips.length > 0 ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-            <p className="app-form-section-title">Upload notes</p>
-            <ul className="mt-2 space-y-2 text-sm leading-6 text-muted-foreground">
+          <div
+            className={cn(
+              "rounded-2xl border border-border/60 bg-muted/20",
+              compact ? "p-3" : "p-3.5",
+            )}
+          >
+            <ul
+              className={cn(
+                "text-sm leading-6 text-muted-foreground",
+                compact ? "space-y-1.5" : "space-y-2",
+              )}
+            >
               {tips.map((tip) => (
                 <li key={tip}>{tip}</li>
               ))}

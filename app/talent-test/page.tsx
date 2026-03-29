@@ -228,6 +228,8 @@ export default async function TalentTestLandingPage() {
     testWindowStart && testWindowEnd && { label: 'Test Window', date: fmtWindow(testWindowStart, testWindowEnd), year: yearOf(testWindowStart) },
     resultsDate && { label: 'Results Declaration', date: fmtMonthDay(resultsDate), year: yearOf(resultsDate) },
   ].filter(Boolean) as { label: string; date: string; year: string }[];
+  const sectionShellClassName = 'mx-auto max-w-7xl px-4 py-16 md:py-20';
+
   return (
     <div className="public-flow-page !px-0 !py-0">
       {/* Hero Section */}
@@ -252,17 +254,17 @@ export default async function TalentTestLandingPage() {
               </p>
             </Reveal>
             <Reveal delay={0.18}>
-              <div className="mt-10 flex flex-wrap justify-center gap-4">
-                <Link href="/register" prefetch className="public-flow-button-primary px-10 py-4 text-xl">
+              <div className="mt-9 flex flex-wrap justify-center gap-3">
+                <Link href="/register" prefetch className="public-flow-button-primary inline-flex min-w-[13.5rem] items-center justify-center px-8 py-3.5 text-lg">
                   {priceLabel ? `Enroll Now for ${priceLabel} ✨` : 'Enroll Now ✨'}
                 </Link>
-                <Link href="#features" className="public-flow-button-secondary px-10 py-4 text-xl">
+                <Link href="#features" className="public-flow-button-secondary inline-flex min-w-[13.5rem] items-center justify-center px-8 py-3.5 text-lg">
                   Learn More
                 </Link>
               </div>
             </Reveal>
             <Reveal delay={0.24}>
-              <div className="mx-auto mt-12 grid max-w-4xl grid-cols-2 gap-6 md:grid-cols-4">
+              <div className="mx-auto mt-10 grid max-w-4xl grid-cols-2 gap-4 md:grid-cols-4">
                 {heroStats.map((stat, i) => (
                   <div key={i} className="public-flow-stat-card">
                     <div className="text-4xl font-bold text-teal-600">{stat.value}</div>
@@ -274,7 +276,7 @@ export default async function TalentTestLandingPage() {
           </div>
 
           <Reveal delay={0.3}>
-            <div className="relative mx-auto mt-16 aspect-[16/9] max-w-5xl overflow-hidden rounded-[1.75rem] border border-border/70 shadow-2xl">
+            <div className="relative mx-auto mt-12 aspect-[16/9] max-w-5xl overflow-hidden rounded-[1.75rem] border border-border/70 shadow-2xl">
               <Image 
                 src="/images/source-frontend/ttf-students-laptop.jpg" 
                 alt="Students preparing for STEM talent test" 
@@ -297,18 +299,18 @@ export default async function TalentTestLandingPage() {
             description={description}
             compact
           />
-          <Stagger className="grid gap-6 md:grid-cols-3">
-            <div className="public-flow-stat-card">
+          <Stagger className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="public-flow-stat-card flex h-full flex-col justify-center">
               <div className="text-3xl mb-2">⏱️</div>
               <div className="text-2xl font-bold text-foreground">{duration}</div>
               <div className="mt-1 text-sm text-muted-foreground">Test Duration</div>
             </div>
-            <div className="public-flow-stat-card">
+            <div className="public-flow-stat-card flex h-full flex-col justify-center">
               <div className="text-3xl mb-2">📚</div>
               <div className="text-lg font-bold text-foreground">{subjects.join(', ')}</div>
               <div className="mt-1 text-sm text-muted-foreground">Subjects Covered</div>
             </div>
-            <div className="public-flow-stat-card">
+            <div className="public-flow-stat-card flex h-full flex-col justify-center">
               <div className="text-3xl mb-2">💰</div>
               <div className="text-2xl font-bold text-foreground">{priceLabel || '—'}</div>
               <div className="mt-1 text-sm text-muted-foreground">One-time Fee</div>
@@ -338,37 +340,37 @@ export default async function TalentTestLandingPage() {
       </section>
 
       {/* What Makes This Unique */}
-      <section id="features" className="mx-auto max-w-7xl px-4 py-20">
+      <section id="features" className={sectionShellClassName}>
         <PublicSectionIntro
           eyebrow="Why It Feels Different"
           title="What makes our talent test different from a normal exam?"
           description="This is not just another score sheet. It is a diagnostic layer that shows how a student thinks, where they break down, and what should happen next."
         />
-        <Stagger className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <Stagger className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {uniqueFeatures.map((item, idx) => (
-            <div key={idx} className={`public-flow-card border-l-4 p-8 transition hover:shadow-xl ${item.border}`}>
-              <div className="mb-4 text-5xl">{item.icon}</div>
-              <h3 className="text-xl font-bold">{item.title}</h3>
-              <p className="mt-3 text-teal-800 dark:text-teal-300">{item.description}</p>
+            <div key={idx} className={`public-flow-card border-l-4 p-6 transition hover:shadow-xl ${item.border}`}>
+              <div className="mb-3 text-4xl">{item.icon}</div>
+              <h3 className="text-lg font-bold">{item.title}</h3>
+              <p className="mt-2.5 text-sm leading-7 text-teal-800 dark:text-teal-300">{item.description}</p>
             </div>
           ))}
         </Stagger>
       </section>
 
       {/* Core Benefits */}
-      <section className="px-4 py-20">
+      <section className="px-4 py-16 md:py-20">
         <div className="mx-auto max-w-7xl">
           <PublicSectionIntro
             eyebrow="Core Benefits"
             title="More than just a test score"
             description="Families get actionable insight, not a one-line verdict. Schools get a better signal on how students are actually learning."
           />
-          <Stagger className="mt-12 grid gap-8 md:grid-cols-3">
+          <Stagger className="mt-10 grid gap-5 md:grid-cols-3">
             {benefits.map((benefit, index) => (
-              <div key={index} className="public-flow-card p-8 transition hover:shadow-xl">
-                <div className="mb-4 text-5xl">{benefit.icon}</div>
-                <h3 className="text-2xl font-bold">{benefit.title}</h3>
-                <p className="mt-3 text-teal-800 dark:text-teal-300">{benefit.description}</p>
+              <div key={index} className="public-flow-card flex h-full flex-col p-6 transition hover:shadow-xl">
+                <div className="mb-3 text-4xl">{benefit.icon}</div>
+                <h3 className="text-xl font-bold">{benefit.title}</h3>
+                <p className="mt-2.5 text-sm leading-7 text-teal-800 dark:text-teal-300">{benefit.description}</p>
               </div>
             ))}
           </Stagger>
@@ -376,8 +378,8 @@ export default async function TalentTestLandingPage() {
       </section>
 
       {/* Sample Report Preview */}
-      <section className="mx-auto max-w-7xl px-4 py-20">
-        <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
+      <section className={sectionShellClassName}>
+        <div className="grid gap-8 lg:grid-cols-2 lg:items-center lg:gap-10">
           <div>
             <Reveal>
               <div className="public-flow-badge mb-4">
@@ -391,7 +393,7 @@ export default async function TalentTestLandingPage() {
               </p>
             </Reveal>
             <Reveal delay={0.12}>
-              <ul className="mt-6 space-y-4">
+              <ul className="mt-6 space-y-3.5">
                 <li className="flex items-start gap-3">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">✓</span>
                   <div>
@@ -431,26 +433,26 @@ export default async function TalentTestLandingPage() {
             </Reveal>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-5">
             <Reveal delay={0.1}>
               <div className="public-flow-card">
                 <h3 className="mb-4 text-lg font-bold">Sample Diagnostic Insight</h3>
                 <div className="space-y-4">
-                  <div className="rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
+                  <div className="rounded-lg bg-red-50 p-3.5 dark:bg-red-900/20">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-red-900 dark:text-red-300">Algebraic Simplification</span>
                       <span className="text-2xl font-bold text-red-700 dark:text-red-400">45%</span>
                     </div>
                     <p className="mt-2 text-xs text-red-800 dark:text-red-200">⚠️ Weak Area: Procedural errors with parentheses and sign changes</p>
                   </div>
-                  <div className="rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20">
+                  <div className="rounded-lg bg-amber-50 p-3.5 dark:bg-amber-900/20">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-amber-900 dark:text-amber-300">Fraction Operations</span>
                       <span className="text-2xl font-bold text-amber-700 dark:text-amber-400">68%</span>
                     </div>
                     <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">⚡ Improving: LCM concepts need reinforcement</p>
                   </div>
-                  <div className="rounded-lg bg-teal-50 p-4 dark:bg-teal-900/20">
+                  <div className="rounded-lg bg-teal-50 p-3.5 dark:bg-teal-900/20">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-teal-900 dark:text-teal-300">Coordinate Geometry</span>
                       <span className="text-2xl font-bold text-teal-700 dark:text-teal-400">92%</span>
@@ -479,18 +481,18 @@ export default async function TalentTestLandingPage() {
 
       {/* Important Dates (dynamic from admin) */}
       {keyDates.length > 0 && (
-        <section className="px-4 py-20">
+        <section className="px-4 py-16 md:py-20">
           <div className="mx-auto max-w-7xl">
             <PublicSectionIntro
               eyebrow="Key Dates"
               title="Stay aligned with the live test schedule"
               description="These dates come from the active organizer configuration so families know exactly what window they are planning around."
             />
-            <Stagger className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+            <Stagger className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
               {keyDates.map((item, index) => (
-                <div key={index} className="public-flow-card-soft border-t-4 border-teal-500 p-8">
+                <div key={index} className="public-flow-card-soft border-t-4 border-teal-500 p-6">
                   <p className="text-sm font-bold uppercase tracking-wide text-muted-foreground">{item.label}</p>
-                  <p className="mt-3 text-3xl font-extrabold tracking-tight text-foreground md:text-5xl">{item.date}</p>
+                  <p className="mt-3 text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">{item.date}</p>
                   <p className="mt-2 text-lg font-medium text-muted-foreground">{item.year}</p>
                 </div>
               ))}
@@ -500,7 +502,7 @@ export default async function TalentTestLandingPage() {
       )}
 
       {/* Testimonials */}
-      <section className="mx-auto max-w-7xl px-4 py-20">
+      <section className={sectionShellClassName}>
         <PublicSectionIntro
           eyebrow="Testimonials"
           title="What students and parents say after the report arrives"
@@ -513,12 +515,12 @@ export default async function TalentTestLandingPage() {
             role: testimonial.role,
             rating: testimonial.rating,
           }))}
-          className="mt-12"
+          className="mt-10"
         />
       </section>
 
       {/* FAQ Section */}
-      <section className="px-4 py-20">
+      <section className="px-4 py-16 md:py-20">
         <div className="mx-auto max-w-4xl">
           <PublicSectionIntro
             eyebrow="FAQ"
@@ -526,7 +528,7 @@ export default async function TalentTestLandingPage() {
             description="The practical details matter: who can take the test, what happens after payment, and when the reports arrive."
           />
           <PublicFaqStack
-            className="mt-12"
+            className="mt-10"
             items={faqs.map((faq) => ({
               question: faq.question,
               answer: faq.answer.replace('{{PRICE}}', priceLabel || 'the set fee'),
@@ -536,7 +538,7 @@ export default async function TalentTestLandingPage() {
       </section>
 
       {/* Sample Papers CTA */}
-      <section className="mx-auto max-w-7xl px-4 py-20">
+      <section className={sectionShellClassName}>
         <div className="public-flow-band">
           <div className="text-center">
             <Reveal>
@@ -548,7 +550,7 @@ export default async function TalentTestLandingPage() {
           </div>
           
           <Reveal delay={0.08}>
-            <div className="mx-auto mt-10 max-w-2xl space-y-4">
+            <div className="mx-auto mt-8 max-w-2xl space-y-3.5">
               {[
                 { title: 'Grade 5 — Sample Paper (Math + Science)', href: '/papers/sample-grade-5.pdf', badge: 'Sample' },
                 { title: 'Grade 8 — Science + Mathematics', href: '/papers/sample-grade-8.pdf', badge: 'Sample' },
@@ -559,7 +561,7 @@ export default async function TalentTestLandingPage() {
                   href={paper.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="public-flow-card flex items-center justify-between gap-3 px-4 py-4 font-medium transition hover:-translate-y-0.5 md:px-6 md:py-5"
+                  className="public-flow-card flex items-center justify-between gap-3 px-4 py-3.5 font-medium transition hover:-translate-y-0.5 md:px-5 md:py-4"
                 >
                   <span className="flex items-center gap-3">
                     <span className="text-2xl">📄</span>
@@ -574,11 +576,11 @@ export default async function TalentTestLandingPage() {
           </Reveal>
 
           <Reveal delay={0.12}>
-            <div className="mt-10 flex flex-wrap justify-center gap-4">
-              <Link href="/register" className="public-flow-button-primary">
+            <div className="mt-9 flex flex-wrap justify-center gap-3">
+              <Link href="/register" className="public-flow-button-primary inline-flex min-w-[13rem] items-center justify-center">
                 Register Now for Full Access
               </Link>
-              <Link href="/contact" className="public-flow-button-secondary">
+              <Link href="/contact" className="public-flow-button-secondary inline-flex min-w-[13rem] items-center justify-center">
                 Request More Papers
               </Link>
             </div>
@@ -587,7 +589,7 @@ export default async function TalentTestLandingPage() {
       </section>
 
       {/* Final CTA */}
-      <section className="mx-auto max-w-7xl px-4 py-24">
+      <section className="mx-auto max-w-7xl px-4 py-20 md:py-24">
         <PublicFinalCta
           eyebrow="Ready to Register?"
           title="Discover your child&apos;s true learning pattern, not just one more score."
