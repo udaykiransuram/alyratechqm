@@ -5,6 +5,7 @@ import {
   getAuthConfigurationIssue,
   getNextAuthSecret,
 } from "@/lib/auth-runtime";
+import { isPublicPathname } from "@/lib/navigation/canonical-paths";
 
 type RateLimitStore = Map<string, number[]>;
 
@@ -71,27 +72,7 @@ function isStudentPage(path: string) {
 }
 
 function isPublicPage(path: string) {
-  return (
-    path === "/" ||
-    path === "/about" ||
-    path.startsWith("/about/") ||
-    path === "/benefits" ||
-    path.startsWith("/benefits/") ||
-    path === "/talent-test" ||
-    path.startsWith("/talent-test/") ||
-    path === "/register" ||
-    path.startsWith("/register/") ||
-    path === "/terms" ||
-    path.startsWith("/terms/") ||
-    path === "/success" ||
-    path.startsWith("/success/") ||
-    path === "/contact" ||
-    path.startsWith("/contact/") ||
-    path === "/product" ||
-    path.startsWith("/product/") ||
-    path === "/case-study" ||
-    path.startsWith("/case-study/")
-  );
+  return isPublicPathname(path);
 }
 
 function isWorkspacePage(path: string) {
@@ -100,13 +81,8 @@ function isWorkspacePage(path: string) {
 
 function allowsAuthPageWithExistingSession(
   error: string | null,
-  signedOut: string | null,
 ) {
-  return (
-    error === "Configuration" ||
-    error === "StudentSessionExpired" ||
-    signedOut === "1"
-  );
+  return error === "Configuration" || error === "StudentSessionExpired";
 }
 
 function resolveTokenAccountType(token: any) {
@@ -288,15 +264,14 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next();
     }
 
-    if (
-      isAuthRoute &&
-      allowsAuthPageWithExistingSession(
-        req.nextUrl.searchParams.get("error"),
-        req.nextUrl.searchParams.get("signedOut"),
-      )
-    ) {
-      return NextResponse.next();
-    }
+        if (
+          isAuthRoute &&
+          allowsAuthPageWithExistingSession(
+                req.nextUrl.searchParams.get("error"),
+          )
+        ) {
+          return NextResponse.next();
+        }
 
     const signInUrl = req.nextUrl.clone();
     if (!isAuthRoute) {
@@ -341,7 +316,6 @@ export async function middleware(req: NextRequest) {
         if (
           allowsAuthPageWithExistingSession(
             req.nextUrl.searchParams.get("error"),
-            req.nextUrl.searchParams.get("signedOut"),
           )
         ) {
           return NextResponse.next();

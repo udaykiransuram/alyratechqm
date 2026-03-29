@@ -1,8 +1,6 @@
 import { ImageResponse } from "next/og";
 import { COMPANY_NAME, HOME_DESCRIPTION, PRODUCT_NAME } from "@/lib/seo";
 
-export const runtime = "edge";
-
 export const size = {
   width: 1200,
   height: 630,

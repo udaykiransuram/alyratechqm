@@ -186,12 +186,11 @@ export async function performNextAuthSignOut(
   );
   const csrfToken = await fetchNextAuthCsrfToken();
 
-  const response = await fetch("/api/auth/signout?json=true", {
+  const response = await fetch("/api/auth/signout", {
     method: "POST",
     cache: "no-store",
     credentials: "same-origin",
     headers: {
-      Accept: "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: new URLSearchParams({
@@ -213,4 +212,75 @@ export async function performNextAuthSignOut(
     url,
     error: getErrorFromAuthUrl(url),
   };
+}
+
+function submitNextAuthSignOutForm({
+  callbackUrl,
+  csrfToken,
+}: {
+  callbackUrl: string;
+  csrfToken: string;
+}) {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/api/auth/signout";
+  form.style.display = "none";
+
+  const fields = {
+    csrfToken,
+    callbackUrl,
+    json: "true",
+  };
+
+  Object.entries(fields).forEach(([name, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
+  return true;
+}
+
+export async function performNextAuthSignOutAndRedirect(
+  options: SignOutOptions = {},
+): Promise<never> {
+  const callbackUrl =
+    resolveAbsoluteUrl(
+      options.callbackUrl,
+      typeof window === "undefined" ? "/" : window.location.href,
+    ) || "/";
+
+  try {
+    const result = await performNextAuthSignOut({ callbackUrl });
+    const redirectUrl = result.url || callbackUrl;
+
+    if (typeof window !== "undefined") {
+      window.location.assign(redirectUrl);
+    }
+  } catch (error) {
+    console.error("Programmatic sign out failed. Falling back to form submit.", error);
+
+    try {
+      const csrfToken = await fetchNextAuthCsrfToken();
+      if (submitNextAuthSignOutForm({ callbackUrl, csrfToken })) {
+        return await new Promise<never>(() => {});
+      }
+    } catch (fallbackError) {
+      console.error("Fallback sign out form submission failed.", fallbackError);
+    }
+
+    if (typeof window !== "undefined") {
+      window.location.assign(callbackUrl);
+    }
+  }
+
+  return await new Promise<never>(() => {});
 }

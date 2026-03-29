@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 import Footer from "@/components/Footer";
 import ClientApiRequestProbe from "@/components/layout/ClientApiRequestProbe";
@@ -21,6 +22,9 @@ export default function PublicRouteChrome({
 }: {
   children: ReactNode;
 }) {
+  const pathname = usePathname() || "/";
+  const isHomeRoute = pathname === "/";
+
   useEffect(() => {
     const root = document.documentElement;
 
@@ -67,7 +71,9 @@ export default function PublicRouteChrome({
       </div>
       <Navbar />
       <ViewportHover />
-      <main className="flex-1 pt-20">{children}</main>
+      <main className={isHomeRoute ? "flex-1 pt-0" : "flex-1 pt-20"}>
+        {children}
+      </main>
       <Footer />
     </div>
   );

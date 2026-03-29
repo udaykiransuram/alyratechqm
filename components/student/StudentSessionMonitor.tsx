@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { performNextAuthSignOut } from "@/lib/client/next-auth-client";
+import { performNextAuthSignOutAndRedirect } from "@/lib/client/next-auth-client";
 import { STUDENT_SESSION_HEARTBEAT_INTERVAL_MS } from "@/lib/student-session";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
@@ -49,14 +49,9 @@ export default function StudentSessionMonitor() {
         if (response.status === 401 || response.status === 403) {
           isSigningOutRef.current = true;
           const callbackUrl = buildStudentSessionExpiredCallbackUrl();
-
-          try {
-            await performNextAuthSignOut({
-              callbackUrl,
-            });
-          } catch {}
-
-          window.location.assign(callbackUrl);
+          await performNextAuthSignOutAndRedirect({
+            callbackUrl,
+          });
         }
       } catch {
       }

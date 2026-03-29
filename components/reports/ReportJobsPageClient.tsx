@@ -21,7 +21,7 @@ const ReportJobsFiltersCard = dynamic(
   () => import("@/components/reports/ReportJobsFiltersCard"),
   {
     loading: () => (
-      <div className="analytics-card overflow-hidden p-4">
+      <div className="app-filter-panel p-4">
         <div className="space-y-3">
           <div className="h-6 w-44 rounded bg-muted/50" />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -39,7 +39,7 @@ const ReportJobsDispatchCard = dynamic(
   () => import("@/components/reports/ReportJobsDispatchCard"),
   {
     loading: () => (
-      <div className="analytics-card overflow-hidden p-4">
+      <div className="app-surface p-4">
         <div className="space-y-3">
           <div className="h-6 w-36 rounded bg-muted/50" />
           <div className="h-60 rounded-xl border border-border/60 bg-muted/20" />
@@ -242,8 +242,7 @@ export default function ReportJobsPageClient({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
-              size="default"
-              className="h-10 rounded-xl px-4"
+              className="app-button-filter"
               onClick={() => router.refresh()}
               disabled={isPending}
             >
@@ -251,8 +250,7 @@ export default function ReportJobsPageClient({
               Refresh
             </Button>
             <Button
-              size="default"
-              className="h-10 rounded-xl px-4"
+              className="app-button-page"
               onClick={() => void runWorkerNow()}
             >
               <Wrench className="h-4 w-4" />
@@ -301,45 +299,49 @@ export default function ReportJobsPageClient({
         ]}
       />
 
-      {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
-      {notice ? <div className="app-feedback app-feedback-success">{notice}</div> : null}
+      <div className="space-y-6">
+        {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+        {notice ? <div className="app-feedback app-feedback-success">{notice}</div> : null}
 
-      <ReportJobsFiltersCard
-        totalJobs={totalJobs}
-        failedCount={summary.failed}
-        awaitingAckCount={summary.awaitingAck}
-        hasActiveFilters={hasActiveFilters}
-        statusFilter={statusFilter}
-        typeFilter={typeFilter}
-        reportScopeFilter={reportScopeFilter}
-        academicSectionFilter={academicSectionFilter}
-        academicSectionOptions={academicSectionOptions}
-        onStatusChange={handleStatusChange}
-        onTypeChange={handleTypeChange}
-        onReportScopeChange={handleReportScopeChange}
-        onAcademicSectionChange={handleAcademicSectionChange}
-        onClearFilters={handleClearFilters}
-      />
+        <ReportJobsFiltersCard
+          totalJobs={totalJobs}
+          failedCount={summary.failed}
+          awaitingAckCount={summary.awaitingAck}
+          hasActiveFilters={hasActiveFilters}
+          statusFilter={statusFilter}
+          typeFilter={typeFilter}
+          reportScopeFilter={reportScopeFilter}
+          academicSectionFilter={academicSectionFilter}
+          academicSectionOptions={academicSectionOptions}
+          onStatusChange={handleStatusChange}
+          onTypeChange={handleTypeChange}
+          onReportScopeChange={handleReportScopeChange}
+          onAcademicSectionChange={handleAcademicSectionChange}
+          onClearFilters={handleClearFilters}
+        />
 
-      <ReportJobsDispatchCard
-        jobs={jobs}
-        totalJobs={totalJobs}
-        page={page}
-        pages={pages}
-        pageSize={pageSize}
-        isPending={isPending}
-        retryingId={retryingId}
-        pendingCount={summary.pending}
-        sentCount={summary.sent}
-        awaitingAckCount={summary.awaitingAck}
-        onPageChange={(nextPage, options) =>
-          navigateWithFilters({
-            nextPage,
-            preserveScroll: Boolean(options?.preserveScroll),
-          })
-        }
-        onRetryJob={(jobId) => void retryJob(jobId)}
-      />
+        <ReportJobsDispatchCard
+          jobs={jobs}
+          totalJobs={totalJobs}
+          page={page}
+          pages={pages}
+          pageSize={pageSize}
+          isPending={isPending}
+          retryingId={retryingId}
+          pendingCount={summary.pending}
+          sentCount={summary.sent}
+          awaitingAckCount={summary.awaitingAck}
+          hasActiveFilters={hasActiveFilters}
+          onPageChange={(nextPage, options) =>
+            navigateWithFilters({
+              nextPage,
+              preserveScroll: Boolean(options?.preserveScroll),
+            })
+          }
+          onRetryJob={(jobId) => void retryJob(jobId)}
+          onClearFilters={handleClearFilters}
+        />
+      </div>
     </PageShell>
   );
 }

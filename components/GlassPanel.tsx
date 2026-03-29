@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 interface GlassPanelProps {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
   /** Override background classes, e.g. "bg-white/5 dark:bg-white/0" */
   bgClassName?: string;
   /** Override blur/saturate classes, e.g. "backdrop-blur-md" */
@@ -36,10 +37,11 @@ interface GlassPanelProps {
  * Reusable glassmorphism panel with subtle teal-friendly border,
  * soft inner highlight and strong backdrop blur.
  */
-export default function GlassPanel({ children, className, bgClassName, blurClassName, noHighlight, borderClassName, textureUrl, textureOpacityClass, noiseUrl, noiseOpacityClass, specular, edgeHighlight, veilClassName, radiusClassName }: GlassPanelProps) {
+export default function GlassPanel({ children, className, style, bgClassName, blurClassName, noHighlight, borderClassName, textureUrl, textureOpacityClass, noiseUrl, noiseOpacityClass, specular, edgeHighlight, veilClassName, radiusClassName }: GlassPanelProps) {
   const radius = radiusClassName ?? "rounded-3xl";
   return (
     <div
+      style={style}
       className={cn(
         "relative border group",
         radius,
