@@ -22,6 +22,7 @@ function buildStudentSessionExpiredCallbackUrl() {
 
 export default function StudentSessionMonitor() {
   const isSigningOutRef = useRef(false);
+  const heartbeatInFlightRef = useRef(false);
 
   useEffect(() => {
     if (studentHeartbeatDisabled) {
@@ -31,10 +32,11 @@ export default function StudentSessionMonitor() {
     let disposed = false;
 
     async function pingStudentSession() {
-      if (disposed || isSigningOutRef.current) {
+      if (disposed || isSigningOutRef.current || heartbeatInFlightRef.current) {
         return;
       }
 
+      heartbeatInFlightRef.current = true;
       try {
         const response = await fetch("/api/student/session/heartbeat", {
           method: "POST",
@@ -54,6 +56,8 @@ export default function StudentSessionMonitor() {
           });
         }
       } catch {
+      } finally {
+        heartbeatInFlightRef.current = false;
       }
     }
 

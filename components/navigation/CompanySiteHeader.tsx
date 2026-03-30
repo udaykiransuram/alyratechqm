@@ -181,6 +181,7 @@ export default function CompanySiteHeader({
               showSchoolWorkspace={false}
               activePath={activePath}
               onNavigate={handleNavigate}
+              onSignOut={() => void handleSignOut()}
             />
             <Button
               type="button"

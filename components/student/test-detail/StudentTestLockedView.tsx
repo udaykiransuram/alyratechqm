@@ -149,6 +149,7 @@ export default function StudentTestLockedView({
         eyebrow="Student Portal"
         title={paper.title}
         variant="overview"
+        density="compact"
         description="Your attempt is locked. Review your submission summary."
         actions={
           <Button
@@ -175,7 +176,6 @@ export default function StudentTestLockedView({
               <span className="app-meta-chip">{paperClassLabel}</span>
             ) : null}
             <span className="app-meta-chip">{submissionStatus}</span>
-            <span className="app-meta-chip">{submittedAtLabel}</span>
           </>
         }
         stats={[
@@ -215,7 +215,7 @@ export default function StudentTestLockedView({
           <CardTitle>Submission Summary</CardTitle>
         </CardHeader>
         <CardContent className="app-section-body">
-          <div className="app-detail-grid">
+          <div className="app-detail-grid app-exam-detail-grid">
             <div className="app-detail-item">
               <p className="app-detail-label">Status</p>
               <div className="app-detail-value">{submissionStatus}</div>
@@ -241,11 +241,11 @@ export default function StudentTestLockedView({
           {submittedSubjectSummaries.length > 1 ? (
             <div className="mt-5 space-y-2.5">
               <p className="app-title-sm">Subject Breakdown</p>
-              <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+              <div className="app-exam-subject-breakdown-grid">
                 {submittedSubjectSummaries.map((subject) => (
                   <div
                     key={subject._id}
-                    className="rounded-[1.15rem] border border-border/60 bg-[hsl(var(--app-surface-2)/0.48)] p-3.5"
+                    className="app-exam-subject-breakdown-card"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="app-title-sm">{subject.name}</p>
@@ -253,7 +253,7 @@ export default function StudentTestLockedView({
                         {subject.answered}/{subject.total} answered
                       </span>
                     </div>
-                    <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="app-exam-subject-breakdown-stats">
                       <div className="app-detail-item">
                         <p className="app-detail-label">Auto-graded marks</p>
                         <div className="app-detail-value">

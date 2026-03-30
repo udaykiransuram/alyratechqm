@@ -58,6 +58,7 @@ export default function StudentTestPageClient({
           eyebrow="Student Portal"
           title="Test"
           variant="overview"
+          density="compact"
           description="We couldn't open this test right now."
           actions={
             <Button

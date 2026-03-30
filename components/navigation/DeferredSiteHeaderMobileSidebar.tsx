@@ -25,12 +25,14 @@ export default function DeferredSiteHeaderMobileSidebar({
   showSchoolWorkspace,
   activePath,
   onNavigate,
+  onSignOut,
 }: {
   groups: SidebarGroup[];
   school?: CurrentSchoolInfo;
   showSchoolWorkspace: boolean;
   activePath: string;
   onNavigate: (href: string) => void;
+  onSignOut: () => void | Promise<void>;
 }) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
@@ -67,6 +69,7 @@ export default function DeferredSiteHeaderMobileSidebar({
           showSchoolWorkspace={showSchoolWorkspace}
           activePath={activePath}
           onNavigate={onNavigate}
+          onSignOut={onSignOut}
         />
       ) : null}
     </>

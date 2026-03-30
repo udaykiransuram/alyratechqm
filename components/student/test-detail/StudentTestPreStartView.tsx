@@ -77,6 +77,7 @@ export default function StudentTestPreStartView({
         eyebrow="Student Portal"
         title={paper.title}
         variant="overview"
+        density="compact"
         description="Review details before you start."
         actions={
           <div className="app-student-action-cluster">
@@ -165,11 +166,7 @@ export default function StudentTestPreStartView({
           <CardTitle>Details</CardTitle>
         </CardHeader>
         <CardContent className="app-section-body">
-          <div className="app-detail-grid">
-            <div className="app-detail-item">
-              <p className="app-detail-label">Status</p>
-              <div className="app-detail-value">{statusLabel}</div>
-            </div>
+          <div className="app-detail-grid app-exam-detail-grid">
             <div className="app-detail-item">
               <p className="app-detail-label">Subjects</p>
               <div className="app-detail-value">{paperSubjectLabel || "—"}</div>
@@ -177,14 +174,6 @@ export default function StudentTestPreStartView({
             <div className="app-detail-item">
               <p className="app-detail-label">Class</p>
               <div className="app-detail-value">{paperClassLabel || "—"}</div>
-            </div>
-            <div className="app-detail-item">
-              <p className="app-detail-label">Questions</p>
-              <div className="app-detail-value">{questionCount}</div>
-            </div>
-            <div className="app-detail-item">
-              <p className="app-detail-label">Duration</p>
-              <div className="app-detail-value">{paper.duration} min</div>
             </div>
             <div className="app-detail-item">
               <p className="app-detail-label">Passing Marks</p>

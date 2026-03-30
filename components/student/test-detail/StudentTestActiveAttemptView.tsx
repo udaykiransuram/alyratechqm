@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Expand, Minimize2 } from "lucide-react";
+import {
+  forwardRef,
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { ChevronUp, Expand, Minimize2 } from "lucide-react";
 
 import { ContentRenderer } from "@/components/ContentRenderer";
 import {
@@ -17,6 +27,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import FeedbackNotice from "@/components/ui/feedback-notice";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
@@ -104,6 +120,843 @@ function getOptionLabel(index: number) {
   return index < 26 ? String.fromCharCode(65 + index) : String(index + 1);
 }
 
+const DESCRIPTIVE_SYNC_DEBOUNCE_MS = 220;
+
+type DescriptiveAnswerEditorHandle = {
+  flush: () => void;
+};
+
+type DescriptiveAnswerEditorProps = {
+  question: StudentQuestion;
+  value: string;
+  onCommit: (question: StudentQuestion, value: string) => void;
+};
+
+const DescriptiveAnswerEditor = memo(
+  forwardRef<DescriptiveAnswerEditorHandle, DescriptiveAnswerEditorProps>(
+    function DescriptiveAnswerEditor({ question, value, onCommit }, ref) {
+      const [draftValue, setDraftValue] = useState(value);
+      const draftValueRef = useRef(value);
+      const lastCommittedValueRef = useRef(value);
+      const syncTimerRef = useRef<number | null>(null);
+
+      const clearSyncTimer = useCallback(() => {
+        if (syncTimerRef.current !== null) {
+          window.clearTimeout(syncTimerRef.current);
+          syncTimerRef.current = null;
+        }
+      }, []);
+
+      const commitValue = useCallback(
+        (nextValue: string, immediate = false) => {
+          if (nextValue === lastCommittedValueRef.current) {
+            return;
+          }
+
+          lastCommittedValueRef.current = nextValue;
+          if (immediate) {
+            onCommit(question, nextValue);
+            return;
+          }
+
+          startTransition(() => {
+            onCommit(question, nextValue);
+          });
+        },
+        [onCommit, question],
+      );
+
+      const flushDraft = useCallback(() => {
+        clearSyncTimer();
+        commitValue(draftValueRef.current, true);
+      }, [clearSyncTimer, commitValue]);
+
+      useImperativeHandle(
+        ref,
+        () => ({
+          flush: flushDraft,
+        }),
+        [flushDraft],
+      );
+
+      useEffect(() => {
+        clearSyncTimer();
+        setDraftValue(value);
+        draftValueRef.current = value;
+        lastCommittedValueRef.current = value;
+      }, [clearSyncTimer, question._id, value]);
+
+      useEffect(() => {
+        if (draftValue === lastCommittedValueRef.current) {
+          clearSyncTimer();
+          return;
+        }
+
+        clearSyncTimer();
+        syncTimerRef.current = window.setTimeout(() => {
+          syncTimerRef.current = null;
+          commitValue(draftValueRef.current);
+        }, DESCRIPTIVE_SYNC_DEBOUNCE_MS);
+
+        return clearSyncTimer;
+      }, [clearSyncTimer, commitValue, draftValue]);
+
+      useEffect(() => {
+        if (typeof window === "undefined" || typeof document === "undefined") {
+          return;
+        }
+
+        const handlePageHide = () => {
+          flushDraft();
+        };
+
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === "hidden") {
+            flushDraft();
+          }
+        };
+
+        window.addEventListener("pagehide", handlePageHide);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+          window.removeEventListener("pagehide", handlePageHide);
+          document.removeEventListener("visibilitychange", handleVisibilityChange);
+          flushDraft();
+        };
+      }, [flushDraft]);
+
+      return (
+        <Textarea
+          value={draftValue}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            draftValueRef.current = nextValue;
+            setDraftValue(nextValue);
+          }}
+          onBlur={flushDraft}
+          placeholder="Write your answer here..."
+          className="min-h-[220px]"
+        />
+      );
+    },
+  ),
+);
+DescriptiveAnswerEditor.displayName = "DescriptiveAnswerEditor";
+
+type SubjectProgressItem = {
+  _id: string;
+  name: string;
+  answered: number;
+  total: number;
+};
+
+type SectionNavigationGroup = {
+  id: string;
+  sectionIndex: number;
+  name: string;
+  description: string;
+  instructions: string;
+  defaultMarks: number;
+  defaultNegativeMarks: number;
+  totalMarks: number;
+  subjects: Array<{ _id: string; name: string }>;
+  items: Array<{
+    questionId: string;
+    globalIndex: number;
+    answered: boolean;
+  }>;
+};
+
+const CountdownStatusCard = memo(function CountdownStatusCard({
+  deadlineAt,
+}: {
+  deadlineAt: string | null;
+}) {
+  const remainingMs = useCountdownRemaining(deadlineAt);
+  const countdownTone = getCountdownTone(remainingMs);
+  const countdownValue = formatRemainingTime(remainingMs);
+
+  return (
+    <div
+      className={cn(
+        "app-exam-timer-card",
+        countdownTone === "warning" && "app-exam-timer-card-warning",
+        countdownTone === "danger" && "app-exam-timer-card-danger",
+      )}
+    >
+      <div className="app-exam-timer-card-head">
+        <p className="app-exam-timer-card-kicker">Time left</p>
+        <span
+          className={cn(
+            "app-status-badge w-fit",
+            countdownTone === "warning"
+              ? "app-status-badge-warning"
+              : countdownTone === "danger"
+                ? "app-status-badge-danger"
+                : "app-status-badge-info",
+          )}
+        >
+          {getCountdownBadgeLabel(remainingMs)}
+        </span>
+      </div>
+      <div className="app-exam-timer-card-value" suppressHydrationWarning>
+        {countdownValue}
+      </div>
+    </div>
+  );
+});
+
+type ExamTopbarProps = {
+  paper: StudentPaper;
+  paperSubjects: Array<{ _id: string; name: string }>;
+  paperSubjectLabel: string;
+  paperClassLabel: string;
+  deadlineAt: string | null;
+  answeredCompactLabel: string;
+  currentSectionName: string | null;
+  showCurrentSectionChip: boolean;
+  saveStateToneClass: string;
+  saveStateBadgeLabel: string;
+  saveStatusLabel: string;
+  submitDialogOpen: boolean;
+  setSubmitDialogOpen: (open: boolean) => void;
+  answeredCount: number;
+  questionCount: number;
+  unansweredCount: number;
+  hasManualReviewQuestions: boolean;
+  isSaving: boolean;
+  isSubmitting: boolean;
+  isFullscreen: boolean;
+  onSaveAttempt: (force?: boolean) => Promise<void>;
+  onToggleFullscreen: () => Promise<void>;
+  onSubmitAttempt: (auto?: boolean) => Promise<void>;
+};
+
+const ExamTopbar = memo(function ExamTopbar({
+  paper,
+  paperSubjects,
+  paperSubjectLabel,
+  paperClassLabel,
+  deadlineAt,
+  answeredCompactLabel,
+  currentSectionName,
+  showCurrentSectionChip,
+  saveStateToneClass,
+  saveStateBadgeLabel,
+  saveStatusLabel,
+  submitDialogOpen,
+  setSubmitDialogOpen,
+  answeredCount,
+  questionCount,
+  unansweredCount,
+  hasManualReviewQuestions,
+  isSaving,
+  isSubmitting,
+  isFullscreen,
+  onSaveAttempt,
+  onToggleFullscreen,
+  onSubmitAttempt,
+}: ExamTopbarProps) {
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  const showPaperSubjectChips = paperSubjects.length > 1;
+
+  return (
+    <div className="app-exam-focus-topbar">
+      <div className="app-exam-focus-topbar-copy">
+        <h1 className="app-exam-focus-topbar-title text-[1.25rem] font-semibold leading-tight tracking-[-0.024em] text-foreground sm:text-[1.45rem]">
+          {paper.title}
+        </h1>
+        <p className="app-copy-muted app-exam-focus-topbar-subtitle">
+          {[paperSubjectLabel, paperClassLabel, `${paper.duration} min`]
+            .filter(Boolean)
+            .join(" • ") || `${questionCount} questions`}
+        </p>
+        {showPaperSubjectChips ? (
+          <div className="mt-1.5 hidden flex-wrap gap-1.5 sm:flex">
+            {paperSubjects.map((subject) => (
+              <span key={subject._id} className="app-meta-chip">
+                {subject.name || subject._id}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="app-exam-focus-topbar-status" aria-label="Test status">
+        <div className="app-exam-focus-topbar-stat">
+          <span className="app-exam-focus-topbar-stat-label">Answered</span>
+          <span className="app-exam-focus-topbar-stat-value">
+            {answeredCompactLabel}
+          </span>
+        </div>
+        {showCurrentSectionChip && currentSectionName ? (
+          <div className="app-exam-focus-topbar-stat app-exam-focus-topbar-stat-current">
+            <span className="app-exam-focus-topbar-stat-label">Current</span>
+            <span
+              className="app-exam-focus-topbar-stat-value app-exam-focus-topbar-stat-value-soft"
+              title={currentSectionName}
+            >
+              {currentSectionName}
+            </span>
+          </div>
+        ) : null}
+        <div className="app-exam-focus-topbar-stat">
+          <span className="app-exam-focus-topbar-stat-label">Save</span>
+          <span
+            className={cn("app-status-badge w-fit", saveStateToneClass)}
+            title={saveStatusLabel}
+          >
+            {saveStateBadgeLabel}
+          </span>
+        </div>
+      </div>
+      <div className="app-exam-focus-topbar-side">
+        <CountdownStatusCard deadlineAt={deadlineAt} />
+        <div
+          className="app-exam-focus-topbar-actions"
+          role="group"
+          aria-label="Test actions"
+        >
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="app-button-compact app-exam-topbar-action"
+            onClick={() => void onSaveAttempt(true)}
+            disabled={isSaving || isSubmitting}
+          >
+            {isSaving ? <Spinner /> : "Save"}
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="app-button-compact app-exam-topbar-action"
+            onClick={() => void onToggleFullscreen()}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="mr-1.5 h-4 w-4 sm:mr-2" />
+            ) : (
+              <Expand className="mr-1.5 h-4 w-4 sm:mr-2" />
+            )}
+            {isFullscreen ? (
+              <>
+                <span className="sm:hidden">Exit</span>
+                <span className="hidden sm:inline">Exit fullscreen</span>
+              </>
+            ) : (
+              <>
+                <span className="sm:hidden">Screen</span>
+                <span className="hidden sm:inline">Fullscreen</span>
+              </>
+            )}
+          </Button>
+
+          {hasMounted ? (
+            <AlertDialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  className="app-button-compact app-exam-topbar-action app-exam-topbar-action-submit"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? <Spinner /> : "Submit"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Submit this test?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    You have answered {answeredCount} of {questionCount} questions.
+                    {unansweredCount > 0
+                      ? ` ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} will be left unanswered.`
+                      : " All questions have a saved answer."}
+                    {hasManualReviewQuestions
+                      ? " Descriptive responses may remain pending review after submission."
+                      : ""}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isSubmitting}>
+                    Continue Reviewing
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => void onSubmitAttempt(false)}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? <Spinner /> : "Confirm Submit"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              className="app-button-compact app-exam-topbar-action app-exam-topbar-action-submit"
+              disabled
+            >
+              Submit
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+type ExamSidebarProps = {
+  answeredCount: number;
+  questionCount: number;
+  unansweredCount: number;
+  currentQuestionNumber: number;
+  subjectProgress: SubjectProgressItem[];
+  sectionNavigation: SectionNavigationGroup[];
+  currentIndex: number;
+  instructions: string;
+  onJumpToQuestion: (index: number) => Promise<void>;
+};
+
+const ExamSidebar = memo(function ExamSidebar({
+  answeredCount,
+  questionCount,
+  unansweredCount,
+  currentQuestionNumber,
+  subjectProgress,
+  sectionNavigation,
+  currentIndex,
+  instructions,
+  onJumpToQuestion,
+}: ExamSidebarProps) {
+  return (
+    <aside className="app-exam-sidebar app-exam-sidebar-focus hidden xl:block">
+      <Card className="app-surface overflow-hidden">
+        <CardHeader className="app-section-header">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>Question Navigation</CardTitle>
+            <span className="app-meta-chip">
+              {answeredCount}/{questionCount} answered
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent className="app-section-body space-y-3">
+          <div className="app-exam-sidebar-summary">
+            <div className="app-exam-sidebar-summary-card">
+              <span className="app-exam-sidebar-summary-label">Answered</span>
+              <span className="app-exam-sidebar-summary-value">{answeredCount}</span>
+              <span className="app-exam-sidebar-summary-meta">Saved responses</span>
+            </div>
+            <div className="app-exam-sidebar-summary-card">
+              <span className="app-exam-sidebar-summary-label">Remaining</span>
+              <span className="app-exam-sidebar-summary-value">{unansweredCount}</span>
+              <span className="app-exam-sidebar-summary-meta">Still to review</span>
+            </div>
+            <div className="app-exam-sidebar-summary-card">
+              <span className="app-exam-sidebar-summary-label">Current</span>
+              <span className="app-exam-sidebar-summary-value">
+                Q {currentQuestionNumber || "—"}
+              </span>
+              <span className="app-exam-sidebar-summary-meta">
+                Jump with the palette
+              </span>
+            </div>
+          </div>
+          {subjectProgress.length > 1 ? (
+            <div className="app-exam-sidebar-panel">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Subject progress
+              </p>
+              <div className="space-y-2">
+                {subjectProgress.map((subject) => (
+                  <div
+                    key={subject._id}
+                    className="flex items-center justify-between gap-3 text-sm"
+                  >
+                    <span className="font-medium text-foreground">{subject.name}</span>
+                    <span className="text-muted-foreground">
+                      {subject.answered}/{subject.total}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div className="space-y-3">
+            {sectionNavigation.map((section) => {
+              const sectionActive = section.items.some(
+                (item) => item.globalIndex === currentIndex,
+              );
+
+              return (
+                <div key={section.id} className="app-exam-sidebar-panel">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        {`Section ${section.sectionIndex + 1}: ${section.name}`}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {section.items.length} question
+                        {section.items.length === 1 ? "" : "s"} • {section.totalMarks} marks
+                        • +{section.defaultMarks} / -{section.defaultNegativeMarks}
+                      </p>
+                    </div>
+                    {sectionActive ? (
+                      <span className="app-status-badge app-status-badge-info w-fit">
+                        Current
+                      </span>
+                    ) : null}
+                  </div>
+                  {section.subjects.length > 0 ? (
+                    <div className="app-exam-sidebar-subjects mt-2 flex flex-wrap gap-1.5">
+                      {section.subjects.map((subject) => (
+                        <span
+                          key={`${section.id}-${subject._id}`}
+                          className="app-meta-chip"
+                        >
+                          {subject.name || subject._id}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="app-exam-palette mt-3">
+                    {section.items.map((item) => (
+                      <button
+                        key={`${section.id}-${item.questionId || item.globalIndex}`}
+                        type="button"
+                        onClick={() => void onJumpToQuestion(item.globalIndex)}
+                        className={cn(
+                          "app-exam-palette-button",
+                          item.globalIndex === currentIndex &&
+                            "app-exam-palette-button-active",
+                          item.globalIndex !== currentIndex &&
+                            item.answered &&
+                            "app-exam-palette-button-complete",
+                        )}
+                      >
+                        {item.globalIndex + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="app-exam-palette-legend">
+            <div className="app-exam-palette-legend-item">
+              <span className="app-exam-palette-swatch bg-primary" />
+              Current
+            </div>
+            <div className="app-exam-palette-legend-item">
+              <span className="app-exam-palette-swatch bg-emerald-400" />
+              Answered
+            </div>
+            <div className="app-exam-palette-legend-item">
+              <span className="app-exam-palette-swatch bg-muted" />
+              Unanswered
+            </div>
+          </div>
+
+          {instructions ? (
+            <details className="app-exam-sidebar-panel px-3.5 py-2.5">
+              <summary className="app-title-sm cursor-pointer">
+                View instructions
+              </summary>
+              <div className="prose prose-sm mt-3 max-w-none text-foreground dark:prose-invert">
+                <p>{instructions}</p>
+              </div>
+            </details>
+          ) : null}
+        </CardContent>
+      </Card>
+    </aside>
+  );
+});
+
+type ExamMobileNavigationProps = {
+  answeredCount: number;
+  questionCount: number;
+  unansweredCount: number;
+  currentQuestionNumber: number;
+  currentIndex: number;
+  currentSectionName: string | null;
+  saveStateToneClass: string;
+  saveStateBadgeLabel: string;
+  subjectProgress: SubjectProgressItem[];
+  sectionNavigation: SectionNavigationGroup[];
+  instructions: string;
+  onJumpToQuestion: (index: number) => Promise<void>;
+};
+
+const ExamMobileNavigation = memo(function ExamMobileNavigation({
+  answeredCount,
+  questionCount,
+  unansweredCount,
+  currentQuestionNumber,
+  currentIndex,
+  currentSectionName,
+  saveStateToneClass,
+  saveStateBadgeLabel,
+  subjectProgress,
+  sectionNavigation,
+  instructions,
+  onJumpToQuestion,
+}: ExamMobileNavigationProps) {
+  const activeSectionId = useMemo(() => {
+    const activeSection = sectionNavigation.find((section) =>
+      section.items.some((item) => item.globalIndex === currentIndex),
+    );
+
+    return activeSection?.id ?? sectionNavigation[0]?.id ?? null;
+  }, [currentIndex, sectionNavigation]);
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
+    activeSectionId,
+  );
+
+  useEffect(() => {
+    setSelectedSectionId(activeSectionId);
+  }, [activeSectionId]);
+
+  const selectedSection = useMemo(() => {
+    return (
+      sectionNavigation.find((section) => section.id === selectedSectionId) ??
+      sectionNavigation.find((section) => section.id === activeSectionId) ??
+      sectionNavigation[0] ??
+      null
+    );
+  }, [activeSectionId, sectionNavigation, selectedSectionId]);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const handleOpenSheet = useCallback(() => {
+    setSelectedSectionId(activeSectionId);
+    setSheetOpen(true);
+  }, [activeSectionId]);
+
+  const handleJumpFromSheet = useCallback(
+    async (index: number) => {
+      setSheetOpen(false);
+      await onJumpToQuestion(index);
+    },
+    [onJumpToQuestion],
+  );
+
+  return (
+    <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
+      <div className="app-exam-mobile-nav-bar xl:hidden" aria-label="Question navigation">
+        <div className="app-exam-mobile-nav-bar-copy">
+          <p className="app-exam-mobile-nav-bar-label">
+            Question {currentQuestionNumber || "—"} of {questionCount || "—"}
+          </p>
+          <div className="app-exam-mobile-nav-bar-meta">
+            <span className="app-exam-mobile-nav-bar-chip">
+              {answeredCount}/{questionCount} answered
+            </span>
+            {unansweredCount > 0 ? (
+              <span className="app-exam-mobile-nav-bar-chip">
+                {unansweredCount} left
+              </span>
+            ) : null}
+            {currentSectionName ? (
+              <span
+                className="app-exam-mobile-nav-bar-chip app-exam-mobile-nav-bar-chip-current"
+                title={currentSectionName}
+              >
+                {currentSectionName}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className="app-exam-mobile-nav-bar-actions">
+          <span
+            className={cn(
+              "app-status-badge hidden min-[400px]:inline-flex",
+              saveStateToneClass,
+            )}
+          >
+            {saveStateBadgeLabel}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            className="app-exam-mobile-nav-open"
+            onClick={handleOpenSheet}
+          >
+            Questions
+            <ChevronUp className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <DialogContent className="app-exam-mobile-sheet inset-x-0 bottom-0 top-auto h-auto max-h-[min(82dvh,42rem)] w-screen translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 rounded-t-[calc(var(--app-radius-xl)+0.125rem)] rounded-b-none border-x-0 border-b-0 p-0 sm:inset-x-0 sm:bottom-0 sm:top-auto sm:h-auto sm:max-h-[min(82dvh,42rem)] sm:w-screen sm:max-w-none sm:translate-x-0 sm:translate-y-0 sm:rounded-t-[calc(var(--app-radius-xl)+0.125rem)] sm:rounded-b-none sm:border-x-0 sm:border-b-0 xl:hidden">
+        <DialogHeader className="app-exam-mobile-sheet-header">
+          <div className="app-exam-mobile-sheet-title-row">
+            <div className="min-w-0">
+              <DialogTitle>Question Navigation</DialogTitle>
+              <p className="app-copy-meta">
+                Question {currentQuestionNumber || "—"} of {questionCount || "—"}
+              </p>
+            </div>
+            <span className={cn("app-status-badge w-fit", saveStateToneClass)}>
+              {saveStateBadgeLabel}
+            </span>
+          </div>
+        </DialogHeader>
+
+        <div className="app-exam-mobile-sheet-body">
+          <section className="app-exam-mobile-nav">
+            <div className="app-exam-mobile-nav-summary">
+              <span className="app-meta-chip">
+                {answeredCount}/{questionCount} answered
+              </span>
+              {unansweredCount > 0 ? (
+                <span className="app-meta-chip">{unansweredCount} left</span>
+              ) : null}
+              {currentSectionName ? (
+                <span className="app-meta-chip" title={currentSectionName}>
+                  {currentSectionName}
+                </span>
+              ) : null}
+            </div>
+
+            {sectionNavigation.length > 1 ? (
+              <div className="app-exam-mobile-section-tabs" aria-label="Sections">
+                {sectionNavigation.map((section) => {
+                  const sectionIsSelected = section.id === selectedSection?.id;
+                  const sectionIsCurrent = section.items.some(
+                    (item) => item.globalIndex === currentIndex,
+                  );
+
+                  return (
+                    <button
+                      key={section.id}
+                      type="button"
+                      aria-pressed={sectionIsSelected}
+                      className={cn(
+                        "app-exam-mobile-section-tab",
+                        sectionIsSelected && "app-exam-mobile-section-tab-active",
+                      )}
+                      onClick={() => setSelectedSectionId(section.id)}
+                      title={`Section ${section.sectionIndex + 1}: ${section.name}`}
+                    >
+                      <span className="app-exam-mobile-section-tab-label">
+                        {`Section ${section.sectionIndex + 1}`}
+                      </span>
+                      <span className="app-exam-mobile-section-tab-meta">
+                        {section.items.length}Q
+                      </span>
+                      {sectionIsCurrent ? (
+                        <span className="app-exam-mobile-section-tab-status">
+                          Now
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {selectedSection ? (
+              <div className="app-exam-mobile-section-panel">
+                <div className="app-exam-mobile-section-panel-head">
+                  <div className="app-exam-mobile-section-panel-copy">
+                    <p className="app-title-sm">
+                      {`Section ${selectedSection.sectionIndex + 1}: ${selectedSection.name}`}
+                    </p>
+                    <p className="app-copy-meta">
+                      {selectedSection.items.length} question
+                      {selectedSection.items.length === 1 ? "" : "s"} •{" "}
+                      {selectedSection.totalMarks} marks • +
+                      {selectedSection.defaultMarks} / -
+                      {selectedSection.defaultNegativeMarks}
+                    </p>
+                  </div>
+                  {selectedSection.id === activeSectionId ? (
+                    <span className="app-status-badge app-status-badge-info w-fit">
+                      Current
+                    </span>
+                  ) : null}
+                </div>
+
+                {selectedSection.subjects.length > 0 ? (
+                  <div className="app-exam-mobile-section-meta">
+                    {selectedSection.subjects.map((subject) => (
+                      <span
+                        key={`${selectedSection.id}-${subject._id}`}
+                        className="app-meta-chip"
+                      >
+                        {subject.name || subject._id}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div
+                  className="app-exam-mobile-palette-grid"
+                  aria-label={`Question navigation for section ${selectedSection.sectionIndex + 1}`}
+                >
+                  {selectedSection.items.map((item) => (
+                    <button
+                      key={`${selectedSection.id}-${item.questionId || item.globalIndex}`}
+                      type="button"
+                      onClick={() => void handleJumpFromSheet(item.globalIndex)}
+                      className={cn(
+                        "app-exam-palette-button app-exam-mobile-palette-button",
+                        item.globalIndex === currentIndex &&
+                          "app-exam-palette-button-active",
+                        item.globalIndex !== currentIndex &&
+                          item.answered &&
+                          "app-exam-palette-button-complete",
+                      )}
+                    >
+                      {item.globalIndex + 1}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {subjectProgress.length > 1 || instructions ? (
+              <details className="app-exam-mobile-details">
+                <summary className="app-title-sm cursor-pointer">
+                  More details
+                </summary>
+                {subjectProgress.length > 1 ? (
+                  <div className="app-exam-mobile-progress">
+                    {subjectProgress.map((subject) => (
+                      <div
+                        key={subject._id}
+                        className="app-exam-mobile-progress-item"
+                      >
+                        <span className="font-medium text-foreground">
+                          {subject.name}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {subject.answered}/{subject.total}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {instructions ? (
+                  <div className="prose prose-sm mt-3 max-w-none text-foreground dark:prose-invert">
+                    <p>{instructions}</p>
+                  </div>
+                ) : null}
+              </details>
+            ) : null}
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+});
+
 type StudentTestActiveAttemptViewProps = {
   examContainerRef: { current: HTMLDivElement | null };
   paper: StudentPaper;
@@ -181,17 +1034,9 @@ export default function StudentTestActiveAttemptView({
   onUpdateMatrixSelection,
   onClearCurrentAnswer,
 }: StudentTestActiveAttemptViewProps) {
-  const [hasMounted, setHasMounted] = useState(false);
-
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
-  const subjectProgress = useMemo(() => {
-    const progressMap = new Map<
-      string,
-      { _id: string; name: string; answered: number; total: number }
-    >();
+  const descriptiveEditorRef = useRef<DescriptiveAnswerEditorHandle | null>(null);
+  const subjectProgress = useMemo<SubjectProgressItem[]>(() => {
+    const progressMap = new Map<string, SubjectProgressItem>();
 
     questionList.forEach((item) => {
       const fallbackSubject =
@@ -219,7 +1064,7 @@ export default function StudentTestActiveAttemptView({
       left.name.localeCompare(right.name),
     );
   }, [answeredQuestionIds, paperSubjects, questionList]);
-  const sectionNavigation = useMemo(() => {
+  const sectionNavigation = useMemo<SectionNavigationGroup[]>(() => {
     let runningIndex = 0;
 
     return (Array.isArray(paper.sections) ? paper.sections : [])
@@ -276,9 +1121,6 @@ export default function StudentTestActiveAttemptView({
         : [],
     [currentQuestion],
   );
-  const remainingMs = useCountdownRemaining(deadlineAt);
-  const countdownTone = getCountdownTone(remainingMs);
-  const countdownValue = formatRemainingTime(remainingMs);
   const totalQuestions = questionList.length;
   const currentQuestionNumber = totalQuestions
     ? Math.min(currentIndex + 1, totalQuestions)
@@ -303,7 +1145,6 @@ export default function StudentTestActiveAttemptView({
   const currentSectionRuleLabel = currentSection
     ? `+${currentSection.defaultMarks || currentQuestion?.marks || 0} / -${currentSection.defaultNegativeMarks || currentQuestion?.negativeMarks || 0}`
     : `+${currentQuestion?.marks || 0} / -${currentQuestion?.negativeMarks || 0}`;
-  const showPaperSubjectChips = paperSubjects.length > 1;
   const answeredCompactLabel = totalQuestions
     ? `${answeredCount}/${totalQuestions}`
     : "—";
@@ -342,172 +1183,68 @@ export default function StudentTestActiveAttemptView({
         );
       })
     : [];
+  const flushDescriptiveAnswer = useCallback(() => {
+    descriptiveEditorRef.current?.flush();
+  }, []);
+  const handleSaveAttempt = useCallback(
+    async (force?: boolean) => {
+      flushDescriptiveAnswer();
+      await onSaveAttempt(force);
+    },
+    [flushDescriptiveAnswer, onSaveAttempt],
+  );
+  const handleSubmitAttempt = useCallback(
+    async (auto?: boolean) => {
+      flushDescriptiveAnswer();
+      await onSubmitAttempt(auto);
+    },
+    [flushDescriptiveAnswer, onSubmitAttempt],
+  );
+  const handleJumpToQuestion = useCallback(
+    async (index: number) => {
+      flushDescriptiveAnswer();
+      await onJumpToQuestion(index);
+    },
+    [flushDescriptiveAnswer, onJumpToQuestion],
+  );
+  const handleClearCurrentAnswer = useCallback(() => {
+    flushDescriptiveAnswer();
+    onClearCurrentAnswer();
+  }, [flushDescriptiveAnswer, onClearCurrentAnswer]);
 
   return (
     <div
       ref={examContainerRef}
       className={cn(
-        "app-page-shell app-exam-focus-shell max-w-[96rem] px-3 py-3 sm:px-4 sm:py-4",
+        "app-page-shell app-exam-focus-shell max-w-[96rem] px-3 pt-3 pb-28 sm:px-4 sm:pt-4 sm:pb-32 xl:py-4",
         isFullscreen && "app-exam-focus-shell-fullscreen",
       )}
     >
-      <div className="app-exam-focus-topbar">
-        <div className="app-exam-focus-topbar-copy">
-          <h1 className="text-[1.25rem] font-semibold leading-tight tracking-[-0.024em] text-foreground sm:text-[1.45rem]">
-            {paper.title}
-          </h1>
-          <p className="app-copy-muted">
-            {[paperSubjectLabel, paperClassLabel, `${paper.duration} min`]
-              .filter(Boolean)
-              .join(" • ") ||
-              `${questionList.length} questions`}
-          </p>
-          {showPaperSubjectChips ? (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {paperSubjects.map((subject) => (
-                <span key={subject._id} className="app-meta-chip">
-                  {subject.name || subject._id}
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        <div className="app-exam-focus-topbar-status" aria-label="Test status">
-          <div className="app-exam-focus-topbar-stat">
-            <span className="app-exam-focus-topbar-stat-label">Answered</span>
-            <span className="app-exam-focus-topbar-stat-value">
-              {answeredCompactLabel}
-            </span>
-          </div>
-          {showCurrentSectionChip && currentSection ? (
-            <div className="app-exam-focus-topbar-stat">
-              <span className="app-exam-focus-topbar-stat-label">Current</span>
-              <span
-                className="app-exam-focus-topbar-stat-value app-exam-focus-topbar-stat-value-soft"
-                title={currentSection.name}
-              >
-                {currentSection.name}
-              </span>
-            </div>
-          ) : null}
-          <div className="app-exam-focus-topbar-stat">
-            <span className="app-exam-focus-topbar-stat-label">Save</span>
-            <span className={cn("app-status-badge w-fit", saveStateToneClass)}>
-              {saveStateBadgeLabel}
-            </span>
-          </div>
-        </div>
-        <div className="app-exam-focus-topbar-side">
-          <div
-            className={cn(
-              "app-exam-timer-card",
-              countdownTone === "warning" && "app-exam-timer-card-warning",
-              countdownTone === "danger" && "app-exam-timer-card-danger",
-            )}
-          >
-            <div className="app-exam-timer-card-head">
-              <p className="app-exam-timer-card-kicker">Time left</p>
-              <span
-                className={cn(
-                  "app-status-badge w-fit",
-                  countdownTone === "warning"
-                    ? "app-status-badge-warning"
-                    : countdownTone === "danger"
-                      ? "app-status-badge-danger"
-                      : "app-status-badge-info",
-                )}
-              >
-                {getCountdownBadgeLabel(remainingMs)}
-              </span>
-            </div>
-            <div className="app-exam-timer-card-value" suppressHydrationWarning>
-              {countdownValue}
-            </div>
-          </div>
-          <div
-            className="app-exam-focus-topbar-actions"
-            role="group"
-            aria-label="Test actions"
-          >
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="app-button-compact app-exam-topbar-action"
-              onClick={() => void onSaveAttempt(true)}
-              disabled={isSaving || isSubmitting}
-            >
-              {isSaving ? <Spinner /> : "Save"}
-            </Button>
-
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="app-button-compact app-exam-topbar-action"
-              onClick={() => void onToggleFullscreen()}
-            >
-              {isFullscreen ? (
-                <Minimize2 className="mr-2 h-4 w-4" />
-              ) : (
-                <Expand className="mr-2 h-4 w-4" />
-              )}
-              {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            </Button>
-
-            {hasMounted ? (
-              <AlertDialog
-                open={submitDialogOpen}
-                onOpenChange={setSubmitDialogOpen}
-              >
-                <AlertDialogTrigger asChild>
-                  <Button
-                    size="sm"
-                    className="app-button-compact app-exam-topbar-action"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? <Spinner /> : "Submit"}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Submit this test?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      You have answered {answeredCount} of {questionList.length} questions.
-                      {unansweredCount > 0
-                        ? ` ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} will be left unanswered.`
-                        : " All questions have a saved answer."}
-                      {hasManualReviewQuestions
-                        ? " Descriptive responses may remain pending review after submission."
-                        : ""}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isSubmitting}>
-                      Continue Reviewing
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => void onSubmitAttempt(false)}
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? <Spinner /> : "Confirm Submit"}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                className="app-button-compact app-exam-topbar-action"
-                disabled
-              >
-                Submit
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
+      <ExamTopbar
+        paper={paper}
+        paperSubjects={paperSubjects}
+        paperSubjectLabel={paperSubjectLabel}
+        paperClassLabel={paperClassLabel}
+        deadlineAt={deadlineAt}
+        answeredCompactLabel={answeredCompactLabel}
+        currentSectionName={currentSection?.name || null}
+        showCurrentSectionChip={showCurrentSectionChip}
+        saveStateToneClass={saveStateToneClass}
+        saveStateBadgeLabel={saveStateBadgeLabel}
+        saveStatusLabel={saveStatusLabel}
+        submitDialogOpen={submitDialogOpen}
+        setSubmitDialogOpen={setSubmitDialogOpen}
+        answeredCount={answeredCount}
+        questionCount={totalQuestions}
+        unansweredCount={unansweredCount}
+        hasManualReviewQuestions={hasManualReviewQuestions}
+        isSaving={isSaving}
+        isSubmitting={isSubmitting}
+        isFullscreen={isFullscreen}
+        onSaveAttempt={handleSaveAttempt}
+        onToggleFullscreen={onToggleFullscreen}
+        onSubmitAttempt={handleSubmitAttempt}
+      />
 
       {connectionNotice ? (
         <FeedbackNotice variant="warning">{connectionNotice}</FeedbackNotice>
@@ -533,155 +1270,39 @@ export default function StudentTestActiveAttemptView({
         <FeedbackNotice variant="error">{actionError}</FeedbackNotice>
       ) : null}
 
+      <ExamMobileNavigation
+        answeredCount={answeredCount}
+        questionCount={totalQuestions}
+        unansweredCount={unansweredCount}
+        currentQuestionNumber={currentQuestionNumber}
+        currentIndex={currentIndex}
+        currentSectionName={currentSection?.name || null}
+        saveStateToneClass={saveStateToneClass}
+        saveStateBadgeLabel={saveStateBadgeLabel}
+        subjectProgress={subjectProgress}
+        sectionNavigation={sectionNavigation}
+        instructions={paper.instructions}
+        onJumpToQuestion={handleJumpToQuestion}
+      />
+
       <div className="app-exam-shell app-exam-shell-focus">
-        <aside className="app-exam-sidebar app-exam-sidebar-focus">
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle>Question Navigation</CardTitle>
-                <span className="app-meta-chip">
-                  {answeredCount}/{questionList.length} answered
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="app-section-body space-y-3">
-              <div className="app-exam-sidebar-summary">
-                <div className="app-exam-sidebar-summary-card">
-                  <span className="app-exam-sidebar-summary-label">Answered</span>
-                  <span className="app-exam-sidebar-summary-value">{answeredCount}</span>
-                  <span className="app-exam-sidebar-summary-meta">Saved responses</span>
-                </div>
-                <div className="app-exam-sidebar-summary-card">
-                  <span className="app-exam-sidebar-summary-label">Remaining</span>
-                  <span className="app-exam-sidebar-summary-value">{unansweredCount}</span>
-                  <span className="app-exam-sidebar-summary-meta">Still to review</span>
-                </div>
-                <div className="app-exam-sidebar-summary-card">
-                  <span className="app-exam-sidebar-summary-label">Current</span>
-                  <span className="app-exam-sidebar-summary-value">
-                    Q {currentQuestionNumber || "—"}
-                  </span>
-                  <span className="app-exam-sidebar-summary-meta">
-                    Jump with the palette
-                  </span>
-                </div>
-              </div>
-              {subjectProgress.length > 1 ? (
-                <div className="app-exam-sidebar-panel">
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Subject progress
-                  </p>
-                  <div className="space-y-2">
-                    {subjectProgress.map((subject) => (
-                      <div
-                        key={subject._id}
-                        className="flex items-center justify-between gap-3 text-sm"
-                      >
-                        <span className="font-medium text-foreground">
-                          {subject.name}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {subject.answered}/{subject.total}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              <div className="space-y-3">
-                {sectionNavigation.map((section) => {
-                  const sectionActive = section.items.some(
-                    (item) => item.globalIndex === currentIndex,
-                  );
-
-                  return (
-                    <div key={section.id} className="app-exam-sidebar-panel">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">
-                            {`Section ${section.sectionIndex + 1}: ${section.name}`}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {section.items.length} question
-                            {section.items.length === 1 ? "" : "s"} • {section.totalMarks} marks • +{section.defaultMarks} / -{section.defaultNegativeMarks}
-                          </p>
-                        </div>
-                        {sectionActive ? (
-                          <span className="app-status-badge app-status-badge-info w-fit">
-                            Current
-                          </span>
-                        ) : null}
-                      </div>
-                      {section.subjects.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {section.subjects.map((subject) => (
-                            <span
-                              key={`${section.id}-${subject._id}`}
-                              className="app-meta-chip"
-                            >
-                              {subject.name || subject._id}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                      <div className="app-exam-palette mt-3">
-                        {section.items.map((item) => (
-                          <button
-                            key={`${section.id}-${item.questionId || item.globalIndex}`}
-                            type="button"
-                            onClick={() => void onJumpToQuestion(item.globalIndex)}
-                            className={cn(
-                              "app-exam-palette-button",
-                              item.globalIndex === currentIndex &&
-                                "app-exam-palette-button-active",
-                              item.globalIndex !== currentIndex &&
-                                item.answered &&
-                                "app-exam-palette-button-complete",
-                            )}
-                          >
-                            {item.globalIndex + 1}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="app-exam-palette-legend">
-                <div className="app-exam-palette-legend-item">
-                  <span className="app-exam-palette-swatch bg-primary" />
-                  Current
-                </div>
-                <div className="app-exam-palette-legend-item">
-                  <span className="app-exam-palette-swatch bg-emerald-400" />
-                  Answered
-                </div>
-                <div className="app-exam-palette-legend-item">
-                  <span className="app-exam-palette-swatch bg-muted" />
-                  Unanswered
-                </div>
-              </div>
-
-              {paper.instructions ? (
-                <details className="app-exam-sidebar-panel px-3.5 py-2.5">
-                  <summary className="app-title-sm cursor-pointer">
-                    View instructions
-                  </summary>
-                  <div className="prose prose-sm mt-3 max-w-none text-foreground dark:prose-invert">
-                    <p>{paper.instructions}</p>
-                  </div>
-                </details>
-              ) : null}
-            </CardContent>
-          </Card>
-        </aside>
+        <ExamSidebar
+          answeredCount={answeredCount}
+          questionCount={totalQuestions}
+          unansweredCount={unansweredCount}
+          currentQuestionNumber={currentQuestionNumber}
+          subjectProgress={subjectProgress}
+          sectionNavigation={sectionNavigation}
+          currentIndex={currentIndex}
+          instructions={paper.instructions}
+          onJumpToQuestion={handleJumpToQuestion}
+        />
 
         <main className="app-exam-main-focus">
           {currentQuestion && currentAnswer ? (
             <Card className="app-surface app-exam-question-card overflow-hidden">
               <CardHeader className="app-section-header">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="app-exam-question-header">
                   <div className="space-y-1.5">
                     {showQuestionEyebrow ? (
                       <p className="app-spotlight-label">
@@ -720,7 +1341,7 @@ export default function StudentTestActiveAttemptView({
                       </div>
                     ) : null}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="app-exam-question-meta">
                     {showQuestionSubjectChip ? (
                       <div className="app-meta-chip">
                         {currentQuestionSubjectName}
@@ -806,16 +1427,11 @@ export default function StudentTestActiveAttemptView({
 
                 {currentQuestion.question.type === "descriptive" ? (
                   <div className="space-y-3">
-                    <Textarea
+                    <DescriptiveAnswerEditor
+                      ref={descriptiveEditorRef}
+                      question={currentQuestion.question}
                       value={currentAnswer.answerText}
-                      onChange={(event) =>
-                        onUpdateDescriptiveAnswer(
-                          currentQuestion.question,
-                          event.target.value,
-                        )
-                      }
-                      placeholder="Write your answer here..."
-                      className="min-h-[220px]"
+                      onCommit={onUpdateDescriptiveAnswer}
                     />
                   </div>
                 ) : null}
@@ -823,42 +1439,34 @@ export default function StudentTestActiveAttemptView({
                 {currentQuestion.question.type === "matrix-match" ? (
                   currentQuestion.question.matrixRows?.length &&
                   currentQuestion.question.matrixColumns?.length ? (
-                    <div className="app-table-wrap overflow-x-auto">
-                      <table className="min-w-full border-collapse text-sm">
-                        <thead>
-                          <tr className="bg-muted/30">
-                            <th className="border border-border/60 px-3 py-2.5 text-left text-[12px] font-medium tracking-[0.03em] text-muted-foreground">
-                              Match
-                            </th>
-                            {currentQuestion.question.matrixColumns.map(
-                              (column, columnIndex) => (
-                                <th
-                                  key={columnIndex}
-                                  className="border border-border/60 px-3 py-2.5 text-center text-[12px] font-medium tracking-[0.03em] text-muted-foreground"
-                                >
-                                  {column || `Column ${columnIndex + 1}`}
-                                </th>
-                              ),
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {currentQuestion.question.matrixRows.map((row, rowIndex) => (
-                            <tr key={rowIndex}>
-                              <td className="border border-border/60 px-3 py-3 font-medium text-foreground">
+                    <div className="space-y-3">
+                      <div className="app-exam-matrix-stack sm:hidden">
+                        {currentQuestion.question.matrixRows.map((row, rowIndex) => (
+                          <div key={rowIndex} className="app-exam-matrix-card">
+                            <div className="app-exam-matrix-card-head">
+                              <span className="app-exam-matrix-card-kicker">
+                                {`Row ${rowIndex + 1}`}
+                              </span>
+                              <p className="app-exam-matrix-card-title">
                                 {row || `Row ${rowIndex + 1}`}
-                              </td>
+                              </p>
+                            </div>
+                            <div className="app-exam-matrix-choice-grid">
                               {currentQuestion.question.matrixColumns?.map(
-                                (_column, columnIndex) => {
+                                (column, columnIndex) => {
                                   const checked =
                                     currentAnswer.matrixSelections[rowIndex]?.includes(
                                       columnIndex,
                                     ) || false;
 
                                   return (
-                                    <td
+                                    <label
                                       key={columnIndex}
-                                      className="border border-border/60 px-3 py-3 text-center"
+                                      className={cn(
+                                        "app-exam-matrix-choice",
+                                        checked &&
+                                          "app-exam-matrix-choice-selected",
+                                      )}
                                     >
                                       <input
                                         type="checkbox"
@@ -870,16 +1478,89 @@ export default function StudentTestActiveAttemptView({
                                             columnIndex,
                                           )
                                         }
-                                        className="h-4 w-4"
+                                        className="sr-only"
                                       />
-                                    </td>
+                                      <span
+                                        className={cn(
+                                          "app-exam-matrix-choice-indicator",
+                                          checked &&
+                                            "app-exam-matrix-choice-indicator-selected",
+                                        )}
+                                      >
+                                        {checked
+                                          ? "✓"
+                                          : getOptionLabel(columnIndex)}
+                                      </span>
+                                      <span className="app-exam-matrix-choice-label">
+                                        {column || `Column ${columnIndex + 1}`}
+                                      </span>
+                                    </label>
                                   );
                                 },
                               )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="app-table-wrap hidden overflow-x-auto sm:block">
+                        <table className="min-w-full border-collapse text-sm">
+                          <thead>
+                            <tr className="bg-muted/30">
+                              <th className="border border-border/60 px-3 py-2.5 text-left text-[12px] font-medium tracking-[0.03em] text-muted-foreground">
+                                Match
+                              </th>
+                              {currentQuestion.question.matrixColumns.map(
+                                (column, columnIndex) => (
+                                  <th
+                                    key={columnIndex}
+                                    className="border border-border/60 px-3 py-2.5 text-center text-[12px] font-medium tracking-[0.03em] text-muted-foreground"
+                                  >
+                                    {column || `Column ${columnIndex + 1}`}
+                                  </th>
+                                ),
+                              )}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {currentQuestion.question.matrixRows.map((row, rowIndex) => (
+                              <tr key={rowIndex}>
+                                <td className="border border-border/60 px-3 py-3 font-medium text-foreground">
+                                  {row || `Row ${rowIndex + 1}`}
+                                </td>
+                                {currentQuestion.question.matrixColumns?.map(
+                                  (_column, columnIndex) => {
+                                    const checked =
+                                      currentAnswer.matrixSelections[rowIndex]?.includes(
+                                        columnIndex,
+                                      ) || false;
+
+                                    return (
+                                      <td
+                                        key={columnIndex}
+                                        className="border border-border/60 px-3 py-3 text-center"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() =>
+                                            onUpdateMatrixSelection(
+                                              currentQuestion.question,
+                                              rowIndex,
+                                              columnIndex,
+                                            )
+                                          }
+                                          className="h-4 w-4"
+                                        />
+                                      </td>
+                                    );
+                                  },
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   ) : (
                     <FeedbackNotice variant="error">
@@ -892,20 +1573,20 @@ export default function StudentTestActiveAttemptView({
                   <Button
                     variant="outline"
                     size="md"
-                    className="app-student-action-compact"
+                    className="app-student-action-compact app-exam-nav-button"
                     onClick={() =>
-                      void onJumpToQuestion(Math.max(0, currentIndex - 1))
+                      void handleJumpToQuestion(Math.max(0, currentIndex - 1))
                     }
                     disabled={currentIndex === 0}
                   >
                     Previous
                   </Button>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="app-exam-nav-actions">
                     <Button
                       variant="ghost"
                       size="md"
-                      className="app-student-action-compact"
-                      onClick={onClearCurrentAnswer}
+                      className="app-student-action-compact app-exam-nav-button"
+                      onClick={handleClearCurrentAnswer}
                       disabled={!currentQuestionAnswered}
                     >
                       Clear Answer
@@ -913,9 +1594,9 @@ export default function StudentTestActiveAttemptView({
                     <Button
                       variant="primary"
                       size="md"
-                      className="app-student-action-compact"
+                      className="app-student-action-compact app-exam-nav-button"
                       onClick={() =>
-                        void onJumpToQuestion(
+                        void handleJumpToQuestion(
                           Math.min(questionList.length - 1, currentIndex + 1),
                         )
                       }
