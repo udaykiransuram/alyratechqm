@@ -19,12 +19,15 @@ import { Spinner } from './ui/spinner';
 import { useToast } from './ui/use-toast';
 
 const MAX_IMAGE_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_UPLOAD_SIZE_LABEL = '5 MB';
+const SUPPORTED_IMAGE_FORMATS_LABEL = 'PNG, JPG/JPEG, WEBP, GIF, AVIF, and SVG';
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   'image/png',
   'image/jpeg',
   'image/webp',
   'image/gif',
   'image/avif',
+  'image/svg+xml',
 ]);
 
 // --- FIX: Correctly type the custom event listener ---
@@ -53,7 +56,44 @@ function normalizeImageFiles(fileList: FileList | File[] | null | undefined) {
   );
 }
 
+function validateImageFile(file: File) {
+  const mimeType = String(file.type || '').toLowerCase();
+
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
+    throw new Error(
+      `Unsupported image format. Upload ${SUPPORTED_IMAGE_FORMATS_LABEL} files only.`,
+    );
+  }
+
+  if (file.size <= 0) {
+    throw new Error(
+      `The selected image is empty. Upload a ${SUPPORTED_IMAGE_FORMATS_LABEL} file up to ${MAX_IMAGE_UPLOAD_SIZE_LABEL}.`,
+    );
+  }
+
+  if (file.size > MAX_IMAGE_UPLOAD_SIZE_BYTES) {
+    throw new Error(
+      `Image too large. Upload ${SUPPORTED_IMAGE_FORMATS_LABEL} files up to ${MAX_IMAGE_UPLOAD_SIZE_LABEL}.`,
+    );
+  }
+}
+
 function getClipboardImageFiles(dataTransfer: DataTransfer | null | undefined) {
+  if (!dataTransfer) return [];
+
+  const filesFromItems = Array.from(dataTransfer.items || [])
+    .filter((item) => item.kind === 'file' && String(item.type || '').toLowerCase().startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+
+  if (filesFromItems.length > 0) {
+    return filesFromItems;
+  }
+
+  return normalizeImageFiles(dataTransfer.files);
+}
+
+function getDroppedImageFiles(dataTransfer: DataTransfer | null | undefined) {
   if (!dataTransfer) return [];
 
   const filesFromItems = Array.from(dataTransfer.items || [])
@@ -83,6 +123,28 @@ function getErrorMessage(error: unknown) {
   return 'Something went wrong while uploading the image.';
 }
 
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      if (!result) {
+        reject(new Error('The selected image could not be read.'));
+        return;
+      }
+
+      resolve(result);
+    };
+
+    reader.onerror = () => {
+      reject(new Error('The selected image could not be read.'));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
 // --- Component Props and Payloads ---
 
 // --- The Component ---
@@ -105,21 +167,14 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
 
   const uploadImageFile = useCallback(async (file: File) => {
-    const mimeType = String(file.type || '').toLowerCase();
-
-    if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
-      throw new Error('Only PNG, JPEG, WEBP, GIF, and AVIF images are supported.');
-    }
-
-    if (file.size > MAX_IMAGE_UPLOAD_SIZE_BYTES) {
-      throw new Error('Images must be 5 MB or smaller.');
-    }
+    validateImageFile(file);
 
     const formData = new FormData();
     formData.append('file', file, file.name || 'question-image');
 
     const response = await fetch('/api/questions/images', {
       method: 'POST',
+      credentials: 'same-origin',
       body: formData,
     });
 
@@ -132,6 +187,27 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
     return String(payload.url);
   }, []);
 
+  const resolveImageSource = useCallback(async (file: File) => {
+    validateImageFile(file);
+
+    try {
+      return {
+        src: await uploadImageFile(file),
+        storage: 'uploaded' as const,
+      };
+    } catch (uploadError) {
+      try {
+        return {
+          src: await readFileAsDataUrl(file),
+          storage: 'inline' as const,
+          uploadError,
+        };
+      } catch {
+        throw uploadError;
+      }
+    }
+  }, [uploadImageFile]);
+
   const uploadImagesToEditor = useCallback(async (files: File[]) => {
     if (!files.length) return;
 
@@ -141,16 +217,21 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
     setUploadingImageCount((count) => count + files.length);
 
     const failures: string[] = [];
+    let inlineFallbackCount = 0;
 
     try {
       for (const file of files) {
         try {
-          const src = await uploadImageFile(file);
+          const resolvedImage = await resolveImageSource(file);
+          if (resolvedImage.storage === 'inline') {
+            inlineFallbackCount += 1;
+          }
+
           currentEditor
             .chain()
             .focus()
             .setImage({
-              src,
+              src: resolvedImage.src,
               alt: getImageAltText(file.name),
             })
             .run();
@@ -160,6 +241,16 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
       }
     } finally {
       setUploadingImageCount((count) => Math.max(0, count - files.length));
+    }
+
+    if (inlineFallbackCount > 0) {
+      toast({
+        title: inlineFallbackCount === 1 ? 'Image embedded inline' : 'Images embedded inline',
+        description:
+          inlineFallbackCount === 1
+            ? 'The image was inserted directly because the upload service was unavailable.'
+            : `${inlineFallbackCount} images were inserted directly because the upload service was unavailable.`,
+      });
     }
 
     if (failures.length > 0) {
@@ -172,7 +263,7 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
         variant: 'destructive',
       });
     }
-  }, [toast, uploadImageFile]);
+  }, [resolveImageSource, toast]);
 
   const editor = useEditor({
     extensions: [
@@ -202,6 +293,16 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
       },
       handlePaste: (_view, event) => {
         const imageFiles = getClipboardImageFiles(event.clipboardData);
+        if (!imageFiles.length) {
+          return false;
+        }
+
+        event.preventDefault();
+        void uploadImagesToEditor(imageFiles);
+        return true;
+      },
+      handleDrop: (_view, event) => {
+        const imageFiles = getDroppedImageFiles(event.dataTransfer);
         if (!imageFiles.length) {
           return false;
         }
@@ -329,7 +430,7 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml"
         className="sr-only"
         onChange={handleFileInputChange}
       />
@@ -345,7 +446,7 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
         <p className="mt-2 text-xs text-muted-foreground">
           {uploadingImageCount > 0
             ? `Uploading ${uploadingImageCount} image${uploadingImageCount === 1 ? '' : 's'}...`
-            : 'Paste screenshots directly, use the upload button for your device, or insert an image URL.'}
+            : 'Paste or drag screenshots directly, use the upload button for your device, or insert an image URL.'}
         </p>
       ) : null}
       <EditorContent editor={editor} />

@@ -35,12 +35,12 @@ export default function WorkspaceCreateShell({
 }: WorkspaceCreateShellProps) {
   return (
     <PageShell width="wide" padding="standard">
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         <Button
           type="button"
           variant="outline"
           onClick={onBack}
-          className="app-button-back w-fit"
+          className="app-button-back w-full sm:w-fit"
         >
           <ArrowLeft className="h-4 w-4" />
           {backLabel}

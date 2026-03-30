@@ -233,7 +233,7 @@ export default function WorkspaceSiteHeader({
     );
     document.documentElement.style.setProperty(
       "--app-mobile-school-switcher-height",
-      "5rem",
+      "0px",
     );
 
     try {
@@ -307,6 +307,7 @@ export default function WorkspaceSiteHeader({
               showSchoolWorkspace
               activePath={activePath}
               onNavigate={handleNavigate}
+              onSignOut={() => void handleSignOut()}
             />
             <Button
               type="button"
@@ -330,6 +331,9 @@ export default function WorkspaceSiteHeader({
               href="/workspace"
               subtitle="Quality Management Workspace"
             />
+            <div className="hidden min-w-0 sm:block md:hidden">
+              <CurrentSchoolBadge school={currentSchool} compact />
+            </div>
           </div>
 
           <div className="hidden min-w-0 flex-1 items-center justify-end md:flex">
@@ -347,14 +351,6 @@ export default function WorkspaceSiteHeader({
           </div>
         </div>
       </header>
-
-      <div className="app-nav-shell fixed inset-x-0 top-[var(--app-header-height)] z-40 border-b px-3 py-2.5 shadow-sm md:hidden">
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <CurrentSchoolBadge school={currentSchool} compact />
-          </div>
-        </div>
-      </div>
 
       <DesktopSidebarShell
         collapsed={collapsed}

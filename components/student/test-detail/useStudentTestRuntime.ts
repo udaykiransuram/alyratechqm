@@ -1,6 +1,13 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -25,6 +32,7 @@ import type {
   StudentTestDetailResponse,
 } from "./student-test-types";
 import {
+  areAnswerStatesEqual,
   buildAnswerMap,
   buildSectionAnswersPayloadFromState,
   clearDraftPersistTimeout,
@@ -45,6 +53,45 @@ type UseStudentTestRuntimeArgs = {
   initialData: StudentTestDetailResponse | null;
   initialLoadError?: string | null;
 };
+
+function shouldRetainQuestionState(
+  question: StudentQuestion,
+  nextState: StudentAnswerState,
+) {
+  if (question.type === "descriptive") {
+    return nextState.answerText.length > 0;
+  }
+
+  return hasAnswerForQuestion(question, nextState);
+}
+
+function applyQuestionAnswerUpdate(
+  current: Record<string, StudentAnswerState>,
+  question: StudentQuestion,
+  nextState: StudentAnswerState,
+) {
+  const previousEntry = current[question._id];
+  const previousState = createQuestionAnswerState(question, previousEntry);
+
+  if (areAnswerStatesEqual(previousState, nextState)) {
+    return current;
+  }
+
+  if (!shouldRetainQuestionState(question, nextState)) {
+    if (!previousEntry) {
+      return current;
+    }
+
+    const nextAnswers = { ...current };
+    delete nextAnswers[question._id];
+    return nextAnswers;
+  }
+
+  return {
+    ...current,
+    [question._id]: nextState,
+  };
+}
 
 export function useStudentTestRuntime({
   paperId,
@@ -112,6 +159,9 @@ export function useStudentTestRuntime({
   const saveAttemptRef = useRef<(force?: boolean) => Promise<void>>(async () => {});
   const submitAttemptRef = useRef<(auto?: boolean) => Promise<void>>(async () => {});
   const examContainerRef = useRef<HTMLDivElement | null>(null);
+  const currentIndexRef = useRef(0);
+  const isOfflineRef = useRef(false);
+  const answeredQuestionIdsRef = useRef<Set<string>>(new Set());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const deferredAnswers = useDeferredValue(answers);
 
@@ -137,24 +187,51 @@ export function useStudentTestRuntime({
   );
 
   const currentQuestion = questionList[currentIndex] || null;
+  const currentQuestionState = currentQuestion
+    ? answers[currentQuestion.question._id]
+    : undefined;
   const currentAnswer = useMemo(() => {
     if (!currentQuestion) return null;
     return createQuestionAnswerState(
       currentQuestion.question,
-      answers[currentQuestion.question._id],
+      currentQuestionState,
     );
-  }, [answers, currentQuestion]);
+  }, [currentQuestion, currentQuestionState]);
+  const questionLookup = useMemo(
+    () =>
+      new Map(
+        questionList.map((item) => [item.question._id, item.question] as const),
+      ),
+    [questionList],
+  );
 
   const answeredQuestionIds = useMemo(() => {
-    const ids = new Set<string>();
+    const nextIds = new Set<string>();
 
     questionList.forEach((item) => {
       if (hasAnswerForQuestion(item.question, deferredAnswers[item.question._id])) {
-        ids.add(item.question._id);
+        nextIds.add(item.question._id);
       }
     });
 
-    return ids;
+    const previousIds = answeredQuestionIdsRef.current;
+    if (previousIds.size === nextIds.size) {
+      let changed = false;
+
+      for (const questionId of nextIds) {
+        if (!previousIds.has(questionId)) {
+          changed = true;
+          break;
+        }
+      }
+
+      if (!changed) {
+        return previousIds;
+      }
+    }
+
+    answeredQuestionIdsRef.current = nextIds;
+    return nextIds;
   }, [deferredAnswers, questionList]);
   const answeredCount = answeredQuestionIds.size;
   const unansweredCount = Math.max(0, questionList.length - answeredCount);
@@ -208,6 +285,14 @@ export function useStudentTestRuntime({
   useEffect(() => {
     hasUnsavedChangesRef.current = hasUnsavedChanges;
   }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  useEffect(() => {
+    isOfflineRef.current = isOffline;
+  }, [isOffline]);
 
   function clearSaveRetryTimer(resetState = true) {
     if (saveRetryTimerRef.current !== null) {
@@ -485,7 +570,7 @@ export function useStudentTestRuntime({
     };
   }, [paperId]);
 
-  async function saveAttempt(force = false) {
+  async function runSaveAttempt(force = false) {
     if (!paper || !attemptStarted || attemptLocked || isSubmitting) {
       return;
     }
@@ -612,7 +697,7 @@ export function useStudentTestRuntime({
     }
   }
 
-  async function submitAttempt(auto = false) {
+  async function runSubmitAttempt(auto = false) {
     if (!paper || !attemptStarted || submitTriggeredRef.current || isSubmitting) {
       return;
     }
@@ -751,8 +836,8 @@ export function useStudentTestRuntime({
     }
   }
 
-  saveAttemptRef.current = saveAttempt;
-  submitAttemptRef.current = submitAttempt;
+  saveAttemptRef.current = runSaveAttempt;
+  submitAttemptRef.current = runSubmitAttempt;
 
   useEffect(() => {
     if (!deadlineAt || !attemptStarted || attemptLocked) return;
@@ -972,64 +1057,84 @@ export function useStudentTestRuntime({
     };
   }, []);
 
-  function updateSingleChoice(questionId: string, optionIndex: number) {
-    setAnswers((current) => ({
-      ...current,
-      [questionId]: {
-        ...(current[questionId] || {
-          selectedOptions: [],
-          answerText: "",
-          matrixSelections: [],
-        }),
-        selectedOptions: [optionIndex],
-      },
-    }));
-  }
+  const updateSingleChoice = useCallback(
+    (questionId: string, optionIndex: number) => {
+      const question = questionLookup.get(questionId);
+      if (!question) {
+        return;
+      }
 
-  function updateMultipleChoice(questionId: string, optionIndex: number) {
-    setAnswers((current) => {
-      const previous = createQuestionAnswerState(
-        currentQuestion?.question || {
-          _id: questionId,
-          content: "",
-          type: "multiple",
-          options: [],
-        },
-        current[questionId],
-      );
+      const currentAnswers = answersRef.current;
+      const nextAnswers = applyQuestionAnswerUpdate(currentAnswers, question, {
+        ...createQuestionAnswerState(question, currentAnswers[questionId]),
+        selectedOptions: [optionIndex],
+      });
+
+      if (nextAnswers === currentAnswers) {
+        return;
+      }
+
+      answersRef.current = nextAnswers;
+      hasUnsavedChangesRef.current = true;
+      setAnswers(nextAnswers);
+    },
+    [questionLookup],
+  );
+
+  const updateMultipleChoice = useCallback(
+    (questionId: string, optionIndex: number) => {
+      const question = questionLookup.get(questionId);
+      if (!question) {
+        return;
+      }
+
+      const currentAnswers = answersRef.current;
+      const previous = createQuestionAnswerState(question, currentAnswers[questionId]);
       const next = previous.selectedOptions.includes(optionIndex)
         ? previous.selectedOptions.filter((value) => value !== optionIndex)
         : [...previous.selectedOptions, optionIndex].sort(
             (left, right) => left - right,
           );
 
-      return {
-        ...current,
-        [questionId]: {
-          ...previous,
-          selectedOptions: next,
-        },
-      };
-    });
-  }
+      const nextAnswers = applyQuestionAnswerUpdate(currentAnswers, question, {
+        ...previous,
+        selectedOptions: next,
+      });
 
-  function updateDescriptiveAnswer(question: StudentQuestion, value: string) {
-    setAnswers((current) => ({
-      ...current,
-      [question._id]: {
-        ...createQuestionAnswerState(question, current[question._id]),
+      if (nextAnswers === currentAnswers) {
+        return;
+      }
+
+      answersRef.current = nextAnswers;
+      hasUnsavedChangesRef.current = true;
+      setAnswers(nextAnswers);
+    },
+    [questionLookup],
+  );
+
+  const updateDescriptiveAnswer = useCallback(
+    (question: StudentQuestion, value: string) => {
+      const currentAnswers = answersRef.current;
+      const nextAnswers = applyQuestionAnswerUpdate(currentAnswers, question, {
+        ...createQuestionAnswerState(question, currentAnswers[question._id]),
         answerText: value,
-      },
-    }));
-  }
+      });
 
-  function updateMatrixSelection(
-    question: StudentQuestion,
-    rowIndex: number,
-    columnIndex: number,
-  ) {
-    setAnswers((current) => {
-      const previous = createQuestionAnswerState(question, current[question._id]);
+      if (nextAnswers === currentAnswers) {
+        return;
+      }
+
+      answersRef.current = nextAnswers;
+      hasUnsavedChangesRef.current = true;
+      setAnswers(nextAnswers);
+    },
+    [],
+  );
+
+  const updateMatrixSelection = useCallback(
+    (question: StudentQuestion, rowIndex: number, columnIndex: number) => {
+      const currentAnswers = answersRef.current;
+      const previous = createQuestionAnswerState(question, currentAnswers[question._id]);
       const nextSelections = previous.matrixSelections.map((row, index) => {
         if (index !== rowIndex) return row;
 
@@ -1038,39 +1143,58 @@ export function useStudentTestRuntime({
           : [...row, columnIndex].sort((left, right) => left - right);
       });
 
-      return {
-        ...current,
-        [question._id]: {
-          ...previous,
-          matrixSelections: nextSelections,
-        },
-      };
-    });
-  }
+      const nextAnswers = applyQuestionAnswerUpdate(currentAnswers, question, {
+        ...previous,
+        matrixSelections: nextSelections,
+      });
 
-  function clearCurrentAnswer() {
+      if (nextAnswers === currentAnswers) {
+        return;
+      }
+
+      answersRef.current = nextAnswers;
+      hasUnsavedChangesRef.current = true;
+      setAnswers(nextAnswers);
+    },
+    [],
+  );
+
+  const clearCurrentAnswer = useCallback(() => {
     if (!currentQuestion) return;
 
-    setAnswers((current) => ({
-      ...current,
-      [currentQuestion.question._id]: createQuestionAnswerState(
-        currentQuestion.question,
-      ),
-    }));
-  }
-
-  async function jumpToQuestion(index: number) {
-    if (index === currentIndex) {
+    const currentAnswers = answersRef.current;
+    if (!currentAnswers[currentQuestion.question._id]) {
       return;
     }
 
-    setCurrentIndex(index);
-    if (!isOffline && hasUnsavedChangesRef.current) {
-      void saveAttemptRef.current();
-    }
-  }
+    const nextAnswers = { ...currentAnswers };
+    delete nextAnswers[currentQuestion.question._id];
+    answersRef.current = nextAnswers;
+    hasUnsavedChangesRef.current = true;
+    setAnswers(nextAnswers);
+  }, [currentQuestion]);
 
-  async function toggleFullscreen() {
+  const jumpToQuestion = useCallback(
+    async (index: number) => {
+      if (questionList.length === 0) {
+        return;
+      }
+
+      const nextIndex = Math.min(Math.max(index, 0), questionList.length - 1);
+      if (nextIndex === currentIndexRef.current) {
+        return;
+      }
+
+      currentIndexRef.current = nextIndex;
+      setCurrentIndex(nextIndex);
+      if (!isOfflineRef.current && hasUnsavedChangesRef.current) {
+        void saveAttemptRef.current();
+      }
+    },
+    [questionList.length],
+  );
+
+  const toggleFullscreen = useCallback(async () => {
     if (typeof document === "undefined" || !examContainerRef.current) {
       return;
     }
@@ -1087,7 +1211,15 @@ export function useStudentTestRuntime({
         "Fullscreen mode is not available right now. You can still continue the test normally.",
       );
     }
-  }
+  }, []);
+
+  const saveAttempt = useCallback(async (force = false) => {
+    await saveAttemptRef.current(force);
+  }, []);
+
+  const submitAttempt = useCallback(async (auto = false) => {
+    await submitAttemptRef.current(auto);
+  }, []);
 
   return {
     paper,

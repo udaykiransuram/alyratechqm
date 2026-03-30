@@ -191,21 +191,67 @@ export function createQuestionAnswerState(
   };
 }
 
+function hasNormalizedAnswerForQuestion(
+  question: StudentQuestion,
+  answer: StudentAnswerState,
+) {
+  if (question.type === "single" || question.type === "multiple") {
+    return answer.selectedOptions.length > 0;
+  }
+
+  if (question.type === "descriptive") {
+    return answer.answerText.trim().length > 0;
+  }
+
+  return answer.matrixSelections.some((row) => row.length > 0);
+}
+
+export function areAnswerStatesEqual(
+  left: StudentAnswerState,
+  right: StudentAnswerState,
+) {
+  if (left.answerText !== right.answerText) {
+    return false;
+  }
+
+  if (left.selectedOptions.length !== right.selectedOptions.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.selectedOptions.length; index += 1) {
+    if (left.selectedOptions[index] !== right.selectedOptions[index]) {
+      return false;
+    }
+  }
+
+  if (left.matrixSelections.length !== right.matrixSelections.length) {
+    return false;
+  }
+
+  for (let rowIndex = 0; rowIndex < left.matrixSelections.length; rowIndex += 1) {
+    const leftRow = left.matrixSelections[rowIndex] || [];
+    const rightRow = right.matrixSelections[rowIndex] || [];
+
+    if (leftRow.length !== rightRow.length) {
+      return false;
+    }
+
+    for (let columnIndex = 0; columnIndex < leftRow.length; columnIndex += 1) {
+      if (leftRow[columnIndex] !== rightRow[columnIndex]) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 export function hasAnswerForQuestion(
   question: StudentQuestion,
   answer?: StudentAnswerState | null,
 ) {
   const current = createQuestionAnswerState(question, answer || undefined);
-
-  if (question.type === "single" || question.type === "multiple") {
-    return current.selectedOptions.length > 0;
-  }
-
-  if (question.type === "descriptive") {
-    return current.answerText.trim().length > 0;
-  }
-
-  return current.matrixSelections.some((row) => row.length > 0);
+  return hasNormalizedAnswerForQuestion(question, current);
 }
 
 export function buildAnswerMap(
@@ -242,10 +288,17 @@ export function buildAnswerMap(
   const normalized: Record<string, StudentAnswerState> = {};
   (paper?.sections || []).forEach((section) => {
     (section.questions || []).forEach((entry) => {
-      normalized[entry.question._id] = createQuestionAnswerState(
-        entry.question,
-        rawAnswers.get(entry.question._id),
-      );
+      const rawAnswer = rawAnswers.get(entry.question._id);
+      if (!rawAnswer) {
+        return;
+      }
+
+      const normalizedAnswer = createQuestionAnswerState(entry.question, rawAnswer);
+      if (!hasNormalizedAnswerForQuestion(entry.question, normalizedAnswer)) {
+        return;
+      }
+
+      normalized[entry.question._id] = normalizedAnswer;
     });
   });
 
@@ -262,12 +315,14 @@ export function buildSectionAnswersPayloadFromState(
     .map((section) => {
       const sectionAnswers = section.questions
         .map((entry) => {
-          const state = createQuestionAnswerState(
-            entry.question,
-            answers[entry.question._id],
-          );
+          const rawState = answers[entry.question._id];
+          if (!rawState) {
+            return null;
+          }
 
-          if (!hasAnswerForQuestion(entry.question, state)) {
+          const state = createQuestionAnswerState(entry.question, rawState);
+
+          if (!hasNormalizedAnswerForQuestion(entry.question, state)) {
             return null;
           }
 

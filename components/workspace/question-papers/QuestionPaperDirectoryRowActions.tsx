@@ -41,13 +41,18 @@ export default function QuestionPaperDirectoryRowActions({
       : "";
 
   return (
-    <div className="min-w-[26rem] space-y-2">
-      <div className="flex flex-wrap gap-2">
+    <div className="min-w-0 space-y-2">
+      <div className="grid gap-2 sm:flex sm:flex-wrap">
         <AppPrefetchLink
           href={buildReturnHref(`/workspace/question-papers/view/${paperId}`)}
           relatedApiPrefetches={[`/api/question-papers/${paperId}`]}
+          className="w-full sm:w-auto"
         >
-          <Button variant="outline" size="sm" className="app-button-compact">
+          <Button
+            variant="outline"
+            size="sm"
+            className="app-button-compact w-full sm:w-auto"
+          >
             Open
           </Button>
         </AppPrefetchLink>
@@ -59,8 +64,13 @@ export default function QuestionPaperDirectoryRowActions({
             "/api/sections",
             "/api/subjects",
           ]}
+          className="w-full sm:w-auto"
         >
-          <Button variant="outline" size="sm" className="app-button-compact">
+          <Button
+            variant="outline"
+            size="sm"
+            className="app-button-compact w-full sm:w-auto"
+          >
             Edit
           </Button>
         </AppPrefetchLink>
@@ -71,13 +81,25 @@ export default function QuestionPaperDirectoryRowActions({
               encodedSectionId ? `&academicSectionId=${encodedSectionId}` : ""
             }`,
           ]}
+          className="w-full sm:w-auto"
         >
-          <Button variant="outline" size="sm" className="app-button-compact">
+          <Button
+            variant="outline"
+            size="sm"
+            className="app-button-compact w-full sm:w-auto"
+          >
             Responses
           </Button>
         </AppPrefetchLink>
-        <AppPrefetchLink href={buildReturnHref(uploadHref)}>
-          <Button variant="outline" size="sm" className="app-button-compact">
+        <AppPrefetchLink
+          href={buildReturnHref(uploadHref)}
+          className="w-full sm:w-auto"
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            className="app-button-compact w-full sm:w-auto"
+          >
             Upload Excel
           </Button>
         </AppPrefetchLink>
@@ -88,17 +110,18 @@ export default function QuestionPaperDirectoryRowActions({
               encodedSectionId ? `&academicSectionId=${encodedSectionId}` : ""
             }`,
           ]}
+          className="w-full sm:w-auto"
         >
-          <Button size="sm" className="app-button-compact">
+          <Button size="sm" className="app-button-compact w-full sm:w-auto">
             Analytics
           </Button>
         </AppPrefetchLink>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid gap-2 sm:flex sm:flex-wrap">
         <Button
           variant="outline"
           size="sm"
-          className="app-button-compact app-button-compact-success"
+          className="app-button-compact app-button-compact-success w-full sm:w-auto"
           onClick={onSendReports}
           disabled={isSendingReports}
         >
@@ -108,7 +131,7 @@ export default function QuestionPaperDirectoryRowActions({
         <Button
           variant="outline"
           size="sm"
-          className="app-button-compact"
+          className="app-button-compact w-full sm:w-auto"
           onClick={onDownloadExcel}
           disabled={isExcelLoading}
         >
@@ -117,7 +140,7 @@ export default function QuestionPaperDirectoryRowActions({
         <Button
           variant="destructive"
           size="sm"
-          className="app-button-compact"
+          className="app-button-compact w-full sm:w-auto"
           onClick={onArchive}
           disabled={isDeleting}
         >

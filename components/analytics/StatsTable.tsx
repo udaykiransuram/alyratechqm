@@ -159,7 +159,9 @@ export default function StatsTable({
           <tr className="analytics-row">
             <td
               className="analytics-td analytics-table-group-cell"
-              style={{ paddingLeft: `${level * 24 + 16}px` }}
+              style={{
+                paddingLeft: `calc(var(--analytics-group-indent-base, 1rem) + ${level} * var(--analytics-group-indent-step, 1.5rem))`,
+              }}
             >
               {getGroupLabel(row.key, row, groupBy[level])}
             </td>

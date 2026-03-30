@@ -34,7 +34,7 @@ import {
 
 function QuestionPaperRowActionsFallback() {
   return (
-    <div className="min-w-[22rem] space-y-2">
+    <div className="min-w-0 space-y-2">
       <div className="h-9 rounded-md border border-border/40 bg-muted/40" />
       <div className="h-9 rounded-md border border-border/30 bg-muted/30" />
     </div>
@@ -246,203 +246,380 @@ export default function QuestionPapersDirectoryTable({
         />
       </div>
 
-      <div className="app-table-wrap app-table-dense rounded-none border-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-12">
-                <Checkbox
-                  checked={allVisibleChecked}
-                  onCheckedChange={(checked) =>
-                    onToggleVisibleSelection(Boolean(checked))
-                  }
-                  aria-label="Select all visible papers"
-                />
-              </TableHead>
-              <TableHead className="w-[15rem]">Paper</TableHead>
-              <TableHead className="w-[14rem]">Scope</TableHead>
-              <TableHead className="w-[150px]">Coverage</TableHead>
-              <TableHead className="w-[140px]">Created</TableHead>
-              <TableHead className="min-w-[24rem]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-8 text-center text-muted-foreground"
-                >
-                  No papers match the current search or scope.
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((paper) => {
-                const paperId = String(paper._id);
-                const paperSectionOptions = getPaperSectionOptions(paper);
-                const selectedAcademicSectionId =
-                  getSelectedAcademicSectionId(paper);
-                const uploadHref = `/workspace/analytics/student-tag-report/excel-upload?paperId=${paperId}${
-                  selectedAcademicSectionId !== "all"
-                    ? `&academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
-                    : ""
-                }`;
-                const responsesHref = `/workspace/question-papers/${paperId}/responses${
-                  selectedAcademicSectionId !== "all"
-                    ? `?academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
-                    : ""
-                }`;
-                const classAnalyticsHref = `/workspace/analytics/class-tag-report/${paperId}${
-                  selectedAcademicSectionId !== "all"
-                    ? `?academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
-                    : ""
-                }`;
-                const paperQuestionCount = getPaperQuestionCount(paper);
-                const paperSubjects = getPaperSubjects(paper);
-                const showGlobalSectionScope = sectionFilterId !== "all";
+      <div className="divide-y divide-border/60 md:hidden">
+        {rows.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+            No papers match the current search or scope.
+          </div>
+        ) : (
+          rows.map((paper) => {
+            const paperId = String(paper._id);
+            const paperSectionOptions = getPaperSectionOptions(paper);
+            const selectedAcademicSectionId = getSelectedAcademicSectionId(paper);
+            const uploadHref = `/workspace/analytics/student-tag-report/excel-upload?paperId=${paperId}${
+              selectedAcademicSectionId !== "all"
+                ? `&academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
+                : ""
+            }`;
+            const responsesHref = `/workspace/question-papers/${paperId}/responses${
+              selectedAcademicSectionId !== "all"
+                ? `?academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
+                : ""
+            }`;
+            const classAnalyticsHref = `/workspace/analytics/class-tag-report/${paperId}${
+              selectedAcademicSectionId !== "all"
+                ? `?academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
+                : ""
+            }`;
+            const paperQuestionCount = getPaperQuestionCount(paper);
+            const paperSubjects = getPaperSubjects(paper);
+            const showGlobalSectionScope = sectionFilterId !== "all";
 
-                return (
-                  <TableRow key={paperId}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedPaperIdSet.has(paperId)}
-                        onCheckedChange={(checked) =>
-                          onTogglePaperSelection(paperId, Boolean(checked))
-                        }
-                        aria-label={`Select ${paper.title}`}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="min-w-[13rem] space-y-2">
-                        <div className="app-table-cell-title">
-                          {paper.title}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
+            return (
+              <div key={paperId} className="space-y-4 px-4 py-4">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    checked={selectedPaperIdSet.has(paperId)}
+                    onCheckedChange={(checked) =>
+                      onTogglePaperSelection(paperId, Boolean(checked))
+                    }
+                    aria-label={`Select ${paper.title}`}
+                    className="mt-1"
+                  />
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="app-table-cell-title">{paper.title}</div>
+                        <Badge
+                          variant={paper.onlineEnabled ? "secondary" : "outline"}
+                          className={
+                            paper.onlineEnabled ? "bg-primary/10 text-primary" : ""
+                          }
+                        >
+                          {paper.onlineEnabled ? "Online" : "Offline"}
+                        </Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {paperSubjects.slice(0, 3).map((subject: any) => (
                           <Badge
-                            variant={
-                              paper.onlineEnabled ? "secondary" : "outline"
-                            }
-                            className={
-                              paper.onlineEnabled
-                                ? "bg-primary/10 text-primary"
-                                : ""
-                            }
+                            key={subject?._id || subject?.name}
+                            variant="outline"
                           >
-                            {paper.onlineEnabled ? "Online" : "Offline"}
+                            {subject?.name || subject?._id || "Unknown Subject"}
                           </Badge>
-                          {paperSubjects.slice(0, 3).map((subject: any) => (
-                            <Badge
-                              key={subject?._id || subject?.name}
-                              variant="outline"
-                            >
-                              {subject?.name ||
-                                subject?._id ||
-                                "Unknown Subject"}
-                            </Badge>
-                          ))}
-                          {paperSubjects.length > 3 ? (
-                            <Badge variant="outline">
-                              +{paperSubjects.length - 3} more
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="min-w-[12rem] space-y-2">
-                        <div className="flex flex-wrap gap-1.5">
+                        ))}
+                        {paperSubjects.length > 3 ? (
                           <Badge variant="outline">
-                            {getPaperClassName(paper)}
+                            +{paperSubjects.length - 3} more
                           </Badge>
-                          <Badge variant="outline">
-                            {paperSectionOptions.length} section
-                            {paperSectionOptions.length === 1 ? "" : "s"}
-                          </Badge>
-                        </div>
-                        {paperSectionOptions.length > 0 ? (
-                          showGlobalSectionScope ? (
-                            <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-foreground">
-                              {selectedSectionLabel}
-                            </div>
-                          ) : paperSectionOptions.length === 1 ? (
-                            <div className="rounded-xl border border-border/60 bg-background px-3 py-2 text-sm font-medium text-foreground">
-                              {paperSectionOptions[0].name}
-                            </div>
-                          ) : (
-                            <Select
-                              value={selectedAcademicSectionId}
-                              onValueChange={(value) =>
-                                onAcademicSectionSelectionChange(paperId, value)
-                              }
-                            >
-                              <SelectTrigger className="app-control-compact w-full">
-                                <SelectValue placeholder="All class sections" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">
-                                  All class sections
-                                </SelectItem>
-                                {paperSectionOptions.map((section: any) => (
-                                  <SelectItem
-                                    key={section._id}
-                                    value={section._id}
-                                  >
-                                    {section.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )
-                        ) : (
-                          <div className="rounded-xl border border-dashed border-border/60 px-3 py-2 text-sm text-muted-foreground">
-                            No sections
-                          </div>
-                        )}
+                        ) : null}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="app-table-cell-stack">
-                        <div className="app-table-cell-title">
-                          {paperQuestionCount} question{paperQuestionCount === 1 ? "" : "s"}
-                        </div>
-                        <div className="app-table-cell-note">
-                          {paper.totalMarks} marks
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="app-table-cell-title">
+                      <p className="app-table-cell-note">
+                        Created{" "}
                         {paper.createdAt
                           ? new Date(paper.createdAt).toLocaleDateString()
                           : "-"}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-xl border border-border/60 bg-background/80 px-3 py-2.5">
+                        <p className="app-detail-label">Scope</p>
+                        <div className="app-table-cell-stack">
+                          <div className="app-table-cell-title">
+                            {getPaperClassName(paper)}
+                          </div>
+                          <div className="app-table-cell-note">
+                            {paperSectionOptions.length} section
+                            {paperSectionOptions.length === 1 ? "" : "s"}
+                          </div>
+                        </div>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {mountRowActions ? (
-                        <QuestionPaperDirectoryRowActions
-                          paperId={paperId}
-                          selectedAcademicSectionId={selectedAcademicSectionId}
-                          responsesHref={responsesHref}
-                          uploadHref={uploadHref}
-                          classAnalyticsHref={classAnalyticsHref}
-                          buildReturnHref={buildReturnHref}
-                          isSendingReports={sendingReportsPaperId === paperId}
-                          isExcelLoading={excelLoadingId === paperId}
-                          isDeleting={deletingId === paperId}
-                          onSendReports={() => onSendReports(paperId)}
-                          onDownloadExcel={() => onDownloadExcel(paperId)}
-                          onArchive={() => onArchive(paperId)}
-                        />
+                      <div className="rounded-xl border border-border/60 bg-background/80 px-3 py-2.5">
+                        <p className="app-detail-label">Coverage</p>
+                        <div className="app-table-cell-stack">
+                          <div className="app-table-cell-title">
+                            {paperQuestionCount} question
+                            {paperQuestionCount === 1 ? "" : "s"}
+                          </div>
+                          <div className="app-table-cell-note">
+                            {paper.totalMarks} marks
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="app-detail-label">Reporting section</p>
+                      {paperSectionOptions.length > 0 ? (
+                        showGlobalSectionScope ? (
+                          <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-foreground">
+                            {selectedSectionLabel}
+                          </div>
+                        ) : paperSectionOptions.length === 1 ? (
+                          <div className="rounded-xl border border-border/60 bg-background px-3 py-2 text-sm font-medium text-foreground">
+                            {paperSectionOptions[0].name}
+                          </div>
+                        ) : (
+                          <Select
+                            value={selectedAcademicSectionId}
+                            onValueChange={(value) =>
+                              onAcademicSectionSelectionChange(paperId, value)
+                            }
+                          >
+                            <SelectTrigger className="app-control-compact w-full">
+                              <SelectValue placeholder="All class sections" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">
+                                All class sections
+                              </SelectItem>
+                              {paperSectionOptions.map((section: any) => (
+                                <SelectItem key={section._id} value={section._id}>
+                                  {section.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )
                       ) : (
-                        <QuestionPaperRowActionsFallback />
+                        <div className="rounded-xl border border-dashed border-border/60 px-3 py-2 text-sm text-muted-foreground">
+                          No sections
+                        </div>
                       )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
+                    </div>
+
+                    {mountRowActions ? (
+                      <QuestionPaperDirectoryRowActions
+                        paperId={paperId}
+                        selectedAcademicSectionId={selectedAcademicSectionId}
+                        responsesHref={responsesHref}
+                        uploadHref={uploadHref}
+                        classAnalyticsHref={classAnalyticsHref}
+                        buildReturnHref={buildReturnHref}
+                        isSendingReports={sendingReportsPaperId === paperId}
+                        isExcelLoading={excelLoadingId === paperId}
+                        isDeleting={deletingId === paperId}
+                        onSendReports={() => onSendReports(paperId)}
+                        onDownloadExcel={() => onDownloadExcel(paperId)}
+                        onArchive={() => onArchive(paperId)}
+                      />
+                    ) : (
+                      <QuestionPaperRowActionsFallback />
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="hidden md:block">
+        <div className="app-table-wrap app-table-dense rounded-none border-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={allVisibleChecked}
+                    onCheckedChange={(checked) =>
+                      onToggleVisibleSelection(Boolean(checked))
+                    }
+                    aria-label="Select all visible papers"
+                  />
+                </TableHead>
+                <TableHead className="w-[14rem]">Paper</TableHead>
+                <TableHead className="w-[12rem]">Scope</TableHead>
+                <TableHead className="w-[150px]">Coverage</TableHead>
+                <TableHead className="w-[140px]">Created</TableHead>
+                <TableHead className="min-w-[20rem] xl:min-w-[24rem]">
+                  Actions
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="py-8 text-center text-muted-foreground"
+                  >
+                    No papers match the current search or scope.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((paper) => {
+                  const paperId = String(paper._id);
+                  const paperSectionOptions = getPaperSectionOptions(paper);
+                  const selectedAcademicSectionId =
+                    getSelectedAcademicSectionId(paper);
+                  const uploadHref = `/workspace/analytics/student-tag-report/excel-upload?paperId=${paperId}${
+                    selectedAcademicSectionId !== "all"
+                      ? `&academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
+                      : ""
+                  }`;
+                  const responsesHref = `/workspace/question-papers/${paperId}/responses${
+                    selectedAcademicSectionId !== "all"
+                      ? `?academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
+                      : ""
+                  }`;
+                  const classAnalyticsHref = `/workspace/analytics/class-tag-report/${paperId}${
+                    selectedAcademicSectionId !== "all"
+                      ? `?academicSectionId=${encodeURIComponent(selectedAcademicSectionId)}`
+                      : ""
+                  }`;
+                  const paperQuestionCount = getPaperQuestionCount(paper);
+                  const paperSubjects = getPaperSubjects(paper);
+                  const showGlobalSectionScope = sectionFilterId !== "all";
+
+                  return (
+                    <TableRow key={paperId}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedPaperIdSet.has(paperId)}
+                          onCheckedChange={(checked) =>
+                            onTogglePaperSelection(paperId, Boolean(checked))
+                          }
+                          aria-label={`Select ${paper.title}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="min-w-[13rem] space-y-2">
+                          <div className="app-table-cell-title">
+                            {paper.title}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge
+                              variant={
+                                paper.onlineEnabled ? "secondary" : "outline"
+                              }
+                              className={
+                                paper.onlineEnabled
+                                  ? "bg-primary/10 text-primary"
+                                  : ""
+                              }
+                            >
+                              {paper.onlineEnabled ? "Online" : "Offline"}
+                            </Badge>
+                            {paperSubjects.slice(0, 3).map((subject: any) => (
+                              <Badge
+                                key={subject?._id || subject?.name}
+                                variant="outline"
+                              >
+                                {subject?.name ||
+                                  subject?._id ||
+                                  "Unknown Subject"}
+                              </Badge>
+                            ))}
+                            {paperSubjects.length > 3 ? (
+                              <Badge variant="outline">
+                                +{paperSubjects.length - 3} more
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="min-w-[12rem] space-y-2">
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge variant="outline">
+                              {getPaperClassName(paper)}
+                            </Badge>
+                            <Badge variant="outline">
+                              {paperSectionOptions.length} section
+                              {paperSectionOptions.length === 1 ? "" : "s"}
+                            </Badge>
+                          </div>
+                          {paperSectionOptions.length > 0 ? (
+                            showGlobalSectionScope ? (
+                              <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-foreground">
+                                {selectedSectionLabel}
+                              </div>
+                            ) : paperSectionOptions.length === 1 ? (
+                              <div className="rounded-xl border border-border/60 bg-background px-3 py-2 text-sm font-medium text-foreground">
+                                {paperSectionOptions[0].name}
+                              </div>
+                            ) : (
+                              <Select
+                                value={selectedAcademicSectionId}
+                                onValueChange={(value) =>
+                                  onAcademicSectionSelectionChange(
+                                    paperId,
+                                    value,
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="app-control-compact w-full">
+                                  <SelectValue placeholder="All class sections" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">
+                                    All class sections
+                                  </SelectItem>
+                                  {paperSectionOptions.map((section: any) => (
+                                    <SelectItem
+                                      key={section._id}
+                                      value={section._id}
+                                    >
+                                      {section.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-border/60 px-3 py-2 text-sm text-muted-foreground">
+                              No sections
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="app-table-cell-stack">
+                          <div className="app-table-cell-title">
+                            {paperQuestionCount} question
+                            {paperQuestionCount === 1 ? "" : "s"}
+                          </div>
+                          <div className="app-table-cell-note">
+                            {paper.totalMarks} marks
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="app-table-cell-title">
+                          {paper.createdAt
+                            ? new Date(paper.createdAt).toLocaleDateString()
+                            : "-"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {mountRowActions ? (
+                          <QuestionPaperDirectoryRowActions
+                            paperId={paperId}
+                            selectedAcademicSectionId={selectedAcademicSectionId}
+                            responsesHref={responsesHref}
+                            uploadHref={uploadHref}
+                            classAnalyticsHref={classAnalyticsHref}
+                            buildReturnHref={buildReturnHref}
+                            isSendingReports={sendingReportsPaperId === paperId}
+                            isExcelLoading={excelLoadingId === paperId}
+                            isDeleting={deletingId === paperId}
+                            onSendReports={() => onSendReports(paperId)}
+                            onDownloadExcel={() => onDownloadExcel(paperId)}
+                            onArchive={() => onArchive(paperId)}
+                          />
+                        ) : (
+                          <QuestionPaperRowActionsFallback />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   );

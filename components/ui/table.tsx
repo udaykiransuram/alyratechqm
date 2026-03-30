@@ -6,12 +6,11 @@ const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-x-auto rounded-[inherit]">
+  <div className="app-table-scroll-area app-scroll-area relative w-full overflow-x-auto rounded-[inherit]">
     <table
       ref={ref}
       className={cn(
-        // Ensure horizontal scroll on very small screens instead of squashing columns
-        "w-full min-w-[640px] caption-bottom text-[13px] leading-6 md:min-w-0 md:text-sm",
+        "w-full min-w-full caption-bottom text-[13px] leading-6 sm:text-sm",
         className,
       )}
       {...props}
@@ -84,7 +83,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-12 px-4 py-3 text-left align-middle text-[12px] font-semibold tracking-[0.03em] text-muted-foreground [&:has([role=checkbox])]:pr-0",
+      "h-11 px-3 py-2.5 text-left align-middle text-[11px] font-semibold tracking-[0.03em] text-muted-foreground sm:h-12 sm:px-4 sm:py-3 sm:text-[12px] [&:has([role=checkbox])]:pr-0",
       className,
     )}
     {...props}
@@ -99,7 +98,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "px-4 py-3.5 align-middle text-[14px] leading-6 text-foreground sm:text-sm [&:has([role=checkbox])]:pr-0",
+      "px-3 py-3 align-middle text-[13px] leading-6 text-foreground sm:px-4 sm:py-3.5 sm:text-sm [&:has([role=checkbox])]:pr-0",
       className,
     )}
     {...props}
