@@ -7028,7 +7028,7 @@ html[data-public-home-cinematic="true"] ::selection {
 }
 
 .public-nav-link {
-  @apply inline-flex items-center rounded-full px-4 py-2 text-[15px] font-semibold transition-[background-color,color,border-color,transform,box-shadow];
+  @apply inline-flex min-h-[2.5rem] items-center rounded-full px-3.5 py-2 text-[14px] font-semibold leading-none tracking-[0.01em] transition-[background-color,color,border-color,transform,box-shadow];
   color: hsl(var(--public-ink-soft) / 0.76);
 }
 
@@ -10220,11 +10220,10 @@ html[data-public-home-flagship="true"] ::selection {
     box-shadow: 0 18px 30px -26px hsl(var(--public-shadow) / 0.16);
   }
 
-  .public-nav-cta {
-    @apply inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-[15px] font-semibold transition-all duration-200;
-    min-height: 2.75rem;
-    color: white;
-    background:
+.public-nav-cta {
+  @apply inline-flex min-h-[2.625rem] items-center gap-1.5 rounded-full px-[1.125rem] py-2 text-[14px] font-semibold leading-none tracking-[0.01em] transition-all duration-200;
+  color: white;
+  background:
       linear-gradient(
         135deg,
         hsl(var(--public-brand-start)) 0%,
@@ -10238,14 +10237,16 @@ html[data-public-home-flagship="true"] ::selection {
     box-shadow: 0 26px 46px -30px hsl(var(--public-shadow) / 0.4);
   }
 
-  .public-nav-secondary-action {
-    @apply text-[15px] font-semibold transition-colors;
-    color: hsl(var(--public-ink-soft));
-  }
+.public-nav-secondary-action {
+  @apply inline-flex min-h-[2.5rem] items-center rounded-full px-3.5 py-2 text-[14px] font-semibold leading-none tracking-[0.01em] transition-[color,background-color,border-color,transform,box-shadow];
+  color: hsl(var(--public-ink-soft));
+}
 
-  .public-nav-secondary-action:hover {
-    color: hsl(var(--public-ink));
-  }
+.public-nav-secondary-action:hover {
+  background-color: hsl(var(--public-accent) / 0.08);
+  color: hsl(var(--public-ink));
+  transform: translateY(-1px);
+}
 
   .public-mobile-menu-heading {
     @apply px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.18em];
