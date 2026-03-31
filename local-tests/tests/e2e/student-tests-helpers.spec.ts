@@ -97,6 +97,7 @@ test.describe("Student test helper coverage @desktop", () => {
       _id: "q1",
       content: "<p>2 + 2 = ?</p>",
       type: "single",
+      subject: null,
       options: [{ content: "<p>4</p>" }, { content: "<p>5</p>" }],
       matrixRows: [],
       matrixColumns: [],

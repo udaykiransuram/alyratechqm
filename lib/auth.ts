@@ -22,10 +22,26 @@ import {
 } from "@/lib/user-credentials";
 import { isAllowedConfiguredSiteUrl } from "@/lib/site-url";
 import { getPublicSchoolOptionByKey } from "@/lib/server/public-school-data";
+import { invalidateStudentSessionValidationCache } from "@/lib/student-session-cache";
+import { invalidateStudentTestResourceCache } from "@/lib/student-test-server";
 import CompanyAdmin from "@/models/CompanyAdmin";
 
+const SCHOOL_NOT_FOUND_ERROR = "SchoolNotFound";
 const STUDENT_ALREADY_SIGNED_IN_ERROR = "StudentAlreadySignedIn";
+const STUDENT_DUPLICATE_ROLL_NUMBER_ERROR = "StudentDuplicateRollNumber";
+const STUDENT_PASSWORD_NOT_PROVISIONED_ERROR = "StudentPasswordNotProvisioned";
+const STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR = "StudentRollNumberNotFound";
+const STUDENT_SIGN_IN_FAILED_ERROR = "StudentSignInFailed";
 const STUDENT_SIGN_IN_RATE_LIMITED_ERROR = "StudentSignInRateLimited";
+const FORWARDED_AUTH_ERRORS = new Set([
+  SCHOOL_NOT_FOUND_ERROR,
+  STUDENT_ALREADY_SIGNED_IN_ERROR,
+  STUDENT_DUPLICATE_ROLL_NUMBER_ERROR,
+  STUDENT_PASSWORD_NOT_PROVISIONED_ERROR,
+  STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR,
+  STUDENT_SIGN_IN_FAILED_ERROR,
+  STUDENT_SIGN_IN_RATE_LIMITED_ERROR,
+]);
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -100,7 +116,7 @@ export const authOptions: NextAuthOptions = {
           const schoolKey = String(credentials.schoolKey).trim().toLowerCase();
           const school = await getPublicSchoolOptionByKey(schoolKey);
           if (!school) {
-            return null;
+            throw new Error(SCHOOL_NOT_FOUND_ERROR);
           }
 
           const identifier = String(rawIdentifier).trim();
@@ -144,13 +160,21 @@ export const authOptions: NextAuthOptions = {
             );
 
             if (matchingStudents.length > 1) {
-              return null;
+              throw new Error(STUDENT_DUPLICATE_ROLL_NUMBER_ERROR);
             }
 
             user = matchingStudents[0] || null;
+
+            if (!user && isStudentIdentifier) {
+              throw new Error(STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR);
+            }
           }
 
           if (!user?.passwordHash) {
+            if (String(user?.role || "") === "student") {
+              throw new Error(STUDENT_PASSWORD_NOT_PROVISIONED_ERROR);
+            }
+
             return null;
           }
 
@@ -159,6 +183,10 @@ export const authOptions: NextAuthOptions = {
             user.passwordHash,
           );
           if (!isValid) {
+            if (String(user?.role || "") === "student" || isStudentIdentifier) {
+              throw new Error(STUDENT_SIGN_IN_FAILED_ERROR);
+            }
+
             return null;
           }
 
@@ -236,6 +264,16 @@ export const authOptions: NextAuthOptions = {
                 return undefined;
               },
             );
+
+            invalidateStudentSessionValidationCache({
+              schoolKey,
+              studentId: String(user._id),
+              studentSessionId,
+            });
+            invalidateStudentTestResourceCache({
+              schoolKey,
+              studentId: String(user._id),
+            });
           }
 
           return {
@@ -259,13 +297,7 @@ export const authOptions: NextAuthOptions = {
           };
         } catch (error) {
           console.error("Error in school user authorize:", error);
-          if (
-            error instanceof Error &&
-            [
-              STUDENT_ALREADY_SIGNED_IN_ERROR,
-              STUDENT_SIGN_IN_RATE_LIMITED_ERROR,
-            ].includes(error.message)
-          ) {
+          if (error instanceof Error && FORWARDED_AUTH_ERRORS.has(error.message)) {
             throw error;
           }
           return null;
@@ -368,6 +400,16 @@ export const authOptions: NextAuthOptions = {
             },
           },
         );
+
+        invalidateStudentSessionValidationCache({
+          schoolKey: String(token.schoolKey),
+          studentId: String(token.id),
+          studentSessionId,
+        });
+        invalidateStudentTestResourceCache({
+          schoolKey: String(token.schoolKey),
+          studentId: String(token.id),
+        });
       } catch (error) {
         console.error("Error clearing active student session on sign out:", error);
       }

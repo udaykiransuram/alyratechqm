@@ -1,5 +1,5 @@
 /// <reference types="@playwright/test" />
-import { test, expect, type Route } from "@playwright/test";
+import { test, expect, type Route } from "./helpers/strict-browser-test";
 import { navigateToAppRoute } from "./helpers/navigation";
 import { setSchoolAdminSession } from "./helpers/session";
 

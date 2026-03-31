@@ -20,8 +20,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import FeedbackNotice from "@/components/ui/feedback-notice";
+import { fetchApiJson } from "@/lib/client/api";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 import { listStudentTestDraftMeta } from "@/lib/student-test-draft";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 const StudentTestsFilters = dynamic(
   () => import("@/components/student/StudentTestsFilters"),
@@ -230,6 +232,8 @@ export default function StudentTestsPageClient({
   initialError: string | null;
   submissionNotice: string | null;
 }) {
+  const shouldRefreshMockedData =
+    isMockedE2ETestMode() && initialTests.length === 0;
   const [tests, setTests] = useState<StudentTest[]>(initialTests);
   const [error, setError] = useState<string | null>(initialError);
   const [clientReady, setClientReady] = useState(false);
@@ -247,6 +251,42 @@ export default function StudentTestsPageClient({
   useEffect(() => {
     setClientReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!initialError && !shouldRefreshMockedData) {
+      return;
+    }
+
+    let active = true;
+    setError(null);
+
+    void fetchApiJson<{ success?: boolean; tests?: StudentTest[] }>(
+      "/api/student/tests",
+      {
+        cache: "no-store",
+        fallbackMessage: "Failed to load assigned tests.",
+      },
+    )
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+
+        setTests(Array.isArray(data?.tests) ? data.tests : []);
+        setError(null);
+      })
+      .catch((loadError: any) => {
+        if (!active) {
+          return;
+        }
+
+        setError(loadError?.message || initialError || "Failed to load assigned tests.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [initialError, shouldRefreshMockedData]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

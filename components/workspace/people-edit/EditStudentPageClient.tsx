@@ -193,7 +193,7 @@ export default function EditStudentPageClient({
           {
             label: "Password control",
             value: "Admin support",
-            meta: "Admins can view the current password only when it still matches saved phone-number digits, then reset to phone digits or generate a temporary password from the credentials panel below.",
+            meta: "Admins can view the current password only while it still matches the saved phone-number digits. If the student forgets a custom password, reset it to the saved phone digits from the credentials panel below.",
           },
         ]}
       />

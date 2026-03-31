@@ -1,5 +1,5 @@
 /// <reference types="@playwright/test" />
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./helpers/strict-browser-test";
 import { navigateToAppRoute } from "./helpers/navigation";
 import { setSchoolAdminSession } from "./helpers/session";
 
@@ -9,20 +9,17 @@ test.describe("Analytics navigation", () => {
     await navigateToAppRoute(page, "/workspace/analytics");
 
     await expect(
-      page.getByRole("heading", { name: "Analytics Hub" }),
+      page.getByRole("heading", { name: "Analytics & Reporting" }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: /Open Question Papers/i })).toHaveAttribute(
-      "href",
-      "/workspace/question-papers",
-    );
-    await expect(page.getByRole("link", { name: /Open Excel Upload/i })).toHaveAttribute(
-      "href",
-      "/workspace/analytics/student-tag-report/excel-upload",
-    );
-    await expect(page.getByRole("link", { name: /Open Report Jobs/i })).toHaveAttribute(
-      "href",
-      "/workspace/manage/reports",
-    );
+    await expect(
+      page.getByRole("link", { name: "Open question papers", exact: true }),
+    ).toHaveAttribute("href", "/workspace/question-papers");
+    await expect(
+      page.getByRole("link", { name: /Open Excel upload/i }),
+    ).toHaveAttribute("href", "/workspace/analytics/student-tag-report/excel-upload");
+    await expect(
+      page.getByRole("link", { name: "Open report delivery", exact: true }),
+    ).toHaveAttribute("href", "/workspace/manage/reports");
   });
 
   test("desktop sidebar analytics section is populated @desktop", async ({ page }) => {
@@ -44,7 +41,7 @@ test.describe("Analytics navigation", () => {
     const sidebar = page.locator("aside");
     await sidebar.getByRole("button", { name: "Analytics" }).click();
 
-    await expect(page.getByRole("link", { name: "Overview" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Analytics Hub" })).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Student Tag Upload" }),
     ).toBeVisible();

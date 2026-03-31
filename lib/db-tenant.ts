@@ -16,6 +16,29 @@ import '@/models/User';
 import '@/models/AuditLog';
 import '@/models/ResponseUploadHistory';
 
+type TenantCoreModelMap = {
+  TagType: typeof import('@/models/TagType').default;
+  Tag: typeof import('@/models/Tag').default;
+  Class: typeof import('@/models/Class').default;
+  AcademicSection: typeof import('@/models/AcademicSection').default;
+  Subject: typeof import('@/models/Subject').default;
+  Question: typeof import('@/models/Question').default;
+  QuestionPaper: typeof import('@/models/QuestionPaper').default;
+  QuestionPaperResponse: typeof import('@/models/QuestionPaperResponse').default;
+  User: typeof import('@/models/User').default;
+  AuditLog: typeof import('@/models/AuditLog').default;
+  ResponseUploadHistory: typeof import('@/models/ResponseUploadHistory').default;
+};
+
+type TenantModelForName<Name extends string> =
+  Name extends keyof TenantCoreModelMap
+    ? TenantCoreModelMap[Name]
+    : mongoose.Model<unknown>;
+
+type TenantModelsForNames<Names extends string> = {
+  [Name in Names]: TenantModelForName<Name>;
+};
+
 // Sanitize school key for db name
 function sanitizeKey(key: string) {
   return key.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
@@ -33,7 +56,7 @@ function deleteTenantModel(conn: mongoose.Connection, name: string) {
     } catch {}
   }
 
-  delete (conn.models as Record<string, any>)[name];
+  delete (conn.models as Record<string, mongoose.Model<unknown>>)[name];
 }
 
 /**
@@ -52,9 +75,12 @@ export async function getTenantDb(schoolKey: string) {
  * Ensure that the given models are compiled on the tenant connection using
  * the schemas from the base connection. Returns a map of models.
  */
-export async function getTenantModels<T extends string>(schoolKey: string, names: T[]): Promise<Record<T, any>> {
+export async function getTenantModels<T extends string>(
+  schoolKey: string,
+  names: readonly T[],
+): Promise<TenantModelsForNames<T>> {
   const conn = await getTenantDb(schoolKey);
-  const out: Record<string, any> = {};
+  const out: Partial<TenantModelsForNames<T>> = {};
   for (const name of names) {
     const baseModel = mongoose.model(name); // schema must be registered on base
     const schema = baseModel.schema;
@@ -65,7 +91,19 @@ export async function getTenantModels<T extends string>(schoolKey: string, names
       deleteTenantModel(conn, name);
     }
 
-    out[name] = conn.models[name] || conn.model(name, schema);
+    out[name] =
+      ((conn.models[name] as TenantModelForName<T>) ||
+        (conn.model(name, schema) as TenantModelForName<T>)) as TenantModelsForNames<T>[typeof name];
   }
-  return out as Record<T, any>;
+  return out as TenantModelsForNames<T>;
+}
+
+export async function getTypedTenantModels<
+  const Names extends readonly (keyof TenantCoreModelMap)[],
+>(
+  schoolKey: string,
+  names: Names,
+): Promise<Pick<TenantCoreModelMap, Names[number]>> {
+  const models = await getTenantModels<Names[number]>(schoolKey, names);
+  return models as Pick<TenantCoreModelMap, Names[number]>;
 }

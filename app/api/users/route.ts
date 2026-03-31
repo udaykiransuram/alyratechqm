@@ -10,6 +10,9 @@ import {
 } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
 import { requireTenantSession } from "@/lib/api-auth";
+import { clearStudentSession } from "@/lib/redis";
+import { invalidateStudentSessionValidationCache } from "@/lib/student-session-cache";
+import { invalidateStudentTestResourceCache } from "@/lib/student-test-server";
 import {
   findStudentsByRollNumber,
   isSameStudentPlacement,
@@ -41,6 +44,103 @@ function normalizeIds(value: unknown) {
 
 function normalizeId(value: unknown) {
   return value ? String(value).trim() : "";
+}
+
+function isDuplicateKeyError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
+function resolveDuplicateUserMessage(error: unknown) {
+  const keyPattern =
+    typeof error === "object" && error !== null
+      ? (error as { keyPattern?: Record<string, unknown> }).keyPattern
+      : undefined;
+  const keyValue =
+    typeof error === "object" && error !== null
+      ? (error as { keyValue?: Record<string, unknown> }).keyValue
+      : undefined;
+  const rawMessage =
+    typeof error === "object" && error !== null
+      ? String((error as { message?: unknown }).message || "")
+      : "";
+
+  if (keyPattern?.email || keyValue?.email) {
+    return "A user with this email already exists.";
+  }
+
+  if (
+    keyPattern?.rollNumber ||
+    keyValue?.rollNumber ||
+    rawMessage.includes("student_roll_unique_active_1")
+  ) {
+    return "Roll number must be unique within the school because students use it to sign in.";
+  }
+
+  return "A user with the same identity already exists.";
+}
+
+async function resetPersistedStudentSessionState(params: {
+  UserModel: any;
+  schoolKey: string;
+  studentId: string;
+}) {
+  const { UserModel, schoolKey, studentId } = params;
+  if (!schoolKey || !studentId) {
+    return;
+  }
+
+  await clearStudentSession(schoolKey, studentId).catch(() => undefined);
+  await UserModel.updateOne(
+    { _id: studentId },
+    {
+      $unset: {
+        activeStudentSessionId: 1,
+        activeStudentSessionLastSeenAt: 1,
+      },
+    },
+  ).catch(() => undefined);
+}
+
+function invalidateStudentAccessCaches(params: {
+  schoolKey: string;
+  studentId: string;
+  previousClassId?: string;
+  nextClassId?: string;
+}) {
+  const {
+    schoolKey,
+    studentId,
+    previousClassId = "",
+    nextClassId = "",
+  } = params;
+
+  invalidateStudentSessionValidationCache({
+    schoolKey,
+    studentId,
+  });
+  invalidateStudentTestResourceCache({
+    schoolKey,
+    studentId,
+  });
+
+  if (previousClassId) {
+    invalidateStudentTestResourceCache({
+      schoolKey,
+      classId: previousClassId,
+    });
+  }
+
+  if (nextClassId && nextClassId !== previousClassId) {
+    invalidateStudentTestResourceCache({
+      schoolKey,
+      classId: nextClassId,
+    });
+  }
 }
 
 function resolveUserScope({
@@ -193,6 +293,13 @@ export async function GET(req: NextRequest) {
       limit,
     });
   } catch (error: any) {
+    if (isDuplicateKeyError(error)) {
+      return NextResponse.json(
+        { success: false, message: resolveDuplicateUserMessage(error) },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },
       { status: 500 },
@@ -387,6 +494,7 @@ export async function POST(req: NextRequest) {
           isSameStudentPlacement(candidate, classId, academicSectionId),
       );
       if (archivedStudent) {
+        const previousClassId = normalizeId(archivedStudent.class);
         const restoredStudent = await UserModel.findByIdAndUpdate(
           archivedStudent._id,
           {
@@ -423,6 +531,20 @@ export async function POST(req: NextRequest) {
           details: { role },
         });
 
+        if (role === "student") {
+          await resetPersistedStudentSessionState({
+            UserModel,
+            schoolKey,
+            studentId: String(archivedStudent._id),
+          });
+          invalidateStudentAccessCaches({
+            schoolKey,
+            studentId: String(archivedStudent._id),
+            previousClassId,
+            nextClassId: classId,
+          });
+        }
+
         return NextResponse.json(
           { success: true, user: restoredStudent, existed: true },
           { status: 200 },
@@ -433,6 +555,8 @@ export async function POST(req: NextRequest) {
     if (email) {
       const archivedUser = await UserModel.findOne({ email, isArchived: true });
       if (archivedUser) {
+        const previousRole = String(archivedUser.role || "");
+        const previousClassId = normalizeId(archivedUser.class);
         const restoredUser = await UserModel.findByIdAndUpdate(
           archivedUser._id,
           {
@@ -480,6 +604,20 @@ export async function POST(req: NextRequest) {
           summary: `Restored user ${name}.`,
           details: { role },
         });
+
+        if (previousRole === "student" || role === "student") {
+          await resetPersistedStudentSessionState({
+            UserModel,
+            schoolKey,
+            studentId: String(archivedUser._id),
+          });
+          invalidateStudentAccessCaches({
+            schoolKey,
+            studentId: String(archivedUser._id),
+            previousClassId,
+            nextClassId: role === "student" ? classId : "",
+          });
+        }
 
         return NextResponse.json(
           { success: true, user: restoredUser, existed: true },
@@ -531,11 +669,26 @@ export async function POST(req: NextRequest) {
       details: { role },
     });
 
+    if (role === "student") {
+      invalidateStudentAccessCaches({
+        schoolKey,
+        studentId: String(newUserDoc._id),
+        nextClassId: classId,
+      });
+    }
+
     return NextResponse.json(
       { success: true, user: userResponse },
       { status: 201 },
     );
   } catch (error: any) {
+    if (isDuplicateKeyError(error)) {
+      return NextResponse.json(
+        { success: false, message: resolveDuplicateUserMessage(error) },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },
       { status: 500 },

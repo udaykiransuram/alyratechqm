@@ -64,7 +64,7 @@ export async function resolveStudentPasswordAdminInfo({
           state: "default_phone",
           label: "Using default phone-digits password",
           detail:
-            "The current password still matches the saved phone number digits, so it can be shown here for admin support.",
+            "The current password still matches the saved phone-number digits, so admins can show it here and reset it back to the same recovery password when needed.",
           currentPassword: defaultPassword,
           defaultPasswordAvailable: true,
         };
@@ -78,8 +78,8 @@ export async function resolveStudentPasswordAdminInfo({
     state: "custom",
     label: "Custom password set",
     detail: defaultPassword
-      ? "The student is using a custom password. It cannot be viewed because only the secure hash is stored."
-      : "The student is using a custom password. It cannot be viewed, and there is no phone-digits default available for reset yet.",
+      ? "The student is using a custom password. It cannot be viewed because only the secure hash is stored. If it is forgotten, reset it to the saved phone-number digits."
+      : "The student is using a custom password. It cannot be viewed, and there is no phone-digits default available for reset yet. Save a phone number with digits first.",
     defaultPasswordAvailable: Boolean(defaultPassword),
   };
 }

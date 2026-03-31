@@ -1,10 +1,13 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import mongoose, { Document, Model, Schema, Types } from 'mongoose';
 import { applyArchiveFields, hasArchiveFields } from '@/lib/archive';
 import { getModelRegistry } from '@/lib/mongoose-models';
 
 export interface IClass extends Document {
   name: string;
   description?: string;
+  isArchived?: boolean;
+  archivedAt?: Date | null;
+  archivedBy?: Types.ObjectId | null;
 }
 
 const ClassSchema: Schema<IClass> = new Schema(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Copy, KeyRound, RefreshCcw } from "lucide-react";
+import { Copy, RefreshCcw } from "lucide-react";
 
 import { fetchApiJson, resolveClientSchoolKey } from "@/lib/client/api";
 import type { StudentPasswordAdminInfo } from "@/lib/user-credentials";
@@ -29,9 +29,9 @@ export default function StudentPasswordAdminPanel({
   const [revealedPassword, setRevealedPassword] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<
-    "reset_to_default" | "generate_temporary" | null
-  >(null);
+  const [pendingAction, setPendingAction] = useState<"reset_to_default" | null>(
+    null,
+  );
 
   useEffect(() => {
     setPasswordInfo(initialInfo);
@@ -73,16 +73,14 @@ export default function StudentPasswordAdminPanel({
     }
   };
 
-  const handleReset = async (
-    action: "reset_to_default" | "generate_temporary",
-  ) => {
+  const handleReset = async () => {
     try {
       const resolvedSchoolKey = resolveClientSchoolKey(schoolKey);
       if (!resolvedSchoolKey) {
         throw new Error("Please select a school in the navbar first.");
       }
 
-      setPendingAction(action);
+      setPendingAction("reset_to_default");
       setErrorMessage(null);
 
       const data = await fetchApiJson<{
@@ -93,7 +91,7 @@ export default function StudentPasswordAdminPanel({
         method: "POST",
         schoolKey: resolvedSchoolKey,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action: "reset_to_default" }),
         fallbackMessage: "Failed to update the student password.",
       });
 
@@ -101,9 +99,7 @@ export default function StudentPasswordAdminPanel({
       setRevealedPassword(String(data.password || "").trim() || null);
       setSuccessMessage(
         data.message ||
-          (action === "reset_to_default"
-            ? "Student password reset to the saved phone-number digits."
-            : "Temporary student password generated successfully."),
+          "Student password reset to the saved phone-number digits. Any active student session was signed out so the student can log in again.",
       );
     } catch (error: any) {
       setErrorMessage(
@@ -121,9 +117,11 @@ export default function StudentPasswordAdminPanel({
       </CardHeader>
       <CardContent className="app-section-body space-y-4">
         <p className="text-sm leading-6 text-muted-foreground">
-          Admins can see the current password only when the student still uses
-          the default saved-phone-number-digits password. Custom passwords are
-          stored only as secure hashes and cannot be recovered.
+          Students can change their own password from the student account page.
+          If a custom password is forgotten, reset it here to the saved
+          phone-number digits. The reset also signs the student out on other
+          devices so they can log in again. Custom passwords are stored only as
+          secure hashes and cannot be recovered.
         </p>
 
         {successMessage ? (
@@ -169,34 +167,20 @@ export default function StudentPasswordAdminPanel({
             </p>
           </div>
 
-          <div className="grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-1">
+          <div className="grid w-full gap-2">
             <Button
               type="button"
               size="lg"
               variant="outline"
               className={credentialActionButtonClassName}
-              onClick={() => handleReset("reset_to_default")}
+              onClick={handleReset}
               disabled={!canResetToDefault || pendingAction !== null}
             >
               <RefreshCcw className="h-4 w-4" />
               <span className="text-center leading-5">
                 {pendingAction === "reset_to_default"
                   ? "Resetting..."
-                  : "Reset to Phone Digits"}
-              </span>
-            </Button>
-            <Button
-              type="button"
-              size="lg"
-              className={credentialActionButtonClassName}
-              onClick={() => handleReset("generate_temporary")}
-              disabled={pendingAction !== null}
-            >
-              <KeyRound className="h-4 w-4" />
-              <span className="text-center leading-5">
-                {pendingAction === "generate_temporary"
-                  ? "Generating..."
-                  : "Generate Temporary Password"}
+                  : "Reset to Saved Phone Digits"}
               </span>
             </Button>
           </div>
@@ -224,7 +208,8 @@ export default function StudentPasswordAdminPanel({
           ) : (
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
               The current password cannot be shown because the student is using a
-              custom password and only its secure hash is stored.
+              custom password and only its secure hash is stored. If the student
+              forgot it, use the reset action above.
             </p>
           )}
         </div>

@@ -10,6 +10,7 @@ import {
   disableExamPaperSnapshotsForPaperId,
   syncExamPaperSnapshotForPaperId,
 } from "@/lib/exam-runtime";
+import { invalidateStudentTestResourceCache } from "@/lib/student-test-server";
 import {
   buildStoredPaperSubjectFields,
   derivePaperSubjectIdsFromQuestions,
@@ -447,6 +448,12 @@ export async function POST(req: NextRequest) {
         String(paper._id),
       ).catch(() => undefined);
     }
+
+    invalidateStudentTestResourceCache({
+      schoolKey,
+      paperId: String(paper._id),
+      classId: String(classId),
+    });
 
     const paperObject = paper?.toObject?.() ?? paper;
 

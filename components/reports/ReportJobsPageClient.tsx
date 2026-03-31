@@ -1,14 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCcw, Wrench } from "lucide-react";
 
-import PageHero from "@/components/layout/PageHero";
-import PageShell from "@/components/layout/PageShell";
-import { Button } from "@/components/ui/button";
 import { fetchApiJson } from "@/lib/client/api";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 import type {
   ReportFilterOption,
@@ -49,7 +46,9 @@ const ReportJobsDispatchCard = dynamic(
   },
 );
 
-type ReportJobsPageClientProps = {
+const REPORT_JOBS_REFRESH_EVENT = "report-jobs:refresh";
+
+export type ReportJobsPageClientProps = {
   jobs: ReportJob[];
   totalJobs: number;
   page: number;
@@ -79,10 +78,18 @@ export default function ReportJobsPageClient({
   loadError = null,
 }: ReportJobsPageClientProps) {
   const router = useRouter();
+  const shouldRefreshMockedData = isMockedE2ETestMode();
   const [isPending, startTransition] = useTransition();
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(loadError);
+  const [visibleJobs, setVisibleJobs] = useState<ReportJob[]>(jobs);
+  const [visibleTotalJobs, setVisibleTotalJobs] = useState(totalJobs);
+  const [visiblePage, setVisiblePage] = useState(page);
+  const [visiblePages, setVisiblePages] = useState(pages);
+  const [visiblePageSize, setVisiblePageSize] = useState(pageSize);
+  const [visibleAcademicSectionOptions, setVisibleAcademicSectionOptions] =
+    useState<ReportFilterOption[]>(academicSectionOptions);
 
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>(initialTypeFilter);
@@ -92,8 +99,34 @@ export default function ReportJobsPageClient({
     initialAcademicSectionFilter,
   );
 
+  useEffect(() => {
+    setVisibleJobs(jobs);
+    setVisibleTotalJobs(totalJobs);
+    setVisiblePage(page);
+    setVisiblePages(pages);
+    setVisiblePageSize(pageSize);
+    setVisibleAcademicSectionOptions(academicSectionOptions);
+    setError(loadError);
+    setStatusFilter(initialStatusFilter);
+    setTypeFilter(initialTypeFilter);
+    setReportScopeFilter(initialReportScopeFilter);
+    setAcademicSectionFilter(initialAcademicSectionFilter);
+  }, [
+    academicSectionOptions,
+    initialAcademicSectionFilter,
+    initialReportScopeFilter,
+    initialStatusFilter,
+    initialTypeFilter,
+    jobs,
+    loadError,
+    page,
+    pageSize,
+    pages,
+    totalJobs,
+  ]);
+
   const summary = useMemo(() => {
-    return jobs.reduce(
+    return visibleJobs.reduce(
       (accumulator, job) => {
         accumulator.total += 1;
         if (job.status === "sent") accumulator.sent += 1;
@@ -114,13 +147,169 @@ export default function ReportJobsPageClient({
         awaitingAck: 0,
       },
     );
-  }, [jobs]);
+  }, [visibleJobs]);
 
   const hasActiveFilters =
     statusFilter !== "all" ||
     typeFilter !== "all" ||
     reportScopeFilter !== "all" ||
     academicSectionFilter !== "all";
+
+  const buildJobsHref = useCallback((values: {
+    nextPage?: number;
+    nextStatus?: string;
+    nextType?: TypeFilter;
+    nextScope?: ReportScopeFilter;
+    nextAcademicSection?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (values.nextStatus && values.nextStatus !== "all") {
+      searchParams.set("status", values.nextStatus);
+    }
+    if (values.nextType && values.nextType !== "all") {
+      searchParams.set("type", values.nextType);
+    }
+    if (values.nextScope && values.nextScope !== "all") {
+      searchParams.set("scope", values.nextScope);
+    }
+    if (values.nextAcademicSection && values.nextAcademicSection !== "all") {
+      searchParams.set("academicSectionId", values.nextAcademicSection);
+    }
+    if ((values.nextPage || 1) > 1) {
+      searchParams.set("page", String(values.nextPage));
+    }
+    searchParams.set("limit", String(visiblePageSize));
+
+    const href = searchParams.toString()
+      ? `/workspace/manage/reports?${searchParams.toString()}`
+      : "/workspace/manage/reports";
+
+    return href;
+  }, [visiblePageSize]);
+
+  const loadJobs = useCallback(
+    async ({
+      nextPage = 1,
+      nextStatus = statusFilter,
+      nextType = typeFilter,
+      nextScope = reportScopeFilter,
+      nextAcademicSection = academicSectionFilter,
+    }: {
+      nextPage?: number;
+      nextStatus?: string;
+      nextType?: TypeFilter;
+      nextScope?: ReportScopeFilter;
+      nextAcademicSection?: string;
+    }) => {
+      const href = buildJobsHref({
+        nextPage,
+        nextStatus,
+        nextType,
+        nextScope,
+        nextAcademicSection,
+      });
+      const apiHref = href.replace("/workspace/manage/reports", "/api/reports/jobs");
+
+      const data = await fetchApiJson<{
+        success?: boolean;
+        jobs?: ReportJob[];
+        total?: number;
+        page?: number;
+        pages?: number;
+        limit?: number;
+        filters?: {
+          academicSections?: ReportFilterOption[];
+        };
+      }>(apiHref, {
+        cache: "no-store",
+        fallbackMessage: "Failed to load report jobs.",
+      });
+
+      setVisibleJobs(Array.isArray(data?.jobs) ? data.jobs : []);
+      setVisibleTotalJobs(Math.max(0, Number(data?.total) || 0));
+      setVisiblePage(Math.max(1, Number(data?.page) || nextPage));
+      setVisiblePages(Math.max(1, Number(data?.pages) || 1));
+      setVisiblePageSize(Math.max(1, Number(data?.limit) || visiblePageSize));
+      setVisibleAcademicSectionOptions(
+        Array.isArray(data?.filters?.academicSections)
+          ? data.filters.academicSections
+          : [],
+      );
+      setError(null);
+    },
+    [
+      academicSectionFilter,
+      buildJobsHref,
+      reportScopeFilter,
+      statusFilter,
+      typeFilter,
+      visiblePageSize,
+    ],
+  );
+
+  useEffect(() => {
+    if (!loadError && !shouldRefreshMockedData) {
+      return;
+    }
+
+    let active = true;
+    void loadJobs({
+      nextPage: page,
+      nextStatus: initialStatusFilter,
+      nextType: initialTypeFilter,
+      nextScope: initialReportScopeFilter,
+      nextAcademicSection: initialAcademicSectionFilter,
+    }).catch((loadJobsError: any) => {
+      if (!active) {
+        return;
+      }
+
+      setError(loadJobsError?.message || loadError || "Failed to load report jobs.");
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    initialAcademicSectionFilter,
+    initialReportScopeFilter,
+    initialStatusFilter,
+    initialTypeFilter,
+    loadError,
+    loadJobs,
+    page,
+    shouldRefreshMockedData,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleRefresh = () => {
+      void loadJobs({
+        nextPage: visiblePage,
+        nextStatus: statusFilter,
+        nextType: typeFilter,
+        nextScope: reportScopeFilter,
+        nextAcademicSection: academicSectionFilter,
+      }).catch((loadJobsError: any) => {
+        setError(loadJobsError?.message || "Failed to refresh report jobs.");
+      });
+    };
+
+    window.addEventListener(REPORT_JOBS_REFRESH_EVENT, handleRefresh);
+    return () => {
+      window.removeEventListener(REPORT_JOBS_REFRESH_EVENT, handleRefresh);
+    };
+  }, [
+    academicSectionFilter,
+    loadJobs,
+    reportScopeFilter,
+    statusFilter,
+    typeFilter,
+    visiblePage,
+  ]);
 
   const navigateWithFilters = ({
     nextPage = 1,
@@ -137,19 +326,27 @@ export default function ReportJobsPageClient({
     nextAcademicSection?: string;
     preserveScroll?: boolean;
   }) => {
-    const params = new URLSearchParams();
-    if (nextStatus !== "all") params.set("status", nextStatus);
-    if (nextType !== "all") params.set("type", nextType);
-    if (nextScope !== "all") params.set("scope", nextScope);
-    if (nextAcademicSection !== "all") {
-      params.set("academicSectionId", nextAcademicSection);
-    }
-    if (nextPage > 1) params.set("page", String(nextPage));
-    params.set("limit", String(pageSize));
+    const href = buildJobsHref({
+      nextPage,
+      nextStatus,
+      nextType,
+      nextScope,
+      nextAcademicSection,
+    });
 
-    const href = params.toString()
-      ? `/workspace/manage/reports?${params.toString()}`
-      : "/workspace/manage/reports";
+    if (shouldRefreshMockedData) {
+      window.history.pushState(null, "", href);
+      void loadJobs({
+        nextPage,
+        nextStatus,
+        nextType,
+        nextScope,
+        nextAcademicSection,
+      }).catch((loadJobsError: any) => {
+        setError(loadJobsError?.message || "Failed to load report jobs.");
+      });
+      return;
+    }
 
     startTransition(() => {
       router.push(href, { scroll: !preserveScroll });
@@ -167,7 +364,17 @@ export default function ReportJobsPageClient({
         fallbackMessage: "Retry failed.",
       });
       setNotice("Retry request queued successfully.");
-      router.refresh();
+      if (shouldRefreshMockedData) {
+        await loadJobs({
+          nextPage: visiblePage,
+          nextStatus: statusFilter,
+          nextType: typeFilter,
+          nextScope: reportScopeFilter,
+          nextAcademicSection: academicSectionFilter,
+        });
+      } else {
+        router.refresh();
+      }
     } catch (retryError: any) {
       setError(retryError?.message || "Retry failed.");
     } finally {
@@ -200,109 +407,33 @@ export default function ReportJobsPageClient({
     setTypeFilter("all");
     setReportScopeFilter("all");
     setAcademicSectionFilter("all");
+    if (shouldRefreshMockedData) {
+      window.history.pushState(null, "", "/workspace/manage/reports");
+      void loadJobs({
+        nextPage: 1,
+        nextStatus: "all",
+        nextType: "all",
+        nextScope: "all",
+        nextAcademicSection: "all",
+      }).catch((loadJobsError: any) => {
+        setError(loadJobsError?.message || "Failed to load report jobs.");
+      });
+      return;
+    }
+
     startTransition(() => {
       router.push("/workspace/manage/reports");
     });
   };
 
-  const runWorkerNow = async () => {
-    try {
-      setNotice(null);
-      setError(null);
-      const data = await fetchApiJson<any>(`/api/reports/worker`, {
-        method: "POST",
-        schoolKey,
-        fallbackMessage: "Worker failed.",
-      });
-      const recoveredNote =
-        data.recoveredStale > 0
-          ? ` Recovered ${data.recoveredStale} stale job lock(s).`
-          : "";
-      const waitingNote =
-        data.awaitingProviderAck > 0
-          ? ` ${data.awaitingProviderAck} job(s) are waiting for provider acknowledgement before retry.`
-          : "";
-      setNotice(
-        `Worker processed ${data.processed}, sent ${data.sent}, and failed ${data.failed}.${recoveredNote}${waitingNote}`,
-      );
-      router.refresh();
-    } catch (workerError: any) {
-      setError(workerError?.message || "Worker run failed.");
-    }
-  };
-
   return (
-    <PageShell width="wide" padding="relaxed">
-      <PageHero
-        variant="operations"
-        eyebrow="School Workspace"
-        title="Report Delivery Queue"
-        description="Track dispatch jobs, refresh delivery state, and run the worker manually."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              className="app-button-filter"
-              onClick={() => router.refresh()}
-              disabled={isPending}
-            >
-              <RefreshCcw className="h-4 w-4" />
-              Refresh
-            </Button>
-            <Button
-              className="app-button-page"
-              onClick={() => void runWorkerNow()}
-            >
-              <Wrench className="h-4 w-4" />
-              Run Worker Now
-            </Button>
-          </div>
-        }
-        meta={
-          <>
-            <span className="app-meta-chip">
-              {schoolKey ? `School: ${schoolKey}` : "No school selected"}
-            </span>
-            <span className="app-meta-chip">
-              {summary.awaitingAck} waiting for provider ack
-            </span>
-          </>
-        }
-        stats={[
-          {
-            label: "Filtered jobs",
-            value: String(totalJobs),
-            meta: "Matching jobs across all pages for the active filters.",
-          },
-          {
-            label: "Pending on page",
-            value: String(summary.pending),
-            meta: "Queued or processing jobs on the current page.",
-          },
-          {
-            label: "Sent on page",
-            value: String(summary.sent),
-            meta: "Jobs successfully processed on the current page.",
-          },
-          {
-            label: "Failed on page",
-            value: String(summary.failed),
-            meta: "Jobs on this page that may need a retry or worker follow-up.",
-          },
-          {
-            label: "Awaiting ack",
-            value: String(summary.awaitingAck),
-            meta: "Jobs waiting for provider acknowledgement before retry.",
-          },
-        ]}
-      />
-
+    <>
       <div className="space-y-4">
         {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
         {notice ? <div className="app-feedback app-feedback-success">{notice}</div> : null}
 
         <ReportJobsFiltersCard
-          totalJobs={totalJobs}
+          totalJobs={visibleTotalJobs}
           failedCount={summary.failed}
           awaitingAckCount={summary.awaitingAck}
           hasActiveFilters={hasActiveFilters}
@@ -310,7 +441,7 @@ export default function ReportJobsPageClient({
           typeFilter={typeFilter}
           reportScopeFilter={reportScopeFilter}
           academicSectionFilter={academicSectionFilter}
-          academicSectionOptions={academicSectionOptions}
+          academicSectionOptions={visibleAcademicSectionOptions}
           onStatusChange={handleStatusChange}
           onTypeChange={handleTypeChange}
           onReportScopeChange={handleReportScopeChange}
@@ -319,11 +450,11 @@ export default function ReportJobsPageClient({
         />
 
         <ReportJobsDispatchCard
-          jobs={jobs}
-          totalJobs={totalJobs}
-          page={page}
-          pages={pages}
-          pageSize={pageSize}
+          jobs={visibleJobs}
+          totalJobs={visibleTotalJobs}
+          page={visiblePage}
+          pages={visiblePages}
+          pageSize={visiblePageSize}
           isPending={isPending}
           retryingId={retryingId}
           pendingCount={summary.pending}
@@ -340,6 +471,6 @@ export default function ReportJobsPageClient({
           onClearFilters={handleClearFilters}
         />
       </div>
-    </PageShell>
+    </>
   );
 }

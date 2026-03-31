@@ -14,6 +14,7 @@ import {
   disableExamPaperSnapshotsForPaperId,
   syncExamPaperSnapshotForPaperId,
 } from "@/lib/exam-runtime";
+import { invalidateStudentTestResourceCache } from "@/lib/student-test-server";
 import {
   buildStoredPaperSubjectFields,
   derivePaperSubjectIdsFromQuestions,
@@ -293,6 +294,12 @@ export async function PUT(
       "Question",
       "User",
     ]);
+    const existingPaper = await QPModel.findOne({
+      _id: id,
+      ...buildArchiveFilter(false),
+    })
+      .select("class")
+      .lean();
 
     const data = await req.json();
     const {
@@ -552,6 +559,24 @@ export async function PUT(
       ).catch(() => undefined);
     }
 
+    const previousClassId = toIdString(existingPaper?.class);
+    const nextClassId = toIdString((updated?.toObject?.() ?? updated)?.class);
+    invalidateStudentTestResourceCache({
+      schoolKey,
+      paperId: String(updated._id),
+      classId: nextClassId || previousClassId || undefined,
+    });
+    if (
+      previousClassId &&
+      nextClassId &&
+      previousClassId !== nextClassId
+    ) {
+      invalidateStudentTestResourceCache({
+        schoolKey,
+        classId: previousClassId,
+      });
+    }
+
     const updatedObject = updated?.toObject?.() ?? updated;
 
     return NextResponse.json({
@@ -611,6 +636,12 @@ export async function DELETE(
       schoolKey,
       String(archived._id),
     ).catch(() => undefined);
+
+    invalidateStudentTestResourceCache({
+      schoolKey,
+      paperId: String(archived._id),
+      classId: toIdString((archived?.toObject?.() ?? archived)?.class),
+    });
 
     return NextResponse.json({
       success: true,

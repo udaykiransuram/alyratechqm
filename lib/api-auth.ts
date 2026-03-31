@@ -13,6 +13,15 @@ import {
   isStudentSessionFresh,
   shouldRefreshStudentSessionHeartbeat,
 } from "@/lib/student-session";
+import {
+  clearStudentSessionRecentRedisValidation,
+  hasRecentlyValidatedStudentSessionViaRedis,
+  invalidateStudentSessionValidationCache,
+  markRedisValidatedStudentSessionDbSynced,
+  markStudentSessionRecentlyValidatedViaRedis,
+  shouldSyncRedisValidatedStudentSessionToDb,
+} from "@/lib/student-session-cache";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 import CompanyAdmin from "@/models/CompanyAdmin";
 
 type RequireTenantSessionOptions = {
@@ -42,156 +51,6 @@ type RequireCompanyAdminSessionSuccess = {
   ok: true;
   session: Session;
 };
-
-type StudentSessionDbSyncEntry = {
-  syncedAt: number;
-};
-
-type StudentSessionRedisValidationEntry = {
-  validatedAt: number;
-};
-
-const STUDENT_SESSION_REDIS_VALIDATION_CACHE_MS = Math.max(
-  500,
-  Number.parseInt(
-    String(process.env.STUDENT_SESSION_REDIS_VALIDATION_CACHE_MS || "1500"),
-    10,
-  ) || 1500,
-);
-
-function getStudentSessionDbSyncCache() {
-  const globalState = globalThis as typeof globalThis & {
-    __studentSessionDbSyncCache?: Map<string, StudentSessionDbSyncEntry>;
-  };
-
-  if (!globalState.__studentSessionDbSyncCache) {
-    globalState.__studentSessionDbSyncCache = new Map();
-  }
-
-  return globalState.__studentSessionDbSyncCache;
-}
-
-function getStudentSessionRedisValidationCache() {
-  const globalState = globalThis as typeof globalThis & {
-    __studentSessionRedisValidationCache?: Map<
-      string,
-      StudentSessionRedisValidationEntry
-    >;
-  };
-
-  if (!globalState.__studentSessionRedisValidationCache) {
-    globalState.__studentSessionRedisValidationCache = new Map();
-  }
-
-  return globalState.__studentSessionRedisValidationCache;
-}
-
-function buildStudentSessionDbSyncCacheKey(
-  schoolKey: string,
-  studentId: string,
-  studentSessionId: string,
-) {
-  return `${schoolKey}::${studentId}::${studentSessionId}`;
-}
-
-function getStudentSessionRedisValidationCacheKey(
-  schoolKey: string,
-  studentId: string,
-  studentSessionId: string,
-) {
-  return `${schoolKey}::${studentId}::${studentSessionId}`;
-}
-
-function shouldSyncRedisValidatedStudentSessionToDb(
-  schoolKey: string,
-  studentId: string,
-  studentSessionId: string,
-  now: Date,
-) {
-  const cache = getStudentSessionDbSyncCache();
-  const cacheKey = buildStudentSessionDbSyncCacheKey(
-    schoolKey,
-    studentId,
-    studentSessionId,
-  );
-  const existingEntry = cache.get(cacheKey);
-
-  if (
-    existingEntry &&
-    !shouldRefreshStudentSessionHeartbeat(existingEntry.syncedAt, now)
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function markRedisValidatedStudentSessionDbSynced(
-  schoolKey: string,
-  studentId: string,
-  studentSessionId: string,
-  now: Date,
-) {
-  getStudentSessionDbSyncCache().set(
-    buildStudentSessionDbSyncCacheKey(
-      schoolKey,
-      studentId,
-      studentSessionId,
-    ),
-    { syncedAt: now.getTime() },
-  );
-}
-
-function hasRecentlyValidatedStudentSessionViaRedis(
-  schoolKey: string,
-  studentId: string,
-  studentSessionId: string,
-  now: Date,
-) {
-  const entry = getStudentSessionRedisValidationCache().get(
-    getStudentSessionRedisValidationCacheKey(
-      schoolKey,
-      studentId,
-      studentSessionId,
-    ),
-  );
-
-  if (!entry) {
-    return false;
-  }
-
-  return now.getTime() - entry.validatedAt < STUDENT_SESSION_REDIS_VALIDATION_CACHE_MS;
-}
-
-function markStudentSessionRecentlyValidatedViaRedis(
-  schoolKey: string,
-  studentId: string,
-  studentSessionId: string,
-  now: Date,
-) {
-  getStudentSessionRedisValidationCache().set(
-    getStudentSessionRedisValidationCacheKey(
-      schoolKey,
-      studentId,
-      studentSessionId,
-    ),
-    { validatedAt: now.getTime() },
-  );
-}
-
-function clearStudentSessionRecentRedisValidation(
-  schoolKey: string,
-  studentId: string,
-  studentSessionId: string,
-) {
-  getStudentSessionRedisValidationCache().delete(
-    getStudentSessionRedisValidationCacheKey(
-      schoolKey,
-      studentId,
-      studentSessionId,
-    ),
-  );
-}
 
 function extractRequestedSchoolKey(
   req: NextRequest,
@@ -240,6 +99,10 @@ async function validatePrivilegedSchoolUserSession(
   session: Session,
   schoolKey: string,
 ) {
+  if (isMockedE2ETestMode()) {
+    return null;
+  }
+
   try {
     await connectDB();
     const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
@@ -276,6 +139,10 @@ async function validateStudentSession(session: Session, schoolKey: string) {
   const studentSessionId = String(session.user.studentSessionId || "").trim();
   if (!studentSessionId) {
     return buildStudentSessionInvalidResponse();
+  }
+
+  if (isMockedE2ETestMode()) {
+    return null;
   }
 
   const now = new Date();
@@ -332,6 +199,11 @@ async function validateStudentSession(session: Session, schoolKey: string) {
       );
 
       if (validationResult === "mismatch") {
+        invalidateStudentSessionValidationCache({
+          schoolKey,
+          studentId: session.user.id,
+          studentSessionId,
+        });
         clearStudentSessionRecentRedisValidation(
           schoolKey,
           session.user.id,
@@ -341,6 +213,11 @@ async function validateStudentSession(session: Session, schoolKey: string) {
       }
 
       if (validationResult === "missing") {
+        invalidateStudentSessionValidationCache({
+          schoolKey,
+          studentId: session.user.id,
+          studentSessionId,
+        });
         clearStudentSessionRecentRedisValidation(
           schoolKey,
           session.user.id,
@@ -350,6 +227,11 @@ async function validateStudentSession(session: Session, schoolKey: string) {
       }
 
       if (validationResult !== "valid") {
+        invalidateStudentSessionValidationCache({
+          schoolKey,
+          studentId: session.user.id,
+          studentSessionId,
+        });
         clearStudentSessionRecentRedisValidation(
           schoolKey,
           session.user.id,
@@ -413,6 +295,11 @@ async function validateStudentSession(session: Session, schoolKey: string) {
       .lean();
 
     if (!student || student.role !== "student") {
+      invalidateStudentSessionValidationCache({
+        schoolKey,
+        studentId: session.user.id,
+        studentSessionId,
+      });
       return buildStudentSessionInvalidResponse();
     }
 
@@ -420,6 +307,11 @@ async function validateStudentSession(session: Session, schoolKey: string) {
       student.activeStudentSessionId || "",
     ).trim();
     if (!activeStudentSessionId || activeStudentSessionId !== studentSessionId) {
+      invalidateStudentSessionValidationCache({
+        schoolKey,
+        studentId: session.user.id,
+        studentSessionId,
+      });
       return buildStudentSessionInvalidResponse();
     }
 
@@ -438,6 +330,11 @@ async function validateStudentSession(session: Session, schoolKey: string) {
         },
       ).catch(() => undefined);
 
+      invalidateStudentSessionValidationCache({
+        schoolKey,
+        studentId: session.user.id,
+        studentSessionId,
+      });
       return buildStudentSessionInvalidResponse();
     }
 

@@ -43,6 +43,15 @@ import {
 import { z } from "zod";
 import { objectIdSchema, parseOr400 } from "@/lib/validation";
 
+type ScopedAnalyticsUser = {
+  hasAllClasses?: boolean;
+  classIds?: any[];
+  hasAllSubjects?: boolean;
+  subjectIds?: any[];
+  hasAllSections?: boolean;
+  academicSectionIds?: any[];
+};
+
 // Recursively deduplicate question ID arrays in stats
 function dedupeStatsArrays(obj: any) {
   if (
@@ -212,12 +221,12 @@ export async function GET(
     "User",
     "AcademicSection",
   ]);
-  const scopedUser = !isStudentSession
-    ? await UserModel.findById(auth.session.user.id)
+  const scopedUser: ScopedAnalyticsUser | null = !isStudentSession
+    ? ((await UserModel.findById(auth.session.user.id)
         .select(
           "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
         )
-        .lean()
+        .lean()) as ScopedAnalyticsUser | null)
     : null;
 
   if (req.nextUrl.searchParams.get("groupFields") === "1") {

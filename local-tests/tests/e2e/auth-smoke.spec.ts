@@ -1,5 +1,5 @@
 /// <reference types="@playwright/test" />
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/strict-browser-test";
 import { navigateToAppRoute } from "./helpers/navigation";
 
 test.describe("Auth smoke @desktop", () => {
@@ -8,7 +8,7 @@ test.describe("Auth smoke @desktop", () => {
   }) => {
     await navigateToAppRoute(page, "/auth/company-signin");
     await expect(
-      page.getByRole("heading", { name: "Manage schools from one place" }),
+      page.getByRole("heading", { name: "Sign in to the company portal" }),
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: /use school sign in/i }),
@@ -16,10 +16,10 @@ test.describe("Auth smoke @desktop", () => {
 
     await navigateToAppRoute(page, "/auth/signin");
     await expect(
-      page.getByRole("link", { name: "Use administrator sign in" }),
+      page.getByRole("heading", { name: "Sign in to your school" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Use administrator sign in" }),
+      page.getByRole("link", { name: "Use company sign in" }),
     ).toHaveAttribute("href", "/auth/company-signin");
   });
 

@@ -21,6 +21,15 @@ function normalizeEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
+function isDuplicateKeyError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireCompanyAdminSession(req);
@@ -133,6 +142,17 @@ export async function POST(req: NextRequest) {
         await tenantDb.dropDatabase().catch(() => undefined);
       } catch {}
 
+      if (isDuplicateKeyError(error)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "School or bootstrap admin already exists. Please retry with unique school/admin details.",
+          },
+          { status: 409 },
+        );
+      }
+
       return NextResponse.json(
         {
           success: false,
@@ -183,4 +203,32 @@ async function ensureTenantIndexesForKey(schoolKey: string) {
       { class: 1, academicSection: 1, rollNumber: 1 },
       { name: "user_class_section_roll_1" },
     );
+  await db
+    .collection("users")
+    .createIndex(
+      { role: 1, rollNumber: 1 },
+      {
+        name: "student_roll_unique_active_1",
+        unique: true,
+        partialFilterExpression: {
+          role: "student",
+          rollNumber: { $type: "string", $gt: "" },
+          $or: [{ isArchived: false }, { isArchived: { $exists: false } }],
+        },
+      },
+    );
+  await db.collection("examattemptlocks").createIndex(
+    { paper: 1, student: 1 },
+    {
+      name: "attempt_lock_paper_student_unique_1",
+      unique: true,
+    },
+  );
+  await db.collection("examattemptlocks").createIndex(
+    { expiresAt: 1 },
+    {
+      name: "attempt_lock_expiresAt_ttl_1",
+      expireAfterSeconds: 0,
+    },
+  );
 }

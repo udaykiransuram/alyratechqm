@@ -3,10 +3,8 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, PlusCircle, X } from "lucide-react";
+import { PlusCircle, X } from "lucide-react";
 
-import PageHero from "@/components/layout/PageHero";
-import PageShell from "@/components/layout/PageShell";
 import EditorLoadingState from "@/components/ui/editor-loading-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,11 +23,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { TagItem } from "@/components/ui/multi-select-tags";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
-
-const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), {
-  ssr: false,
-  loading: () => <EditorLoadingState label="Loading rich text editor" />,
-});
 
 const MatrixMatchConfigurator = dynamic(
   () =>
@@ -63,6 +56,10 @@ function QuestionMetadataSkeleton() {
     </Card>
   );
 }
+
+const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), {
+  loading: () => <EditorLoadingState label="Loading editor" />,
+});
 
 const MetadataSelector = dynamic(
   () =>
@@ -172,11 +169,6 @@ export default function QuestionEditorClient({
     const selectedSubject = initialSubjects.find((subject) => subject._id === subjectId);
     return selectedSubject ? selectedSubject.tags.map((tag) => tag._id) : [];
   }, [initialSubjects, subjectId]);
-
-  const pageTitle = isEditMode ? "Edit Question" : "Create Question";
-  const pageDescription = isEditMode
-    ? "Update the question content, metadata, and answer configuration without leaving the dedicated authoring flow."
-    : "Write the question body, set answer logic, and connect the item to the right class, subject, and tags before it enters the bank.";
 
   const handleClassChange = (value: string) => {
     setClassId(value);
@@ -423,77 +415,11 @@ export default function QuestionEditorClient({
   };
 
   if (isEditMode && !initialQuestion) {
-    return (
-      <PageShell width="wide" padding="standard">
-        <PageHero
-          variant="editor"
-          eyebrow="Question Bank"
-          title="Edit Question"
-          description="The requested question could not be loaded."
-          actions={
-            <Button variant="outline" onClick={navigateBack} className="app-button-back">
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Button>
-          }
-        />
-        <div className="app-empty-state">Question not found.</div>
-      </PageShell>
-    );
+    return <div className="app-empty-state">Question not found.</div>;
   }
 
   return (
-    <PageShell width="wide" padding="standard">
-      <PageHero
-        variant="editor"
-        density="compact"
-        eyebrow="Question Bank"
-        title={pageTitle}
-        description={pageDescription}
-        actions={
-          <Button
-            type="button"
-            variant="outline"
-            onClick={navigateBack}
-            className="app-button-back"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-        }
-        meta={
-          <>
-            <span className="app-meta-chip">
-              {isEditMode ? "Question maintenance" : "Authoring workspace"}
-            </span>
-            <span className="app-meta-chip">
-              {isEditMode ? "Metadata-aware editing" : "Metadata-first flow"}
-            </span>
-          </>
-        }
-        stats={[
-          {
-            label: "Question type",
-            value: getQuestionTypeLabel(type),
-            meta: isEditMode
-              ? "Existing question type stays fixed on this edit screen."
-              : "Switch types from the side rail before saving.",
-          },
-          {
-            label: "Selected tags",
-            value: String(selectedTags.length),
-            meta: "Tags help reuse the question across filters, papers, and analytics.",
-          },
-          {
-            label: "Marks",
-            value: String(marks),
-            meta: isEditMode
-              ? "Marks edits affect paper-building and reporting expectations."
-              : "Set the question value before adding it to a paper.",
-          },
-        ]}
-      />
-
+    <div className="space-y-4 sm:space-y-5">
       {initialMessage ? (
         <div className="app-feedback app-feedback-info">{initialMessage}</div>
       ) : null}
@@ -741,6 +667,6 @@ export default function QuestionEditorClient({
           </Card>
         </aside>
       </div>
-    </PageShell>
+    </div>
   );
 }

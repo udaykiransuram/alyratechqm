@@ -1,4 +1,4 @@
-import { ContentRenderer } from "@/components/ContentRenderer";
+import StaticContentRenderer from "@/components/StaticContentRenderer";
 import { Badge } from "@/components/ui/badge";
 
 type QuestionTagType = {
@@ -65,9 +65,10 @@ export function QuestionPaperReadOnlyQuestionCard({
       </div>
 
       <div className="rounded-xl border border-border/50 bg-background/80 p-3">
-        <div className="prose prose-base dark:prose-invert mb-3 max-w-none font-semibold text-foreground">
-          <ContentRenderer htmlContent={questionContent} />
-        </div>
+        <StaticContentRenderer
+          htmlContent={questionContent}
+          className="mb-3 prose-base font-semibold text-foreground"
+        />
 
         {options.length > 0 ? (
           <div className="space-y-2">
@@ -95,9 +96,12 @@ export function QuestionPaperReadOnlyQuestionCard({
                   >
                     {isCorrect ? "Correct" : `Option ${optionIndex + 1}`}
                   </Badge>
-                  <span className="prose prose-sm dark:prose-invert font-medium">
-                    <ContentRenderer htmlContent={optionContent} />
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <StaticContentRenderer
+                      htmlContent={optionContent}
+                      className="prose-sm font-medium"
+                    />
+                  </div>
                 </div>
               );
             })}

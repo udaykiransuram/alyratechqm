@@ -2,6 +2,13 @@
 
 Use this checklist after automated preflight passes and before approving production rollout.
 
+Automated coverage now verifies:
+
+- student session-lock acquisition and release in the real-backend integration suite
+- online-test integration against the fallback runtime and, when `EXAM_RUNTIME_DATABASE_URL` is configured for a managed lane, the exam-runtime-backed path as well
+
+Keep the checklist below for deployment-specific sign-off and rollback drills.
+
 ## 1) Student session lock behavior
 
 - [ ] Sign in as one student in browser A and confirm `/student/tests` loads.

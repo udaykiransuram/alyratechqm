@@ -337,6 +337,10 @@ export default function StudentAccountPageClient({
                     placeholder="Enter your phone number"
                     required
                   />
+                  <p className="text-xs text-muted-foreground">
+                    The digits saved here become your fallback password if a
+                    school admin resets your account.
+                  </p>
                 </div>
               </div>
               <Button
@@ -396,7 +400,10 @@ export default function StudentAccountPageClient({
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Use at least 6 characters, or set the saved phone-number digits exactly as stored to return to the default password.
+                Use at least 6 characters, or set the saved phone-number digits
+                exactly as stored to return to the default password. If you
+                forget a custom password later, ask your school admin to reset
+                it to these saved phone digits.
               </p>
               <Button
                 type="submit"

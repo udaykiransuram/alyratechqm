@@ -332,7 +332,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({
       success: true,
-      question: sanitizeQuestionForApiResponse(question),
+      question: {
+        ...sanitizeQuestionForApiResponse(question),
+        detailLevel: 'full',
+      },
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message || 'Server error' }, { status: 500 });

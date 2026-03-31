@@ -1,5 +1,5 @@
 /// <reference types="@playwright/test" />
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./helpers/strict-browser-test";
 import { navigateToAppRoute } from "./helpers/navigation";
 import { setSchoolAdminSession } from "./helpers/session";
 
@@ -65,10 +65,10 @@ test.describe("Navbar layout and navigation", () => {
     await expect(
       dialog.getByRole("link", { name: "All Questions" }),
     ).toBeVisible();
-    await expect(dialog.getByRole("link", { name: "Overview" })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Home" })).toBeVisible();
 
     // Close menu by navigating.
-    await dialog.getByRole("link", { name: "Overview" }).click();
-    await expect(page).toHaveURL(/\/workspace\/analytics/);
+    await dialog.getByRole("link", { name: "Home" }).click();
+    await expect(page).toHaveURL(/\/workspace$/);
   });
 });

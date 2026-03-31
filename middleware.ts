@@ -6,6 +6,7 @@ import {
   getNextAuthSecret,
 } from "@/lib/auth-runtime";
 import { isPublicPathname } from "@/lib/navigation/canonical-paths";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 type RateLimitStore = Map<string, number[]>;
 
@@ -254,8 +255,11 @@ export async function middleware(req: NextRequest) {
 
 
   const authSecret = getNextAuthSecret();
+  const mockedE2ETestMode = isMockedE2ETestMode();
   const authConfigurationIssue =
-    process.env.NODE_ENV === "production" && !isStaticAsset
+    !mockedE2ETestMode &&
+    process.env.NODE_ENV === "production" &&
+    !isStaticAsset
       ? getAuthConfigurationIssue(req.nextUrl.origin)
       : null;
 

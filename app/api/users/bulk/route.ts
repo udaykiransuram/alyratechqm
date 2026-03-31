@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import { buildRestoreUpdate } from "@/lib/archive";
+import { buildArchiveFilter, buildRestoreUpdate } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { requireTenantSession } from "@/lib/api-auth";
 import {
-  findStudentsByRollNumber,
   isSameStudentPlacement,
   normalizeEmail,
   normalizeRollNumber,
@@ -16,6 +15,15 @@ import {
   validateStudentDefaultPasswordSource,
 } from "@/lib/user-credentials";
 import { normalizeUserGender } from "@/lib/user-gender";
+import { recordOpsFailure } from "@/lib/ops-runtime";
+
+const MAX_BULK_UPLOAD_ROWS = Math.max(
+  1,
+  Number.parseInt(String(process.env.BULK_USER_UPLOAD_MAX_ROWS || "1000"), 10) ||
+    1000,
+);
+
+const ROLL_LOOKUP_CHUNK_SIZE = 80;
 
 function normalizeIds(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -58,6 +66,249 @@ function parseClassSectionToken(value: string) {
 
 function buildSectionLookupKey(classId: string, sectionName: string) {
   return `${classId}::${toUploadLookupKey(sectionName)}`;
+}
+
+function toRollLookupKey(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function chunkArray<T>(items: T[], chunkSize: number) {
+  if (items.length <= chunkSize) {
+    return [items];
+  }
+
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
+function isDuplicateKeyError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    Number((error as { code?: unknown }).code) === 11000
+  );
+}
+
+function stringifyUnknownError(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+
+  return fallback;
+}
+
+async function recordTenantAuditSafe(
+  params: Parameters<typeof recordTenantAudit>[0],
+) {
+  try {
+    await recordTenantAudit(params);
+  } catch (error) {
+    console.error("Bulk upload audit write failed:", error);
+  }
+}
+
+type PreparedUploadRow = {
+  rowNumber: number;
+  source: any;
+  normalizedStudent: any;
+  name: string;
+  email: string | undefined;
+  password: string | undefined;
+  role: string;
+  gender: ReturnType<typeof normalizeUserGender>;
+  fatherName: string;
+  classId: string;
+  academicSectionId: string;
+  finalRollNumber: string;
+  finalMobileNumber: string;
+  normalizedClassIds: string[];
+  normalizedAcademicSectionIds: string[];
+  normalizedSubjectIds: string[];
+  allowAllClasses: boolean;
+  allowAllSections: boolean;
+  allowAllSubjects: boolean;
+  scopedClassIds: string[];
+  scopedAcademicSectionIds: string[];
+  scopedSubjectIds: string[];
+};
+
+function prepareUploadRow(student: any, index: number): PreparedUploadRow {
+  const normalizedStudent: any = {};
+  Object.keys(student || {}).forEach((key) => {
+    normalizedStudent[key.toLowerCase()] = (student as any)[key];
+  });
+
+  const role = String(normalizedStudent.role || "").trim();
+  const finalMobileNumber = String(
+    normalizedStudent.mobilenumber || normalizedStudent.mobileNumber || "",
+  ).trim();
+  const finalRollNumber = normalizeRollNumber(
+    normalizedStudent.rollnumber || normalizedStudent.rollNumber,
+  );
+  const scope = resolveUserScope({
+    role,
+    classIds: normalizedStudent.classids,
+    academicSectionIds:
+      normalizedStudent.academicsectionids ?? normalizedStudent.sectionids,
+    subjectIds: normalizedStudent.subjectids,
+    hasAllClasses: normalizedStudent.hasallclasses,
+    hasAllSections: normalizedStudent.hasallsections,
+    hasAllSubjects: normalizedStudent.hasallsubjects,
+  });
+
+  return {
+    rowNumber: index + 1,
+    source: student,
+    normalizedStudent,
+    name: String(normalizedStudent.name || "").trim(),
+    email: normalizeEmail(normalizedStudent.email),
+    password: normalizedStudent.password
+      ? String(normalizedStudent.password)
+      : undefined,
+    role,
+    gender: normalizeUserGender(normalizedStudent.gender),
+    fatherName: String(normalizedStudent.fathername || "").trim(),
+    classId: normalizeId(normalizedStudent.classid ?? normalizedStudent.class),
+    academicSectionId: normalizeId(
+      normalizedStudent.academicsectionid ??
+        normalizedStudent.academicsection ??
+        normalizedStudent.sectionid ??
+        normalizedStudent.section,
+    ),
+    finalRollNumber,
+    finalMobileNumber,
+    normalizedClassIds: scope.normalizedClassIds,
+    normalizedAcademicSectionIds: scope.normalizedAcademicSectionIds,
+    normalizedSubjectIds: scope.normalizedSubjectIds,
+    allowAllClasses: scope.allowAllClasses,
+    allowAllSections: scope.allowAllSections,
+    allowAllSubjects: scope.allowAllSubjects,
+    scopedClassIds: scope.scopedClassIds,
+    scopedAcademicSectionIds: scope.scopedAcademicSectionIds,
+    scopedSubjectIds: scope.scopedSubjectIds,
+  };
+}
+
+function buildUploadConflictMap(rows: PreparedUploadRow[]) {
+  const conflictsByRow = new Map<number, string[]>();
+  const seenByEmail = new Map<string, number>();
+  const seenByRollNumber = new Map<string, number>();
+
+  const addConflict = (rowNumber: number, message: string) => {
+    const existing = conflictsByRow.get(rowNumber) || [];
+    conflictsByRow.set(rowNumber, [...existing, message]);
+  };
+
+  rows.forEach((row) => {
+    if (row.email) {
+      const existingRowNumber = seenByEmail.get(row.email);
+      if (existingRowNumber) {
+        addConflict(
+          row.rowNumber,
+          `Duplicate email in upload (matches row ${existingRowNumber}).`,
+        );
+      } else {
+        seenByEmail.set(row.email, row.rowNumber);
+      }
+    }
+
+    if (row.role === "student" && row.finalRollNumber) {
+      const rollKey = toRollLookupKey(row.finalRollNumber);
+      const existingRowNumber = seenByRollNumber.get(rollKey);
+      if (existingRowNumber) {
+        addConflict(
+          row.rowNumber,
+          `Duplicate student rollNumber in upload (matches row ${existingRowNumber}).`,
+        );
+      } else {
+        seenByRollNumber.set(rollKey, row.rowNumber);
+      }
+    }
+  });
+
+  return conflictsByRow;
+}
+
+async function preloadExistingUsersByEmail(
+  UserModel: any,
+  emails: string[],
+) {
+  const map = new Map<string, any>();
+  const uniqueEmails = Array.from(new Set(emails.map((item) => String(item).trim())))
+    .map((item) => normalizeEmail(item))
+    .filter((item): item is string => Boolean(item));
+
+  if (!uniqueEmails.length) {
+    return map;
+  }
+
+  const existingUsers = await UserModel.find({
+    email: { $in: uniqueEmails },
+  })
+    .select("_id email role class academicSection rollNumber")
+    .lean();
+
+  existingUsers.forEach((existingUser: any) => {
+    const normalizedEmail = normalizeEmail(existingUser?.email);
+    if (!normalizedEmail) {
+      return;
+    }
+    map.set(normalizedEmail, existingUser);
+  });
+
+  return map;
+}
+
+async function preloadExistingStudentsByRollNumber(
+  UserModel: any,
+  rollNumbers: string[],
+) {
+  const map = new Map<string, any[]>();
+  const uniqueRollNumbers = Array.from(
+    new Set(rollNumbers.map((item) => normalizeRollNumber(item)).filter(Boolean)),
+  );
+
+  if (!uniqueRollNumbers.length) {
+    return map;
+  }
+
+  const chunks = chunkArray(uniqueRollNumbers, ROLL_LOOKUP_CHUNK_SIZE);
+  for (const chunk of chunks) {
+    const rollNumberMatchers = chunk.map((rollNumber) => ({
+      rollNumber: new RegExp(`^${escapeRegExp(rollNumber)}$`, "i"),
+    }));
+
+    const existingStudents = await UserModel.find({
+      role: "student",
+      ...buildArchiveFilter(false),
+      $or: rollNumberMatchers,
+    })
+      .select("_id name email class academicSection rollNumber")
+      .lean();
+
+    existingStudents.forEach((existingStudent: any) => {
+      const key = toRollLookupKey(existingStudent?.rollNumber);
+      if (!key) {
+        return;
+      }
+      const existingEntries = map.get(key) || [];
+      map.set(key, [...existingEntries, existingStudent]);
+    });
+  }
+
+  return map;
 }
 
 type CachedClassRecord = {
@@ -276,7 +527,7 @@ async function restoreClassRecord({
     },
   );
 
-  await recordTenantAudit({
+  await recordTenantAuditSafe({
     schoolKey,
     req: request,
     entityType: "class",
@@ -303,13 +554,35 @@ async function createClassRecord({
   request: NextRequest;
   state: StructureState;
 }) {
-  const created = await ClassModel.create({
-    name,
-  });
-  const nextRecord = rememberClass(state, created.toObject()) || {
-    _id: String(created._id),
-    name: String(created.name || "").trim(),
-  };
+  let nextRecord: CachedClassRecord | null = null;
+  let didCreate = false;
+  try {
+    const created = await ClassModel.create({
+      name,
+    });
+    didCreate = true;
+    nextRecord = rememberClass(state, created.toObject()) || {
+      _id: String(created._id),
+      name: String(created.name || "").trim(),
+    };
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) {
+      throw error;
+    }
+
+    const existing = await ClassModel.findOne({ name })
+      .select("name description isArchived")
+      .lean();
+    nextRecord = existing ? rememberClass(state, existing) : null;
+  }
+
+  if (!nextRecord) {
+    throw new Error(`Class "${name}" could not be created or resolved.`);
+  }
+
+  if (!didCreate) {
+    return nextRecord;
+  }
 
   pushStructureChange(
     state.createdClasses,
@@ -320,7 +593,7 @@ async function createClassRecord({
     },
   );
 
-  await recordTenantAudit({
+  await recordTenantAuditSafe({
     schoolKey,
     req: request,
     entityType: "class",
@@ -426,7 +699,7 @@ async function restoreSectionRecord({
     },
   );
 
-  await recordTenantAudit({
+  await recordTenantAuditSafe({
     schoolKey,
     req: request,
     entityType: "academic_section",
@@ -459,16 +732,43 @@ async function createSectionRecord({
   request: NextRequest;
   state: StructureState;
 }) {
-  const created = await AcademicSectionModel.create({
-    name,
-    class: classRecord._id,
-    isActive: true,
-  });
-  const nextRecord = rememberSection(state, created.toObject()) || {
-    _id: String(created._id),
-    name: String(created.name || "").trim(),
-    classId: classRecord._id,
-  };
+  let nextRecord: CachedSectionRecord | null = null;
+  let didCreate = false;
+  try {
+    const created = await AcademicSectionModel.create({
+      name,
+      class: classRecord._id,
+      isActive: true,
+    });
+    didCreate = true;
+    nextRecord = rememberSection(state, created.toObject()) || {
+      _id: String(created._id),
+      name: String(created.name || "").trim(),
+      classId: classRecord._id,
+    };
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) {
+      throw error;
+    }
+
+    const existing = await AcademicSectionModel.findOne({
+      class: classRecord._id,
+      name,
+    })
+      .select("name class description isActive isArchived")
+      .lean();
+    nextRecord = existing ? rememberSection(state, existing) : null;
+  }
+
+  if (!nextRecord) {
+    throw new Error(
+      `Section "${name}" could not be created or resolved for class "${classRecord.name}".`,
+    );
+  }
+
+  if (!didCreate) {
+    return nextRecord;
+  }
 
   pushStructureChange(
     state.createdSections,
@@ -481,7 +781,7 @@ async function createSectionRecord({
     },
   );
 
-  await recordTenantAudit({
+  await recordTenantAuditSafe({
     schoolKey,
     req: request,
     entityType: "academic_section",
@@ -540,7 +840,7 @@ async function restoreSubjectRecord({
     },
   );
 
-  await recordTenantAudit({
+  await recordTenantAuditSafe({
     schoolKey,
     req: request,
     entityType: "subject",
@@ -567,13 +867,35 @@ async function createSubjectRecord({
   request: NextRequest;
   state: StructureState;
 }) {
-  const created = await SubjectModel.create({
-    name,
-  });
-  const nextRecord = rememberSubject(state, created.toObject()) || {
-    _id: String(created._id),
-    name: String(created.name || "").trim(),
-  };
+  let nextRecord: CachedSubjectRecord | null = null;
+  let didCreate = false;
+  try {
+    const created = await SubjectModel.create({
+      name,
+    });
+    didCreate = true;
+    nextRecord = rememberSubject(state, created.toObject()) || {
+      _id: String(created._id),
+      name: String(created.name || "").trim(),
+    };
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) {
+      throw error;
+    }
+
+    const existing = await SubjectModel.findOne({ name })
+      .select("name code description isArchived")
+      .lean();
+    nextRecord = existing ? rememberSubject(state, existing) : null;
+  }
+
+  if (!nextRecord) {
+    throw new Error(`Subject "${name}" could not be created or resolved.`);
+  }
+
+  if (!didCreate) {
+    return nextRecord;
+  }
 
   pushStructureChange(
     state.createdSubjects,
@@ -584,7 +906,7 @@ async function createSubjectRecord({
     },
   );
 
-  await recordTenantAudit({
+  await recordTenantAuditSafe({
     schoolKey,
     req: request,
     entityType: "subject",
@@ -1025,6 +1347,7 @@ function resolveUserScope({
 
 async function validateStudentAcademicSection(
   AcademicSectionModel: any,
+  state: StructureState,
   classId: string,
   academicSectionId: string,
 ) {
@@ -1039,8 +1362,19 @@ async function validateStudentAcademicSection(
     } as const;
   }
 
+  const knownSection = state.sectionById.get(academicSectionId);
+  if (knownSection) {
+    if (classId && String(knownSection.classId) !== String(classId)) {
+      return {
+        ok: false,
+        message: "Selected section does not belong to the selected class.",
+      } as const;
+    }
+    return { ok: true } as const;
+  }
+
   const academicSection = await AcademicSectionModel.findById(academicSectionId)
-    .select("class")
+    .select("name class description isActive isArchived")
     .lean();
   if (!academicSection) {
     return {
@@ -1048,6 +1382,8 @@ async function validateStudentAcademicSection(
       message: "Academic section not found.",
     } as const;
   }
+
+  rememberSection(state, academicSection);
 
   if (classId && String((academicSection as any).class) !== String(classId)) {
     return {
@@ -1064,10 +1400,12 @@ export async function POST(request: NextRequest) {
     allowRoles: ["admin"],
   });
   if (!auth.ok) return auth.response;
+  let studentRowCount: number | null = null;
 
-  await connectDB();
   try {
     const schoolKey = auth.schoolKey as string;
+
+    await connectDB();
 
     const {
       User,
@@ -1085,14 +1423,28 @@ export async function POST(request: NextRequest) {
     const students = Array.isArray(payload?.users)
       ? payload.users
       : payload?.students;
+    studentRowCount = Array.isArray(students) ? students.length : null;
     if (!Array.isArray(students) || students.length === 0) {
       return NextResponse.json(
         { success: false, message: "No students provided." },
         { status: 400 },
       );
     }
+    if (students.length > MAX_BULK_UPLOAD_ROWS) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Upload is too large. Maximum ${MAX_BULK_UPLOAD_ROWS} rows are supported per request.`,
+        },
+        { status: 400 },
+      );
+    }
 
     const structureState = createStructureState();
+    const preparedRows = students.map((student, index) =>
+      prepareUploadRow(student, index),
+    );
+    const conflictsByRow = buildUploadConflictMap(preparedRows);
     const [existingClasses, existingSections, existingSubjects] = await Promise.all([
       ClassModel.find({})
         .select("name description isArchived")
@@ -1115,157 +1467,122 @@ export async function POST(request: NextRequest) {
       rememberSubject(structureState, subjectRecord);
     });
 
+    const [existingUsersByEmail, existingStudentsByRollNumber] = await Promise.all([
+      preloadExistingUsersByEmail(
+        User,
+        preparedRows
+          .map((row) => row.email)
+          .filter((value): value is string => Boolean(value)),
+      ),
+      preloadExistingStudentsByRollNumber(
+        User,
+        preparedRows
+          .filter((row) => row.role === "student")
+          .map((row) => row.finalRollNumber)
+          .filter(Boolean),
+      ),
+    ]);
+
     const results: any[] = [];
-    for (const student of students) {
-      const normalizedStudent: any = {};
-      Object.keys(student || {}).forEach((key) => {
-        normalizedStudent[key.toLowerCase()] = (student as any)[key];
-      });
+    for (const row of preparedRows) {
+      const student = row.source;
+      const rowConflictMessages = conflictsByRow.get(row.rowNumber);
+      if (rowConflictMessages?.length) {
+        results.push({
+          success: false,
+          message: rowConflictMessages.join(" "),
+          student,
+        });
+        continue;
+      }
 
-      const name = String(normalizedStudent.name || "").trim();
-      const email = normalizeEmail(normalizedStudent.email);
-      const password = normalizedStudent.password
-        ? String(normalizedStudent.password)
-        : undefined;
-      const role = String(normalizedStudent.role || "").trim();
-      const gender = normalizeUserGender(normalizedStudent.gender);
-      const fatherName = String(normalizedStudent.fathername || "").trim();
-      const classId = normalizeId(normalizedStudent.classid ?? normalizedStudent.class);
-      const academicSectionId = normalizeId(
-        normalizedStudent.academicsectionid ??
-          normalizedStudent.academicsection ??
-          normalizedStudent.sectionid ??
-          normalizedStudent.section,
-      );
-      const finalRollNumber = normalizeRollNumber(
-        normalizedStudent.rollnumber || normalizedStudent.rollNumber,
-      );
-      const finalMobileNumber =
-        normalizedStudent.mobilenumber || normalizedStudent.mobileNumber;
-      const {
-        normalizedClassIds,
-        normalizedAcademicSectionIds,
-        normalizedSubjectIds,
-        allowAllClasses,
-        allowAllSections,
-        allowAllSubjects,
-        scopedClassIds,
-        scopedAcademicSectionIds,
-        scopedSubjectIds,
-      } = resolveUserScope({
-        role,
-        classIds: normalizedStudent.classids,
-        academicSectionIds:
-          normalizedStudent.academicsectionids ?? normalizedStudent.sectionids,
-        subjectIds: normalizedStudent.subjectids,
-        hasAllClasses: normalizedStudent.hasallclasses,
-        hasAllSections: normalizedStudent.hasallsections,
-        hasAllSubjects: normalizedStudent.hasallsubjects,
-      });
+      try {
+        const {
+          normalizedStudent,
+          name,
+          email,
+          password,
+          role,
+          gender,
+          fatherName,
+          classId,
+          academicSectionId,
+          finalRollNumber,
+          finalMobileNumber,
+          normalizedClassIds,
+          normalizedAcademicSectionIds,
+          normalizedSubjectIds,
+          allowAllClasses,
+          allowAllSections,
+          allowAllSubjects,
+          scopedClassIds,
+          scopedAcademicSectionIds,
+          scopedSubjectIds,
+        } = row;
 
-      if (!name || !role) {
-        results.push({
-          success: false,
-          message: "Name and role are required.",
-          student,
-        });
-        continue;
-      }
-      if (role === "student" && !finalRollNumber) {
-        results.push({
-          success: false,
-          message: "rollNumber is required for students.",
-          student,
-        });
-        continue;
-      }
-      if (!finalMobileNumber || !String(finalMobileNumber).trim()) {
-        results.push({
-          success: false,
-          message: "Phone number is required.",
-          student,
-        });
-        continue;
-      }
-      if (role === "student") {
-        const studentPasswordSourceValidation =
-          validateStudentDefaultPasswordSource(finalMobileNumber);
-        if (!studentPasswordSourceValidation.ok) {
+        if (!name || !role) {
           results.push({
             success: false,
-            message: studentPasswordSourceValidation.message,
+            message: "Name and role are required.",
             student,
           });
           continue;
         }
-      }
-      if (
-        role === "teacher" &&
-        (normalizedClassIds.length === 0 || normalizedSubjectIds.length === 0)
-      ) {
-        results.push({
-          success: false,
-          message: "Teachers must have at least one class and one subject.",
-          student,
-        });
-        continue;
-      }
-
-      const structureContext = {
-        ClassModel,
-        AcademicSectionModel,
-        schoolKey,
-        request,
-        state: structureState,
-      };
-      let resolvedClassId = classId;
-      let resolvedAcademicSectionId = academicSectionId;
-      let resolvedScopedClassIds = scopedClassIds;
-      let resolvedScopedAcademicSectionIds = scopedAcademicSectionIds;
-      let resolvedScopedSubjectIds = scopedSubjectIds;
-
-      if (role === "student") {
-        const classResolution = await ensureClassRecord(classId, {
-          ClassModel,
-          schoolKey,
-          request,
-          state: structureState,
-        });
-        if (!classResolution.ok) {
+        if (role === "student" && !finalRollNumber) {
           results.push({
             success: false,
-            message: classResolution.message,
+            message: "rollNumber is required for students.",
             student,
           });
           continue;
         }
-
-        resolvedClassId = classResolution.record._id;
-
-        if (academicSectionId) {
-          const sectionResolution = await ensureSectionRecord({
-            value: academicSectionId,
-            classScopeIds: [resolvedClassId],
-            classContextMessage:
-              "does not belong to the selected class.",
-            ...structureContext,
+        if (!finalMobileNumber || !String(finalMobileNumber).trim()) {
+          results.push({
+            success: false,
+            message: "Phone number is required.",
+            student,
           });
-          if (!sectionResolution.ok) {
+          continue;
+        }
+        if (role === "student") {
+          const studentPasswordSourceValidation =
+            validateStudentDefaultPasswordSource(finalMobileNumber);
+          if (!studentPasswordSourceValidation.ok) {
             results.push({
               success: false,
-              message: sectionResolution.message,
+              message: studentPasswordSourceValidation.message,
               student,
             });
             continue;
           }
-
-          resolvedAcademicSectionId = sectionResolution.record?._id || "";
-        } else {
-          resolvedAcademicSectionId = "";
         }
-      } else {
-        if (!(role === "admin" && allowAllClasses)) {
-          const classResolution = await resolveClassTokens(normalizedClassIds, {
+        if (
+          role === "teacher" &&
+          (normalizedClassIds.length === 0 || normalizedSubjectIds.length === 0)
+        ) {
+          results.push({
+            success: false,
+            message: "Teachers must have at least one class and one subject.",
+            student,
+          });
+          continue;
+        }
+
+        const structureContext = {
+          ClassModel,
+          AcademicSectionModel,
+          schoolKey,
+          request,
+          state: structureState,
+        };
+        let resolvedClassId = classId;
+        let resolvedAcademicSectionId = academicSectionId;
+        let resolvedScopedClassIds = scopedClassIds;
+        let resolvedScopedAcademicSectionIds = scopedAcademicSectionIds;
+        let resolvedScopedSubjectIds = scopedSubjectIds;
+
+        if (role === "student") {
+          const classResolution = await ensureClassRecord(classId, {
             ClassModel,
             schoolKey,
             request,
@@ -1279,180 +1596,269 @@ export async function POST(request: NextRequest) {
             });
             continue;
           }
-          resolvedScopedClassIds = classResolution.ids;
-        } else {
-          resolvedScopedClassIds = [];
-        }
 
-        if (!allowAllSections) {
-          const sectionResolution = await resolveSectionTokens({
-            values: normalizedAcademicSectionIds,
-            classScopeIds: resolvedScopedClassIds,
-            classContextMessage:
-              "does not belong to the classes listed in this row.",
-            ...structureContext,
-          });
-          if (!sectionResolution.ok) {
-            results.push({
-              success: false,
-              message: sectionResolution.message,
-              student,
+          resolvedClassId = classResolution.record._id;
+
+          if (academicSectionId) {
+            const sectionResolution = await ensureSectionRecord({
+              value: academicSectionId,
+              classScopeIds: [resolvedClassId],
+              classContextMessage: "does not belong to the selected class.",
+              ...structureContext,
             });
-            continue;
-          }
-          resolvedScopedAcademicSectionIds = sectionResolution.ids;
-        } else {
-          resolvedScopedAcademicSectionIds = [];
-        }
+            if (!sectionResolution.ok) {
+              results.push({
+                success: false,
+                message: sectionResolution.message,
+                student,
+              });
+              continue;
+            }
 
-        if (!(role === "admin" && allowAllSubjects)) {
-          const subjectResolution = await resolveSubjectTokens(
-            normalizedSubjectIds,
-            {
-              SubjectModel,
+            resolvedAcademicSectionId = sectionResolution.record?._id || "";
+          } else {
+            resolvedAcademicSectionId = "";
+          }
+        } else {
+          if (!(role === "admin" && allowAllClasses)) {
+            const classResolution = await resolveClassTokens(normalizedClassIds, {
+              ClassModel,
               schoolKey,
               request,
               state: structureState,
-            },
+            });
+            if (!classResolution.ok) {
+              results.push({
+                success: false,
+                message: classResolution.message,
+                student,
+              });
+              continue;
+            }
+            resolvedScopedClassIds = classResolution.ids;
+          } else {
+            resolvedScopedClassIds = [];
+          }
+
+          if (!allowAllSections) {
+            const sectionResolution = await resolveSectionTokens({
+              values: normalizedAcademicSectionIds,
+              classScopeIds: resolvedScopedClassIds,
+              classContextMessage:
+                "does not belong to the classes listed in this row.",
+              ...structureContext,
+            });
+            if (!sectionResolution.ok) {
+              results.push({
+                success: false,
+                message: sectionResolution.message,
+                student,
+              });
+              continue;
+            }
+            resolvedScopedAcademicSectionIds = sectionResolution.ids;
+          } else {
+            resolvedScopedAcademicSectionIds = [];
+          }
+
+          if (!(role === "admin" && allowAllSubjects)) {
+            const subjectResolution = await resolveSubjectTokens(
+              normalizedSubjectIds,
+              {
+                SubjectModel,
+                schoolKey,
+                request,
+                state: structureState,
+              },
+            );
+            if (!subjectResolution.ok) {
+              results.push({
+                success: false,
+                message: subjectResolution.message,
+                student,
+              });
+              continue;
+            }
+            resolvedScopedSubjectIds = subjectResolution.ids;
+          } else {
+            resolvedScopedSubjectIds = [];
+          }
+        }
+
+        if (role === "student" && resolvedClassId && resolvedAcademicSectionId) {
+          const sectionValidation = await validateStudentAcademicSection(
+            AcademicSectionModel,
+            structureState,
+            resolvedClassId,
+            resolvedAcademicSectionId,
           );
-          if (!subjectResolution.ok) {
+          if (!sectionValidation.ok) {
             results.push({
               success: false,
-              message: subjectResolution.message,
+              message: sectionValidation.message,
               student,
             });
             continue;
           }
-          resolvedScopedSubjectIds = subjectResolution.ids;
-        } else {
-          resolvedScopedSubjectIds = [];
         }
-      }
 
-      if (role === "student" && resolvedClassId && resolvedAcademicSectionId) {
-        const sectionValidation = await validateStudentAcademicSection(
-          AcademicSectionModel,
-          resolvedClassId,
-          resolvedAcademicSectionId,
-        );
-        if (!sectionValidation.ok) {
+        if (role === "student" && finalRollNumber) {
+          const rollLookupKey = toRollLookupKey(finalRollNumber);
+          const existingStudents =
+            existingStudentsByRollNumber.get(rollLookupKey) || [];
+
+          if (existingStudents.length > 0) {
+            if (
+              existingStudents.length === 1 &&
+              isSameStudentPlacement(
+                existingStudents[0],
+                resolvedClassId,
+                resolvedAcademicSectionId,
+              )
+            ) {
+              if (email) {
+                existingUsersByEmail.set(email, existingStudents[0]);
+              }
+              results.push({
+                success: true,
+                user: existingStudents[0],
+                existed: true,
+              });
+              continue;
+            }
+
+            results.push({
+              success: false,
+              message:
+                "Roll number must be unique within the school because students use it to sign in.",
+              student,
+            });
+            continue;
+          }
+        }
+
+        if (email) {
+          const existingUser = existingUsersByEmail.get(email);
+          if (existingUser) {
+            results.push({
+              success: false,
+              message: "A user with this email already exists.",
+              student,
+            });
+            continue;
+          }
+        }
+
+        const effectivePassword = resolveUserPasswordInput({
+          role,
+          rollNumber: finalRollNumber,
+          mobileNumber: String(finalMobileNumber).trim(),
+          password,
+        });
+        const passwordValidation = validatePasswordInput({
+          role,
+          rollNumber: finalRollNumber,
+          mobileNumber: String(finalMobileNumber).trim(),
+          password: effectivePassword,
+        });
+        if (!passwordValidation.ok) {
           results.push({
             success: false,
-            message: sectionValidation.message,
+            message: passwordValidation.message,
             student,
           });
           continue;
         }
-      }
 
-      if (role === "student" && finalRollNumber) {
-        const existingStudents = await findStudentsByRollNumber(
-          User,
-          finalRollNumber,
-          { limit: 2 },
-        );
-        if (existingStudents.length > 0) {
-          if (
-            existingStudents.length === 1 &&
-            isSameStudentPlacement(
-              existingStudents[0],
-              resolvedClassId,
-              resolvedAcademicSectionId,
-            )
-          ) {
-            results.push({
-              success: true,
-              user: existingStudents[0],
-              existed: true,
-            });
-            continue;
+        let passwordHash: string | undefined;
+        if (effectivePassword) {
+          passwordHash = await bcrypt.hash(String(effectivePassword), 10);
+        }
+
+        const newUser = new User({
+          name,
+          email,
+          passwordHash,
+          role,
+          mobileNumber: String(finalMobileNumber).trim(),
+          gender,
+          fatherName: role === "student" ? fatherName || undefined : undefined,
+          class: role === "student" ? resolvedClassId || undefined : undefined,
+          academicSection:
+            role === "student" ? resolvedAcademicSectionId || undefined : undefined,
+          classIds:
+            role === "teacher" || role === "admin"
+              ? resolvedScopedClassIds
+              : undefined,
+          academicSectionIds:
+            role === "teacher" || role === "admin"
+              ? resolvedScopedAcademicSectionIds
+              : undefined,
+          subjectIds:
+            role === "teacher" || role === "admin"
+              ? resolvedScopedSubjectIds
+              : undefined,
+          hasAllClasses: role === "admin" ? allowAllClasses : false,
+          hasAllSections:
+            role === "teacher" || role === "admin" ? allowAllSections : false,
+          hasAllSubjects: role === "admin" ? allowAllSubjects : false,
+          rollNumber: role === "student" ? finalRollNumber : undefined,
+          enrolledAt:
+            role === "student"
+              ? normalizedStudent.enrolledat || Date.now()
+              : undefined,
+        });
+
+        try {
+          await newUser.save();
+        } catch (error) {
+          if (!isDuplicateKeyError(error)) {
+            throw error;
+          }
+
+          const duplicateKeyPattern = (
+            error as { keyPattern?: Record<string, unknown> }
+          )?.keyPattern;
+          let message = "Duplicate user identity detected.";
+          if (duplicateKeyPattern?.email) {
+            message = "A user with this email already exists.";
+          } else if (duplicateKeyPattern?.rollNumber) {
+            message =
+              "Roll number must be unique within the school because students use it to sign in.";
           }
 
           results.push({
             success: false,
-            message:
-              "Roll number must be unique within the school because students use it to sign in.",
+            message,
             student,
           });
           continue;
         }
-      }
 
-      if (email) {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-          results.push({
-            success: false,
-            message: "A user with this email already exists.",
-            student,
-          });
-          continue;
+        if (email) {
+          existingUsersByEmail.set(email, newUser);
         }
-      }
+        if (role === "student" && finalRollNumber) {
+          const rollLookupKey = toRollLookupKey(finalRollNumber);
+          const existingStudents =
+            existingStudentsByRollNumber.get(rollLookupKey) || [];
+          existingStudentsByRollNumber.set(rollLookupKey, [
+            ...existingStudents,
+            newUser,
+          ]);
+        }
 
-      const effectivePassword = resolveUserPasswordInput({
-        role,
-        rollNumber: finalRollNumber,
-        mobileNumber: String(finalMobileNumber).trim(),
-        password,
-      });
-      const passwordValidation = validatePasswordInput({
-        role,
-        rollNumber: finalRollNumber,
-        mobileNumber: String(finalMobileNumber).trim(),
-        password: effectivePassword,
-      });
-      if (!passwordValidation.ok) {
+        results.push({ success: true, user: newUser });
+      } catch (rowError) {
         results.push({
           success: false,
-          message: passwordValidation.message,
+          message: stringifyUnknownError(
+            rowError,
+            `Failed to process upload row ${row.rowNumber}.`,
+          ),
           student,
         });
-        continue;
       }
-
-      let passwordHash: string | undefined;
-      if (effectivePassword) {
-        passwordHash = await bcrypt.hash(String(effectivePassword), 10);
-      }
-
-      const newUser = new User({
-        name,
-        email,
-        passwordHash,
-        role,
-        mobileNumber: String(finalMobileNumber).trim(),
-        gender,
-        fatherName: role === "student" ? fatherName || undefined : undefined,
-        class: role === "student" ? resolvedClassId || undefined : undefined,
-        academicSection:
-          role === "student"
-            ? resolvedAcademicSectionId || undefined
-            : undefined,
-        classIds:
-          role === "teacher" || role === "admin"
-            ? resolvedScopedClassIds
-            : undefined,
-        academicSectionIds:
-          role === "teacher" || role === "admin"
-            ? resolvedScopedAcademicSectionIds
-            : undefined,
-        subjectIds:
-          role === "teacher" || role === "admin"
-            ? resolvedScopedSubjectIds
-            : undefined,
-        hasAllClasses: role === "admin" ? allowAllClasses : false,
-        hasAllSections:
-          role === "teacher" || role === "admin" ? allowAllSections : false,
-        hasAllSubjects: role === "admin" ? allowAllSubjects : false,
-        rollNumber: role === "student" ? finalRollNumber : undefined,
-        enrolledAt:
-          role === "student"
-            ? normalizedStudent.enrolledat || Date.now()
-            : undefined,
-      });
-      await newUser.save();
-      results.push({ success: true, user: newUser });
     }
 
     const successCount = results.filter((result) => result.success).length;
@@ -1468,6 +1874,24 @@ export async function POST(request: NextRequest) {
       restoredSubjects: structureState.restoredSubjects,
     });
   } catch (error: any) {
+    await recordOpsFailure({
+      schoolKey: auth.schoolKey,
+      req: request,
+      action: "bulk_user_import",
+      message: error?.message || "Failed to import users.",
+      error,
+      metadata: {
+        route: "/api/users/bulk",
+        method: "POST",
+        uploadType: "users",
+        rows: studentRowCount,
+      },
+      entity: {
+        type: "bulk_upload",
+        label: "users",
+      },
+      severity: "error",
+    });
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },
       { status: 500 },

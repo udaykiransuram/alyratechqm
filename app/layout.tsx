@@ -10,7 +10,7 @@ import {
   getMetadataBase,
 } from "@/lib/seo";
 import "./globals.css";
-import AppChrome from "@/components/layout/AppChrome";
+import AppClientRuntime from "@/components/layout/AppClientRuntime";
 
 // Keep the workspace font self-hosted. The current repo only includes Roboto,
 // so it remains the bundled fallback until the intended Plus Jakarta Sans asset
@@ -69,7 +69,8 @@ export default function RootLayout({
           workspaceSans.variable,
         )}
       >
-        <AppChrome>{children}</AppChrome>
+        <AppClientRuntime />
+        {children}
         <Toaster />
       </body>
     </html>

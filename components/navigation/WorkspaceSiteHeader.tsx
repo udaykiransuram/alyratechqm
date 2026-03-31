@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   BarChart2,
   BookOpen,
@@ -185,11 +186,8 @@ const schoolSidebarGroups: SidebarGroup[] = [
   },
 ];
 
-export default function WorkspaceSiteHeader({
-  pathname,
-}: {
-  pathname: string;
-}) {
+export default function WorkspaceSiteHeader() {
+  const pathname = usePathname() || "/workspace";
   const [collapsed, setCollapsed] = useState(false);
   const [expandedSidebarWidth, setExpandedSidebarWidth] = useState(() =>
     getSidebarWidthPx(false),

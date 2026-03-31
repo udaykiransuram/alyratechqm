@@ -1,5 +1,3 @@
-import { randomBytes } from "crypto";
-
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
@@ -9,26 +7,20 @@ import { recordTenantAudit } from "@/lib/audit";
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { recordOpsFailure } from "@/lib/ops-runtime";
+import { clearStudentLoginRateLimit, clearStudentSession } from "@/lib/redis";
+import { invalidateStudentSessionValidationCache } from "@/lib/student-session-cache";
+import { invalidateStudentTestResourceCache } from "@/lib/student-test-server";
 import {
   getDefaultStudentPassword,
+  normalizeRollNumber,
   resolveStudentPasswordAdminInfo,
 } from "@/lib/user-credentials";
 
 export const dynamic = "force-dynamic";
 
-type ResetAction = "reset_to_default" | "generate_temporary";
-
-function generateTemporaryPassword(length = 10) {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  const bytes = randomBytes(length);
-  let password = "ST-";
-
-  for (let index = 0; index < length; index += 1) {
-    password += alphabet[bytes[index] % alphabet.length];
-  }
-
-  return password;
-}
+const RESET_TO_DEFAULT_ACTION = "reset_to_default";
+const LEGACY_TEMPORARY_ACTION = "generate_temporary";
 
 export async function POST(
   req: NextRequest,
@@ -52,13 +44,26 @@ export async function POST(
     }
 
     const body = await req.json().catch(() => ({}));
-    const action = String((body as { action?: string })?.action || "").trim() as
-      | ResetAction
-      | "";
+    const action = String((body as { action?: string })?.action || "").trim();
 
-    if (action !== "reset_to_default" && action !== "generate_temporary") {
+    if (
+      action &&
+      action !== RESET_TO_DEFAULT_ACTION &&
+      action !== LEGACY_TEMPORARY_ACTION
+    ) {
       return NextResponse.json(
         { success: false, message: "Invalid password reset action." },
+        { status: 400 },
+      );
+    }
+
+    if (action === LEGACY_TEMPORARY_ACTION) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Temporary passwords are no longer supported. Reset this student to the saved phone-number digits instead.",
+        },
         { status: 400 },
       );
     }
@@ -86,27 +91,48 @@ export async function POST(
       );
     }
 
-    let nextPassword = "";
-
-    if (action === "reset_to_default") {
-      const defaultPassword = getDefaultStudentPassword(student.mobileNumber);
-      if (!defaultPassword) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "This student does not have a saved phone number with digits, so the default password cannot be restored.",
-          },
-          { status: 400 },
-        );
-      }
-      nextPassword = defaultPassword;
-    } else {
-      nextPassword = generateTemporaryPassword();
+    const defaultPassword = getDefaultStudentPassword(student.mobileNumber);
+    if (!defaultPassword) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "This student cannot be reset yet because the saved phone number does not contain digits. Update the saved phone number first, then reset the password.",
+        },
+        { status: 400 },
+      );
     }
 
+    const nextPassword = defaultPassword;
     student.passwordHash = await bcrypt.hash(nextPassword, 10);
     await student.save();
+
+    const studentId = String(student._id);
+    const normalizedRollNumber = normalizeRollNumber(student.rollNumber);
+
+    await clearStudentSession(schoolKey, studentId).catch(() => undefined);
+    await UserModel.updateOne(
+      { _id: studentId },
+      {
+        $unset: {
+          activeStudentSessionId: 1,
+          activeStudentSessionLastSeenAt: 1,
+        },
+      },
+    ).catch(() => undefined);
+    await clearStudentLoginRateLimit(
+      schoolKey,
+      normalizedRollNumber,
+    ).catch(() => undefined);
+
+    invalidateStudentSessionValidationCache({
+      schoolKey,
+      studentId,
+    });
+    invalidateStudentTestResourceCache({
+      schoolKey,
+      studentId,
+    });
 
     const credentials = await resolveStudentPasswordAdminInfo({
       mobileNumber: student.mobileNumber,
@@ -117,32 +143,40 @@ export async function POST(
       schoolKey,
       req,
       entityType: "user",
-      entityId: String(student._id),
+      entityId: studentId,
       entityLabel: String(student.name || ""),
-      action:
-        action === "reset_to_default"
-          ? "student_password_reset_default"
-          : "student_password_reset_temporary",
-      summary:
-        action === "reset_to_default"
-          ? `Reset ${student.name}'s password to the saved phone-number digits.`
-          : `Generated a temporary student password for ${student.name}.`,
+      action: "student_password_reset_default",
+      summary: `Reset ${student.name}'s password to the saved phone-number digits and cleared active student sign-in state.`,
       details: {
         role: "student",
-        resetMode: action,
+        resetMode: RESET_TO_DEFAULT_ACTION,
+        clearedStudentSessionState: true,
+        clearedStudentLoginRateLimit: Boolean(normalizedRollNumber),
       },
     });
 
     return NextResponse.json({
       success: true,
       message:
-        action === "reset_to_default"
-          ? "Student password reset to the saved phone-number digits."
-          : "Temporary student password generated successfully.",
+        "Student password reset to the saved phone-number digits. Any active student session was signed out so the student can log in again.",
       password: nextPassword,
       credentials,
     });
   } catch (error: any) {
+    await recordOpsFailure({
+      schoolKey,
+      req,
+      action: "student_password_reset",
+      message: "Failed to reset student password to saved phone-number digits.",
+      error,
+      alertLevel: "trust_critical",
+      metadata: {
+        route: "/api/users/[id]/student-password",
+        method: "POST",
+        userId,
+      },
+      entity: { type: "user", id: String(userId), label: "student_password_reset" },
+    });
     return NextResponse.json(
       {
         success: false,

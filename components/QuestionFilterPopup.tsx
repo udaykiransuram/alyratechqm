@@ -15,6 +15,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { QuestionPickerCard } from '@/components/question-paper-builder/QuestionPickerCard';
 import { cn } from '@/lib/utils';
 
 function MetadataSelectorLoadingState() {
@@ -30,23 +31,6 @@ function MetadataSelectorLoadingState() {
   );
 }
 
-function QuestionCardLoadingState() {
-  return (
-    <div className="rounded-2xl border border-border/60 bg-background p-4 shadow-none">
-      <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          <div className="h-6 w-20 animate-pulse rounded-full bg-muted" />
-          <div className="h-6 w-24 animate-pulse rounded-full bg-muted" />
-          <div className="h-6 w-20 animate-pulse rounded-full bg-muted" />
-        </div>
-        <div className="h-4 w-full animate-pulse rounded bg-muted" />
-        <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
-        <div className="h-10 w-full animate-pulse rounded-xl bg-muted/60" />
-      </div>
-    </div>
-  );
-}
-
 const MetadataSelector = dynamic(
   () =>
     import('@/components/MetadataSelector').then(
@@ -54,14 +38,6 @@ const MetadataSelector = dynamic(
     ),
   {
     loading: () => <MetadataSelectorLoadingState />,
-  },
-);
-
-const QuestionItem = dynamic(
-  () =>
-    import('@/components/question-items').then((module) => module.QuestionItem),
-  {
-    loading: () => <QuestionCardLoadingState />,
   },
 );
 
@@ -85,9 +61,17 @@ type QuestionFilterPopupProps = {
   setModalSearch: (search: string) => void;
   loadingQuestions: boolean;
   modalAvailableQuestions: any[];
+  questionResultCount: number;
+  questionPage: number;
+  setQuestionPage: Dispatch<SetStateAction<number>>;
+  questionPageCount: number;
+  questionPageSize: number;
   selectedQuestionIds: (string | number)[];
   setSelectedQuestionIds: Dispatch<SetStateAction<(string | number)[]>>;
-  handleConfirmQuestions: () => void;
+  handleConfirmQuestions: () => Promise<void>;
+  handleSelectAllFilteredQuestions: () => Promise<void>;
+  confirmingQuestions: boolean;
+  selectingAllFilteredQuestions: boolean;
   toast: any;
   handleEditQuestionSave: (updated: any) => Promise<void>;
 };
@@ -112,9 +96,17 @@ export function QuestionFilterPopup({
   setModalSearch,
   loadingQuestions,
   modalAvailableQuestions,
+  questionResultCount,
+  questionPage,
+  setQuestionPage,
+  questionPageCount,
+  questionPageSize,
   selectedQuestionIds,
   setSelectedQuestionIds,
   handleConfirmQuestions,
+  handleSelectAllFilteredQuestions,
+  confirmingQuestions,
+  selectingAllFilteredQuestions,
   toast,
   handleEditQuestionSave,
 }: QuestionFilterPopupProps) {
@@ -145,6 +137,14 @@ export function QuestionFilterPopup({
     String(classId) !== 'all' ||
     String(subjectId) !== 'all';
   const canShowSelectionControls = !loadingQuestions && allQuestionsToShow.length > 0;
+  const currentPage = Math.max(questionPage, 1);
+  const totalPages = Math.max(questionPageCount, 1);
+  const pageStart =
+    questionResultCount > 0 ? (currentPage - 1) * questionPageSize + 1 : 0;
+  const pageEnd =
+    questionResultCount > 0
+      ? Math.min(questionResultCount, pageStart + allQuestionsToShow.length - 1)
+      : 0;
 
   const handleToggleQuestion = (id: string | number) => {
     const normalizedId = normalizeQuestionId(id);
@@ -168,11 +168,18 @@ export function QuestionFilterPopup({
   };
 
   const handleClearFilters = () => {
+    setQuestionPage(1);
     setModalSearch('');
     setSelectedTags([]);
     setQuestionTagMatchMode('any');
     setClassId('all');
     setSubjectId('all');
+  };
+
+  const handleDeselectHiddenQuestions = () => {
+    setSelectedQuestionIds((currentIds) =>
+      currentIds.filter((id) => visibleQuestionIdSet.has(normalizeQuestionId(id))),
+    );
   };
 
   return (
@@ -229,7 +236,10 @@ export function QuestionFilterPopup({
                   id="question-filter-search"
                   type="text"
                   value={modalSearch}
-                  onChange={(event) => setModalSearch(event.target.value)}
+                  onChange={(event) => {
+                    setQuestionPage(1);
+                    setModalSearch(event.target.value);
+                  }}
                   placeholder="Search by content..."
                 />
               </div>
@@ -270,7 +280,10 @@ export function QuestionFilterPopup({
                     variant={questionTagMatchMode === 'any' ? 'default' : 'outline'}
                     size="sm"
                     className="h-10 w-full"
-                    onClick={() => setQuestionTagMatchMode('any')}
+                    onClick={() => {
+                      setQuestionPage(1);
+                      setQuestionTagMatchMode('any');
+                    }}
                     disabled={selectedTags.length === 0}
                   >
                     Any Tag
@@ -280,7 +293,10 @@ export function QuestionFilterPopup({
                     variant={questionTagMatchMode === 'all' ? 'default' : 'outline'}
                     size="sm"
                     className="h-10 w-full"
-                    onClick={() => setQuestionTagMatchMode('all')}
+                    onClick={() => {
+                      setQuestionPage(1);
+                      setQuestionTagMatchMode('all');
+                    }}
                     disabled={selectedTags.length === 0}
                   >
                     All Tags
@@ -303,14 +319,29 @@ export function QuestionFilterPopup({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                   <h3 className="text-base font-semibold text-foreground">
-                    Available Questions <span className="text-muted-foreground">({allQuestionsToShow.length})</span>
+                    Available Questions <span className="text-muted-foreground">({questionResultCount})</span>
                   </h3>
-                  <p className="text-sm text-muted-foreground">Review the matches and select the questions to add. Selections from other filters stay queued until you confirm.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Review the matches and select the questions to add. Selections from other filters stay queued until you confirm.
+                  </p>
                 </div>
-                <span className="inline-flex w-fit rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                  {selectedCount} selected
-                  {hiddenSelectedCount > 0 ? ` • ${hiddenSelectedCount} outside current view` : ''}
-                </span>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <span className="inline-flex w-fit rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                    {selectedCount} selected
+                    {hiddenSelectedCount > 0 ? ` • ${hiddenSelectedCount} outside current view` : ''}
+                  </span>
+                  {hiddenSelectedCount > 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-3 text-xs font-semibold"
+                      onClick={handleDeselectHiddenQuestions}
+                    >
+                      Deselect hidden
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             </div>
 
@@ -348,10 +379,31 @@ export function QuestionFilterPopup({
                     htmlFor="select-all-questions"
                     className="cursor-pointer select-none text-sm font-medium text-foreground"
                   >
-                    Select All
+                    Select Page
                   </label>
                 </div>
-                <span className="text-xs text-muted-foreground">{allQuestionsToShow.length} result(s)</span>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {questionResultCount > 0
+                      ? `Showing ${pageStart}-${pageEnd} of ${questionResultCount}`
+                      : '0 results'}
+                  </span>
+                  {questionResultCount > allQuestionsToShow.length ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="app-button-filter"
+                      onClick={() => void handleSelectAllFilteredQuestions()}
+                      disabled={loadingQuestions || selectingAllFilteredQuestions}
+                      aria-busy={selectingAllFilteredQuestions}
+                    >
+                      {selectingAllFilteredQuestions
+                        ? 'Selecting...'
+                        : `Select all ${questionResultCount}`}
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
 
@@ -405,12 +457,11 @@ export function QuestionFilterPopup({
                             onCheckedChange={() => handleToggleQuestion(question._id)}
                           />
                           <div className="min-w-0 flex-1 py-1 pr-1">
-                            <QuestionItem
-                              compact
+                            <QuestionPickerCard
                               className={cn(
-                            'w-full border-border/50 bg-background shadow-none',
-                            isSelected ? 'border-primary/60' : 'hover:border-border/60',
-                          )}
+                                'w-full border-border/50 bg-background shadow-none',
+                                isSelected ? 'border-primary/60' : 'hover:border-border/60',
+                              )}
                               question={question}
                               classes={classes}
                               subjects={subjects}
@@ -425,6 +476,36 @@ export function QuestionFilterPopup({
                 </div>
               )}
             </div>
+
+            {questionResultCount > 0 ? (
+              <div className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <span className="text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="app-button-filter"
+                    onClick={() => setQuestionPage((page) => Math.max(1, page - 1))}
+                    disabled={loadingQuestions || currentPage <= 1}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="app-button-filter"
+                    onClick={() => setQuestionPage((page) => Math.min(totalPages, page + 1))}
+                    disabled={loadingQuestions || currentPage >= totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </main>
         </div>
 
@@ -435,8 +516,13 @@ export function QuestionFilterPopup({
           <Button variant="outline" className="app-button-filter" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button className="app-button-inline" onClick={handleConfirmQuestions}>
-            Add Selected Questions
+          <Button
+            className="app-button-inline"
+            onClick={() => void handleConfirmQuestions()}
+            disabled={confirmingQuestions}
+            aria-busy={confirmingQuestions}
+          >
+            {confirmingQuestions ? 'Adding...' : 'Add Selected Questions'}
           </Button>
         </DialogFooter>
       </DialogContent>

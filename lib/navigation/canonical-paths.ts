@@ -11,6 +11,13 @@ export const PUBLIC_PATH_PREFIXES = [
   "/talent-test",
 ] as const;
 
+export type AppChromeKind =
+  | "home"
+  | "public"
+  | "auth"
+  | "student"
+  | "product";
+
 export function matchesPathPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
@@ -34,31 +41,13 @@ export function isStudentPathname(pathname: string) {
   return pathname === "/student" || pathname.startsWith("/student/");
 }
 
-export type AppChromeKind =
-  | "home"
-  | "public"
-  | "auth"
-  | "student"
-  | "product";
-
-export function resolveAppChromeKind(pathname: string): AppChromeKind {
-  if (isHomePublicPathname(pathname)) {
-    return "home";
-  }
-
-  if (isPublicPathname(pathname)) {
-    return "public";
-  }
-
-  if (isAuthPathname(pathname)) {
-    return "auth";
-  }
-
-  if (isStudentPathname(pathname)) {
-    return "student";
-  }
-
-  return "product";
+export function isProductPathname(pathname: string) {
+  return (
+    pathname === "/workspace" ||
+    pathname.startsWith("/workspace/") ||
+    pathname === "/company" ||
+    pathname.startsWith("/company/")
+  );
 }
 
 export function canonicalizePathname(pathname: string) {
@@ -82,4 +71,26 @@ export function canonicalizeAppPath(path: string) {
   const canonicalPathname = canonicalizePathname(pathname || "/");
 
   return `${canonicalPathname}${existingQuery ? `?${existingQuery}` : ""}${hashFragment ? `#${hashFragment}` : ""}`;
+}
+
+export function resolveAppChromeKind(pathname: string): AppChromeKind {
+  const normalizedPathname = canonicalizePathname(String(pathname || "").trim() || "/");
+
+  if (isHomePublicPathname(normalizedPathname)) {
+    return "home";
+  }
+
+  if (isAuthPathname(normalizedPathname)) {
+    return "auth";
+  }
+
+  if (isStudentPathname(normalizedPathname)) {
+    return "student";
+  }
+
+  if (isProductPathname(normalizedPathname)) {
+    return "product";
+  }
+
+  return "public";
 }

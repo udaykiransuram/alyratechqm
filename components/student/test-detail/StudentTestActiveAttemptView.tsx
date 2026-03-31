@@ -33,7 +33,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import FeedbackNotice from "@/components/ui/feedback-notice";
+import FeedbackNotice, {
+  type FeedbackNoticeVariant,
+} from "@/components/ui/feedback-notice";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -118,6 +120,45 @@ function labelsMatch(left: unknown, right: unknown) {
 
 function getOptionLabel(index: number) {
   return index < 26 ? String.fromCharCode(65 + index) : String(index + 1);
+}
+
+function formatQuestionPositionLabel(current: number, total: number) {
+  if (!total) return "Questions";
+  return `Q ${current || 1} / ${total}`;
+}
+
+function formatQuestionRangeLabel(start: number, end: number) {
+  if (!start || !end) return "Questions";
+  return start === end ? `Q ${start}` : `Q ${start}-${end}`;
+}
+
+function formatSectionSummaryLabel(sectionIndex: number, name: string) {
+  const baseLabel = `Section ${sectionIndex + 1}`;
+  return labelsMatch(name, baseLabel) ? baseLabel : `${baseLabel} • ${name}`;
+}
+
+function formatScoreLabel(positive: number, negative: number) {
+  const safePositive = Number(positive || 0);
+  const safeNegative = Number(negative || 0);
+
+  if (safeNegative > 0) {
+    return `+${safePositive} / -${safeNegative}`;
+  }
+
+  return `+${safePositive}`;
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  return tagName === "input" || tagName === "textarea" || tagName === "select";
 }
 
 const DESCRIPTIVE_SYNC_DEBOUNCE_MS = 220;
@@ -285,29 +326,32 @@ const CountdownStatusCard = memo(function CountdownStatusCard({
         countdownTone === "danger" && "app-exam-timer-card-danger",
       )}
     >
-      <div className="app-exam-timer-card-head">
-        <p className="app-exam-timer-card-kicker">Time left</p>
-        <span
-          className={cn(
-            "app-status-badge w-fit",
-            countdownTone === "warning"
-              ? "app-status-badge-warning"
-              : countdownTone === "danger"
-                ? "app-status-badge-danger"
-                : "app-status-badge-info",
-          )}
-        >
-          {getCountdownBadgeLabel(remainingMs)}
-        </span>
-      </div>
-      <div className="app-exam-timer-card-value" suppressHydrationWarning>
-        {countdownValue}
+      <div className="app-exam-timer-card-main">
+        <div className="app-exam-timer-card-copy">
+          <p className="app-exam-timer-card-kicker">Time left</p>
+          <span
+            className={cn(
+              "app-status-badge w-fit",
+              countdownTone === "warning"
+                ? "app-status-badge-warning"
+                : countdownTone === "danger"
+                  ? "app-status-badge-danger"
+                  : "app-status-badge-info",
+            )}
+          >
+            {getCountdownBadgeLabel(remainingMs)}
+          </span>
+        </div>
+        <div className="app-exam-timer-card-value" suppressHydrationWarning>
+          {countdownValue}
+        </div>
       </div>
     </div>
   );
 });
 
 type ExamTopbarProps = {
+  dialogContainer?: HTMLElement | null;
   paper: StudentPaper;
   paperSubjects: Array<{ _id: string; name: string }>;
   paperSubjectLabel: string;
@@ -316,6 +360,7 @@ type ExamTopbarProps = {
   answeredCompactLabel: string;
   currentSectionName: string | null;
   showCurrentSectionChip: boolean;
+  showSaveStateBadge: boolean;
   saveStateToneClass: string;
   saveStateBadgeLabel: string;
   saveStatusLabel: string;
@@ -334,6 +379,7 @@ type ExamTopbarProps = {
 };
 
 const ExamTopbar = memo(function ExamTopbar({
+  dialogContainer,
   paper,
   paperSubjects,
   paperSubjectLabel,
@@ -342,6 +388,7 @@ const ExamTopbar = memo(function ExamTopbar({
   answeredCompactLabel,
   currentSectionName,
   showCurrentSectionChip,
+  showSaveStateBadge,
   saveStateToneClass,
   saveStateBadgeLabel,
   saveStatusLabel,
@@ -368,24 +415,120 @@ const ExamTopbar = memo(function ExamTopbar({
 
   return (
     <div className="app-exam-focus-topbar">
-      <div className="app-exam-focus-topbar-copy">
-        <h1 className="app-exam-focus-topbar-title text-[1.25rem] font-semibold leading-tight tracking-[-0.024em] text-foreground sm:text-[1.45rem]">
-          {paper.title}
-        </h1>
-        <p className="app-copy-muted app-exam-focus-topbar-subtitle">
-          {[paperSubjectLabel, paperClassLabel, `${paper.duration} min`]
-            .filter(Boolean)
-            .join(" • ") || `${questionCount} questions`}
-        </p>
-        {showPaperSubjectChips ? (
-          <div className="mt-1.5 hidden flex-wrap gap-1.5 sm:flex">
-            {paperSubjects.map((subject) => (
-              <span key={subject._id} className="app-meta-chip">
-                {subject.name || subject._id}
-              </span>
-            ))}
+      <div className="app-exam-focus-topbar-main">
+        <div className="app-exam-focus-topbar-copy">
+          <h1 className="app-exam-focus-topbar-title text-[1rem] font-semibold leading-tight tracking-[-0.022em] text-foreground sm:text-[1.08rem] xl:text-[1.16rem]">
+            {paper.title}
+          </h1>
+          <div className="app-exam-focus-topbar-meta">
+            <p className="app-copy-muted app-exam-focus-topbar-subtitle">
+              {[paperSubjectLabel, paperClassLabel, `${paper.duration} min`]
+                .filter(Boolean)
+                .join(" • ") || `${questionCount} questions`}
+            </p>
+            {showPaperSubjectChips ? (
+              <div className="app-exam-focus-topbar-subjects">
+                {paperSubjects.map((subject) => (
+                  <span key={subject._id} className="app-meta-chip">
+                    {subject.name || subject._id}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </div>
+        <div className="app-exam-focus-topbar-side">
+          <CountdownStatusCard deadlineAt={deadlineAt} />
+          <div
+            className="app-exam-focus-topbar-actions"
+            role="group"
+            aria-label="Test actions"
+          >
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="app-button-compact app-exam-topbar-action"
+              onClick={() => void onSaveAttempt(true)}
+              disabled={isSaving || isSubmitting}
+            >
+              {isSaving ? <Spinner /> : "Save"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="app-button-compact app-exam-topbar-action"
+              onClick={() => void onToggleFullscreen()}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="mr-1.5 h-4 w-4 sm:mr-2" />
+              ) : (
+                <Expand className="mr-1.5 h-4 w-4 sm:mr-2" />
+              )}
+              {isFullscreen ? (
+                <>
+                  <span className="sm:hidden">Exit</span>
+                  <span className="hidden sm:inline">Exit fullscreen</span>
+                </>
+              ) : (
+                <>
+                  <span className="sm:hidden">Screen</span>
+                  <span className="hidden sm:inline">Fullscreen</span>
+                </>
+              )}
+            </Button>
+
+            {hasMounted ? (
+              <AlertDialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    className="app-button-compact app-exam-topbar-action app-exam-topbar-action-submit"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? <Spinner /> : "Submit"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent container={dialogContainer}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Submit this test?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      You have answered {answeredCount} of {questionCount} questions.
+                      {unansweredCount > 0
+                        ? ` ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} will be left unanswered.`
+                        : " All questions have a saved answer."}
+                      {hasManualReviewQuestions
+                        ? " Descriptive responses may remain pending review after submission."
+                        : ""}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isSubmitting}>
+                      Continue Reviewing
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => void onSubmitAttempt(false)}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? <Spinner /> : "Confirm Submit"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                className="app-button-compact app-exam-topbar-action app-exam-topbar-action-submit"
+                disabled
+              >
+                Submit
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
       <div className="app-exam-focus-topbar-status" aria-label="Test status">
         <div className="app-exam-focus-topbar-stat">
@@ -405,272 +548,324 @@ const ExamTopbar = memo(function ExamTopbar({
             </span>
           </div>
         ) : null}
-        <div className="app-exam-focus-topbar-stat">
-          <span className="app-exam-focus-topbar-stat-label">Save</span>
-          <span
-            className={cn("app-status-badge w-fit", saveStateToneClass)}
-            title={saveStatusLabel}
+        {showSaveStateBadge ? (
+          <div
+            className="app-exam-focus-topbar-stat app-exam-focus-topbar-stat-save"
+            aria-label={`Save status ${saveStatusLabel}`}
           >
-            {saveStateBadgeLabel}
-          </span>
-        </div>
-      </div>
-      <div className="app-exam-focus-topbar-side">
-        <CountdownStatusCard deadlineAt={deadlineAt} />
-        <div
-          className="app-exam-focus-topbar-actions"
-          role="group"
-          aria-label="Test actions"
-        >
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="app-button-compact app-exam-topbar-action"
-            onClick={() => void onSaveAttempt(true)}
-            disabled={isSaving || isSubmitting}
-          >
-            {isSaving ? <Spinner /> : "Save"}
-          </Button>
-
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="app-button-compact app-exam-topbar-action"
-            onClick={() => void onToggleFullscreen()}
-          >
-            {isFullscreen ? (
-              <Minimize2 className="mr-1.5 h-4 w-4 sm:mr-2" />
-            ) : (
-              <Expand className="mr-1.5 h-4 w-4 sm:mr-2" />
-            )}
-            {isFullscreen ? (
-              <>
-                <span className="sm:hidden">Exit</span>
-                <span className="hidden sm:inline">Exit fullscreen</span>
-              </>
-            ) : (
-              <>
-                <span className="sm:hidden">Screen</span>
-                <span className="hidden sm:inline">Fullscreen</span>
-              </>
-            )}
-          </Button>
-
-          {hasMounted ? (
-            <AlertDialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
-              <AlertDialogTrigger asChild>
-                <Button
-                  size="sm"
-                  className="app-button-compact app-exam-topbar-action app-exam-topbar-action-submit"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? <Spinner /> : "Submit"}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Submit this test?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    You have answered {answeredCount} of {questionCount} questions.
-                    {unansweredCount > 0
-                      ? ` ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} will be left unanswered.`
-                      : " All questions have a saved answer."}
-                    {hasManualReviewQuestions
-                      ? " Descriptive responses may remain pending review after submission."
-                      : ""}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={isSubmitting}>
-                    Continue Reviewing
-                  </AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => void onSubmitAttempt(false)}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? <Spinner /> : "Confirm Submit"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              className="app-button-compact app-exam-topbar-action app-exam-topbar-action-submit"
-              disabled
+            <span className="sr-only">Save status</span>
+            <span
+              className={cn("app-status-badge w-fit", saveStateToneClass)}
+              title={saveStatusLabel}
             >
-              Submit
-            </Button>
-          )}
-        </div>
+              {saveStateBadgeLabel}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
 });
 
 type ExamSidebarProps = {
-  answeredCount: number;
   questionCount: number;
-  unansweredCount: number;
-  currentQuestionNumber: number;
   subjectProgress: SubjectProgressItem[];
   sectionNavigation: SectionNavigationGroup[];
   currentIndex: number;
   instructions: string;
   onJumpToQuestion: (index: number) => Promise<void>;
+  isFullscreen?: boolean;
+  compact?: boolean;
 };
 
 const ExamSidebar = memo(function ExamSidebar({
-  answeredCount,
   questionCount,
-  unansweredCount,
-  currentQuestionNumber,
   subjectProgress,
   sectionNavigation,
   currentIndex,
   instructions,
   onJumpToQuestion,
+  isFullscreen = false,
+  compact = false,
 }: ExamSidebarProps) {
+  const activeSectionId = useMemo(() => {
+    const activeSection = sectionNavigation.find((section) =>
+      section.items.some((item) => item.globalIndex === currentIndex),
+    );
+
+    return activeSection?.id ?? sectionNavigation[0]?.id ?? null;
+  }, [currentIndex, sectionNavigation]);
+  const [expandedSectionId, setExpandedSectionId] = useState<string | null>(
+    activeSectionId,
+  );
+
+  useEffect(() => {
+    setExpandedSectionId(activeSectionId);
+  }, [activeSectionId]);
+
+  const answeredSummaryCount = subjectProgress.reduce(
+    (sum, subject) => sum + subject.answered,
+    0,
+  );
+  const activeSection =
+    sectionNavigation.find((section) => section.id === activeSectionId) ??
+    sectionNavigation[0] ??
+    null;
+  const fullQuestionRangeLabel = formatQuestionRangeLabel(
+    questionCount > 0 ? 1 : 0,
+    questionCount,
+  );
+  const hasMultipleSections = sectionNavigation.length > 1;
+  const compactSectionStart = (activeSection?.items[0]?.globalIndex ?? 0) + 1;
+  const compactSectionEnd =
+    (activeSection?.items[activeSection?.items.length - 1]?.globalIndex ?? 0) + 1;
+  const compactSectionAnsweredCount = activeSection
+    ? activeSection.items.filter((item) => item.answered).length
+    : 0;
+  const showCompactSectionRule = Boolean(
+    activeSection &&
+      (activeSection.defaultMarks > 0 || activeSection.defaultNegativeMarks > 0),
+  );
+  const showCompactSectionSubjects = Boolean(
+    activeSection && activeSection.subjects.length > 1,
+  );
+
   return (
-    <aside className="app-exam-sidebar app-exam-sidebar-focus hidden xl:block">
+    <aside
+      className={cn(
+        "app-exam-sidebar app-exam-sidebar-focus hidden xl:block",
+        compact && "app-exam-sidebar-compact",
+        isFullscreen && "app-exam-sidebar-focus-fullscreen",
+      )}
+    >
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle>Question Navigation</CardTitle>
-            <span className="app-meta-chip">
-              {answeredCount}/{questionCount} answered
-            </span>
+            <CardTitle>{isFullscreen ? "Jump" : "Questions"}</CardTitle>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="app-meta-chip">{fullQuestionRangeLabel}</span>
+              <span className="app-meta-chip">
+                {questionCount > 0
+                  ? `${answeredSummaryCount}/${questionCount} done`
+                  : "No questions"}
+              </span>
+              {hasMultipleSections ? (
+                <span className="app-meta-chip">
+                  {sectionNavigation.length} sections
+                </span>
+              ) : null}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="app-section-body space-y-3">
-          <div className="app-exam-sidebar-summary">
-            <div className="app-exam-sidebar-summary-card">
-              <span className="app-exam-sidebar-summary-label">Answered</span>
-              <span className="app-exam-sidebar-summary-value">{answeredCount}</span>
-              <span className="app-exam-sidebar-summary-meta">Saved responses</span>
-            </div>
-            <div className="app-exam-sidebar-summary-card">
-              <span className="app-exam-sidebar-summary-label">Remaining</span>
-              <span className="app-exam-sidebar-summary-value">{unansweredCount}</span>
-              <span className="app-exam-sidebar-summary-meta">Still to review</span>
-            </div>
-            <div className="app-exam-sidebar-summary-card">
-              <span className="app-exam-sidebar-summary-label">Current</span>
-              <span className="app-exam-sidebar-summary-value">
-                Q {currentQuestionNumber || "—"}
-              </span>
-              <span className="app-exam-sidebar-summary-meta">
-                Jump with the palette
-              </span>
-            </div>
-          </div>
-          {subjectProgress.length > 1 ? (
-            <div className="app-exam-sidebar-panel">
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Subject progress
-              </p>
-              <div className="space-y-2">
-                {subjectProgress.map((subject) => (
-                  <div
-                    key={subject._id}
-                    className="flex items-center justify-between gap-3 text-sm"
-                  >
-                    <span className="font-medium text-foreground">{subject.name}</span>
-                    <span className="text-muted-foreground">
-                      {subject.answered}/{subject.total}
-                    </span>
-                  </div>
-                ))}
+          {compact && activeSection ? (
+            <div className="space-y-3">
+              <div className="app-exam-sidebar-summary-card">
+                <span className="app-exam-sidebar-summary-label">
+                  {formatQuestionRangeLabel(compactSectionStart, compactSectionEnd)}
+                </span>
+                <span className="app-exam-sidebar-summary-value">
+                  {compactSectionAnsweredCount}/{activeSection.items.length} done
+                </span>
+                {activeSection.totalMarks > 0 ? (
+                  <span className="app-exam-sidebar-summary-meta">
+                    {activeSection.totalMarks} total marks
+                  </span>
+                ) : null}
               </div>
-            </div>
-          ) : null}
-          <div className="space-y-3">
-            {sectionNavigation.map((section) => {
-              const sectionActive = section.items.some(
-                (item) => item.globalIndex === currentIndex,
-              );
-
-              return (
-                <div key={section.id} className="app-exam-sidebar-panel">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {`Section ${section.sectionIndex + 1}: ${section.name}`}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {section.items.length} question
-                        {section.items.length === 1 ? "" : "s"} • {section.totalMarks} marks
-                        • +{section.defaultMarks} / -{section.defaultNegativeMarks}
-                      </p>
-                    </div>
-                    {sectionActive ? (
-                      <span className="app-status-badge app-status-badge-info w-fit">
-                        Current
-                      </span>
-                    ) : null}
-                  </div>
-                  {section.subjects.length > 0 ? (
-                    <div className="app-exam-sidebar-subjects mt-2 flex flex-wrap gap-1.5">
-                      {section.subjects.map((subject) => (
+              {showCompactSectionRule || showCompactSectionSubjects ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {showCompactSectionRule ? (
+                    <span className="app-meta-chip">
+                      {formatScoreLabel(
+                        activeSection.defaultMarks || 0,
+                        activeSection.defaultNegativeMarks || 0,
+                      )}{" "}
+                      each
+                    </span>
+                  ) : null}
+                  {showCompactSectionSubjects
+                    ? activeSection.subjects.map((subject) => (
                         <span
-                          key={`${section.id}-${subject._id}`}
+                          key={`${activeSection.id}-${subject._id}`}
                           className="app-meta-chip"
                         >
                           {subject.name || subject._id}
                         </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="app-exam-palette mt-3">
-                    {section.items.map((item) => (
-                      <button
-                        key={`${section.id}-${item.questionId || item.globalIndex}`}
-                        type="button"
-                        onClick={() => void onJumpToQuestion(item.globalIndex)}
-                        className={cn(
-                          "app-exam-palette-button",
-                          item.globalIndex === currentIndex &&
-                            "app-exam-palette-button-active",
-                          item.globalIndex !== currentIndex &&
-                            item.answered &&
-                            "app-exam-palette-button-complete",
-                        )}
-                      >
-                        {item.globalIndex + 1}
-                      </button>
-                    ))}
-                  </div>
+                      ))
+                    : null}
                 </div>
-              );
-            })}
-          </div>
+              ) : null}
+              <div
+                className="app-exam-palette app-exam-sidebar-compact-palette"
+                aria-label="Question navigation"
+              >
+                {activeSection.items.map((item) => (
+                  <button
+                    key={`${activeSection.id}-${item.questionId || item.globalIndex}`}
+                    type="button"
+                    onClick={() => void onJumpToQuestion(item.globalIndex)}
+                    className={cn(
+                      "app-exam-palette-button",
+                      item.globalIndex === currentIndex &&
+                        "app-exam-palette-button-active",
+                      item.globalIndex !== currentIndex &&
+                        item.answered &&
+                        "app-exam-palette-button-complete",
+                    )}
+                  >
+                    {item.globalIndex + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="app-exam-sidebar-section-list">
+              {sectionNavigation.map((section) => {
+                const sectionActive = section.id === activeSectionId;
+                const sectionExpanded =
+                  section.id === (expandedSectionId ?? activeSectionId);
+                const sectionAnsweredCount = section.items.filter(
+                  (item) => item.answered,
+                ).length;
+                const sectionStart = (section.items[0]?.globalIndex ?? 0) + 1;
+                const sectionEnd =
+                  (section.items[section.items.length - 1]?.globalIndex ?? 0) + 1;
+                const sectionRangeLabel = formatQuestionRangeLabel(
+                  sectionStart,
+                  sectionEnd,
+                );
+                const showSectionRule =
+                  section.defaultMarks > 0 || section.defaultNegativeMarks > 0;
+                const showSectionSubjects = section.subjects.length > 1;
 
-          <div className="app-exam-palette-legend">
-            <div className="app-exam-palette-legend-item">
-              <span className="app-exam-palette-swatch bg-primary" />
-              Current
+                return (
+                  <div
+                    key={section.id}
+                    className={cn(
+                      "app-exam-sidebar-section",
+                      sectionActive && "app-exam-sidebar-section-active",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      className="app-exam-sidebar-section-trigger"
+                      onClick={() => setExpandedSectionId(section.id)}
+                      aria-expanded={sectionExpanded}
+                    >
+                      <div className="app-exam-sidebar-section-copy">
+                        <p className="app-exam-sidebar-section-title">
+                          {sectionRangeLabel}
+                        </p>
+                        <div className="app-exam-sidebar-section-summary">
+                          {hasMultipleSections ? (
+                            <span>
+                              {formatSectionSummaryLabel(
+                                section.sectionIndex,
+                                section.name,
+                              )}
+                            </span>
+                          ) : null}
+                          <span>
+                            {sectionAnsweredCount}/{section.items.length} done
+                          </span>
+                          {section.totalMarks > 0 ? (
+                            <span>{section.totalMarks} marks</span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 pl-2">
+                        <ChevronUp
+                          className={cn(
+                            "app-exam-sidebar-section-chevron",
+                            !sectionExpanded &&
+                              "app-exam-sidebar-section-chevron-collapsed",
+                          )}
+                        />
+                      </div>
+                    </button>
+                    {sectionExpanded ? (
+                      <div className="app-exam-sidebar-section-body">
+                        {showSectionRule || showSectionSubjects ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {showSectionRule ? (
+                              <span className="app-meta-chip">
+                                {formatScoreLabel(
+                                  section.defaultMarks || 0,
+                                  section.defaultNegativeMarks || 0,
+                                )}{" "}
+                                each
+                              </span>
+                            ) : null}
+                            {showSectionSubjects
+                              ? section.subjects.map((subject) => (
+                                  <span
+                                    key={`${section.id}-${subject._id}`}
+                                    className="app-meta-chip"
+                                  >
+                                    {subject.name || subject._id}
+                                  </span>
+                                ))
+                              : null}
+                          </div>
+                        ) : null}
+                        <div
+                          className="app-exam-palette"
+                          aria-label={`Question navigation for section ${section.sectionIndex + 1}`}
+                        >
+                          {section.items.map((item) => (
+                            <button
+                              key={`${section.id}-${item.questionId || item.globalIndex}`}
+                              type="button"
+                              onClick={() => void onJumpToQuestion(item.globalIndex)}
+                              className={cn(
+                                "app-exam-palette-button",
+                                item.globalIndex === currentIndex &&
+                                  "app-exam-palette-button-active",
+                                item.globalIndex !== currentIndex &&
+                                  item.answered &&
+                                  "app-exam-palette-button-complete",
+                              )}
+                            >
+                              {item.globalIndex + 1}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
-            <div className="app-exam-palette-legend-item">
-              <span className="app-exam-palette-swatch bg-emerald-400" />
-              Answered
-            </div>
-            <div className="app-exam-palette-legend-item">
-              <span className="app-exam-palette-swatch bg-muted" />
-              Unanswered
-            </div>
-          </div>
+          )}
 
-          {instructions ? (
+          {subjectProgress.length > 1 || instructions ? (
             <details className="app-exam-sidebar-panel px-3.5 py-2.5">
               <summary className="app-title-sm cursor-pointer">
-                View instructions
+                More details
               </summary>
-              <div className="prose prose-sm mt-3 max-w-none text-foreground dark:prose-invert">
-                <p>{instructions}</p>
-              </div>
+              {subjectProgress.length > 1 ? (
+                <div className="mt-3 space-y-2">
+                  {subjectProgress.map((subject) => (
+                    <div
+                      key={subject._id}
+                      className="flex items-center justify-between gap-3 text-sm"
+                    >
+                      <span className="font-medium text-foreground">
+                        {subject.name}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {subject.answered}/{subject.total}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {instructions ? (
+                <div className="prose prose-sm mt-3 max-w-none text-foreground dark:prose-invert">
+                  <p>{instructions}</p>
+                </div>
+              ) : null}
             </details>
           ) : null}
         </CardContent>
@@ -680,12 +875,14 @@ const ExamSidebar = memo(function ExamSidebar({
 });
 
 type ExamMobileNavigationProps = {
+  dialogContainer?: HTMLElement | null;
   answeredCount: number;
   questionCount: number;
   unansweredCount: number;
   currentQuestionNumber: number;
   currentIndex: number;
   currentSectionName: string | null;
+  showSaveStateBadge: boolean;
   saveStateToneClass: string;
   saveStateBadgeLabel: string;
   subjectProgress: SubjectProgressItem[];
@@ -695,12 +892,14 @@ type ExamMobileNavigationProps = {
 };
 
 const ExamMobileNavigation = memo(function ExamMobileNavigation({
+  dialogContainer,
   answeredCount,
   questionCount,
   unansweredCount,
   currentQuestionNumber,
   currentIndex,
   currentSectionName,
+  showSaveStateBadge,
   saveStateToneClass,
   saveStateBadgeLabel,
   subjectProgress,
@@ -731,7 +930,35 @@ const ExamMobileNavigation = memo(function ExamMobileNavigation({
       null
     );
   }, [activeSectionId, sectionNavigation, selectedSectionId]);
+  const selectedSectionAnsweredCount = selectedSection
+    ? selectedSection.items.filter((item) => item.answered).length
+    : 0;
+  const selectedSectionStart = selectedSection
+    ? (selectedSection.items[0]?.globalIndex ?? 0) + 1
+    : 0;
+  const selectedSectionEnd = selectedSection
+    ? (selectedSection.items[selectedSection.items.length - 1]?.globalIndex ?? 0) +
+      1
+    : 0;
   const [sheetOpen, setSheetOpen] = useState(false);
+  const fullQuestionRangeLabel = formatQuestionRangeLabel(
+    questionCount > 0 ? 1 : 0,
+    questionCount,
+  );
+  const currentQuestionLabel = formatQuestionPositionLabel(
+    currentQuestionNumber,
+    questionCount,
+  );
+  const hasMultipleSections = sectionNavigation.length > 1;
+  const showQuestionJump = questionCount > 1;
+  const showMobileDetailsAccess = Boolean(
+    showQuestionJump || subjectProgress.length > 1 || instructions,
+  );
+  const mobileSheetTitle = showQuestionJump ? "Questions" : "Details";
+  const mobileSheetSubtitle = showQuestionJump
+    ? fullQuestionRangeLabel
+    : currentQuestionLabel;
+  const mobileSheetTriggerLabel = showQuestionJump ? "Jump" : "Details";
 
   const handleOpenSheet = useCallback(() => {
     setSelectedSectionId(activeSectionId);
@@ -746,23 +973,28 @@ const ExamMobileNavigation = memo(function ExamMobileNavigation({
     [onJumpToQuestion],
   );
 
+  if (!showMobileDetailsAccess) {
+    return null;
+  }
+
   return (
     <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
-      <div className="app-exam-mobile-nav-bar xl:hidden" aria-label="Question navigation">
+      <div
+        className="app-exam-mobile-nav-bar xl:hidden"
+        aria-label={showQuestionJump ? "Question navigation" : "Test details"}
+      >
         <div className="app-exam-mobile-nav-bar-copy">
-          <p className="app-exam-mobile-nav-bar-label">
-            Question {currentQuestionNumber || "—"} of {questionCount || "—"}
-          </p>
+          <p className="app-exam-mobile-nav-bar-label">{currentQuestionLabel}</p>
           <div className="app-exam-mobile-nav-bar-meta">
             <span className="app-exam-mobile-nav-bar-chip">
-              {answeredCount}/{questionCount} answered
+              {answeredCount}/{questionCount} done
             </span>
             {unansweredCount > 0 ? (
               <span className="app-exam-mobile-nav-bar-chip">
                 {unansweredCount} left
               </span>
             ) : null}
-            {currentSectionName ? (
+            {hasMultipleSections && currentSectionName ? (
               <span
                 className="app-exam-mobile-nav-bar-chip app-exam-mobile-nav-bar-chip-current"
                 title={currentSectionName}
@@ -773,64 +1005,70 @@ const ExamMobileNavigation = memo(function ExamMobileNavigation({
           </div>
         </div>
         <div className="app-exam-mobile-nav-bar-actions">
-          <span
-            className={cn(
-              "app-status-badge hidden min-[400px]:inline-flex",
-              saveStateToneClass,
-            )}
-          >
-            {saveStateBadgeLabel}
-          </span>
+          {showSaveStateBadge ? (
+            <span
+              className={cn(
+                "app-status-badge hidden min-[400px]:inline-flex",
+                saveStateToneClass,
+              )}
+            >
+              {saveStateBadgeLabel}
+            </span>
+          ) : null}
           <Button
             type="button"
             size="sm"
             className="app-exam-mobile-nav-open"
             onClick={handleOpenSheet}
           >
-            Questions
+            {mobileSheetTriggerLabel}
             <ChevronUp className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      <DialogContent className="app-exam-mobile-sheet inset-x-0 bottom-0 top-auto h-auto max-h-[min(82dvh,42rem)] w-screen translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 rounded-t-[calc(var(--app-radius-xl)+0.125rem)] rounded-b-none border-x-0 border-b-0 p-0 sm:inset-x-0 sm:bottom-0 sm:top-auto sm:h-auto sm:max-h-[min(82dvh,42rem)] sm:w-screen sm:max-w-none sm:translate-x-0 sm:translate-y-0 sm:rounded-t-[calc(var(--app-radius-xl)+0.125rem)] sm:rounded-b-none sm:border-x-0 sm:border-b-0 xl:hidden">
+      <DialogContent
+        container={dialogContainer}
+        className="app-exam-mobile-sheet inset-x-0 bottom-0 top-auto h-auto max-h-[min(82dvh,42rem)] w-screen translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 rounded-t-[calc(var(--app-radius-xl)+0.125rem)] rounded-b-none border-x-0 border-b-0 p-0 sm:inset-x-0 sm:bottom-0 sm:top-auto sm:h-auto sm:max-h-[min(82dvh,42rem)] sm:w-screen sm:max-w-none sm:translate-x-0 sm:translate-y-0 sm:rounded-t-[calc(var(--app-radius-xl)+0.125rem)] sm:rounded-b-none sm:border-x-0 sm:border-b-0 xl:hidden"
+      >
         <DialogHeader className="app-exam-mobile-sheet-header">
           <div className="app-exam-mobile-sheet-title-row">
             <div className="min-w-0">
-              <DialogTitle>Question Navigation</DialogTitle>
-              <p className="app-copy-meta">
-                Question {currentQuestionNumber || "—"} of {questionCount || "—"}
-              </p>
+              <DialogTitle>{mobileSheetTitle}</DialogTitle>
+              <p className="app-copy-meta">{mobileSheetSubtitle}</p>
             </div>
-            <span className={cn("app-status-badge w-fit", saveStateToneClass)}>
-              {saveStateBadgeLabel}
-            </span>
+            {showSaveStateBadge ? (
+              <span className={cn("app-status-badge w-fit", saveStateToneClass)}>
+                {saveStateBadgeLabel}
+              </span>
+            ) : null}
           </div>
         </DialogHeader>
 
         <div className="app-exam-mobile-sheet-body">
           <section className="app-exam-mobile-nav">
             <div className="app-exam-mobile-nav-summary">
-              <span className="app-meta-chip">
-                {answeredCount}/{questionCount} answered
-              </span>
+              <span className="app-meta-chip">{answeredCount}/{questionCount} done</span>
               {unansweredCount > 0 ? (
                 <span className="app-meta-chip">{unansweredCount} left</span>
               ) : null}
-              {currentSectionName ? (
+              {hasMultipleSections && currentSectionName ? (
                 <span className="app-meta-chip" title={currentSectionName}>
                   {currentSectionName}
                 </span>
               ) : null}
             </div>
 
-            {sectionNavigation.length > 1 ? (
+            {showQuestionJump && hasMultipleSections ? (
               <div className="app-exam-mobile-section-tabs" aria-label="Sections">
                 {sectionNavigation.map((section) => {
                   const sectionIsSelected = section.id === selectedSection?.id;
-                  const sectionIsCurrent = section.items.some(
-                    (item) => item.globalIndex === currentIndex,
-                  );
+                  const sectionAnsweredCount = section.items.filter(
+                    (item) => item.answered,
+                  ).length;
+                  const sectionStart = (section.items[0]?.globalIndex ?? 0) + 1;
+                  const sectionEnd =
+                    (section.items[section.items.length - 1]?.globalIndex ?? 0) + 1;
 
                   return (
                     <button
@@ -845,45 +1083,43 @@ const ExamMobileNavigation = memo(function ExamMobileNavigation({
                       title={`Section ${section.sectionIndex + 1}: ${section.name}`}
                     >
                       <span className="app-exam-mobile-section-tab-label">
-                        {`Section ${section.sectionIndex + 1}`}
+                        {formatQuestionRangeLabel(sectionStart, sectionEnd)}
                       </span>
                       <span className="app-exam-mobile-section-tab-meta">
-                        {section.items.length}Q
+                        {sectionAnsweredCount}/{section.items.length} done
                       </span>
-                      {sectionIsCurrent ? (
-                        <span className="app-exam-mobile-section-tab-status">
-                          Now
-                        </span>
-                      ) : null}
                     </button>
                   );
                 })}
               </div>
             ) : null}
 
-            {selectedSection ? (
+            {showQuestionJump && selectedSection ? (
               <div className="app-exam-mobile-section-panel">
                 <div className="app-exam-mobile-section-panel-head">
                   <div className="app-exam-mobile-section-panel-copy">
                     <p className="app-title-sm">
-                      {`Section ${selectedSection.sectionIndex + 1}: ${selectedSection.name}`}
+                      {formatQuestionRangeLabel(
+                        selectedSectionStart,
+                        selectedSectionEnd,
+                      )}
                     </p>
                     <p className="app-copy-meta">
-                      {selectedSection.items.length} question
-                      {selectedSection.items.length === 1 ? "" : "s"} •{" "}
-                      {selectedSection.totalMarks} marks • +
-                      {selectedSection.defaultMarks} / -
-                      {selectedSection.defaultNegativeMarks}
+                      {hasMultipleSections
+                        ? `${formatSectionSummaryLabel(
+                            selectedSection.sectionIndex,
+                            selectedSection.name,
+                          )} • `
+                        : ""}
+                      {selectedSectionAnsweredCount}/{selectedSection.items.length} done
+                      {selectedSection.totalMarks > 0
+                        ? ` • ${selectedSection.totalMarks} marks`
+                        : ""}
                     </p>
                   </div>
-                  {selectedSection.id === activeSectionId ? (
-                    <span className="app-status-badge app-status-badge-info w-fit">
-                      Current
-                    </span>
-                  ) : null}
                 </div>
 
-                {selectedSection.subjects.length > 0 ? (
+                {selectedSection.subjects.length > 1 ? (
                   <div className="app-exam-mobile-section-meta">
                     {selectedSection.subjects.map((subject) => (
                       <span
@@ -1141,22 +1377,114 @@ export default function StudentTestActiveAttemptView({
         ? "Needs check"
         : pendingSubmitRetry || saveRetryPending
       ? "Retrying"
-      : "Protected";
-  const currentSectionRuleLabel = currentSection
-    ? `+${currentSection.defaultMarks || currentQuestion?.marks || 0} / -${currentSection.defaultNegativeMarks || currentQuestion?.negativeMarks || 0}`
-    : `+${currentQuestion?.marks || 0} / -${currentQuestion?.negativeMarks || 0}`;
+      : "Saved";
+  const showSaveStateBadge = Boolean(
+    isSubmitting || isSaving || actionError || pendingSubmitRetry || saveRetryPending,
+  );
+  const runtimeNotice = useMemo<
+    { variant: FeedbackNoticeVariant; message: string } | null
+  >(() => {
+    if (actionError) {
+      return {
+        variant: "error",
+        message: actionError,
+      };
+    }
+
+    if (pendingSubmitRetry) {
+      return {
+        variant: "warning",
+        message: "Submission pending. Keep this tab open while we retry.",
+      };
+    }
+
+    if (connectionNotice && saveRetryPending) {
+      return {
+        variant: "warning",
+        message: `${connectionNotice} Save retry queued in the background.`,
+      };
+    }
+
+    if (connectionNotice) {
+      return {
+        variant: "warning",
+        message: connectionNotice,
+      };
+    }
+
+    if (saveRetryPending) {
+      return {
+        variant: "info",
+        message: "Save retry queued in the background. Latest answers are safe on this device.",
+      };
+    }
+
+    if (recoveryNotice) {
+      return {
+        variant: "success",
+        message: recoveryNotice,
+      };
+    }
+
+    return null;
+  }, [
+    actionError,
+    connectionNotice,
+    pendingSubmitRetry,
+    recoveryNotice,
+    saveRetryPending,
+  ]);
+  const currentQuestionScoreLabel = formatScoreLabel(
+    currentQuestion?.marks || 0,
+    currentQuestion?.negativeMarks || 0,
+  );
+  const currentSectionRuleLabel = formatScoreLabel(
+    currentSection?.defaultMarks || currentQuestion?.marks || 0,
+    currentSection?.defaultNegativeMarks || currentQuestion?.negativeMarks || 0,
+  );
   const answeredCompactLabel = totalQuestions
     ? `${answeredCount}/${totalQuestions}`
     : "—";
-  const showCurrentSectionChip = Boolean(
+  const hasMultipleSections = sectionNavigation.length > 1;
+  const currentSectionQuestionCount = currentSection?.items.length || 0;
+  const showSectionRuleChip = Boolean(
     currentSection &&
-      (sectionNavigation.length > 1 ||
-        !labelsMatch(currentSection.name, paperSubjectLabel)),
+      currentSectionQuestionCount > 1 &&
+      (currentSection.defaultMarks > 0 || currentSection.defaultNegativeMarks > 0),
+  );
+  const showSectionTotalChip = Boolean(
+    currentSection && currentSectionQuestionCount > 1 && currentSection.totalMarks > 0,
+  );
+  const sectionRuleMatchesQuestion = Boolean(
+    currentSection &&
+      (currentSection.defaultMarks || 0) === (currentQuestion?.marks || 0) &&
+      (currentSection.defaultNegativeMarks || 0) ===
+        (currentQuestion?.negativeMarks || 0),
+  );
+  const showQuestionScoreChip = Boolean(
+    currentQuestion && (!showSectionRuleChip || !sectionRuleMatchesQuestion),
+  );
+  const currentQuestionTitle = currentQuestion
+    ? `Question ${currentIndex + 1}`
+    : "Question";
+  const currentQuestionPositionLabel = formatQuestionPositionLabel(
+    currentQuestionNumber,
+    totalQuestions,
+  );
+  const showDesktopSidebar = Boolean(
+    totalQuestions > 1 || subjectProgress.length > 1 || paper.instructions,
+  );
+  const useCompactSidebar = Boolean(
+    showDesktopSidebar && !hasMultipleSections && totalQuestions <= 12,
+  );
+  const showMobileExamDrawer = Boolean(
+    totalQuestions > 1 || subjectProgress.length > 1 || paper.instructions,
+  );
+  const showCurrentSectionChip = Boolean(
+    currentSection && hasMultipleSections,
   );
   const showQuestionEyebrow = Boolean(
-    currentQuestion?.sectionName &&
-      (sectionNavigation.length > 1 ||
-        !labelsMatch(currentQuestion.sectionName, paperSubjectLabel)),
+    currentQuestion?.sectionName && hasMultipleSections,
   );
   const currentQuestionSubjectName = String(
     currentQuestion?.question.subject?.name || "",
@@ -1211,16 +1539,119 @@ export default function StudentTestActiveAttemptView({
     flushDescriptiveAnswer();
     onClearCurrentAnswer();
   }, [flushDescriptiveAnswer, onClearCurrentAnswer]);
+  const showClearAnswerAction = currentQuestionAnswered;
+  const isSingleQuestionActionRow = totalQuestions <= 1;
+  const showQuestionNavigationRow = totalQuestions > 1 || showClearAnswerAction;
+  const handleKeyboardSave = useCallback(() => {
+    if (isSaving || isSubmitting) {
+      return;
+    }
+
+    void handleSaveAttempt(true);
+  }, [handleSaveAttempt, isSaving, isSubmitting]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) {
+        return;
+      }
+
+      if (isEditableKeyboardTarget(event.target)) {
+        return;
+      }
+
+      if (document.querySelector("[role='dialog']")) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "arrowleft") {
+        if (currentIndex > 0) {
+          event.preventDefault();
+          void handleJumpToQuestion(Math.max(0, currentIndex - 1));
+        }
+        return;
+      }
+
+      if (key === "arrowright") {
+        if (currentIndex < questionList.length - 1) {
+          event.preventDefault();
+          void handleJumpToQuestion(
+            Math.min(questionList.length - 1, currentIndex + 1),
+          );
+        }
+        return;
+      }
+
+      if (key === "s") {
+        event.preventDefault();
+        handleKeyboardSave();
+        return;
+      }
+
+      if (!currentQuestion) {
+        return;
+      }
+
+      if (
+        currentQuestion.question.type !== "single" &&
+        currentQuestion.question.type !== "multiple"
+      ) {
+        return;
+      }
+
+      if (!/^[1-9]$/.test(key)) {
+        return;
+      }
+
+      const optionIndex = Number.parseInt(key, 10) - 1;
+      if (optionIndex >= currentQuestion.question.options.length) {
+        return;
+      }
+
+      event.preventDefault();
+      if (currentQuestion.question.type === "multiple") {
+        onUpdateMultipleChoice(currentQuestion.question._id, optionIndex);
+        return;
+      }
+
+      onUpdateSingleChoice(currentQuestion.question._id, optionIndex);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [
+    currentIndex,
+    currentQuestion,
+    handleJumpToQuestion,
+    handleKeyboardSave,
+    onUpdateMultipleChoice,
+    onUpdateSingleChoice,
+    questionList.length,
+  ]);
 
   return (
     <div
       ref={examContainerRef}
       className={cn(
-        "app-page-shell app-exam-focus-shell max-w-[96rem] px-3 pt-3 pb-28 sm:px-4 sm:pt-4 sm:pb-32 xl:py-4",
+        "app-page-shell app-exam-focus-shell max-w-[96rem] px-3 pt-3 sm:px-4 sm:pt-4 xl:py-4",
+        showMobileExamDrawer ? "pb-28 sm:pb-32" : "pb-16 sm:pb-20",
         isFullscreen && "app-exam-focus-shell-fullscreen",
       )}
     >
       <ExamTopbar
+        dialogContainer={examContainerRef.current}
         paper={paper}
         paperSubjects={paperSubjects}
         paperSubjectLabel={paperSubjectLabel}
@@ -1229,6 +1660,7 @@ export default function StudentTestActiveAttemptView({
         answeredCompactLabel={answeredCompactLabel}
         currentSectionName={currentSection?.name || null}
         showCurrentSectionChip={showCurrentSectionChip}
+        showSaveStateBadge={showSaveStateBadge}
         saveStateToneClass={saveStateToneClass}
         saveStateBadgeLabel={saveStateBadgeLabel}
         saveStatusLabel={saveStatusLabel}
@@ -1246,37 +1678,24 @@ export default function StudentTestActiveAttemptView({
         onSubmitAttempt={handleSubmitAttempt}
       />
 
-      {connectionNotice ? (
-        <FeedbackNotice variant="warning">{connectionNotice}</FeedbackNotice>
-      ) : null}
-
-      {recoveryNotice ? (
-        <FeedbackNotice variant="info">{recoveryNotice}</FeedbackNotice>
-      ) : null}
-
-      {pendingSubmitRetry ? (
-        <FeedbackNotice variant="warning">
-          Submission is pending due to connection issues. Keep this tab open while we retry.
+      {runtimeNotice ? (
+        <FeedbackNotice
+          variant={runtimeNotice.variant}
+          className="app-exam-runtime-feedback"
+        >
+          {runtimeNotice.message}
         </FeedbackNotice>
-      ) : null}
-
-      {saveRetryPending && !pendingSubmitRetry ? (
-        <FeedbackNotice variant="info">
-          Save retry queued in the background. Your latest answers are safe on this device.
-        </FeedbackNotice>
-      ) : null}
-
-      {actionError ? (
-        <FeedbackNotice variant="error">{actionError}</FeedbackNotice>
       ) : null}
 
       <ExamMobileNavigation
+        dialogContainer={examContainerRef.current}
         answeredCount={answeredCount}
         questionCount={totalQuestions}
         unansweredCount={unansweredCount}
         currentQuestionNumber={currentQuestionNumber}
         currentIndex={currentIndex}
         currentSectionName={currentSection?.name || null}
+        showSaveStateBadge={showSaveStateBadge}
         saveStateToneClass={saveStateToneClass}
         saveStateBadgeLabel={saveStateBadgeLabel}
         subjectProgress={subjectProgress}
@@ -1285,40 +1704,48 @@ export default function StudentTestActiveAttemptView({
         onJumpToQuestion={handleJumpToQuestion}
       />
 
-      <div className="app-exam-shell app-exam-shell-focus">
-        <ExamSidebar
-          answeredCount={answeredCount}
-          questionCount={totalQuestions}
-          unansweredCount={unansweredCount}
-          currentQuestionNumber={currentQuestionNumber}
-          subjectProgress={subjectProgress}
-          sectionNavigation={sectionNavigation}
-          currentIndex={currentIndex}
-          instructions={paper.instructions}
-          onJumpToQuestion={handleJumpToQuestion}
-        />
+      <div
+        className={cn(
+          "app-exam-shell app-exam-shell-focus",
+          useCompactSidebar && "app-exam-shell-focus-compact-sidebar",
+          !showDesktopSidebar && "app-exam-shell-focus-no-sidebar",
+          isFullscreen && "app-exam-shell-focus-fullscreen",
+        )}
+      >
+        {showDesktopSidebar ? (
+          <ExamSidebar
+            questionCount={totalQuestions}
+            subjectProgress={subjectProgress}
+            sectionNavigation={sectionNavigation}
+            currentIndex={currentIndex}
+            instructions={paper.instructions}
+            onJumpToQuestion={handleJumpToQuestion}
+            isFullscreen={isFullscreen}
+            compact={useCompactSidebar}
+          />
+        ) : null}
 
         <main className="app-exam-main-focus">
           {currentQuestion && currentAnswer ? (
             <Card className="app-surface app-exam-question-card overflow-hidden">
               <CardHeader className="app-section-header">
                 <div className="app-exam-question-header">
-                  <div className="space-y-1.5">
+                  <div className="app-exam-question-header-copy">
                     {showQuestionEyebrow ? (
                       <p className="app-spotlight-label">
                         {currentQuestion.sectionName}
                       </p>
                     ) : null}
-                    <CardTitle className="text-xl tracking-tight sm:text-2xl">
-                      Question {currentIndex + 1} of {questionList.length}
+                    <CardTitle className="app-exam-question-title">
+                      {currentQuestionTitle}
                     </CardTitle>
                     {currentQuestion.sectionDescription ? (
-                      <p className="app-copy-muted max-w-3xl">
+                      <p className="app-copy-muted app-exam-question-section-description max-w-3xl">
                         {currentQuestion.sectionDescription}
                       </p>
                     ) : null}
                     {currentSection ? (
-                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <div className="app-exam-question-section-meta">
                         {visibleCurrentSectionSubjects.map((subject) => (
                           <span
                             key={`${currentSection.id}-${subject._id}`}
@@ -1327,16 +1754,20 @@ export default function StudentTestActiveAttemptView({
                             {subject.name || subject._id}
                           </span>
                         ))}
-                        <span className="app-meta-chip">
-                          Rule {currentSectionRuleLabel}
-                          {currentSection.totalMarks > 0
-                            ? ` • ${currentSection.totalMarks} total`
-                            : ""}
-                        </span>
+                        {showSectionRuleChip ? (
+                          <span className="app-meta-chip">
+                            {currentSectionRuleLabel} each
+                          </span>
+                        ) : null}
+                        {showSectionTotalChip ? (
+                          <span className="app-meta-chip">
+                            {currentSection.totalMarks} total
+                          </span>
+                        ) : null}
                       </div>
                     ) : null}
                     {currentQuestion.sectionInstructions ? (
-                      <div className="rounded-[1.15rem] border border-border/60 bg-muted/15 px-4 py-3 text-sm leading-6 text-foreground/82">
+                      <div className="app-exam-question-context-note">
                         {currentQuestion.sectionInstructions}
                       </div>
                     ) : null}
@@ -1347,26 +1778,28 @@ export default function StudentTestActiveAttemptView({
                         {currentQuestionSubjectName}
                       </div>
                     ) : null}
-                    <div className="app-meta-chip">
-                      {currentQuestion.marks} mark
-                      {currentQuestion.marks === 1 ? "" : "s"}
-                    </div>
-                    {currentQuestion.negativeMarks > 0 ? (
+                    {showQuestionScoreChip ? (
                       <div className="app-meta-chip">
-                        -{currentQuestion.negativeMarks} negative
+                        {currentQuestionScoreLabel}
                       </div>
                     ) : null}
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="app-section-body app-exam-question-body app-exam-question-shell">
-                <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
-                  <ContentRenderer htmlContent={currentQuestionHtml} />
+                <div className="app-exam-question-content">
+                  <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
+                    <ContentRenderer
+                      htmlContent={currentQuestionHtml}
+                      enableImageZoom
+                      dialogContainer={examContainerRef.current}
+                    />
+                  </div>
                 </div>
 
                 {currentQuestion.question.type === "single" ||
                 currentQuestion.question.type === "multiple" ? (
-                  <div className="space-y-3">
+                  <div className="app-exam-question-option-list">
                     {currentQuestion.question.options.map((option, optionIndex) => {
                       const selected =
                         currentAnswer.selectedOptions.includes(optionIndex);
@@ -1388,7 +1821,9 @@ export default function StudentTestActiveAttemptView({
                             name={currentQuestion.question._id}
                             checked={selected}
                             aria-label={`Option ${getOptionLabel(optionIndex)}`}
-                            onChange={() => {
+                            readOnly
+                            onClick={(event) => {
+                              event.preventDefault();
                               if (currentQuestion.question.type === "multiple") {
                                 onUpdateMultipleChoice(
                                   currentQuestion.question._id,
@@ -1412,10 +1847,12 @@ export default function StudentTestActiveAttemptView({
                           >
                             {getOptionLabel(optionIndex)}
                           </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
+                          <div className="app-exam-option-content">
+                            <div className="prose prose-sm app-exam-option-richtext max-w-none text-foreground dark:prose-invert">
                               <ContentRenderer
                                 htmlContent={currentOptionHtml[optionIndex] || ""}
+                                enableImageZoom
+                                dialogContainer={examContainerRef.current}
                               />
                             </div>
                           </div>
@@ -1569,43 +2006,78 @@ export default function StudentTestActiveAttemptView({
                   )
                 ) : null}
 
-                <div className="app-exam-nav-row">
-                  <Button
-                    variant="outline"
-                    size="md"
-                    className="app-student-action-compact app-exam-nav-button"
-                    onClick={() =>
-                      void handleJumpToQuestion(Math.max(0, currentIndex - 1))
-                    }
-                    disabled={currentIndex === 0}
+                {showQuestionNavigationRow ? (
+                  <div
+                    className={cn(
+                      "app-exam-nav-row",
+                      isSingleQuestionActionRow && "app-exam-nav-row-single",
+                    )}
                   >
-                    Previous
-                  </Button>
-                  <div className="app-exam-nav-actions">
-                    <Button
-                      variant="ghost"
-                      size="md"
-                      className="app-student-action-compact app-exam-nav-button"
-                      onClick={handleClearCurrentAnswer}
-                      disabled={!currentQuestionAnswered}
+                    {!isSingleQuestionActionRow ? (
+                      <div className="app-exam-nav-row-copy">
+                        <span className="app-meta-chip">
+                          {currentQuestionPositionLabel}
+                        </span>
+                        <span className="app-exam-nav-row-shortcuts">
+                          1-9 answer, arrows move, S saves
+                        </span>
+                      </div>
+                    ) : null}
+                    <div
+                      className={cn(
+                        "app-exam-nav-row-actions",
+                        isSingleQuestionActionRow && "app-exam-nav-row-actions-end",
+                      )}
                     >
-                      Clear Answer
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="md"
-                      className="app-student-action-compact app-exam-nav-button"
-                      onClick={() =>
-                        void handleJumpToQuestion(
-                          Math.min(questionList.length - 1, currentIndex + 1),
-                        )
-                      }
-                      disabled={currentIndex >= questionList.length - 1}
-                    >
-                      Next
-                    </Button>
+                      {!isSingleQuestionActionRow ? (
+                        <Button
+                          variant="outline"
+                          size="md"
+                          className="app-student-action-compact app-exam-nav-button"
+                          onClick={() =>
+                            void handleJumpToQuestion(Math.max(0, currentIndex - 1))
+                          }
+                          disabled={currentIndex === 0}
+                        >
+                          Previous
+                        </Button>
+                      ) : null}
+                      <div
+                        className={cn(
+                          "app-exam-nav-actions",
+                          (!showClearAnswerAction || isSingleQuestionActionRow) &&
+                            "app-exam-nav-actions-single",
+                        )}
+                      >
+                        {showClearAnswerAction ? (
+                          <Button
+                            variant="ghost"
+                            size="md"
+                            className="app-student-action-compact app-exam-nav-button"
+                            onClick={handleClearCurrentAnswer}
+                          >
+                            Clear
+                          </Button>
+                        ) : null}
+                        {!isSingleQuestionActionRow ? (
+                          <Button
+                            variant="primary"
+                            size="md"
+                            className="app-student-action-compact app-exam-nav-button"
+                            onClick={() =>
+                              void handleJumpToQuestion(
+                                Math.min(questionList.length - 1, currentIndex + 1),
+                              )
+                            }
+                            disabled={currentIndex >= questionList.length - 1}
+                          >
+                            Next
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </CardContent>
             </Card>
           ) : (

@@ -9,28 +9,29 @@ import Subject from "@/models/Subject";
 import { Model } from "mongoose";
 import Class from "@/models/Class";
 import { requireTenantSession } from "@/lib/api-auth";
+import { recordOpsFailure } from "@/lib/ops-runtime";
 
 interface ClassDoc {
-  _id: string;
+  _id: unknown;
   name: string;
 }
 
 interface SubjectDoc {
-  _id: string;
+  _id: unknown;
   name: string;
-  tags: string[];
-  save: () => Promise<void>;
+  tags: unknown[];
+  save: () => Promise<unknown>;
 }
 
 interface TagTypeDoc {
-  _id: string;
+  _id: unknown;
   name: string;
 }
 
 interface TagDoc {
-  _id: string;
+  _id: unknown;
   name: string;
-  type: string;
+  type: unknown;
 }
 
 export const runtime = "nodejs";
@@ -71,26 +72,29 @@ export async function POST(req: NextRequest) {
   }
   const schoolKey = auth.schoolKey;
 
-  await connectDB();
-
-  // Bind tenant models (shadow globals below)
-  const {
-    Class: ClassModel,
-    Subject: SubjectModel,
-    TagType: TagTypeModel,
-    Tag: TagModel,
-    Question: QuestionModel,
-  } = await getTenantModels(schoolKey, [
-    "Class",
-    "Subject",
-    "TagType",
-    "Tag",
-    "Question",
-  ]);
+  let questionRowCount: number | null = null;
 
   try {
+    await connectDB();
+
+    // Bind tenant models (shadow globals below)
+    const {
+      Class: ClassModel,
+      Subject: SubjectModel,
+      TagType: TagTypeModel,
+      Tag: TagModel,
+      Question: QuestionModel,
+    } = await getTenantModels(schoolKey, [
+      "Class",
+      "Subject",
+      "TagType",
+      "Tag",
+      "Question",
+    ]);
+
     const body = await req.json();
     const { questions } = body || {};
+    questionRowCount = Array.isArray(questions) ? questions.length : null;
 
     if (!Array.isArray(questions) || questions.length === 0) {
       return bad("Invalid input. Expected a non-empty array of questions.");
@@ -184,7 +188,7 @@ export async function POST(req: NextRequest) {
 
     let createdTagTypes: any[] = [];
     if (createTT.length) {
-      const TagTypeModelTyped = TagTypeModel as Model<TagTypeDoc>;
+      const TagTypeModelTyped = TagTypeModel as unknown as Model<TagTypeDoc>;
       const results = await Promise.all(
         createTT.map(
           async (name) =>
@@ -216,7 +220,7 @@ export async function POST(req: NextRequest) {
     );
     let createdTags: any[] = [];
     if (missingTags.length) {
-      const TagModelTyped = TagModel as Model<TagDoc>;
+      const TagModelTyped = TagModel as unknown as Model<TagDoc>;
       const results = await Promise.all(
         missingTags.map(
           async ({ name, type }) =>
@@ -263,7 +267,7 @@ export async function POST(req: NextRequest) {
           code: subjectCodes.get(subjectName) || "",
           tags: tagIds,
         });
-        subjectDoc = newSubject as SubjectDoc;
+        subjectDoc = newSubject as unknown as SubjectDoc;
         createdSubjects.push(subjectDoc);
         subjectMap.set(subjectName, subjectDoc);
       } else {
@@ -338,6 +342,24 @@ export async function POST(req: NextRequest) {
       { status: 200 },
     );
   } catch (error: any) {
+    await recordOpsFailure({
+      schoolKey,
+      req,
+      action: "bulk_question_import",
+      message: error?.message || "Failed to import bulk questions.",
+      error,
+      metadata: {
+        route: "/api/questions/bulk",
+        method: "POST",
+        uploadType: "questions",
+        rows: questionRowCount,
+      },
+      entity: {
+        type: "bulk_upload",
+        label: "questions",
+      },
+      severity: "error",
+    });
     console.error("[BulkQuestion] Error during bulk creation:", error);
     return NextResponse.json(
       {

@@ -28,6 +28,21 @@ export type StudentSessionValidationResult =
   | "missing"
   | "mismatch";
 
+export type RedisDependencyStatus = "up" | "down" | "not_configured";
+
+export type RedisHealthProbeResult = {
+  status: RedisDependencyStatus;
+  configured: boolean;
+  temporarilyUnavailable: boolean;
+  latencyMs: number | null;
+  error?: string;
+  lock: {
+    status: RedisDependencyStatus;
+    latencyMs: number | null;
+    error?: string;
+  };
+};
+
 const REDIS_FAILURE_BACKOFF_MS = 30_000;
 
 type RedisRuntimeState = {
@@ -45,6 +60,10 @@ function getRedisToken() {
 
 export function isRedisConfigured() {
   return Boolean(getRedisUrl() && getRedisToken());
+}
+
+export function isRedisInBackoffWindow() {
+  return isRedisTemporarilyUnavailable();
 }
 
 function getRedisRuntimeState() {
@@ -508,4 +527,81 @@ export async function readCachedExamSnapshotPayload<T>(
   ]);
 
   return decodeRedisValue<T>(payload);
+}
+
+export async function probeRedisHealth(): Promise<RedisHealthProbeResult> {
+  const configured = isRedisConfigured();
+  if (!configured) {
+    return {
+      status: "not_configured",
+      configured: false,
+      temporarilyUnavailable: false,
+      latencyMs: null,
+      lock: {
+        status: "not_configured",
+        latencyMs: null,
+      },
+    };
+  }
+
+  const pingStartedAt = Date.now();
+  const pingResult = await runRedisCommand<string>(["PING"]);
+  const pingLatencyMs = Date.now() - pingStartedAt;
+
+  if (String(pingResult || "").toUpperCase() !== "PONG") {
+    return {
+      status: "down",
+      configured: true,
+      temporarilyUnavailable: isRedisTemporarilyUnavailable(),
+      latencyMs: pingLatencyMs,
+      error: "Redis ping failed.",
+      lock: {
+        status: "down",
+        latencyMs: null,
+        error: "Redis ping failed, lock check skipped.",
+      },
+    };
+  }
+
+  const healthLockKey = `health:exam-lock:${Date.now()}:${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+  const healthLockToken = `probe:${Date.now()}`;
+  const lockStartedAt = Date.now();
+  const lockResult = await runRedisCommand<string | null>([
+    "SET",
+    healthLockKey,
+    healthLockToken,
+    "EX",
+    15,
+    "NX",
+  ]);
+  const lockLatencyMs = Date.now() - lockStartedAt;
+
+  if (lockResult !== "OK") {
+    return {
+      status: "up",
+      configured: true,
+      temporarilyUnavailable: isRedisTemporarilyUnavailable(),
+      latencyMs: pingLatencyMs,
+      lock: {
+        status: "down",
+        latencyMs: lockLatencyMs,
+        error: "Redis lock probe failed.",
+      },
+    };
+  }
+
+  await runRedisCommand(["DEL", healthLockKey]);
+
+  return {
+    status: "up",
+    configured: true,
+    temporarilyUnavailable: false,
+    latencyMs: pingLatencyMs,
+    lock: {
+      status: "up",
+      latencyMs: lockLatencyMs,
+    },
+  };
 }

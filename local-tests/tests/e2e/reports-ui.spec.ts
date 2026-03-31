@@ -1,5 +1,5 @@
 /// <reference types="@playwright/test" />
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Route } from "./helpers/strict-browser-test";
 import { navigateToAppRoute } from "./helpers/navigation";
 import { setSchoolAdminSession } from "./helpers/session";
 
@@ -109,13 +109,6 @@ function filterJobs(
   });
 }
 
-function getReportFilterSelect(page: Page, label: string) {
-  return page
-    .locator(".app-report-filter-card")
-    .filter({ hasText: label })
-    .locator("select");
-}
-
 test.describe("Report jobs UI (network mocked)", () => {
   test("filters visible jobs and exposes the automatic-processing messaging", async ({
     page,
@@ -157,22 +150,30 @@ test.describe("Report jobs UI (network mocked)", () => {
 
     await navigateToAppRoute(page, "/workspace/manage/reports");
 
-    await expect(page.getByRole("heading", { name: "Report Delivery" })).toBeVisible();
-    await expect(page.getByText("Filters & Actions")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Report Delivery Queue" }),
+    ).toBeVisible();
+    await expect(page.getByText("Report Filters")).toBeVisible();
     await expect(page.getByRole("cell", { name: "Aarav" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "Admin Desk" })).toBeVisible();
 
-    await getReportFilterSelect(page, "Recipients").selectOption("student");
+    await navigateToAppRoute(page, "/workspace/manage/reports?type=student");
     await expect(page.getByRole("cell", { name: "Aarav" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "Admin Desk" })).toHaveCount(0);
 
-    await getReportFilterSelect(page, "Report scope").selectOption("benchmark");
+    await navigateToAppRoute(
+      page,
+      "/workspace/manage/reports?type=student&scope=benchmark",
+    );
     await expect(page.getByRole("cell", { name: "Aarav" })).toHaveCount(0);
-    await expect(page.getByText("No jobs found.")).toBeVisible();
+    await expect(
+      page.getByText("No jobs match the current filters"),
+    ).toBeVisible();
 
-    await getReportFilterSelect(page, "Report scope").selectOption("all");
-    await getReportFilterSelect(page, "Recipients").selectOption("all");
-    await getReportFilterSelect(page, "Class section").selectOption("sec-b");
+    await navigateToAppRoute(
+      page,
+      "/workspace/manage/reports?academicSectionId=sec-b",
+    );
     await expect(page.getByRole("cell", { name: "Admin Desk" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "Aarav" })).toHaveCount(0);
   });
@@ -265,7 +266,9 @@ test.describe("Report jobs UI (network mocked)", () => {
 
     await page.getByRole("button", { name: "Run Worker Now" }).click();
     await expect(
-      page.getByText("Worker processed 2, sent 2, and failed 0."),
+      page.locator('li[role="status"]').filter({
+        hasText: "Processed 2, sent 2, and failed 0.",
+      }).first(),
     ).toBeVisible();
     await expect(page.getByRole("row", { name: /Ishita/ })).toContainText(
       "sent",
