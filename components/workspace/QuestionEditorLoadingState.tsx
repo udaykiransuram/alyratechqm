@@ -28,7 +28,7 @@ function EditorBlockSkeleton({
 export default function QuestionEditorLoadingState() {
   return (
     <div className="app-editor-grid app-editor-grid-composer">
-      <div className="app-editor-main space-y-4">
+      <div className="app-editor-main space-y-3.5">
         <EditorBlockSkeleton lines={4} />
         <EditorBlockSkeleton lines={4} />
         <EditorBlockSkeleton lines={3} />

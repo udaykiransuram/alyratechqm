@@ -46,20 +46,20 @@ export default async function CreateQuestionPage() {
 
   return (
     <PageShell width="wide" padding="standard">
-      <div className="space-y-4 sm:space-y-5">
+      <div className="space-y-3.5 sm:space-y-4">
         <PageHero
           variant="editor"
           density="compact"
           eyebrow="Question Bank"
           title="Create Question"
-          description="Write the question body, set answer logic, and connect the item to the right class, subject, and tags before it enters the bank."
+          description="Write the prompt, set the answer model, and attach the right metadata before the question enters the bank."
           actions={
             <ReturnBackButton fallbackPath="/workspace/questions" label="Back" />
           }
           meta={
             <>
-              <span className="app-meta-chip">Authoring workspace</span>
-              <span className="app-meta-chip">Metadata-first flow</span>
+              <span className="app-meta-chip">Question authoring</span>
+              <span className="app-meta-chip">Cleaner setup flow</span>
             </>
           }
         />

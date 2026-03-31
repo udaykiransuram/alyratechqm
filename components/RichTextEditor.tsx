@@ -325,8 +325,14 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
   }, [editor]);
 
   useEffect(() => {
-    if (editor && initialContent && initialContent !== editor.getHTML()) {
-      editor.commands.setContent(initialContent, false);
+    if (!editor) {
+      return;
+    }
+
+    const nextContent = initialContent ?? '';
+
+    if (nextContent !== editor.getHTML()) {
+      editor.commands.setContent(nextContent);
     }
   }, [initialContent, editor]);
 

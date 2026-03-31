@@ -1337,39 +1337,37 @@ export default function QuestionPaperForm({
 
   // --- Render ---
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-3.5 sm:space-y-4">
       {initialSupportMessage ? (
         <div className="app-feedback app-feedback-info">{initialSupportMessage}</div>
       ) : null}
 
       <div className="app-editor-grid app-editor-grid-builder">
         <main className="app-editor-main">
-          <div className="app-surface overflow-hidden border-border/70 shadow-[0_26px_46px_-38px_hsl(var(--app-shadow-deep)/0.18)]">
-            <div className="relative overflow-hidden app-section-header bg-[linear-gradient(145deg,hsl(var(--app-surface-tint)/0.42)_0%,hsl(var(--app-surface-1)/0.99)_46%,hsl(var(--app-surface-2)/0.92)_100%)]">
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/36 to-transparent" />
-              <div className="pointer-events-none absolute -right-16 top-0 h-28 w-28 rounded-full bg-primary/10 blur-3xl" />
+          <div className="app-surface overflow-hidden border-border/72 shadow-[0_22px_40px_-38px_hsl(var(--app-shadow-deep)/0.12)]">
+            <div className="app-section-header">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0 space-y-2.5">
-                  <span className="inline-flex items-center rounded-full border border-primary/16 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
-                    Builder
-                  </span>
-                  <div className="space-y-1.5">
+                <div className="min-w-0 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="app-meta-chip">Section builder</span>
+                    <span className="app-meta-chip">
+                      {sections.length > 0
+                        ? `${sections.length} sections • ${totalQuestions} questions • ${totalPaperMarks} marks`
+                        : 'No sections yet'}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
                     <h2 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
                       Section Builder
                     </h2>
                     <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                      Start with the section name and marking defaults. Add notes only when they help, then bring in questions.
+                      Define sections, set marking defaults, and attach questions without the builder feeling heavy.
                     </p>
                   </div>
-                  <p className="text-sm font-medium text-foreground/82">
-                    {sections.length > 0
-                      ? `${sections.length} section${sections.length === 1 ? '' : 's'} / ${totalQuestions} question${totalQuestions === 1 ? '' : 's'} / ${totalPaperMarks} marks`
-                      : 'No sections yet. Add one section to define the structure and marking first.'}
-                  </p>
                 </div>
                 <Button
                   variant="default"
-                  className="app-button-inline shadow-[0_20px_34px_-24px_hsl(var(--primary)/0.36)]"
+                  className="app-button-inline"
                   onClick={handleAddSection}
                 >
                   <Plus className="h-4 w-4" />
@@ -1397,16 +1395,16 @@ export default function QuestionPaperForm({
                       <AccordionItem
                         key={section.id}
                         value={section.id}
-                        className="group relative overflow-hidden rounded-[calc(var(--app-radius-xl)+0.125rem)] border border-border/72 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.998)_0%,hsl(var(--app-surface-2)/0.9)_100%)] shadow-[0_24px_40px_-36px_hsl(var(--app-shadow-deep)/0.16)] transition-[border-color,box-shadow] duration-200 data-[state=open]:border-primary/16 data-[state=open]:shadow-[0_28px_46px_-34px_hsl(var(--primary)/0.16)]"
+                        className="group relative overflow-hidden rounded-[calc(var(--app-radius-xl)+0.125rem)] border border-border/72 bg-[hsl(var(--app-surface-1)/0.98)] shadow-[0_16px_28px_-30px_hsl(var(--app-shadow-deep)/0.1)] transition-[border-color,box-shadow] duration-200 data-[state=open]:border-primary/18 data-[state=open]:shadow-[0_20px_34px_-30px_hsl(var(--primary)/0.12)]"
                       >
-                        <AccordionTrigger className="gap-4 px-4 py-4 text-left hover:no-underline data-[state=open]:bg-[hsl(var(--app-surface-tint)/0.18)] [&>svg]:mt-1 [&>svg]:text-muted-foreground data-[state=open]:[&>svg]:text-primary">
+                        <AccordionTrigger className="gap-4 px-3.5 py-3.5 text-left hover:no-underline data-[state=open]:bg-[hsl(var(--app-surface-tint)/0.12)] [&>svg]:mt-1 [&>svg]:text-muted-foreground data-[state=open]:[&>svg]:text-primary">
                           <div className="flex min-w-0 flex-1 items-start gap-3.5">
                             <div
                               className={cn(
-                                "flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.15rem] border text-sm font-semibold shadow-sm",
+                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-[1rem] border text-sm font-semibold shadow-none",
                                 canAddQuestions
-                                  ? "border-primary/18 bg-primary/10 text-primary shadow-[0_18px_30px_-24px_hsl(var(--primary)/0.34)]"
-                                  : "border-border/70 bg-background/88 text-foreground/88",
+                                  ? "border-primary/18 bg-primary/10 text-primary"
+                                  : "border-border/70 bg-background/92 text-foreground/88",
                               )}
                             >
                               {sectionNumberLabel}
@@ -1430,13 +1428,13 @@ export default function QuestionPaperForm({
                               <h3 className="truncate text-[18px] font-semibold tracking-[-0.04em] text-foreground">
                                 {section.name || `Untitled Section ${sectionIndex + 1}`}
                               </h3>
-                              <p className="text-sm leading-6 text-muted-foreground">
-                                {section.questions.length} question{section.questions.length === 1 ? '' : 's'} / {sectionTotalMarks} marks / Defaults +{section.defaultMarks ?? 0} / -{section.defaultNegativeMarks ?? 0}
+                              <p className="text-sm leading-5 text-muted-foreground">
+                                {section.questions.length} question{section.questions.length === 1 ? '' : 's'} • {sectionTotalMarks} marks • Defaults +{section.defaultMarks ?? 0} / -{section.defaultNegativeMarks ?? 0}
                               </p>
                             </div>
                           </div>
                         </AccordionTrigger>
-                        <AccordionContent className="border-t border-border/60 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.84)_0%,hsl(var(--app-surface-2)/0.62)_100%)]">
+                        <AccordionContent className="border-t border-border/60 bg-[hsl(var(--app-surface-1)/0.94)]">
                           <SectionEditor
                             section={section}
                             onUpdate={(field, value) =>
@@ -1490,7 +1488,7 @@ export default function QuestionPaperForm({
                                 ))}
                               </div>
                             ) : (
-                              <div className="app-empty-state border-border/70 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.98)_0%,hsl(var(--app-surface-2)/0.78)_100%)] py-10">
+                              <div className="app-authoring-empty-state">
                                 <p className="text-sm font-semibold text-foreground">
                                   No questions in this section yet.
                                 </p>
@@ -1519,7 +1517,7 @@ export default function QuestionPaperForm({
                   })}
                 </Accordion>
               ) : (
-                <div className="app-empty-state border-border/70 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.98)_0%,hsl(var(--app-surface-2)/0.8)_100%)] py-10">
+                <div className="app-authoring-empty-state">
                   <p className="text-sm font-semibold text-foreground">No sections added yet.</p>
                   <div className="mt-4 flex justify-center">
                     <Button variant="default" className="app-button-inline" onClick={handleAddSection}>

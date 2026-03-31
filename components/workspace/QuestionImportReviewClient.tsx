@@ -32,6 +32,7 @@ import {
   summarizeQuestionImportReviewState,
   syncQuestionImportMappings,
 } from "@/lib/question-import/review";
+import { getQuestionTypeLabel } from "@/lib/question-display";
 import type { QuestionImportDraftRecord } from "@/lib/question-import/types";
 import type {
   WorkspaceAcademicSectionItem,
@@ -200,15 +201,17 @@ function ReviewSummaryBadge({
   value: string;
   variant?: "outline" | "success" | "warning" | "destructive" | "secondary";
 }) {
+  const toneClass =
+    variant === "success"
+      ? "app-import-summary-card-success"
+      : variant === "warning" || variant === "destructive"
+        ? "app-import-summary-card-warning"
+        : "";
+
   return (
-    <div className="rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.9)] px-3.5 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-        {label}
-      </p>
-      <div className="mt-2 flex items-center gap-2">
-        <p className="text-lg font-semibold text-foreground">{value}</p>
-        <Badge variant={variant}>{value}</Badge>
-      </div>
+    <div className={cn("app-import-summary-card", toneClass)}>
+      <p className="app-import-summary-label">{label}</p>
+      <p className="app-import-summary-value">{value}</p>
     </div>
   );
 }
@@ -498,8 +501,8 @@ export default function QuestionImportReviewClient({
     <div className="space-y-4 sm:space-y-5">
       <Card className="app-surface overflow-hidden shadow-none">
         <CardContent className="app-surface-body space-y-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-2">
+          <div className="app-import-toolbar">
+            <div className="app-import-toolbar-copy">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={getDraftStatusVariant(draft.status)}>
                   {getDraftStatusLabel(draft.status)}
@@ -512,24 +515,28 @@ export default function QuestionImportReviewClient({
               <div>
                 <h2 className="app-title-md">Import review and approval</h2>
                 <p className="app-copy-muted">
-                  Review the parsed paper setup, edit questions in a create-like
-                  editor, approve the items you want, and publish only after the
-                  draft is clean.
+                  Review the parsed paper, clean up questions, approve what
+                  should publish, and create the draft paper only when the
+                  review is clear.
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="app-import-toolbar-actions">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
+                className="app-import-action-button"
                 onClick={() => void saveDraft(true)}
                 disabled={isSaving || isPublishing || !hasUnsavedChanges}
               >
                 {isSaving ? <Spinner className="h-4 w-4" /> : null}
-                Save review
+                Save changes
               </Button>
               <Button
                 type="button"
+                size="sm"
+                className="app-import-action-button-primary"
                 onClick={() => void handlePublish()}
                 disabled={
                   isSaving ||
@@ -538,12 +545,12 @@ export default function QuestionImportReviewClient({
                 }
               >
                 {isPublishing ? <Spinner className="h-4 w-4" /> : null}
-                Publish approved draft
+                Publish draft
               </Button>
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="app-import-summary-grid">
             <ReviewSummaryBadge
               label="Questions"
               value={String(questions.length)}
@@ -598,10 +605,16 @@ export default function QuestionImportReviewClient({
             </Alert>
           )}
 
-          <div className="flex flex-wrap gap-2">
+          <div className="app-import-inline-actions">
             <Button
               type="button"
               variant={activeTab === "paper" ? "default" : "outline"}
+              size="sm"
+              className={
+                activeTab === "paper"
+                  ? "app-import-action-button-primary"
+                  : "app-import-action-button"
+              }
               onClick={() => setActiveTab("paper")}
             >
               Paper setup
@@ -609,9 +622,15 @@ export default function QuestionImportReviewClient({
             <Button
               type="button"
               variant={activeTab === "questions" ? "default" : "outline"}
+              size="sm"
+              className={
+                activeTab === "questions"
+                  ? "app-import-action-button-primary"
+                  : "app-import-action-button"
+              }
               onClick={() => setActiveTab("questions")}
             >
-              Question approval
+              Question review
             </Button>
           </div>
         </CardContent>
@@ -637,7 +656,7 @@ export default function QuestionImportReviewClient({
                   payload.mappings.subjects.map((mapping) => (
                     <div
                       key={mapping.token}
-                      className="space-y-3 rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] p-3.5"
+                      className="app-import-nested-card space-y-3"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="outline">{mapping.token}</Badge>
@@ -682,7 +701,7 @@ export default function QuestionImportReviewClient({
                         }
                         showCloseAction
                       />
-                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <label className="flex items-start gap-2.5 text-[13px] leading-5 text-muted-foreground">
                         <Checkbox
                           checked={mapping.createIfMissing === true}
                           onCheckedChange={(checked) =>
@@ -717,7 +736,7 @@ export default function QuestionImportReviewClient({
                 </CardDescription>
               </CardHeader>
               <CardContent className="app-section-body space-y-4">
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="app-import-toggle-grid">
                   <Button
                     type="button"
                     variant={
@@ -725,7 +744,12 @@ export default function QuestionImportReviewClient({
                         ? "default"
                         : "outline"
                     }
-                    className="justify-start"
+                    size="sm"
+                    className={
+                      academicSectionAssignmentMode === "all"
+                        ? "app-import-action-button-primary justify-start"
+                        : "app-import-toggle-button"
+                    }
                     onClick={() =>
                       updateDraftPayload((nextPayload) => {
                         nextPayload.paper.academicSectionAssignmentMode = "all";
@@ -741,7 +765,12 @@ export default function QuestionImportReviewClient({
                         ? "default"
                         : "outline"
                     }
-                    className="justify-start"
+                    size="sm"
+                    className={
+                      academicSectionAssignmentMode === "selected"
+                        ? "app-import-action-button-primary justify-start"
+                        : "app-import-toggle-button"
+                    }
                     disabled={!payload.paper.classId}
                     onClick={() =>
                       updateDraftPayload((nextPayload) => {
@@ -750,12 +779,12 @@ export default function QuestionImportReviewClient({
                       })
                     }
                   >
-                    Select specific sections
+                    Choose sections
                   </Button>
                 </div>
 
                 {!payload.paper.classId ? (
-                  <div className="rounded-[var(--app-radius-md)] border border-dashed border-border/70 bg-[hsl(var(--app-surface-1)/0.88)] px-3.5 py-3 text-sm text-muted-foreground">
+                  <div className="app-import-note-card border-dashed bg-[hsl(var(--app-surface-1)/0.88)]">
                     Select the paper class first. After that, you can assign
                     this import to any active school sections in that class.
                   </div>
@@ -793,7 +822,7 @@ export default function QuestionImportReviewClient({
                     }
                   />
                 ) : (
-                  <div className="rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] px-3.5 py-3">
+                  <div className="app-import-nested-card">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="success">All sections</Badge>
                       <p className="text-sm font-medium text-foreground">
@@ -805,7 +834,7 @@ export default function QuestionImportReviewClient({
                 )}
 
                 {importedAcademicSectionTokens.length > 0 ? (
-                  <div className="space-y-2 rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] p-3.5">
+                  <div className="app-import-nested-card space-y-2">
                     <div className="space-y-1">
                       <Label className="app-field-label">
                         Imported section hints
@@ -842,19 +871,18 @@ export default function QuestionImportReviewClient({
                     type="button"
                     onClick={() => setActiveSectionId(section.id)}
                     className={cn(
-                      "w-full rounded-[var(--app-radius-md)] border px-3.5 py-3 text-left transition-colors",
-                      activeSectionId === section.id
-                        ? "border-primary/40 bg-primary/5"
-                        : "border-border/70 bg-[hsl(var(--app-surface-1)/0.9)] hover:border-primary/24 hover:bg-[hsl(var(--app-surface-2)/0.76)]",
+                      "app-import-select-card",
+                      activeSectionId === section.id &&
+                        "app-import-select-card-active",
                     )}
                   >
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-foreground">{section.name}</p>
+                      <p className="app-import-select-card-title">{section.name}</p>
                       <Badge variant="outline">
                         {section.defaultMarks} mark default
                       </Badge>
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="app-import-select-card-meta">
                       {Array.isArray(questions)
                         ? questions.filter((question) => question.sectionId === section.id).length
                         : 0}{" "}
@@ -1116,31 +1144,32 @@ export default function QuestionImportReviewClient({
                       type="button"
                       onClick={() => setActiveQuestionId(question.id)}
                       className={cn(
-                        "w-full rounded-[var(--app-radius-md)] border px-3.5 py-3 text-left transition-colors",
-                        activeQuestionId === question.id
-                          ? "border-primary/40 bg-primary/5"
-                          : "border-border/70 bg-[hsl(var(--app-surface-1)/0.9)] hover:border-primary/24 hover:bg-[hsl(var(--app-surface-2)/0.76)]",
+                        "app-import-select-card",
+                        activeQuestionId === question.id &&
+                          "app-import-select-card-active",
                       )}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <p className="font-medium text-foreground">
+                          <p className="app-import-select-card-title">
                             Q{index + 1}
                           </p>
                           <Badge variant={getApprovalBadgeVariant(question.approvalStatus)}>
                             {getApprovalLabel(question.approvalStatus)}
                           </Badge>
-                          <Badge variant="outline">{question.type}</Badge>
+                          <Badge variant="outline">
+                            {getQuestionTypeLabel(question.type)}
+                          </Badge>
                         </div>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="text-[12px] leading-5 text-muted-foreground">
                           {question.marks} mark{question.marks === 1 ? "" : "s"}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm text-muted-foreground">
+                      <p className="app-import-select-card-meta">
                         Subject token: {question.subjectToken || "Not set"}
                       </p>
                       {activeBlockingWarnings.length > 0 || hasMissingSubjectToken ? (
-                        <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                        <p className="app-import-select-card-warning">
                           {activeBlockingWarnings.length +
                             (hasMissingSubjectToken ? 1 : 0)}{" "}
                           blocking issue
@@ -1163,7 +1192,7 @@ export default function QuestionImportReviewClient({
               <>
                 <Card className="app-surface overflow-hidden shadow-none">
                   <CardHeader className="app-section-header">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="app-import-toolbar">
                       <div>
                         <CardTitle>Question editor</CardTitle>
                         <CardDescription>
@@ -1171,13 +1200,19 @@ export default function QuestionImportReviewClient({
                           it enters the question bank.
                         </CardDescription>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="app-import-inline-actions">
                         <Button
                           type="button"
                           variant={
                             selectedQuestion.approvalStatus === "approved"
                               ? "default"
                               : "outline"
+                          }
+                          size="sm"
+                          className={
+                            selectedQuestion.approvalStatus === "approved"
+                              ? "app-import-action-button-primary"
+                              : "app-import-action-button"
                           }
                           onClick={() =>
                             updateQuestion(selectedQuestion.id, (question) => {
@@ -1194,6 +1229,12 @@ export default function QuestionImportReviewClient({
                               ? "default"
                               : "outline"
                           }
+                          size="sm"
+                          className={
+                            selectedQuestion.approvalStatus === "needs_fix"
+                              ? "app-import-action-button-primary"
+                              : "app-import-action-button"
+                          }
                           onClick={() =>
                             updateQuestion(selectedQuestion.id, (question) => {
                               question.approvalStatus = "needs_fix";
@@ -1208,6 +1249,12 @@ export default function QuestionImportReviewClient({
                             selectedQuestion.approvalStatus === "excluded"
                               ? "secondary"
                               : "outline"
+                          }
+                          size="sm"
+                          className={
+                            selectedQuestion.approvalStatus === "excluded"
+                              ? "app-import-action-button"
+                              : "app-import-action-button"
                           }
                           onClick={() =>
                             updateQuestion(selectedQuestion.id, (question) => {
@@ -1273,7 +1320,7 @@ export default function QuestionImportReviewClient({
                               }
                             })
                           }
-                          className="flex h-11 w-full rounded-[var(--app-radius-md)] border border-input bg-background px-3.5 text-sm text-foreground shadow-[0_10px_18px_-20px_hsl(var(--app-shadow-deep)/0.08)] transition-[border-color,box-shadow] hover:border-primary/24 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          className="app-import-native-select"
                         >
                           <option value="single">Single choice</option>
                           <option value="multiple">Multiple choice</option>
@@ -1359,6 +1406,8 @@ export default function QuestionImportReviewClient({
                           <Button
                             type="button"
                             variant="outline"
+                            size="sm"
+                            className="app-import-action-button"
                             onClick={() =>
                               updateQuestion(selectedQuestion.id, (question) => {
                                 if (question.options.length >= 5) {
@@ -1382,7 +1431,7 @@ export default function QuestionImportReviewClient({
                           {selectedQuestion.options.map((option, index) => (
                             <div
                               key={option.id}
-                              className="space-y-3 rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] p-4"
+                              className="app-import-nested-card space-y-3"
                             >
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex items-center gap-3">
@@ -1417,7 +1466,9 @@ export default function QuestionImportReviewClient({
                                 </div>
                                 <Button
                                   type="button"
-                                  variant="ghost"
+                                  variant="outline"
+                                  size="sm"
+                                  className="app-import-action-button text-rose-700 hover:bg-rose-50 hover:text-rose-800"
                                   onClick={() =>
                                     updateQuestion(selectedQuestion.id, (question) => {
                                       if (question.options.length <= 2) {
@@ -1530,6 +1581,8 @@ export default function QuestionImportReviewClient({
                         <Button
                           type="button"
                           variant="outline"
+                          size="sm"
+                          className="app-import-action-button"
                           onClick={() =>
                             updateQuestion(selectedQuestion.id, (question) => {
                               question.metadata.customTags.push(createEmptyCustomTag());
@@ -1541,7 +1594,7 @@ export default function QuestionImportReviewClient({
                         </Button>
                       </div>
                       {selectedQuestion.metadata.customTags.length === 0 ? (
-                        <div className="rounded-[var(--app-radius-md)] border border-dashed border-border/70 px-4 py-3 text-sm text-muted-foreground">
+                        <div className="app-import-note-card border-dashed">
                           No extra tags added for this question.
                         </div>
                       ) : (
@@ -1549,7 +1602,7 @@ export default function QuestionImportReviewClient({
                           {selectedQuestion.metadata.customTags.map((tag, index) => (
                             <div
                               key={`${selectedQuestion.id}-tag-${index}`}
-                              className="grid gap-3 rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                              className="app-import-nested-card grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
                             >
                               <Input
                                 value={tag.type}
@@ -1573,7 +1626,9 @@ export default function QuestionImportReviewClient({
                               />
                               <Button
                                 type="button"
-                                variant="ghost"
+                                variant="outline"
+                                size="sm"
+                                className="app-import-action-button text-rose-700 hover:bg-rose-50 hover:text-rose-800"
                                 onClick={() =>
                                   updateQuestion(selectedQuestion.id, (question) => {
                                     question.metadata.customTags =
@@ -1619,7 +1674,7 @@ export default function QuestionImportReviewClient({
                           return (
                             <div
                               key={warning.id}
-                              className="rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] p-3.5"
+                              className="app-import-nested-card"
                             >
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge
@@ -1635,8 +1690,9 @@ export default function QuestionImportReviewClient({
                               {warning.blocking ? (
                                 <Button
                                   type="button"
-                                  variant="ghost"
-                                  className="mt-3"
+                                  variant="outline"
+                                  size="sm"
+                                  className="mt-3 app-import-action-button"
                                   onClick={() => resolveWarning(warning.id)}
                                 >
                                   Mark resolved
@@ -1666,7 +1722,7 @@ export default function QuestionImportReviewClient({
                         selectedQuestionMathFragments.map((fragment) => (
                           <div
                             key={fragment.id}
-                            className="rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] p-3.5"
+                            className="app-import-nested-card"
                           >
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge
@@ -1698,7 +1754,7 @@ export default function QuestionImportReviewClient({
                                 </pre>
                               </div>
                               {fragment.warning ? (
-                                <p className="text-amber-700 dark:text-amber-300">
+                                <p className="text-[12px] leading-5 text-amber-700 dark:text-amber-300">
                                   {fragment.warning}
                                 </p>
                               ) : null}
@@ -1706,11 +1762,12 @@ export default function QuestionImportReviewClient({
                             {fragment.mappingStatus === "unmapped" ? (
                               <Button
                                 type="button"
-                                variant="ghost"
-                                className="mt-3"
+                                variant="outline"
+                                size="sm"
+                                className="mt-3 app-import-action-button"
                                 onClick={() => resolveMathFragment(fragment.id)}
                               >
-                                Mark resolved after manual review
+                                Confirm resolved
                               </Button>
                             ) : null}
                           </div>

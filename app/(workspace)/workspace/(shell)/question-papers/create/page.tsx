@@ -55,13 +55,13 @@ export default async function CreateQuestionPaperPage() {
 
   return (
     <PageShell width="wide" padding="standard">
-      <div className="space-y-4 sm:space-y-5">
+      <div className="space-y-3.5 sm:space-y-4">
         <PageHero
           variant="editor"
           density="compact"
           eyebrow="Assessments"
           title="Create Question Paper"
-          description="Build a new paper with consistent sections, question selection, and scoring rules."
+          description="Set the paper structure, section defaults, and question mix in one cleaner builder."
           actions={
             <ReturnBackButton
               fallbackPath="/workspace/question-papers"
@@ -70,27 +70,10 @@ export default async function CreateQuestionPaperPage() {
           }
           meta={
             <>
-              <span className="app-meta-chip">Paper builder</span>
-              <span className="app-meta-chip">Offline / online configurable</span>
+              <span className="app-meta-chip">Section-based builder</span>
+              <span className="app-meta-chip">Online or offline delivery</span>
             </>
           }
-          stats={[
-            {
-              label: "Sections",
-              value: "0",
-              meta: "Add sections, defaults, and questions as you build the paper.",
-            },
-            {
-              label: "Questions",
-              value: "0",
-              meta: "The builder will organize questions section by section.",
-            },
-            {
-              label: "Total marks",
-              value: "0",
-              meta: "Marks will accumulate as sections and questions are configured.",
-            },
-          ]}
         />
 
         <CreateQuestionPaperPageClient

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 import GlassPanel from "@/components/GlassPanel";
-import Navbar from "@/components/Navbar";
 import { useClientRuntimeSignals } from "@/lib/client/runtime-signals";
 
 type Hero3DProps = {
@@ -132,11 +131,10 @@ export function Hero3D({ whatsappHref }: Hero3DProps) {
 
   return (
     <>
-      <Navbar />
       <section
         ref={sectionRef}
         data-home-cinematic-stage
-        className="relative flex min-h-[80vh] w-full items-end overflow-hidden bg-[#050505] sm:min-h-[88vh] md:min-h-screen"
+        className="relative flex min-h-[72vh] w-full items-end overflow-hidden bg-[#050505] sm:min-h-[78vh] md:min-h-[86vh] lg:min-h-[88vh]"
       >
         <div className="absolute inset-0 z-0">
           {isInView && !shouldUseLiteHeroMedia ? (
@@ -193,8 +191,8 @@ export function Hero3D({ whatsappHref }: Hero3DProps) {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(45,212,191,0.18),transparent_22rem)]" />
         </div>
 
-        <div className="relative z-10 mx-auto flex w-full max-w-[84rem] flex-col items-center px-4 pb-3 pt-28 text-center sm:px-6 sm:pb-4 sm:pt-32 md:items-start md:px-8 md:pb-5 md:pt-40 md:text-left lg:pb-6 lg:pt-44">
-          <div className="w-full max-w-[42rem]">
+        <div className="relative z-10 mx-auto flex w-full max-w-[84rem] flex-col items-center px-4 pb-3 pt-24 text-center sm:px-6 sm:pb-4 sm:pt-28 md:items-start md:px-8 md:pb-5 md:pt-32 md:text-left lg:pb-6 lg:pt-36">
+          <div className="w-full md:w-[48%] lg:w-[45%] xl:w-[42%] max-w-[38rem]">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/40 px-4 py-1.5 text-sm font-medium text-emerald-300 shadow-xl shadow-black/20 backdrop-blur-md sm:mb-4">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -204,7 +202,7 @@ export function Hero3D({ whatsappHref }: Hero3DProps) {
             </div>
 
             <GlassPanel
-              className="home-glass-surface home-hero-glass-panel w-full p-6 transition-[background,border-color,box-shadow,backdrop-filter,transform] duration-200 ease-out will-change-[background,border-color,box-shadow,backdrop-filter,transform] sm:p-7 md:p-10"
+              className="home-glass-surface home-hero-glass-panel w-full p-5 transition-[background,border-color,box-shadow,backdrop-filter,transform] duration-200 ease-out will-change-[background,border-color,box-shadow,backdrop-filter,transform] sm:p-6 md:p-7"
               style={heroPanelStyle}
               bgClassName="bg-transparent"
               blurClassName=""
@@ -213,7 +211,7 @@ export function Hero3D({ whatsappHref }: Hero3DProps) {
               radiusClassName="rounded-[1.85rem]"
             >
               <div className="max-w-none">
-                <h1 className="mb-6 text-[2.25rem] font-bold leading-tight tracking-tight text-white drop-shadow-2xl sm:text-5xl md:mb-8 md:text-7xl lg:text-8xl">
+                <h1 className="mb-5 text-[1.95rem] font-bold leading-[1.02] tracking-tight text-white drop-shadow-2xl sm:text-[2.85rem] md:mb-6 md:text-[4rem] lg:text-[4.75rem]">
                   <span className="block">
                     Unlock
                   </span>
@@ -233,7 +231,7 @@ export function Hero3D({ whatsappHref }: Hero3DProps) {
                   </span>
                 </h1>
 
-                <p className="mb-8 max-w-2xl text-base font-normal leading-relaxed text-slate-100/95 drop-shadow-md sm:text-lg md:mb-10 md:text-xl">
+                <p className="mb-7 max-w-xl text-[0.98rem] font-normal leading-relaxed text-slate-100/95 drop-shadow-md sm:text-base md:mb-8 md:text-[1.08rem]">
                   See what grades miss. We diagnose the{" "}
                   <span className="font-semibold text-white">hidden patterns</span>{" "}
                   in student thinking so schools can bridge the gap between effort

@@ -77,18 +77,18 @@ export default async function EditQuestionPage({
 
   return (
     <PageShell width="wide" padding="standard">
-      <div className="space-y-4 sm:space-y-5">
+      <div className="space-y-3.5 sm:space-y-4">
         <PageHero
           variant="editor"
           density="compact"
           eyebrow="Question Bank"
           title="Edit Question"
-          description="Update the question content, metadata, and answer configuration without leaving the dedicated authoring flow."
+          description="Refine the prompt, metadata, and answer configuration without leaving the authoring flow."
           actions={<ReturnBackButton fallbackPath={backHref} label="Back" />}
           meta={
             <>
               <span className="app-meta-chip">Question maintenance</span>
-              <span className="app-meta-chip">Metadata-aware editing</span>
+              <span className="app-meta-chip">Focused editing</span>
             </>
           }
         />

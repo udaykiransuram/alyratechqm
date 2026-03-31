@@ -101,13 +101,16 @@ export const InnerHero = ({
           initial={{ opacity: 0, x: 60 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
-          className="pointer-events-none absolute right-[2%] top-[21%] z-[2] hidden items-center justify-center lg:flex xl:right-[4%] 2xl:right-[6%]"
+          className="pointer-events-none absolute bottom-[-7%] right-[-3%] z-[2] hidden items-end justify-center lg:flex xl:bottom-[-10%] xl:right-0 2xl:right-[2%]"
         >
           <motion.div
             animate={prefersReduced ? undefined : { y: [-8, 10, -8] }}
             transition={prefersReduced ? undefined : { duration: 6, repeat: Infinity, ease: "easeInOut" }}
           >
-            <LottieAnimation src={lottieRight} className="h-52 w-52 opacity-70 xl:h-68 xl:w-68 2xl:h-80 2xl:w-80" />
+            <LottieAnimation
+              src={lottieRight}
+              className="h-[18rem] w-[18rem] opacity-80 drop-shadow-[0_28px_42px_rgba(15,23,42,0.10)] xl:h-[24rem] xl:w-[24rem] 2xl:h-[30rem] 2xl:w-[30rem]"
+            />
           </motion.div>
         </motion.div>
       )}
@@ -118,13 +121,16 @@ export const InnerHero = ({
           initial={{ opacity: 0, x: -60 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.5 }}
-          className="pointer-events-none absolute left-[2%] top-[24%] z-[2] hidden items-center justify-center lg:flex xl:left-[4%] 2xl:left-[6%]"
+          className="pointer-events-none absolute bottom-[-6%] left-[-4%] z-[2] hidden items-end justify-center lg:flex xl:bottom-[-9%] xl:left-0 2xl:left-[2%]"
         >
           <motion.div
             animate={prefersReduced ? undefined : { y: [7, -9, 7] }}
             transition={prefersReduced ? undefined : { duration: 7, repeat: Infinity, ease: "easeInOut" }}
           >
-            <LottieAnimation src={lottieLeft} className="h-48 w-48 opacity-64 xl:h-64 xl:w-64 2xl:h-72 2xl:w-72" />
+            <LottieAnimation
+              src={lottieLeft}
+              className="h-[16rem] w-[16rem] opacity-74 drop-shadow-[0_24px_38px_rgba(15,23,42,0.09)] xl:h-[22rem] xl:w-[22rem] 2xl:h-[27rem] 2xl:w-[27rem]"
+            />
           </motion.div>
         </motion.div>
       )}
