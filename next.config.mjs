@@ -13,6 +13,28 @@ export default function createNextConfig(phase) {
     eslint: {
       ignoreDuringBuilds: true,
     },
+    async headers() {
+      return [
+        {
+          source: "/animations/:path*",
+          headers: [
+            {
+              key: "Cache-Control",
+              value: "public, max-age=0, must-revalidate",
+            },
+          ],
+        },
+        {
+          source: "/wasm/:path*",
+          headers: [
+            {
+              key: "Cache-Control",
+              value: "public, max-age=0, must-revalidate",
+            },
+          ],
+        },
+      ];
+    },
     images: {
       qualities: [75, 78],
     },

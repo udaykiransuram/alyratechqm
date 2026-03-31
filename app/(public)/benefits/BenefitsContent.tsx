@@ -207,7 +207,13 @@ export default function BenefitsContent({
   return (
     <main className="min-h-screen bg-slate-50/60">
       <InnerHero
-        title="Why Choose Alyra Tech?"
+        title={
+          <>
+            Why Choose
+            <br />
+            Alyra Tech?
+          </>
+        }
         subtitle="Physical reports with precision diagnostics — no software needed. Any school can get started."
         pillText="Benefits"
         lottieRight="/animations/online-learning.lottie"

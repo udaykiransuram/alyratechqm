@@ -396,7 +396,7 @@ export default function Navbar() {
           <Link
             href="/auth/signin"
             className={cn(
-              "public-nav-secondary-action text-[13px]",
+              "public-nav-secondary-action",
               isMarketingHome && "text-white/80 hover:text-white",
             )}
           >
@@ -405,7 +405,7 @@ export default function Navbar() {
           <Link
             href="/contact"
             className={cn(
-              "public-nav-secondary-action text-[13px]",
+              "public-nav-secondary-action",
               isMarketingHome && "text-white/80 hover:text-white",
             )}
           >

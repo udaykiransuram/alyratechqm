@@ -22,25 +22,25 @@ interface InnerHeroProps {
 
 const heroVariantClasses = {
   flagship: {
-    shell: "pt-14 pb-14 sm:pt-16 sm:pb-16 lg:pt-20 lg:pb-18",
-    content: "max-w-4xl",
-    title: "text-4xl sm:text-6xl lg:text-7xl",
-    subtitle: "mx-auto max-w-[46rem]",
-    actions: "mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-3.5",
+    shell: "pt-8 pb-8 sm:pt-10 sm:pb-10 lg:pt-12 lg:pb-12",
+    content: "max-w-[56rem]",
+    title: "text-[clamp(2.15rem,4.8vw,4.05rem)]",
+    subtitle: "mx-auto max-w-[48rem]",
+    actions: "mt-5 flex flex-wrap items-center justify-center gap-3 sm:gap-3.5",
   },
   story: {
-    shell: "pt-14 pb-16 sm:pt-16 sm:pb-18 lg:pt-20 lg:pb-20",
-    content: "max-w-[44rem]",
-    title: "text-4xl sm:text-6xl lg:text-7xl",
-    subtitle: "mx-auto max-w-[40rem]",
-    actions: "mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-3.5",
+    shell: "pt-8 pb-10 sm:pt-10 sm:pb-12 lg:pt-12 lg:pb-12",
+    content: "max-w-[52rem]",
+    title: "text-[clamp(2rem,4.4vw,3.7rem)]",
+    subtitle: "mx-auto max-w-[42rem]",
+    actions: "mt-5 flex flex-wrap items-center justify-center gap-3 sm:gap-3.5",
   },
   conversion: {
-    shell: "pt-12 pb-12 sm:pt-16 sm:pb-14 lg:pt-18 lg:pb-16",
-    content: "max-w-2xl",
-    title: "text-4xl sm:text-5xl lg:text-6xl",
+    shell: "pt-8 pb-8 sm:pt-9 sm:pb-9 lg:pt-10 lg:pb-10",
+    content: "max-w-[42rem]",
+    title: "text-[clamp(1.85rem,4vw,3.1rem)]",
     subtitle: "mx-auto max-w-xl",
-    actions: "mt-6 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3",
+    actions: "mt-4 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3",
   },
 } as const;
 
@@ -142,7 +142,7 @@ export const InnerHero = ({
               initial={prefersReduced ? undefined : { opacity: 0, scale: 0.9 }}
               animate={prefersReduced ? undefined : { opacity: 1, scale: 1 }}
               transition={prefersReduced ? undefined : { duration: 0.5 }}
-              className="mb-6 inline-flex items-center rounded-full border border-white/65 bg-white/72 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[hsl(var(--public-ink-soft))] shadow-sm backdrop-blur-sm"
+              className="mb-4 inline-flex items-center rounded-full border border-white/65 bg-white/72 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[hsl(var(--public-ink-soft))] shadow-sm backdrop-blur-sm"
             >
               <span className="mr-2 flex h-2 w-2">
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -156,7 +156,7 @@ export const InnerHero = ({
             animate={prefersReduced ? undefined : { opacity: 1, y: 0 }}
             transition={prefersReduced ? undefined : { duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
-              "text-balance font-semibold tracking-tight text-slate-900",
+              "text-balance font-semibold leading-[0.98] tracking-tight text-slate-900",
               variantClasses.title,
             )}
           >
@@ -168,7 +168,7 @@ export const InnerHero = ({
             animate={prefersReduced ? undefined : { opacity: 1, y: 0 }}
             transition={prefersReduced ? undefined : { duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
-              "mt-5 text-balance text-[1.02rem] leading-7 text-slate-700 sm:text-lg sm:leading-8",
+              "mt-3 text-balance text-[0.95rem] leading-[1.65] text-slate-700 sm:text-[1rem] sm:leading-7",
               variantClasses.subtitle,
             )}
           >
