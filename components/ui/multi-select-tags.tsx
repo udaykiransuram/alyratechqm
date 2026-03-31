@@ -7,6 +7,10 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  formatQuestionTagLabel,
+  formatQuestionTagTypeLabel,
+} from '@/lib/question-display';
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -153,7 +157,9 @@ export function MultiSelectTags({
         typeMap.set(normalizedType._id, normalizedType);
       }
     });
-    return Array.from(typeMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(typeMap.values()).sort((a, b) =>
+      formatQuestionTagTypeLabel(a.name).localeCompare(formatQuestionTagTypeLabel(b.name)),
+    );
   }, [allTags]);
 
   const searchQuery = deferredInputValue.trim().toLowerCase();
@@ -174,7 +180,9 @@ export function MultiSelectTags({
       const matchesTypeFilter = selectedTypeIdFilter === 'all' || (tag.type && tag.type._id === selectedTypeIdFilter);
 
       // 2. Create a single searchable string for the tag
-      const searchableText = `${tag.name} ${tag.type ? tag.type?.name ?? '' : ''}`.toLowerCase();
+      const searchableText = `${tag.name} ${tag.type ? tag.type?.name ?? '' : ''} ${
+        tag.type ? formatQuestionTagTypeLabel(tag.type?.name) : ''
+      }`.toLowerCase();
       
       // 3. Check if the tag matches the search input
       const matchesSearch = searchQuery ? searchableText.includes(searchQuery) : true;
@@ -279,9 +287,9 @@ export function MultiSelectTags({
                 key={tag._id}
                 variant="secondary"
                 className="app-selection-badge border-transparent"
+                title={formatQuestionTagLabel(tag)}
               >
-                {tag.type?.name ? `${tag.type?.name ?? ''}: ` : ''}
-                {tag.name}
+                {formatQuestionTagLabel(tag)}
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handleDeselect(tag); }}
@@ -326,7 +334,9 @@ export function MultiSelectTags({
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
                   {uniqueTagTypesForFilter.map(type => (
-                    <SelectItem key={type._id} value={type._id} className="capitalize">{type.name}</SelectItem>
+                    <SelectItem key={type._id} value={type._id}>
+                      {formatQuestionTagTypeLabel(type.name)}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -371,7 +381,11 @@ export function MultiSelectTags({
                       <Select value={newTagTypeId} onValueChange={setNewTagTypeId}>
                         <SelectTrigger className="app-control-compact"><SelectValue placeholder="Select a type" /></SelectTrigger>
                         <SelectContent>
-                          {tagTypes.map(type => (<SelectItem key={type._id} value={type._id} className="capitalize">{type.name}</SelectItem>))}
+                          {tagTypes.map(type => (
+                            <SelectItem key={type._id} value={type._id}>
+                              {formatQuestionTagTypeLabel(type.name)}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <Button
@@ -413,7 +427,9 @@ export function MultiSelectTags({
                         <CommandItem key={tag._id} value={tag.name} onSelect={() => handleSelect(tag)} className="cursor-pointer">
                           <TagIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                           <span>{tag.name}</span>
-                          <span className="ml-auto text-xs text-muted-foreground/80 capitalize">{tag.type?.name ?? ''}</span>
+                          <span className="ml-auto text-xs text-muted-foreground/80">
+                            {formatQuestionTagTypeLabel(tag.type?.name ?? '', '')}
+                          </span>
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -424,7 +440,9 @@ export function MultiSelectTags({
                         <CommandItem key={tag._id} value={tag.name} onSelect={() => handleSelect(tag)} className="cursor-pointer">
                           <TagIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                           <span>{tag.name}</span>
-                          <span className="ml-auto text-xs text-muted-foreground/80 capitalize">{tag.type?.name ?? ''}</span>
+                          <span className="ml-auto text-xs text-muted-foreground/80">
+                            {formatQuestionTagTypeLabel(tag.type?.name ?? '', '')}
+                          </span>
                         </CommandItem>
                       ))}
                     </CommandGroup>

@@ -6,10 +6,12 @@ import { Edit, X } from "lucide-react";
 import { toast as showToast } from "sonner";
 
 import type { Question, Tag } from "@/components/question-items";
+import QuestionTagList from "@/components/questions/QuestionTagList";
 import { QuestionPreviewRenderer } from "@/components/question-paper-builder/QuestionPreviewRenderer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { getQuestionTypeLabel } from "@/lib/question-display";
 import { cn } from "@/lib/utils";
 
 const EditQuestionModal = dynamic(
@@ -55,19 +57,6 @@ function getCreatedAtLabel(createdAt?: string) {
 
   const date = new Date(createdAt);
   return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString();
-}
-
-function getQuestionTypeLabel(type: Question["type"]) {
-  switch (type) {
-    case "single":
-      return "Single choice";
-    case "multiple":
-      return "Multiple choice";
-    case "matrix-match":
-      return "Matrix match";
-    default:
-      return "Descriptive";
-  }
 }
 
 export function SelectedPaperQuestionCard({
@@ -206,24 +195,17 @@ export function SelectedPaperQuestionCard({
         ) : null}
 
         {showFooter ? (
-          <CardFooter className="flex flex-col gap-3 border-t border-border/60 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.8)_0%,hsl(var(--app-surface-tint)/0.16)_100%)] px-4 pb-4 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-muted-foreground">
-              {tags.slice(0, 4).map((tag) => (
-                <Badge
-                  key={tag._id}
-                  variant="secondary"
-                  className="bg-background/88 font-medium text-foreground shadow-sm"
-                >
-                  {tag.name}
-                </Badge>
-              ))}
-              {tags.length > 4 ? (
-                <Badge variant="outline" className="bg-background/88 font-medium shadow-sm">
-                  +{tags.length - 4} more
-                </Badge>
-              ) : null}
+          <CardFooter className="flex flex-col gap-3 border-t border-border/60 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.8)_0%,hsl(var(--app-surface-tint)/0.16)_100%)] px-4 pb-4 pt-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-wrap items-start gap-x-2 gap-y-2.5 text-xs text-muted-foreground">
+              <QuestionTagList
+                tags={tags}
+                maxVisible={4}
+                className="min-w-0 pt-0.5"
+                badgeClassName="bg-background/88 font-medium text-foreground shadow-sm"
+                moreBadgeClassName="bg-background/88 font-medium shadow-sm"
+              />
               {createdAtLabel ? (
-                <span className="inline-flex items-center rounded-full border border-border/60 bg-background/88 px-2.5 py-1 font-medium shadow-sm">
+                <span className="inline-flex items-center rounded-full border border-border/60 bg-background/88 px-2.5 py-1 font-medium shadow-sm sm:mt-0.5">
                   {createdAtLabel}
                 </span>
               ) : null}

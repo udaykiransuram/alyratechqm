@@ -35,12 +35,15 @@ import {
 } from "@/lib/student-tests";
 import { ATTEMPT_LOCK_TTL_SECONDS } from "@/lib/student-session";
 import { resolvePaperSubjectIds } from "@/lib/question-paper/subjects";
+import { sanitizeRichTextToPlainText } from "@/lib/security/html-sanitize";
 import {
   cacheExamSnapshotPayload,
   claimExamAttemptLock,
+  claimExamAttemptLockAndConsumeAutosaveRateLimit,
   consumeAutosaveRateLimit,
   readCachedExamSnapshotPayload,
   releaseExamAttemptLock,
+  type RedisRateLimitResult,
 } from "@/lib/redis";
 
 type ExamSnapshotStatus = "active" | "superseded" | "disabled";
@@ -1750,6 +1753,32 @@ async function getExamAttemptById(attemptId: string) {
   return row ? mapAttemptRow(row) : null;
 }
 
+async function getRuntimeAttemptReference(params: {
+  schoolKey: string;
+  studentId: string;
+  paperId: string;
+  attemptId?: string | null;
+}) {
+  const normalizedAttemptId = String(params.attemptId || "").trim();
+  if (UUID_PATTERN.test(normalizedAttemptId)) {
+    const attemptById = await getExamAttemptById(normalizedAttemptId);
+    if (
+      attemptById &&
+      attemptById.schoolKey === params.schoolKey &&
+      attemptById.studentId === params.studentId &&
+      attemptById.mongoPaperId === params.paperId
+    ) {
+      return attemptById;
+    }
+  }
+
+  return getExamAttemptByPaperId(
+    params.schoolKey,
+    params.studentId,
+    params.paperId,
+  );
+}
+
 async function listExamAnswerRowsByAttemptIds(attemptIds: string[]) {
   const normalizedIds = Array.from(
     new Set(attemptIds.map((value) => String(value || "").trim()).filter(Boolean)),
@@ -2126,18 +2155,20 @@ function buildRuntimeSectionAnswersSignature(
   return JSON.stringify(normalized.ok ? normalized.sectionAnswers : []);
 }
 
+type PersistedExamAnswerRowInput = {
+  questionId: string;
+  sectionIndex: number;
+  questionIndex: number;
+  selectedOptions: number[] | null;
+  matrixSelections: number[][] | null;
+  answerText: string | null;
+  marksAwarded: number | null;
+};
+
 async function replaceAttemptAnswerRows(
   client: ExamRuntimeClient,
   attemptId: string,
-  rows: Array<{
-    questionId: string;
-    sectionIndex: number;
-    questionIndex: number;
-    selectedOptions: number[] | null;
-    matrixSelections: number[][] | null;
-    answerText: string | null;
-    marksAwarded: number | null;
-  }>,
+  rows: PersistedExamAnswerRowInput[],
 ) {
   if (rows.length === 0) {
     await client.query("DELETE FROM exam_answers WHERE attempt_id = $1", [
@@ -2236,6 +2267,156 @@ async function replaceAttemptAnswerRows(
   );
 }
 
+async function saveAttemptAnswerRowsAndTouchAttempt(
+  attemptId: string,
+  lastSavedAt: string,
+  rows: PersistedExamAnswerRowInput[],
+) {
+  if (rows.length === 0) {
+    const result = await queryExamRuntime(
+      `
+        WITH target_attempt AS (
+          SELECT id
+          FROM exam_attempts
+          WHERE id = $1::uuid
+            AND status = 'in_progress'
+        ),
+        deleted AS (
+          DELETE FROM exam_answers existing
+          USING target_attempt target
+          WHERE existing.attempt_id = target.id
+        ),
+        updated_attempt AS (
+          UPDATE exam_attempts
+          SET last_saved_at = $2,
+              updated_at = NOW()
+          WHERE id = (SELECT id FROM target_attempt)
+          RETURNING ${ATTEMPT_COLUMNS}
+        )
+        SELECT *
+        FROM updated_attempt
+      `,
+      [attemptId, lastSavedAt],
+    );
+
+    const row = result.rows[0];
+    return row ? mapAttemptRow(row) : null;
+  }
+
+  const values: Array<string | number | number[] | null> = [
+    attemptId,
+    lastSavedAt,
+  ];
+  const tuples = rows.map((row, index) => {
+    const offset = 3 + index * 7;
+    values.push(
+      row.questionId,
+      row.sectionIndex,
+      row.questionIndex,
+      row.selectedOptions,
+      row.matrixSelections === null ? null : JSON.stringify(row.matrixSelections),
+      row.answerText,
+      row.marksAwarded,
+    );
+
+    return `(
+      $${offset}::text,
+      $${offset + 1}::integer,
+      $${offset + 2}::integer,
+      $${offset + 3}::integer[],
+      $${offset + 4}::jsonb,
+      $${offset + 5}::text,
+      $${offset + 6}::numeric
+    )`;
+  });
+
+  const result = await queryExamRuntime(
+    `
+      WITH target_attempt AS (
+        SELECT id
+        FROM exam_attempts
+        WHERE id = $1::uuid
+          AND status = 'in_progress'
+      ),
+      input_rows (
+        question_id,
+        section_index,
+        question_index,
+        selected_options,
+        matrix_selections,
+        answer_text,
+        marks_awarded
+      ) AS (
+        VALUES ${tuples.join(",\n")}
+      ),
+      deleted AS (
+        DELETE FROM exam_answers existing
+        USING target_attempt target
+        WHERE existing.attempt_id = target.id
+          AND NOT EXISTS (
+            SELECT 1
+            FROM input_rows incoming
+            WHERE incoming.question_id = existing.question_id
+          )
+      ),
+      upserted AS (
+        INSERT INTO exam_answers (
+          attempt_id,
+          question_id,
+          section_index,
+          question_index,
+          selected_options,
+          matrix_selections,
+          answer_text,
+          marks_awarded,
+          updated_at
+        )
+        SELECT
+          target.id,
+          incoming.question_id,
+          incoming.section_index,
+          incoming.question_index,
+          incoming.selected_options,
+          incoming.matrix_selections,
+          incoming.answer_text,
+          incoming.marks_awarded,
+          NOW()
+        FROM target_attempt target
+        CROSS JOIN input_rows incoming
+        ON CONFLICT (attempt_id, question_id)
+        DO UPDATE SET
+          section_index = EXCLUDED.section_index,
+          question_index = EXCLUDED.question_index,
+          selected_options = EXCLUDED.selected_options,
+          matrix_selections = EXCLUDED.matrix_selections,
+          answer_text = EXCLUDED.answer_text,
+          marks_awarded = EXCLUDED.marks_awarded,
+          updated_at = NOW()
+        WHERE exam_answers.section_index IS DISTINCT FROM EXCLUDED.section_index
+           OR exam_answers.question_index IS DISTINCT FROM EXCLUDED.question_index
+           OR exam_answers.selected_options IS DISTINCT FROM EXCLUDED.selected_options
+           OR exam_answers.matrix_selections IS DISTINCT FROM EXCLUDED.matrix_selections
+           OR exam_answers.answer_text IS DISTINCT FROM EXCLUDED.answer_text
+           OR exam_answers.marks_awarded IS DISTINCT FROM EXCLUDED.marks_awarded
+        RETURNING attempt_id
+      ),
+      updated_attempt AS (
+        UPDATE exam_attempts
+        SET last_saved_at = $2,
+            updated_at = NOW()
+        WHERE id = (SELECT id FROM target_attempt)
+        RETURNING ${ATTEMPT_COLUMNS}
+      )
+      SELECT *
+      FROM updated_attempt
+    `,
+    values,
+  );
+
+  const row = result.rows[0];
+  return row ? mapAttemptRow(row) : null;
+}
+
 async function loadSnapshotSourcePaper(schoolKey: string, paperId: string) {
   await connectDB();
 
@@ -2295,7 +2476,7 @@ function buildPreparedExamPaperSnapshotPayload(
           .filter(Boolean)
       : [],
     title: String(sourcePaper?.title || ""),
-    instructions: String(sourcePaper?.instructions || ""),
+    instructions: sanitizeRichTextToPlainText(sourcePaper?.instructions),
     durationMinutes: Number(sourcePaper?.duration || 0),
     passingMarks: Number(sourcePaper?.passingMarks || 0),
     totalMarks: Number(sourcePaper?.totalMarks || 0),
@@ -3054,7 +3235,26 @@ async function withAttemptLock<T>(
   paperId: string,
   studentId: string,
   handler: () => Promise<T>,
+  options?: {
+    preclaimedRedisLockToken?: string | null;
+  },
 ) {
+  const preclaimedRedisLockToken = String(
+    options?.preclaimedRedisLockToken || "",
+  ).trim();
+  if (preclaimedRedisLockToken) {
+    try {
+      return await handler();
+    } finally {
+      await releaseExamAttemptLock(
+        schoolKey,
+        paperId,
+        studentId,
+        preclaimedRedisLockToken,
+      ).catch(() => undefined);
+    }
+  }
+
   const lockToken = crypto.randomUUID();
   let releaseLock:
     | (() => Promise<unknown>)
@@ -4107,6 +4307,7 @@ export async function saveStudentExamAttempt(params: {
   schoolKey: string;
   studentId: string;
   paperId: string;
+  attemptId?: string | null;
   sectionAnswers: unknown;
   baseLastSavedAt?: string | null;
 }) {
@@ -4121,6 +4322,7 @@ export async function submitStudentExamAttempt(params: {
   schoolKey: string;
   studentId: string;
   paperId: string;
+  attemptId?: string | null;
   sectionAnswers?: unknown;
   baseLastSavedAt?: string | null;
 }) {
@@ -4409,243 +4611,278 @@ export async function startStudentExamRuntimeAttempt(
   });
 }
 
+async function saveStudentExamRuntimeAttemptLocked(params: {
+  schoolKey: string;
+  studentId: string;
+  paperId: string;
+  attemptId?: string | null;
+  sectionAnswers: unknown;
+  baseLastSavedAt?: string | null;
+}, prefetchedRateLimit?: RedisRateLimitResult | null) {
+  const now = new Date();
+  const rateLimit =
+    typeof prefetchedRateLimit === "undefined"
+      ? await consumeAutosaveRateLimit(
+          params.schoolKey,
+          params.studentId,
+          params.paperId,
+        )
+      : prefetchedRateLimit;
+  if (rateLimit?.limited) {
+    throwExamRuntimeError({
+      message:
+        "Too many save requests were sent at once. Please wait a few seconds and try again.",
+      code: "ATTEMPT_SAVE_RATE_LIMITED",
+      httpStatus: 429,
+      retryable: true,
+    });
+  }
+
+  let attempt = await getRuntimeAttemptReference({
+    schoolKey: params.schoolKey,
+    studentId: params.studentId,
+    paperId: params.paperId,
+    attemptId: params.attemptId,
+  });
+
+  if (!attempt) {
+    throwExamRuntimeError({
+      message: "Start the test before saving answers.",
+      code: "ATTEMPT_NOT_STARTED",
+      httpStatus: 409,
+      retryable: false,
+    });
+  }
+
+  const snapshot = await getExamSnapshotForGradingById(attempt.snapshotId);
+  if (!snapshot) {
+    throwExamRuntimeError({
+      message: "Online test snapshot not found.",
+      code: "ONLINE_TEST_SNAPSHOT_NOT_FOUND",
+      httpStatus: 404,
+      retryable: false,
+    });
+  }
+  const paperSummary = buildSnapshotPaperSummary(snapshot);
+  const serializeStoredAttempt = (
+    resolvedAttempt: ExamAttempt,
+    answerRows: ExamAnswerRow[],
+  ) =>
+    serializeRuntimeAttempt(
+      resolvedAttempt,
+      paperSummary,
+      answerRows,
+      {
+        sectionAnswers: buildStoredSectionAnswers(
+          snapshot.gradingJson,
+          answerRows,
+        ) as any,
+      },
+    );
+
+  const current = await autoSubmitExpiredAttemptIfNeeded({
+    schoolKey: params.schoolKey,
+    attempt,
+    snapshot,
+    now,
+    includeAnswerRows: false,
+  });
+  attempt = current.attempt;
+
+  if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
+    const submittedAnswerRows =
+      current.answerRows.length > 0
+        ? current.answerRows
+        : await listExamAnswerRowsByAttemptIds([attempt.id]);
+    throwExamRuntimeError({
+      message: "This attempt has already been submitted.",
+      code: "ATTEMPT_ALREADY_SUBMITTED",
+      httpStatus: 409,
+      retryable: false,
+      details: {
+        attempt: sanitizeSerializedAttemptForStudentDelivery(
+          serializeStoredAttempt(attempt, submittedAnswerRows),
+          paperSummary,
+          now,
+        ),
+        serverLastSavedAt: attempt.lastSavedAt,
+      },
+    });
+  }
+
+  const normalized = validateStudentSectionAnswers(
+    params.sectionAnswers ?? [],
+    snapshot.gradingJson,
+    { allowEmpty: true },
+  );
+
+  if (!normalized.ok) {
+    throwExamRuntimeError({
+      message: normalized.issues[0] || "Invalid answers payload.",
+      code: "INVALID_ANSWERS_PAYLOAD",
+      httpStatus: 400,
+      retryable: false,
+      details: { issues: normalized.issues },
+    });
+  }
+
+  const baseLastSavedAtMs = parseTimestampMs(params.baseLastSavedAt);
+  const serverLastSavedAtMs = parseTimestampMs(attempt.lastSavedAt);
+  if (
+    baseLastSavedAtMs !== null &&
+    serverLastSavedAtMs !== null &&
+    baseLastSavedAtMs + 1000 < serverLastSavedAtMs
+  ) {
+    const storedAnswerRows =
+      current.answerRows.length > 0
+        ? current.answerRows
+        : await listExamAnswerRowsByAttemptIds([attempt.id]);
+    const serverSectionAnswers = buildStoredSectionAnswers(
+      snapshot.gradingJson,
+      storedAnswerRows,
+    );
+    const incomingSignature = buildRuntimeSectionAnswersSignature(
+      normalized.sectionAnswers,
+      snapshot.gradingJson,
+    );
+    const serverSignature = buildRuntimeSectionAnswersSignature(
+      serverSectionAnswers,
+      snapshot.gradingJson,
+    );
+
+    if (incomingSignature !== serverSignature) {
+      throwExamRuntimeError({
+        message:
+          "This test was updated from another session. Reload to continue with the latest saved answers.",
+        code: "ATTEMPT_STATE_CONFLICT",
+        httpStatus: 409,
+        retryable: false,
+        details: {
+          attempt: sanitizeSerializedAttemptForStudentDelivery(
+            serializeRuntimeAttempt(
+              attempt,
+              paperSummary,
+              storedAnswerRows,
+              { sectionAnswers: serverSectionAnswers as any },
+            ),
+            paperSummary,
+            now,
+          ),
+          serverLastSavedAt: attempt.lastSavedAt,
+        },
+      });
+    }
+  }
+
+  const storedRows = flattenSectionAnswersForStorage(
+    normalized.sectionAnswers,
+    snapshot.gradingJson,
+  );
+
+  const nextAttempt = await saveAttemptAnswerRowsAndTouchAttempt(
+    attempt.id,
+    now.toISOString(),
+    storedRows,
+  );
+
+  if (!nextAttempt) {
+    const resolvedAttempt = await getRuntimeAttemptReference({
+      schoolKey: params.schoolKey,
+      studentId: params.studentId,
+      paperId: params.paperId,
+      attemptId: attempt.id,
+    });
+    const details =
+      resolvedAttempt &&
+      (resolvedAttempt.status === "submitted" ||
+        resolvedAttempt.status === "auto_submitted")
+        ? {
+            attempt: sanitizeSerializedAttemptForStudentDelivery(
+              serializeStoredAttempt(
+                resolvedAttempt,
+                await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]),
+              ),
+              paperSummary,
+              now,
+            ),
+            serverLastSavedAt: resolvedAttempt.lastSavedAt,
+          }
+        : undefined;
+    throwExamRuntimeError({
+      message: "This attempt has already been submitted.",
+      code: "ATTEMPT_ALREADY_SUBMITTED",
+      httpStatus: 409,
+      retryable: false,
+      details,
+    });
+  }
+
+  return {
+    success: true,
+    attempt: sanitizeSerializedAttemptForStudentDelivery(
+      serializeRuntimeAttempt(nextAttempt, paperSummary, [], {
+        sectionAnswers: normalized.sectionAnswers,
+      }),
+      paperSummary,
+      now,
+    ),
+    resultReleased: isStudentResultReleasedForPaper(paperSummary, now),
+    status: deriveStudentTestStatus(
+      paperSummary,
+      buildAttemptStateForStatus(nextAttempt),
+      now,
+    ),
+    remainingTimeMs: getAttemptRemainingTimeMs(nextAttempt, now),
+    deadlineAt: nextAttempt.deadlineAt,
+  };
+}
+
 export async function saveStudentExamRuntimeAttempt(params: {
   schoolKey: string;
   studentId: string;
   paperId: string;
+  attemptId?: string | null;
   sectionAnswers: unknown;
   baseLastSavedAt?: string | null;
 }) {
+  const lockToken = crypto.randomUUID();
+  const combinedRedisGate = await claimExamAttemptLockAndConsumeAutosaveRateLimit(
+    params.schoolKey,
+    params.paperId,
+    params.studentId,
+    lockToken,
+  );
+
+  if (combinedRedisGate) {
+    if (!combinedRedisGate.claimed) {
+      throwExamRuntimeError({
+        message: "Another test update is already in progress. Please retry.",
+        code: "ATTEMPT_LOCKED",
+        httpStatus: 409,
+        retryable: true,
+      });
+    }
+
+    return withAttemptLock(
+      params.schoolKey,
+      params.paperId,
+      params.studentId,
+      () =>
+        saveStudentExamRuntimeAttemptLocked(
+          params,
+          combinedRedisGate.rateLimit,
+        ),
+      {
+        preclaimedRedisLockToken: lockToken,
+      },
+    );
+  }
+
   return withAttemptLock(
     params.schoolKey,
     params.paperId,
     params.studentId,
-    async () => {
-      const now = new Date();
-      const rateLimit = await consumeAutosaveRateLimit(
-        params.schoolKey,
-        params.studentId,
-        params.paperId,
-      );
-      if (rateLimit?.limited) {
-        throwExamRuntimeError({
-          message:
-            "Too many save requests were sent at once. Please wait a few seconds and try again.",
-          code: "ATTEMPT_SAVE_RATE_LIMITED",
-          httpStatus: 429,
-          retryable: true,
-        });
-      }
-
-      let attempt = await getExamAttemptByPaperId(
-        params.schoolKey,
-        params.studentId,
-        params.paperId,
-      );
-
-      if (!attempt) {
-        throwExamRuntimeError({
-          message: "Start the test before saving answers.",
-          code: "ATTEMPT_NOT_STARTED",
-          httpStatus: 409,
-          retryable: false,
-        });
-      }
-
-      const snapshot = await getExamSnapshotForGradingById(attempt.snapshotId);
-      if (!snapshot) {
-        throwExamRuntimeError({
-          message: "Online test snapshot not found.",
-          code: "ONLINE_TEST_SNAPSHOT_NOT_FOUND",
-          httpStatus: 404,
-          retryable: false,
-        });
-      }
-      const paperSummary = buildSnapshotPaperSummary(snapshot);
-      const serializeStoredAttempt = (
-        resolvedAttempt: ExamAttempt,
-        answerRows: ExamAnswerRow[],
-      ) =>
-        serializeRuntimeAttempt(
-          resolvedAttempt,
-          paperSummary,
-          answerRows,
-          {
-            sectionAnswers: buildStoredSectionAnswers(
-              snapshot.gradingJson,
-              answerRows,
-            ) as any,
-          },
-        );
-
-      const current = await autoSubmitExpiredAttemptIfNeeded({
-        schoolKey: params.schoolKey,
-        attempt,
-        snapshot,
-        now,
-        includeAnswerRows: false,
-      });
-      attempt = current.attempt;
-
-      if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
-        const submittedAnswerRows =
-          current.answerRows.length > 0
-            ? current.answerRows
-            : await listExamAnswerRowsByAttemptIds([attempt.id]);
-        throwExamRuntimeError({
-          message: "This attempt has already been submitted.",
-          code: "ATTEMPT_ALREADY_SUBMITTED",
-          httpStatus: 409,
-          retryable: false,
-          details: {
-            attempt: sanitizeSerializedAttemptForStudentDelivery(
-              serializeStoredAttempt(attempt, submittedAnswerRows),
-              paperSummary,
-              now,
-            ),
-            serverLastSavedAt: attempt.lastSavedAt,
-          },
-        });
-      }
-
-      const normalized = validateStudentSectionAnswers(
-        params.sectionAnswers ?? [],
-        snapshot.gradingJson,
-        { allowEmpty: true },
-      );
-
-      if (!normalized.ok) {
-        throwExamRuntimeError({
-          message: normalized.issues[0] || "Invalid answers payload.",
-          code: "INVALID_ANSWERS_PAYLOAD",
-          httpStatus: 400,
-          retryable: false,
-          details: { issues: normalized.issues },
-        });
-      }
-
-      const baseLastSavedAtMs = parseTimestampMs(params.baseLastSavedAt);
-      const serverLastSavedAtMs = parseTimestampMs(attempt.lastSavedAt);
-      if (
-        baseLastSavedAtMs !== null &&
-        serverLastSavedAtMs !== null &&
-        baseLastSavedAtMs + 1000 < serverLastSavedAtMs
-      ) {
-        const storedAnswerRows =
-          current.answerRows.length > 0
-            ? current.answerRows
-            : await listExamAnswerRowsByAttemptIds([attempt.id]);
-        const serverSectionAnswers = buildStoredSectionAnswers(
-          snapshot.gradingJson,
-          storedAnswerRows,
-        );
-        const incomingSignature = buildRuntimeSectionAnswersSignature(
-          normalized.sectionAnswers,
-          snapshot.gradingJson,
-        );
-        const serverSignature = buildRuntimeSectionAnswersSignature(
-          serverSectionAnswers,
-          snapshot.gradingJson,
-        );
-
-        if (incomingSignature !== serverSignature) {
-          throwExamRuntimeError({
-            message:
-              "This test was updated from another session. Reload to continue with the latest saved answers.",
-            code: "ATTEMPT_STATE_CONFLICT",
-            httpStatus: 409,
-            retryable: false,
-            details: {
-              attempt: sanitizeSerializedAttemptForStudentDelivery(
-                serializeRuntimeAttempt(
-                  attempt,
-                  paperSummary,
-                  storedAnswerRows,
-                  { sectionAnswers: serverSectionAnswers as any },
-                ),
-                paperSummary,
-                now,
-              ),
-              serverLastSavedAt: attempt.lastSavedAt,
-            },
-          });
-        }
-      }
-
-      const storedRows = flattenSectionAnswersForStorage(
-        normalized.sectionAnswers,
-        snapshot.gradingJson,
-      );
-
-      const nextAttempt = await withExamRuntimeTransaction(async (client) => {
-        await replaceAttemptAnswerRows(client, attempt.id, storedRows);
-
-        const result = await client.query(
-          `
-            UPDATE exam_attempts
-            SET last_saved_at = $2,
-                updated_at = NOW()
-            WHERE id = $1
-              AND status = 'in_progress'
-            RETURNING ${ATTEMPT_COLUMNS}
-          `,
-          [attempt.id, now.toISOString()],
-        );
-
-        const row = result.rows[0];
-        return row ? mapAttemptRow(row) : null;
-      });
-
-      if (!nextAttempt) {
-        const resolvedAttempt = await getExamAttemptByPaperId(
-          params.schoolKey,
-          params.studentId,
-          params.paperId,
-        );
-        const details =
-          resolvedAttempt &&
-          (resolvedAttempt.status === "submitted" ||
-            resolvedAttempt.status === "auto_submitted")
-            ? {
-                attempt: sanitizeSerializedAttemptForStudentDelivery(
-                  serializeStoredAttempt(
-                    resolvedAttempt,
-                    await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]),
-                  ),
-                  paperSummary,
-                  now,
-                ),
-                serverLastSavedAt: resolvedAttempt.lastSavedAt,
-              }
-            : undefined;
-        throwExamRuntimeError({
-          message: "This attempt has already been submitted.",
-          code: "ATTEMPT_ALREADY_SUBMITTED",
-          httpStatus: 409,
-          retryable: false,
-          details,
-        });
-      }
-
-      return {
-        success: true,
-        attempt: sanitizeSerializedAttemptForStudentDelivery(
-          serializeRuntimeAttempt(nextAttempt, paperSummary, [], {
-            sectionAnswers: normalized.sectionAnswers,
-          }),
-          paperSummary,
-          now,
-        ),
-        resultReleased: isStudentResultReleasedForPaper(paperSummary, now),
-        status: deriveStudentTestStatus(
-          paperSummary,
-          buildAttemptStateForStatus(nextAttempt),
-          now,
-        ),
-        remainingTimeMs: getAttemptRemainingTimeMs(nextAttempt, now),
-        deadlineAt: nextAttempt.deadlineAt,
-      };
-    },
+    () => saveStudentExamRuntimeAttemptLocked(params),
   );
 }
 
@@ -4653,6 +4890,7 @@ export async function submitStudentExamRuntimeAttempt(params: {
   schoolKey: string;
   studentId: string;
   paperId: string;
+  attemptId?: string | null;
   sectionAnswers?: unknown;
   baseLastSavedAt?: string | null;
 }) {
@@ -4662,11 +4900,12 @@ export async function submitStudentExamRuntimeAttempt(params: {
     params.studentId,
     async () => {
       const now = new Date();
-      let attempt = await getExamAttemptByPaperId(
-        params.schoolKey,
-        params.studentId,
-        params.paperId,
-      );
+      let attempt = await getRuntimeAttemptReference({
+        schoolKey: params.schoolKey,
+        studentId: params.studentId,
+        paperId: params.paperId,
+        attemptId: params.attemptId,
+      });
 
       if (!attempt) {
         throwExamRuntimeError({

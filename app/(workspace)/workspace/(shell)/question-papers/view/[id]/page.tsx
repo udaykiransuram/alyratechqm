@@ -240,7 +240,7 @@ export default async function ViewQuestionPaperPage({
                 <CardTitle>Instructions</CardTitle>
               </CardHeader>
               <CardContent className="app-section-body prose prose-sm max-w-none dark:prose-invert">
-                <p>{paper.instructions}</p>
+                <p className="whitespace-pre-line">{paper.instructions}</p>
               </CardContent>
             </Card>
           ) : null}
@@ -339,12 +339,12 @@ export default async function ViewQuestionPaperPage({
                           {`Section ${sectionIndex + 1}: ${section?.name || "Untitled Section"}`}
                         </CardTitle>
                         {section?.description ? (
-                          <p className="mt-2 text-sm text-muted-foreground">
+                          <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
                             {section.description}
                           </p>
                         ) : null}
                         {section?.instructions ? (
-                          <p className="mt-2 text-sm leading-6 text-foreground/82">
+                          <p className="mt-2 whitespace-pre-line text-sm leading-6 text-foreground/82">
                             {section.instructions}
                           </p>
                         ) : null}

@@ -4,13 +4,18 @@ import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { ContentRenderer } from "@/components/ContentRenderer";
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
+import QuestionTagList from "@/components/questions/QuestionTagList";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getQuestionTypeLabel } from "@/lib/question-display";
 import { buildHrefWithReturnTo, getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { getWorkspaceQuestionById } from "@/lib/server/workspace-assessment-data";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
-import { sanitizeRichTextHtml } from "@/lib/security/html-sanitize";
+import {
+  sanitizeRichTextHtml,
+  trimTrailingBlankRichTextBlocks,
+} from "@/lib/security/html-sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +57,10 @@ type ViewQuestion = {
   matrixOptions?: ViewQuestionMatrixOption[];
   explanation?: string | null;
 };
+
+function sanitizeQuestionRichText(value: unknown) {
+  return trimTrailingBlankRichTextBlocks(sanitizeRichTextHtml(value));
+}
 
 export default async function ViewQuestionPage({
   params,
@@ -101,6 +110,11 @@ export default async function ViewQuestionPage({
     );
   }
 
+  const questionContent = sanitizeQuestionRichText(question.content);
+  const explanationContent = question.explanation
+    ? sanitizeQuestionRichText(question.explanation)
+    : null;
+
   return (
     <PageShell width="wide" padding="standard">
       <PageHero
@@ -143,7 +157,7 @@ export default async function ViewQuestionPage({
         stats={[
           {
             label: "Question type",
-            value: question.type,
+            value: getQuestionTypeLabel(question.type),
             meta: "This determines how the item behaves in authoring and delivery flows.",
           },
           {
@@ -165,8 +179,10 @@ export default async function ViewQuestionPage({
             <CardHeader className="app-section-header">
               <CardTitle>Question</CardTitle>
             </CardHeader>
-            <CardContent className="app-section-body prose max-w-none dark:prose-invert">
-              <ContentRenderer htmlContent={sanitizeRichTextHtml(question.content)} />
+            <CardContent className="app-section-body pt-3.5">
+              <div className="app-question-card-richtext">
+                <ContentRenderer htmlContent={questionContent} />
+              </div>
             </CardContent>
           </Card>
 
@@ -175,10 +191,13 @@ export default async function ViewQuestionPage({
               <CardHeader className="app-section-header">
                 <CardTitle>Options</CardTitle>
               </CardHeader>
-              <CardContent className="app-section-body">
-                <ul className="space-y-2.5">
+              <CardContent className="app-section-body pb-3.5 pt-3">
+                <ul className="space-y-2">
                   {question.options.map((option: any, index: number) => {
                     const isAnswer = question.answerIndexes?.includes(index);
+                    const optionContent = sanitizeQuestionRichText(
+                      option.content || "",
+                    );
                     return (
                       <li
                         key={index}
@@ -192,13 +211,11 @@ export default async function ViewQuestionPage({
                           <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" />
                         ) : null}
                         <div
-                          className={`min-w-0 flex-1 prose prose-sm max-w-none dark:prose-invert ${
+                          className={`app-question-card-option-richtext min-w-0 flex-1 ${
                             isAnswer ? "font-medium" : ""
                           }`}
                         >
-                          <ContentRenderer
-                            htmlContent={sanitizeRichTextHtml(option.content || "")}
-                          />
+                          <ContentRenderer htmlContent={optionContent} />
                         </div>
                       </li>
                     );
@@ -246,10 +263,10 @@ export default async function ViewQuestionPage({
                   Explanation
                 </CardTitle>
               </CardHeader>
-              <CardContent className="app-section-body prose prose-sm max-w-none dark:prose-invert">
-                <ContentRenderer
-                  htmlContent={sanitizeRichTextHtml(question.explanation)}
-                />
+              <CardContent className="app-section-body pt-3.5">
+                <div className="app-question-card-option-richtext">
+                  <ContentRenderer htmlContent={explanationContent || ""} />
+                </div>
               </CardContent>
             </Card>
           ) : null}
@@ -264,7 +281,7 @@ export default async function ViewQuestionPage({
               <div className="app-detail-grid">
                 <div className="app-detail-item">
                   <p className="app-detail-label">Type</p>
-                  <div className="app-detail-value capitalize">{question.type}</div>
+                  <div className="app-detail-value">{getQuestionTypeLabel(question.type)}</div>
                 </div>
                 <div className="app-detail-item">
                   <p className="app-detail-label">Marks</p>
@@ -286,16 +303,9 @@ export default async function ViewQuestionPage({
             <CardHeader className="app-section-header">
               <CardTitle>Tags</CardTitle>
             </CardHeader>
-            <CardContent className="app-section-body">
+            <CardContent className="app-section-body pt-3.5">
               {question.tags?.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {question.tags.map((tag: any) => (
-                    <Badge key={tag._id} variant="secondary">
-                      {tag.type?.name ? `${tag.type.name}: ` : ""}
-                      {tag.name}
-                    </Badge>
-                  ))}
-                </div>
+                <QuestionTagList tags={question.tags} className="app-question-card-tag-list" />
               ) : (
                 <div className="app-empty-state py-6">No tags linked.</div>
               )}

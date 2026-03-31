@@ -1740,7 +1740,7 @@ export default function StudentTestActiveAttemptView({
                       {currentQuestionTitle}
                     </CardTitle>
                     {currentQuestion.sectionDescription ? (
-                      <p className="app-copy-muted app-exam-question-section-description max-w-3xl">
+                      <p className="app-copy-muted app-exam-question-section-description max-w-3xl whitespace-pre-line">
                         {currentQuestion.sectionDescription}
                       </p>
                     ) : null}
@@ -1767,7 +1767,7 @@ export default function StudentTestActiveAttemptView({
                       </div>
                     ) : null}
                     {currentQuestion.sectionInstructions ? (
-                      <div className="app-exam-question-context-note">
+                      <div className="app-exam-question-context-note whitespace-pre-line">
                         {currentQuestion.sectionInstructions}
                       </div>
                     ) : null}

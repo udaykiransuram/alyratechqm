@@ -204,7 +204,7 @@ export default function QuestionsDirectoryClient({
   useEffect(() => {
     const currentClassId = draftFilters.classId;
     if (!currentClassId) {
-      setSubjectsState([]);
+      setSubjectsState(subjects);
       setLoadedSubjectsClassId("");
       setSetupNotice(null);
       return;
@@ -252,7 +252,7 @@ export default function QuestionsDirectoryClient({
     return () => {
       active = false;
     };
-  }, [draftFilters.classId, loadedSubjectsClassId, schoolKey]);
+  }, [draftFilters.classId, loadedSubjectsClassId, schoolKey, subjects]);
 
   const classFilterOptions = useMemo<SearchableCommandOption[]>(
     () => [
@@ -532,8 +532,7 @@ export default function QuestionsDirectoryClient({
                     subjectId: value === ALL_SUBJECTS_VALUE ? "" : value,
                   }))
                 }
-                disabled={!draftFilters.classId}
-                placeholder={draftFilters.classId ? "All subjects" : "Select class first"}
+                placeholder="All subjects"
                 searchPlaceholder="Search subjects..."
                 emptyText="No subjects found."
                 onClear={() =>

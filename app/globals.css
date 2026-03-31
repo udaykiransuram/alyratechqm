@@ -1838,6 +1838,111 @@
     color: hsl(var(--foreground) / 0.82);
   }
 
+  .app-question-card-richtext .content-renderer,
+  .app-question-card-option-richtext .content-renderer {
+    @apply prose prose-sm max-w-none dark:prose-invert;
+  }
+
+  .app-question-card-richtext .content-renderer {
+    @apply font-medium text-foreground;
+  }
+
+  .app-question-card-option-richtext .content-renderer {
+    @apply text-foreground;
+  }
+
+  .app-question-card-richtext .content-renderer > * + * {
+    margin-top: 0.45rem;
+  }
+
+  .app-question-card-option-richtext .content-renderer > * + * {
+    margin-top: 0.35rem;
+  }
+
+  .app-question-card-richtext .content-renderer > :first-child,
+  .app-question-card-option-richtext .content-renderer > :first-child {
+    margin-top: 0;
+  }
+
+  .app-question-card-richtext .content-renderer > :last-child,
+  .app-question-card-option-richtext .content-renderer > :last-child {
+    margin-bottom: 0;
+  }
+
+  .app-question-card-richtext .content-renderer :where(p, li, figcaption),
+  .app-question-card-option-richtext .content-renderer :where(p, li, figcaption) {
+    overflow-wrap: anywhere;
+  }
+
+  .app-question-card-tag-list {
+    @apply flex flex-wrap gap-2 pt-1;
+  }
+
+  .app-section-tag-summary {
+    @apply space-y-2;
+  }
+
+  .app-section-tag-row {
+    @apply grid gap-2.5 rounded-[calc(var(--app-radius-md)+0.05rem)] border px-3 py-2.5;
+    border-color: hsl(var(--border) / 0.7);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-surface-2) / 0.66) 100%
+      );
+    box-shadow: 0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.1);
+  }
+
+  .app-section-tag-row-header {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+
+  .app-section-tag-type {
+    @apply inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em];
+    border-color: hsl(var(--primary) / 0.14);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--primary) / 0.08) 100%
+      );
+    color: hsl(var(--primary));
+  }
+
+  .app-section-tag-count {
+    @apply text-[11px] font-semibold leading-5 text-muted-foreground;
+  }
+
+  .app-section-tag-chip-list {
+    @apply flex flex-wrap gap-1.5;
+  }
+
+  .app-section-tag-chip {
+    @apply inline-flex min-h-8 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-5;
+    gap: 0.375rem;
+    border-color: hsl(var(--border) / 0.72);
+    background-color: hsl(var(--background) / 0.9);
+    color: hsl(var(--foreground) / 0.82);
+  }
+
+  .app-section-tag-chip-count {
+    @apply inline-flex min-w-[1.35rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold;
+    background-color: hsl(var(--primary) / 0.1);
+    color: hsl(var(--primary));
+  }
+
+  @media (min-width: 768px) {
+    .app-section-tag-row {
+      grid-template-columns: minmax(0, 10.5rem) minmax(0, 1fr);
+      align-items: start;
+    }
+
+    .app-section-tag-row-header {
+      @apply flex-col items-start justify-start gap-1;
+    }
+  }
+
   .app-form-section-heading {
     @apply space-y-0;
   }
@@ -2540,6 +2645,8 @@
   .app-table-scroll-area {
     scroll-padding-inline: 0.75rem;
     overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
+    touch-action: pan-x pan-y;
   }
 
   @media (max-width: 767px) {
@@ -2829,7 +2936,7 @@
   }
 
   .app-dashboard-module-grid {
-    @apply grid gap-3 md:grid-cols-2 xl:grid-cols-4;
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-4;
   }
 
   .app-table-dense table {
@@ -2887,7 +2994,7 @@
   }
 
   .app-spotlight-grid {
-    @apply grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)];
+    @apply grid gap-4 lg:grid-cols-[minmax(0,1.08fr)_minmax(18rem,0.92fr)];
   }
 
   .app-create-shell-grid {
@@ -2911,30 +3018,30 @@
   }
 
   .app-spotlight-card {
-    @apply relative overflow-hidden border p-3.5 sm:p-5 lg:p-6;
+    @apply relative overflow-hidden border p-4 sm:p-5 lg:p-6;
     border-color: hsl(var(--border) / 0.84);
     border-radius: calc(var(--app-radius-lg) + 0.125rem);
     background:
-      radial-gradient(circle at top left, hsl(var(--app-nav-accent) / 0.08) 0%, transparent 16rem),
-      radial-gradient(circle at top right, hsl(40 42% 72% / 0.16) 0%, transparent 14rem),
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.08) 0%, transparent 15rem),
+      radial-gradient(circle at bottom left, hsl(40 42% 72% / 0.16) 0%, transparent 15rem),
       linear-gradient(
         180deg,
         hsl(var(--app-surface-1) / 0.995) 0%,
-        hsl(var(--app-surface-2) / 0.84) 100%
+        hsl(var(--app-surface-2) / 0.86) 100%
       );
     box-shadow:
-      0 26px 46px -36px hsl(var(--app-shadow-deep) / 0.13),
+      0 24px 42px -34px hsl(var(--app-shadow-deep) / 0.12),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.8);
   }
 
   .app-spotlight-card-strong {
     background:
       radial-gradient(circle at top left, hsl(var(--primary) / 0.12) 0%, transparent 15rem),
-      radial-gradient(circle at top right, hsl(40 42% 72% / 0.2) 0%, transparent 15rem),
+      radial-gradient(circle at bottom right, hsl(40 42% 72% / 0.18) 0%, transparent 16rem),
       linear-gradient(
         180deg,
-        hsl(var(--app-surface-2) / 0.92) 0%,
-        hsl(var(--app-surface-1)) 100%
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-2) / 0.9) 100%
       );
   }
 
@@ -3024,21 +3131,28 @@
   }
 
   .app-flow-item {
-    @apply flex gap-2.5 rounded-xl border px-3 py-2.5;
+    @apply flex gap-3 rounded-xl border px-3.5 py-3;
     border-color: hsl(var(--border) / 0.82);
     background:
       linear-gradient(
         180deg,
         hsl(var(--app-surface-1) / 0.98) 0%,
-        hsl(var(--app-surface-2) / 0.76) 100%
+        hsl(var(--app-surface-tint) / 0.58) 100%
       );
-    box-shadow: 0 16px 24px -24px hsl(var(--app-shadow-deep) / 0.1);
+    box-shadow: 0 18px 28px -28px hsl(var(--app-shadow-deep) / 0.1);
   }
 
   .app-flow-index {
-    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold;
-    background-color: hsl(var(--primary) / 0.12);
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold;
+    border: 1px solid hsl(var(--primary) / 0.08);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--primary) / 0.18) 0%,
+        hsl(var(--primary) / 0.08) 100%
+      );
     color: hsl(var(--primary));
+    box-shadow: inset 0 1px 0 hsl(var(--background) / 0.4);
   }
 
   .app-flow-copy {
@@ -3054,66 +3168,109 @@
   }
 
   .app-workspace-module-card {
-    @apply relative flex h-full flex-col gap-5 overflow-hidden border p-5 transition-[background-color,border-color,box-shadow,transform] duration-200;
+    --app-workspace-module-accent: var(--primary);
+    --app-workspace-module-glow: 40 42% 72%;
+    @apply relative flex h-full flex-col gap-4 overflow-hidden border p-5 transition-[background-color,border-color,box-shadow,transform] duration-200;
     border-color: hsl(var(--border) / 0.84);
     border-radius: calc(var(--app-radius-lg) + 0.125rem);
     background:
-      radial-gradient(circle at top right, hsl(var(--primary) / 0.16) 0%, transparent 13rem),
-      radial-gradient(circle at top left, hsl(40 42% 72% / 0.12) 0%, transparent 14rem),
+      radial-gradient(circle at top right, hsl(var(--app-workspace-module-accent) / 0.17) 0%, transparent 12rem),
+      radial-gradient(circle at bottom left, hsl(var(--app-workspace-module-glow) / 0.18) 0%, transparent 15rem),
       linear-gradient(
         180deg,
         hsl(var(--app-surface-1) / 0.995) 0%,
-        hsl(var(--app-surface-2) / 0.82) 100%
+        hsl(var(--app-surface-2) / 0.84) 100%
       );
     box-shadow:
-      0 24px 40px -36px hsl(var(--app-shadow-deep) / 0.13),
+      0 24px 42px -34px hsl(var(--app-shadow-deep) / 0.13),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.84);
   }
 
   .app-workspace-module-card:hover {
     border-color: hsl(var(--primary) / 0.24);
     box-shadow:
-      0 30px 46px -34px hsl(var(--app-shadow-deep) / 0.16),
+      0 32px 52px -34px hsl(var(--app-shadow-deep) / 0.16),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.88);
-    transform: translateY(-2px);
+    transform: translateY(-3px);
+  }
+
+  .app-workspace-module-card-papers {
+    --app-workspace-module-accent: var(--primary);
+    --app-workspace-module-glow: 38 72% 72%;
+  }
+
+  .app-workspace-module-card-questions {
+    --app-workspace-module-accent: 214 74% 44%;
+    --app-workspace-module-glow: 198 76% 74%;
+  }
+
+  .app-workspace-module-card-students {
+    --app-workspace-module-accent: 151 56% 35%;
+    --app-workspace-module-glow: 151 40% 76%;
+  }
+
+  .app-workspace-module-card-reports {
+    --app-workspace-module-accent: 28 76% 44%;
+    --app-workspace-module-glow: 38 76% 76%;
+  }
+
+  .app-workspace-module-card-top {
+    @apply flex items-start justify-between gap-3;
   }
 
   .app-workspace-module-header {
-    @apply flex items-start gap-3;
+    @apply flex items-start gap-3.5;
   }
 
   .app-workspace-module-icon {
     @apply flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl;
+    border: 1px solid hsl(var(--app-workspace-module-accent) / 0.1);
     background:
       linear-gradient(
         180deg,
-        hsl(var(--primary) / 0.18) 0%,
-        hsl(var(--primary) / 0.08) 100%
+        hsl(var(--app-workspace-module-accent) / 0.18) 0%,
+        hsl(var(--app-workspace-module-accent) / 0.08) 100%
       );
-    color: hsl(var(--primary));
+    color: hsl(var(--app-workspace-module-accent));
     box-shadow:
-      inset 0 0 0 1px hsl(var(--primary) / 0.08),
-      0 18px 28px -26px hsl(var(--primary) / 0.22);
+      inset 0 1px 0 hsl(var(--background) / 0.42),
+      0 18px 28px -26px hsl(var(--app-workspace-module-accent) / 0.22);
   }
 
   .app-workspace-module-label {
     @apply inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.1em];
-    border-color: hsl(var(--border) / 0.82);
-    background-color: hsl(var(--app-surface-1) / 0.84);
-    color: hsl(var(--muted-foreground));
+    border-color: hsl(var(--app-workspace-module-accent) / 0.12);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.96) 0%,
+        hsl(var(--app-workspace-module-accent) / 0.08) 100%
+      );
+    color: hsl(var(--foreground) / 0.74);
   }
 
   .app-workspace-module-title {
-    @apply mt-3 text-[1.3rem] font-semibold leading-tight tracking-[-0.028em] text-foreground;
+    @apply mt-2.5 text-[1.28rem] font-semibold leading-tight tracking-[-0.03em] text-foreground;
   }
 
   .app-workspace-module-copy {
-    @apply mt-2 text-[14px] leading-6 text-muted-foreground;
+    @apply mt-1.5 text-[13px] leading-6 text-muted-foreground;
+  }
+
+  .app-workspace-module-chip-row {
+    @apply flex flex-wrap gap-1.5;
+  }
+
+  .app-workspace-module-chip {
+    @apply inline-flex min-h-8 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-5;
+    border-color: hsl(var(--app-workspace-module-accent) / 0.12);
+    background-color: hsl(var(--app-workspace-module-accent) / 0.08);
+    color: hsl(var(--foreground) / 0.74);
   }
 
   .app-workspace-module-cta {
     @apply mt-auto inline-flex items-center gap-2 text-sm font-semibold;
-    color: hsl(var(--primary));
+    color: hsl(var(--app-workspace-module-accent));
   }
 
   .app-workspace-module-card:hover .app-workspace-module-cta {
@@ -3121,64 +3278,150 @@
   }
 
   .app-workspace-overview-page .app-page-hero {
-    border-color: hsl(var(--border) / 0.74);
-    background: hsl(var(--app-surface-1) / 0.88);
-    box-shadow: 0 14px 28px -28px hsl(var(--app-shadow-deep) / 0.07);
+    border-color: hsl(var(--primary) / 0.14);
+    background:
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.18) 0%, transparent 18rem),
+      radial-gradient(circle at bottom left, hsl(var(--app-surface-tint-strong) / 0.56) 0%, transparent 22rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-2) / 0.94) 100%
+      );
+    box-shadow:
+      0 28px 52px -38px hsl(var(--app-shadow-deep) / 0.14),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.84);
   }
 
-  .app-workspace-overview-page .app-page-hero::before,
+  .app-workspace-overview-page .app-page-hero::before {
+    top: -3rem;
+    right: -2.5rem;
+    width: 14rem;
+    height: 14rem;
+    background: radial-gradient(circle, hsl(var(--primary) / 0.2) 0%, transparent 72%);
+    opacity: 0.84;
+  }
+
   .app-workspace-overview-page .app-page-hero::after {
-    display: none;
+    display: block;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary) / 0.34) 0%,
+      hsl(40 42% 72% / 0.18) 42%,
+      transparent 88%
+    );
+  }
+
+  .app-workspace-overview-page .app-page-description {
+    max-width: 46rem;
   }
 
   .app-workspace-overview-page .app-meta-chip {
-    border-color: hsl(var(--border) / 0.68);
-    background: hsl(var(--app-surface-1) / 0.92);
-    box-shadow: none;
+    border-color: hsl(var(--primary) / 0.1);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--primary) / 0.06) 100%
+      );
+    box-shadow:
+      0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.1),
+      inset 0 1px 0 hsl(var(--background) / 0.46);
   }
 
   .app-workspace-overview-page .app-metric-card {
-    border-color: hsl(var(--border) / 0.72);
-    background: hsl(var(--app-surface-1) / 0.92);
-    box-shadow: 0 10px 20px -22px hsl(var(--app-shadow-deep) / 0.06);
+    border-color: hsl(var(--border) / 0.78);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-tint) / 0.68) 100%
+      );
+    box-shadow:
+      0 18px 28px -28px hsl(var(--app-shadow-deep) / 0.11),
+      inset 0 1px 0 hsl(var(--background) / 0.42);
   }
 
-  .app-workspace-overview-page .app-workspace-module-card,
-  .app-workspace-overview-page .app-spotlight-card,
-  .app-workspace-overview-page .app-inline-stat,
-  .app-workspace-overview-page .app-link-card,
-  .app-workspace-overview-page .app-flow-item {
-    border-color: hsl(var(--border) / 0.72);
-    background: hsl(var(--app-surface-1) / 0.92);
-    box-shadow: 0 10px 22px -24px hsl(var(--app-shadow-deep) / 0.06);
+  .app-workspace-overview-page .app-workspace-module-card {
+    border-color: hsl(var(--border) / 0.78);
+    box-shadow:
+      0 24px 44px -34px hsl(var(--app-shadow-deep) / 0.13),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.84);
   }
 
   .app-workspace-overview-page .app-spotlight-card-strong {
-    border-color: hsl(var(--primary) / 0.12);
-    background: hsl(var(--app-surface-2) / 0.78);
+    border-color: hsl(var(--primary) / 0.16);
+    background:
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.15) 0%, transparent 16rem),
+      radial-gradient(circle at bottom right, hsl(40 42% 72% / 0.18) 0%, transparent 18rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-tint) / 0.72) 100%
+      );
+  }
+
+  .app-workspace-overview-page .app-spotlight-card {
+    border-color: hsl(var(--border) / 0.78);
+    box-shadow:
+      0 22px 40px -32px hsl(var(--app-shadow-deep) / 0.12),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-workspace-overview-page .app-link-card {
+    border-color: hsl(var(--border) / 0.76);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-tint) / 0.6) 100%
+      );
+    box-shadow:
+      0 16px 26px -28px hsl(var(--app-shadow-deep) / 0.1),
+      inset 0 1px 0 hsl(var(--background) / 0.4);
+  }
+
+  .app-workspace-overview-page .app-flow-item {
+    border-color: hsl(var(--border) / 0.76);
+    box-shadow:
+      0 16px 24px -26px hsl(var(--app-shadow-deep) / 0.1),
+      inset 0 1px 0 hsl(var(--background) / 0.38);
   }
 
   .app-workspace-overview-page .app-page-hero-toolbar {
-    border-color: hsl(var(--border) / 0.72);
-    background: hsl(var(--app-surface-1) / 0.9);
-    box-shadow: 0 10px 22px -24px hsl(var(--app-shadow-deep) / 0.06);
+    border-color: hsl(var(--border) / 0.76);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-tint) / 0.66) 100%
+      );
+    box-shadow:
+      0 18px 32px -30px hsl(var(--app-shadow-deep) / 0.1),
+      inset 0 1px 0 hsl(var(--background) / 0.42);
   }
 
   .app-workspace-overview-page .app-link-card:hover,
   .app-workspace-overview-page .app-workspace-module-card:hover {
-    border-color: hsl(var(--primary) / 0.16);
-    background: hsl(var(--app-surface-1) / 0.98);
-    box-shadow: 0 12px 24px -22px hsl(var(--app-shadow-deep) / 0.08);
-    transform: translateY(-1px);
+    border-color: hsl(var(--primary) / 0.2);
+    box-shadow:
+      0 26px 40px -30px hsl(var(--app-shadow-deep) / 0.13),
+      inset 0 1px 0 hsl(var(--background) / 0.46);
   }
 
   .app-workspace-overview-page .app-workspace-module-icon,
   .app-workspace-overview-link-icon {
     @apply flex h-10 w-10 items-center justify-center rounded-2xl border;
     border-color: hsl(var(--primary) / 0.1);
-    background: hsl(var(--primary) / 0.08);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.96) 0%,
+        hsl(var(--primary) / 0.1) 100%
+      );
     color: hsl(var(--primary));
-    box-shadow: none;
+    box-shadow:
+      inset 0 1px 0 hsl(var(--background) / 0.46),
+      0 16px 26px -28px hsl(var(--app-shadow-deep) / 0.12);
   }
 
   .app-workspace-overview-page .app-workspace-module-icon {
@@ -3186,8 +3429,13 @@
   }
 
   .app-workspace-overview-page .app-workspace-module-label {
-    border-color: hsl(var(--border) / 0.68);
-    background-color: hsl(var(--app-surface-1) / 0.94);
+    border-color: hsl(var(--app-workspace-module-accent) / 0.12);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-workspace-module-accent) / 0.08) 100%
+      );
   }
 
   .app-chip-cloud {

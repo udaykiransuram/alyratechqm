@@ -831,11 +831,19 @@ async function runStudentFlow({
         `/api/student/tests/${paperId}/attempt`,
         {
           method: 'PATCH',
-          data: { sectionAnswers },
+          data: {
+            attemptId: attempt?._id ? String(attempt._id) : null,
+            sectionAnswers,
+            baseLastSavedAt: attempt?.lastSavedAt || null,
+          },
           timeoutMs,
         },
       );
-      ensureApiSuccess(saveResult, 'Failed to save the online test.');
+      const savedAttempt = ensureApiSuccess(
+        saveResult,
+        'Failed to save the online test.',
+      );
+      attempt = savedAttempt?.attempt || attempt;
 
       if (heartbeatEnabled) {
         await heartbeatStudent(context, metrics, student.label, timeoutMs);
@@ -857,7 +865,9 @@ async function runStudentFlow({
         {
           method: 'POST',
           data: {
+            attemptId: attempt?._id ? String(attempt._id) : null,
             sectionAnswers: buildSectionAnswersPayload(entries, rounds, rounds),
+            baseLastSavedAt: attempt?.lastSavedAt || null,
           },
           timeoutMs,
         },

@@ -1,6 +1,5 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 
 import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
@@ -22,6 +21,7 @@ import {
 } from "@/lib/user-credentials";
 import { isAllowedConfiguredSiteUrl } from "@/lib/site-url";
 import { getPublicSchoolOptionByKey } from "@/lib/server/public-school-data";
+import { comparePasswordHash } from "@/lib/server/password-compare";
 import { invalidateStudentSessionValidationCache } from "@/lib/student-session-cache";
 import { invalidateStudentTestResourceCache } from "@/lib/student-test-server";
 import CompanyAdmin from "@/models/CompanyAdmin";
@@ -33,6 +33,8 @@ const STUDENT_PASSWORD_NOT_PROVISIONED_ERROR = "StudentPasswordNotProvisioned";
 const STUDENT_ROLL_NUMBER_NOT_FOUND_ERROR = "StudentRollNumberNotFound";
 const STUDENT_SIGN_IN_FAILED_ERROR = "StudentSignInFailed";
 const STUDENT_SIGN_IN_RATE_LIMITED_ERROR = "StudentSignInRateLimited";
+const AUTH_USER_PROJECTION =
+  "name email passwordHash role class academicSection";
 const FORWARDED_AUTH_ERRORS = new Set([
   SCHOOL_NOT_FOUND_ERROR,
   STUDENT_ALREADY_SIGNED_IN_ERROR,
@@ -65,12 +67,14 @@ export const authOptions: NextAuthOptions = {
           const companyAdmin = await CompanyAdmin.findOne({
             email,
             isActive: true,
-          });
+          })
+            .select("name email passwordHash")
+            .lean();
           if (!companyAdmin?.passwordHash) {
             return null;
           }
 
-          const isValid = await bcrypt.compare(
+          const isValid = await comparePasswordHash(
             credentials.password,
             companyAdmin.passwordHash,
           );
@@ -150,13 +154,19 @@ export const authOptions: NextAuthOptions = {
                 email,
                 ...buildArchiveFilter(false),
               })
+                .select(AUTH_USER_PROJECTION)
+                .lean()
             : null;
 
           if (!user) {
             const matchingStudents = await findStudentsByRollNumber(
               User,
               rollNumber,
-              { limit: 2 },
+              {
+                limit: 2,
+                projection: AUTH_USER_PROJECTION,
+                lean: true,
+              },
             );
 
             if (matchingStudents.length > 1) {
@@ -178,7 +188,7 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          const isValid = await bcrypt.compare(
+          const isValid = await comparePasswordHash(
             credentials.password,
             user.passwordHash,
           );
@@ -255,7 +265,7 @@ export const authOptions: NextAuthOptions = {
               );
             }
 
-            await clearStudentLoginRateLimit(schoolKey, rollNumber).catch(
+            void clearStudentLoginRateLimit(schoolKey, rollNumber).catch(
               (error) => {
                 console.error(
                   "Failed to clear student login rate limit after successful sign in:",

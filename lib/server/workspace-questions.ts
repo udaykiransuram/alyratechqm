@@ -6,6 +6,7 @@ import { getTenantModels } from "@/lib/db-tenant";
 import { sanitizeQuestionForApiResponse } from "@/lib/security/html-sanitize";
 import {
   getWorkspaceClasses,
+  getWorkspaceSubjects,
   getWorkspaceTags,
 } from "@/lib/server/workspace-support-data";
 
@@ -371,10 +372,17 @@ export async function getWorkspaceQuestionSupportData({
   const [classes, tags, subjects] = await Promise.all([
     getWorkspaceClasses(schoolKey),
     getWorkspaceTags(schoolKey),
-    getWorkspaceSubjectsForClass({
-      schoolKey,
-      classId: resolvedClassId,
-    }),
+    resolvedClassId
+      ? getWorkspaceSubjectsForClass({
+          schoolKey,
+          classId: resolvedClassId,
+        })
+      : getWorkspaceSubjects(schoolKey).then((allSubjects) =>
+          allSubjects.map((subject) => ({
+            _id: String(subject._id || ""),
+            name: String(subject.name || ""),
+          })),
+        ),
   ]);
 
   return {

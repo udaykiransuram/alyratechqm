@@ -12,9 +12,11 @@ const enableClientApiProbe = process.env.NODE_ENV !== "production";
 export default function PublicRouteShell({
   children,
   flushTop = false,
+  hideNavbar = false,
 }: {
   children: ReactNode;
   flushTop?: boolean;
+  hideNavbar?: boolean;
 }) {
   return (
     <div className="public-site-shell relative flex min-h-screen flex-col overflow-x-hidden">
@@ -42,7 +44,7 @@ export default function PublicRouteShell({
         />
         <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.06)_1px,transparent_1px)] [background-size:132px_132px] [mask-image:linear-gradient(180deg,rgba(0,0,0,0.24),transparent_82%)]" />
       </div>
-      <Navbar />
+      {hideNavbar ? null : <Navbar />}
       <ViewportHover />
       <main
         className={cn(

@@ -215,12 +215,12 @@ export default function StudentTestPreStartView({
                       {section.questionCount} question{section.questionCount === 1 ? "" : "s"} • {section.totalMarks} marks • +{section.defaultMarks} / -{section.defaultNegativeMarks}
                     </p>
                     {section.description ? (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="whitespace-pre-line text-sm text-muted-foreground">
                         {section.description}
                       </p>
                     ) : null}
                     {section.instructions ? (
-                      <p className="text-sm leading-6 text-foreground/82">
+                      <p className="whitespace-pre-line text-sm leading-6 text-foreground/82">
                         {section.instructions}
                       </p>
                     ) : null}
@@ -255,7 +255,7 @@ export default function StudentTestPreStartView({
             <CardTitle>Instructions</CardTitle>
           </CardHeader>
           <CardContent className="app-section-body prose prose-sm max-w-none dark:prose-invert">
-            <p>{paper.instructions}</p>
+            <p className="whitespace-pre-line">{paper.instructions}</p>
           </CardContent>
         </Card>
       ) : null}

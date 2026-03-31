@@ -7,5 +7,9 @@ export default function LandingLayout({
 }: {
   children: ReactNode;
 }) {
-  return <PublicRouteShell flushTop>{children}</PublicRouteShell>;
+  return (
+    <PublicRouteShell flushTop hideNavbar>
+      {children}
+    </PublicRouteShell>
+  );
 }

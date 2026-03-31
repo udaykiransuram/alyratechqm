@@ -15,6 +15,7 @@ import '@/models/QuestionPaperResponse';
 import '@/models/User';
 import '@/models/AuditLog';
 import '@/models/ResponseUploadHistory';
+import '@/models/QuestionImportDraft';
 
 type TenantCoreModelMap = {
   TagType: typeof import('@/models/TagType').default;
@@ -28,6 +29,7 @@ type TenantCoreModelMap = {
   User: typeof import('@/models/User').default;
   AuditLog: typeof import('@/models/AuditLog').default;
   ResponseUploadHistory: typeof import('@/models/ResponseUploadHistory').default;
+  QuestionImportDraft: typeof import('@/models/QuestionImportDraft').default;
 };
 
 type TenantModelForName<Name extends string> =

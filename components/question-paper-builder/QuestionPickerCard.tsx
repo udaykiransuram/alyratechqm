@@ -6,11 +6,13 @@ import { Edit } from "lucide-react";
 import { toast as showToast } from "sonner";
 
 import type { Question, Tag } from "@/components/question-items";
+import QuestionTagList from "@/components/questions/QuestionTagList";
 import { QuestionPreviewRenderer } from "@/components/question-paper-builder/QuestionPreviewRenderer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { getQuestionTypeLabel } from "@/lib/question-display";
 import { cn } from "@/lib/utils";
 
 const EditQuestionModal = dynamic(
@@ -49,19 +51,6 @@ function getCreatedAtLabel(createdAt?: string) {
 
   const date = new Date(createdAt);
   return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString();
-}
-
-function getQuestionTypeLabel(type: Question["type"]) {
-  switch (type) {
-    case "single":
-      return "Single choice";
-    case "multiple":
-      return "Multiple choice";
-    case "matrix-match":
-      return "Matrix match";
-    default:
-      return "Descriptive";
-  }
 }
 
 export function QuestionPickerCard({
@@ -156,27 +145,24 @@ export function QuestionPickerCard({
         ) : null}
 
         {showFooter ? (
-          <CardFooter className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-4 pb-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-muted-foreground">
+          <CardFooter className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-4 pb-4 pt-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-wrap items-start gap-x-2 gap-y-2.5 text-xs text-muted-foreground">
               {tags.length > 0 ? (
                 <>
-                  {tags.slice(0, 4).map((tag) => (
-                    <Badge key={tag._id} variant="secondary" className="font-normal">
-                      {tag.name}
-                    </Badge>
-                  ))}
-                  {tags.length > 4 ? (
-                    <Badge variant="outline" className="font-normal">
-                      +{tags.length - 4} more
-                    </Badge>
-                  ) : null}
+                  <QuestionTagList
+                    tags={tags}
+                    maxVisible={4}
+                    className="min-w-0 pt-0.5"
+                    badgeClassName="shadow-none"
+                    moreBadgeClassName="shadow-none"
+                  />
                 </>
               ) : null}
               {tags.length > 0 && createdAtLabel ? (
-                <Separator orientation="vertical" className="hidden h-4 sm:block" />
+                <Separator orientation="vertical" className="mt-1 hidden h-4 sm:block" />
               ) : null}
               {createdAtLabel ? (
-                <p className="text-xs text-muted-foreground sm:text-right">{createdAtLabel}</p>
+                <p className="pt-1 text-xs text-muted-foreground sm:text-right">{createdAtLabel}</p>
               ) : null}
             </div>
           </CardFooter>

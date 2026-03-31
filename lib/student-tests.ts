@@ -10,6 +10,7 @@ import {
   deriveSectionDefaultMarks,
   deriveSectionDefaultNegativeMarks,
 } from "@/lib/question-paper/sections";
+import { sanitizeRichTextToPlainText } from "@/lib/security/html-sanitize";
 
 function normalizeId(value: unknown) {
   return String(value || "").trim();
@@ -222,7 +223,7 @@ export function sanitizePaperForStudent(paper: any) {
   return {
     _id: String(paper?._id || ""),
     title: String(paper?.title || ""),
-    instructions: String(paper?.instructions || ""),
+    instructions: sanitizeRichTextToPlainText(paper?.instructions),
     duration: Number(paper?.duration || 0),
     passingMarks: Number(paper?.passingMarks || 0),
     totalMarks: Number(paper?.totalMarks || 0),
@@ -253,8 +254,8 @@ export function sanitizePaperForStudent(paper: any) {
     sections: (Array.isArray(paper?.sections) ? paper.sections : []).map(
       (section: any) => ({
         name: String(section?.name || ""),
-        description: String(section?.description || ""),
-        instructions: String(section?.instructions || ""),
+        description: sanitizeRichTextToPlainText(section?.description),
+        instructions: sanitizeRichTextToPlainText(section?.instructions),
         defaultMarks: deriveSectionDefaultMarks(section, 1),
         defaultNegativeMarks: deriveSectionDefaultNegativeMarks(section, 0),
         marks: Number(section?.marks || 0),

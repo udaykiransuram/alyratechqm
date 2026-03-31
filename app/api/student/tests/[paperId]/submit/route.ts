@@ -26,6 +26,7 @@ export async function POST(
       schoolKey: auth.schoolKey as string,
       studentId: auth.session.user.id,
       paperId,
+      attemptId: typeof body?.attemptId === "string" ? body.attemptId : null,
       sectionAnswers: body?.sectionAnswers,
       baseLastSavedAt:
         typeof body?.baseLastSavedAt === "string" ? body.baseLastSavedAt : null,

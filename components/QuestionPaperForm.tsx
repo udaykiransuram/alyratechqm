@@ -1349,28 +1349,23 @@ export default function QuestionPaperForm({
               <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/36 to-transparent" />
               <div className="pointer-events-none absolute -right-16 top-0 h-28 w-28 rounded-full bg-primary/10 blur-3xl" />
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0 space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center rounded-full border border-primary/16 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
-                      Builder
-                    </span>
-                    {sections.length > 0 ? (
-                      <>
-                        <span className="inline-flex items-center rounded-full border border-border/60 bg-background/88 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-sm">
-                          {sections.length} sections
-                        </span>
-                        <span className="inline-flex items-center rounded-full border border-border/60 bg-background/88 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-sm">
-                          {totalQuestions} questions
-                        </span>
-                        <span className="inline-flex items-center rounded-full border border-primary/16 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary shadow-sm">
-                          {totalPaperMarks} marks
-                        </span>
-                      </>
-                    ) : null}
+                <div className="min-w-0 space-y-2.5">
+                  <span className="inline-flex items-center rounded-full border border-primary/16 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+                    Builder
+                  </span>
+                  <div className="space-y-1.5">
+                    <h2 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
+                      Section Builder
+                    </h2>
+                    <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                      Start with the section name and marking defaults. Add notes only when they help, then bring in questions.
+                    </p>
                   </div>
-                  <h2 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
-                    Section Builder
-                  </h2>
+                  <p className="text-sm font-medium text-foreground/82">
+                    {sections.length > 0
+                      ? `${sections.length} section${sections.length === 1 ? '' : 's'} / ${totalQuestions} question${totalQuestions === 1 ? '' : 's'} / ${totalPaperMarks} marks`
+                      : 'No sections yet. Add one section to define the structure and marking first.'}
+                  </p>
                 </div>
                 <Button
                   variant="default"
@@ -1378,7 +1373,7 @@ export default function QuestionPaperForm({
                   onClick={handleAddSection}
                 >
                   <Plus className="h-4 w-4" />
-                  Add New Section
+                  Add Section
                 </Button>
               </div>
             </div>
@@ -1416,38 +1411,28 @@ export default function QuestionPaperForm({
                             >
                               {sectionNumberLabel}
                             </div>
-                            <div className="flex min-w-0 flex-1 flex-col gap-3">
+                            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="inline-flex items-center rounded-full border border-primary/16 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+                                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                                   Section {sectionIndex + 1}
                                 </span>
                                 <span
                                   className={cn(
-                                    "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]",
+                                    "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold",
                                     canAddQuestions
                                       ? "border-emerald-300/55 bg-emerald-50 text-emerald-800 dark:border-emerald-700/45 dark:bg-emerald-950/35 dark:text-emerald-200"
                                       : "border-amber-300/55 bg-amber-50 text-amber-800 dark:border-amber-700/45 dark:bg-amber-950/35 dark:text-amber-200",
                                   )}
                                 >
-                                  {canAddQuestions ? 'Ready for Questions' : 'Setup Needed'}
+                                  {canAddQuestions ? 'Ready' : 'Setup needed'}
                                 </span>
                               </div>
-                              <div className="flex min-w-0 flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-                                <h3 className="truncate text-[18px] font-semibold tracking-[-0.04em] text-foreground">
-                                  {section.name || `Untitled Section ${sectionIndex + 1}`}
-                                </h3>
-                                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                  <span className="rounded-full border border-border/60 bg-background/88 px-3 py-1.5 text-xs font-semibold shadow-sm">
-                                    {section.questions.length} question{section.questions.length === 1 ? '' : 's'}
-                                  </span>
-                                  <span className="rounded-full border border-border/60 bg-background/88 px-3 py-1.5 text-xs font-semibold shadow-sm">
-                                    +{section.defaultMarks ?? 0} / -{section.defaultNegativeMarks ?? 0}
-                                  </span>
-                                  <span className="rounded-full border border-primary/16 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary shadow-sm">
-                                    {sectionTotalMarks} marks
-                                  </span>
-                                </div>
-                              </div>
+                              <h3 className="truncate text-[18px] font-semibold tracking-[-0.04em] text-foreground">
+                                {section.name || `Untitled Section ${sectionIndex + 1}`}
+                              </h3>
+                              <p className="text-sm leading-6 text-muted-foreground">
+                                {section.questions.length} question{section.questions.length === 1 ? '' : 's'} / {sectionTotalMarks} marks / Defaults +{section.defaultMarks ?? 0} / -{section.defaultNegativeMarks ?? 0}
+                              </p>
                             </div>
                           </div>
                         </AccordionTrigger>
