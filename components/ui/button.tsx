@@ -10,17 +10,17 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "border border-[hsl(var(--primary)/0.14)] bg-primary text-primary-foreground shadow-[0_20px_34px_-24px_hsl(var(--primary)/0.38),inset_0_1px_0_hsl(var(--background)/0.16)] hover:-translate-y-px hover:bg-primary/95 hover:shadow-[0_24px_38px_-24px_hsl(var(--primary)/0.42),inset_0_1px_0_hsl(var(--background)/0.18)] active:translate-y-0",
+          "border border-[hsl(var(--primary)/0.14)] bg-primary text-primary-foreground shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.28),inset_0_1px_0_hsl(var(--background)/0.14)] hover:-translate-y-px hover:bg-primary/96 hover:shadow-[0_18px_30px_-24px_hsl(var(--primary)/0.32),inset_0_1px_0_hsl(var(--background)/0.16)] active:translate-y-0",
         primary:
-          "border border-[hsl(var(--primary)/0.14)] bg-primary text-primary-foreground shadow-[0_20px_34px_-24px_hsl(var(--primary)/0.38),inset_0_1px_0_hsl(var(--background)/0.16)] hover:-translate-y-px hover:bg-primary/95 hover:shadow-[0_24px_38px_-24px_hsl(var(--primary)/0.42),inset_0_1px_0_hsl(var(--background)/0.18)] active:translate-y-0",
+          "border border-[hsl(var(--primary)/0.14)] bg-primary text-primary-foreground shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.28),inset_0_1px_0_hsl(var(--background)/0.14)] hover:-translate-y-px hover:bg-primary/96 hover:shadow-[0_18px_30px_-24px_hsl(var(--primary)/0.32),inset_0_1px_0_hsl(var(--background)/0.16)] active:translate-y-0",
         destructive:
-          "border border-[hsl(var(--destructive)/0.16)] bg-destructive text-destructive-foreground shadow-[0_20px_34px_-24px_hsl(var(--destructive)/0.28),inset_0_1px_0_hsl(var(--background)/0.16)] hover:-translate-y-px hover:bg-destructive/95 hover:shadow-[0_24px_38px_-24px_hsl(var(--destructive)/0.34),inset_0_1px_0_hsl(var(--background)/0.18)] active:translate-y-0",
+          "border border-[hsl(var(--destructive)/0.16)] bg-destructive text-destructive-foreground shadow-[0_16px_28px_-24px_hsl(var(--destructive)/0.22),inset_0_1px_0_hsl(var(--background)/0.14)] hover:-translate-y-px hover:bg-destructive/96 hover:shadow-[0_18px_30px_-24px_hsl(var(--destructive)/0.26),inset_0_1px_0_hsl(var(--background)/0.16)] active:translate-y-0",
         outline:
-          "border border-border/78 bg-[hsl(var(--app-surface-1)/0.98)] text-foreground shadow-[0_14px_24px_-24px_hsl(var(--app-shadow-deep)/0.08),inset_0_1px_0_hsl(var(--app-surface-1)/0.82)] hover:-translate-y-px hover:border-primary/20 hover:bg-[hsl(var(--app-surface-2)/0.92)] hover:text-foreground hover:shadow-[0_18px_28px_-24px_hsl(var(--app-shadow-deep)/0.12),inset_0_1px_0_hsl(var(--app-surface-1)/0.86)] active:translate-y-0",
+          "border border-border/76 bg-[hsl(var(--app-surface-1)/0.96)] text-foreground shadow-[0_10px_20px_-22px_hsl(var(--app-shadow-deep)/0.08),inset_0_1px_0_hsl(var(--app-surface-1)/0.8)] hover:-translate-y-px hover:border-primary/18 hover:bg-[hsl(var(--app-surface-2)/0.82)] hover:text-foreground hover:shadow-[0_14px_24px_-22px_hsl(var(--app-shadow-deep)/0.1),inset_0_1px_0_hsl(var(--app-surface-1)/0.84)] active:translate-y-0",
         secondary:
-          "border border-border/76 bg-[hsl(var(--app-surface-1)/0.98)] text-foreground shadow-[0_14px_24px_-24px_hsl(var(--app-shadow-deep)/0.08),inset_0_1px_0_hsl(var(--app-surface-1)/0.82)] hover:-translate-y-px hover:border-primary/18 hover:bg-[hsl(var(--app-surface-2)/0.88)] hover:shadow-[0_18px_28px_-24px_hsl(var(--app-shadow-deep)/0.12),inset_0_1px_0_hsl(var(--app-surface-1)/0.86)] active:translate-y-0",
+          "border border-border/76 bg-[hsl(var(--app-surface-1)/0.96)] text-foreground shadow-[0_10px_20px_-22px_hsl(var(--app-shadow-deep)/0.08),inset_0_1px_0_hsl(var(--app-surface-1)/0.8)] hover:-translate-y-px hover:border-primary/18 hover:bg-[hsl(var(--app-surface-2)/0.8)] hover:shadow-[0_14px_24px_-22px_hsl(var(--app-shadow-deep)/0.1),inset_0_1px_0_hsl(var(--app-surface-1)/0.84)] active:translate-y-0",
         ghost:
-          "text-foreground/72 shadow-none hover:bg-[hsl(var(--app-surface-2)/0.72)] hover:text-foreground",
+          "text-foreground/72 shadow-none hover:bg-[hsl(var(--app-surface-2)/0.64)] hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         plain: "text-muted-foreground shadow-none hover:text-foreground",
       },

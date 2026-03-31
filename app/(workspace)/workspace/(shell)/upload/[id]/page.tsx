@@ -56,7 +56,11 @@ export default async function QuestionImportReviewPage({
           title="Review Import Draft"
           description="Confirm the parsed paper setup, edit questions in a create-like workflow, and approve only the questions that should be published."
           actions={
-            <ReturnBackButton fallbackPath="/workspace/upload" label="Back" />
+            <ReturnBackButton
+              fallbackPath="/workspace/upload"
+              label="Back"
+              className="app-import-action-button"
+            />
           }
           meta={
             <>

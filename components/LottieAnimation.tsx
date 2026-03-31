@@ -1,10 +1,21 @@
 "use client";
+
 import dynamic from "next/dynamic";
+import type { DotLottie } from "@lottiefiles/dotlottie-react";
 import { useEffect, useRef, useState } from "react";
+
+const LOCAL_DOTLOTTIE_WASM_URL = "/wasm/dotlottie-player.wasm";
 
 // Lazy-load the heavy Lottie player on the client to reduce initial JS
 const DotLottieReact = dynamic(
-  () => import("@lottiefiles/dotlottie-react").then((m) => m.DotLottieReact),
+  () =>
+    import("@lottiefiles/dotlottie-react").then((module) => {
+      // Force the player to load the WASM bundle from our own deployment.
+      // The upstream default falls back to external CDNs, which is fragile
+      // behind production CSPs and is what breaks on Vercel.
+      module.setWasmUrl(LOCAL_DOTLOTTIE_WASM_URL);
+      return module.DotLottieReact;
+    }),
   {
     ssr: false,
     // Show a lightweight placeholder while the chunk loads; avoids layout shifts
@@ -32,6 +43,8 @@ export function LottieAnimation({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [playbackFailed, setPlaybackFailed] = useState(false);
+  const [dotLottie, setDotLottie] = useState<DotLottie | null>(null);
   const isGif = /\.(gif|webp)$/i.test(src);
   const isVideo = /\.(mp4|webm|ogg)$/i.test(src);
   const isLottie = /\.(lottie|json)$/i.test(src);
@@ -44,6 +57,10 @@ export function LottieAnimation({
     mq.addEventListener?.("change", onChange);
     return () => mq.removeEventListener?.("change", onChange);
   }, []);
+
+  useEffect(() => {
+    setPlaybackFailed(false);
+  }, [src]);
 
   useEffect(() => {
     if (!containerRef.current || isVisible) return;
@@ -62,6 +79,32 @@ export function LottieAnimation({
     io.observe(el);
     return () => io.disconnect();
   }, [isVisible]);
+
+  useEffect(() => {
+    if (!dotLottie) return;
+
+    const markReady = () => setPlaybackFailed(false);
+    const markFailed = () => setPlaybackFailed(true);
+
+    dotLottie.addEventListener("ready", markReady);
+    dotLottie.addEventListener("load", markReady);
+    dotLottie.addEventListener("loadError", markFailed);
+    dotLottie.addEventListener("renderError", markFailed);
+
+    return () => {
+      dotLottie.removeEventListener("ready", markReady);
+      dotLottie.removeEventListener("load", markReady);
+      dotLottie.removeEventListener("loadError", markFailed);
+      dotLottie.removeEventListener("renderError", markFailed);
+    };
+  }, [dotLottie]);
+
+  const fallbackDecoration = (
+    <div
+      aria-hidden
+      className="h-full w-full rounded-[inherit] border border-white/25 bg-[radial-gradient(circle_at_30%_28%,rgba(255,255,255,0.88)_0%,rgba(255,255,255,0.36)_24%,rgba(45,212,191,0.22)_58%,rgba(15,23,42,0.08)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.34)]"
+    />
+  );
 
   return (
     <div className={className} ref={containerRef}>
@@ -82,13 +125,18 @@ export function LottieAnimation({
         ) : isLottie ? (
           // Lottie with graceful fallback if the runtime chunk fails to load
           <div style={{ width: "100%", height: "100%" }}>
-            <DotLottieReact
-              src={src}
-              loop={loop}
-              autoplay={reducedMotion ? false : autoplay}
-              speed={reducedMotion ? 0 : speed}
-              style={{ width: "100%", height: "100%" }}
-            />
+            {playbackFailed ? (
+              fallbackDecoration
+            ) : (
+              <DotLottieReact
+                src={src}
+                loop={loop}
+                autoplay={reducedMotion ? false : autoplay}
+                speed={reducedMotion ? 0 : speed}
+                dotLottieRefCallback={setDotLottie}
+                style={{ width: "100%", height: "100%" }}
+              />
+            )}
           </div>
         ) : (
           // Generic image fallback for JPG/PNG/SVG or other URLs

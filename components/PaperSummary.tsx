@@ -105,7 +105,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
           Paper Summary
         </CardTitle>
       </CardHeader>
-      <CardContent className="app-section-body space-y-5">
+      <CardContent className="app-section-body space-y-4">
         <div className="app-detail-grid">
           {stats.map(({ label, value, icon: Icon }) => (
             <div key={label} className="app-detail-item">
@@ -118,7 +118,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
           ))}
         </div>
 
-        <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+        <div className="rounded-xl border border-border/60 bg-[hsl(var(--app-surface-1)/0.92)] p-3.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-foreground">
@@ -126,11 +126,8 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
               </p>
               <p className="text-sm text-muted-foreground">
                 {onlineEnabled
-                  ? 'Online delivery enabled for student logins. Descriptive answers will still require manual review.'
+                  ? 'Online delivery is enabled. Descriptive answers still require manual review.'
                   : 'Offline/manual workflow only.'}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Update these delivery settings in the Paper Details panel.
               </p>
             </div>
             <Badge variant={onlineEnabled ? 'default' : 'secondary'}>
@@ -140,7 +137,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
 
           {onlineEnabled ? (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-border/60 bg-background/70 px-3 py-2">
+              <div className="rounded-xl border border-border/60 bg-background/84 px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   Online Start
                 </p>
@@ -148,7 +145,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
                   {formatDateTime(onlineStartsAt || examDate)}
                 </p>
               </div>
-              <div className="rounded-xl border border-border/60 bg-background/70 px-3 py-2">
+              <div className="rounded-xl border border-border/60 bg-background/84 px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   Online End
                 </p>
@@ -160,7 +157,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
           ) : null}
         </div>
 
-        <div className="space-y-3 border-t border-border/60 pt-4">
+        <div className="space-y-3 border-t border-border/60 pt-3.5">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <TagIcon className="h-4 w-4" />
             Subject Mix
@@ -180,7 +177,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
           )}
         </div>
 
-        <div className="space-y-3 border-t border-border/60 pt-4">
+        <div className="space-y-3 border-t border-border/60 pt-3.5">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Layers className="h-4 w-4" />
             Section Setup
@@ -190,7 +187,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
               {sectionSummaries.map((section) => (
                 <div
                   key={section.id}
-                  className="rounded-2xl border border-border/60 bg-muted/15 p-3.5"
+                  className="rounded-xl border border-border/60 bg-[hsl(var(--app-surface-1)/0.9)] p-3"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
@@ -235,7 +232,7 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
           )}
         </div>
 
-        <div className="space-y-3 border-t border-border/60 pt-4">
+        <div className="space-y-3 border-t border-border/60 pt-3.5">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <TagIcon className="h-4 w-4" />
             Tag Summary

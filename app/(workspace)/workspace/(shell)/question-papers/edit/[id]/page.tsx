@@ -136,39 +136,25 @@ export default async function EditQuestionPaperPage({
 
   return (
     <PageShell width="wide" padding="standard">
-      <div className="space-y-4 sm:space-y-5">
+      <div className="space-y-3.5 sm:space-y-4">
         <PageHero
           variant="editor"
           density="compact"
           eyebrow="Assessments"
           title="Edit Question Paper"
-          description="Refine the paper structure, question mix, and grading rules before publishing."
+          description="Adjust the paper structure, question mix, and grading rules before publishing."
           actions={<ReturnBackButton fallbackPath={backHref} label="Back" />}
           meta={
             <>
               <span className="app-meta-chip">Paper maintenance</span>
+              <span className="app-meta-chip">{initialData.sections.length} sections</span>
+              <span className="app-meta-chip">{initialQuestionCount} questions</span>
+              <span className="app-meta-chip">{initialTotalMarks} marks</span>
               <span className="app-meta-chip">
-                {paper.onlineEnabled ? "Online delivery enabled" : "Offline / manual delivery"}
+                {paper.onlineEnabled ? "Online delivery" : "Offline delivery"}
               </span>
             </>
           }
-          stats={[
-            {
-              label: "Sections",
-              value: String(initialData.sections.length),
-              meta: "Current section count before you make further edits.",
-            },
-            {
-              label: "Questions",
-              value: String(initialQuestionCount),
-              meta: "Questions currently attached across the full paper.",
-            },
-            {
-              label: "Total marks",
-              value: String(initialTotalMarks),
-              meta: "Marks based on the paper's saved section configuration.",
-            },
-          ]}
         />
 
         <QuestionPaperForm

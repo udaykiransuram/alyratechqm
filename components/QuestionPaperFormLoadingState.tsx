@@ -42,7 +42,7 @@ function SectionSkeleton() {
 
 export default function QuestionPaperFormLoadingState() {
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-3.5 sm:space-y-4">
       <div className="app-editor-grid app-editor-grid-builder">
         <main className="app-editor-main">
           <div className="app-surface overflow-hidden">

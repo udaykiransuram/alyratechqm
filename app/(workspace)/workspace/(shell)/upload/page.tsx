@@ -78,14 +78,20 @@ export default function UploadPage() {
           density="compact"
           eyebrow="Import Tools"
           title="Import Teacher Master DOCX"
-          description="Upload the official teacher-master DOCX, review the parsed paper and questions, approve what should be published, and keep spreadsheet import available as a separate path."
+          description="Upload the teacher-master DOCX, review the parsed paper and questions, and publish only the items you approve."
           actions={
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={navigateBack} className="app-button-back">
+            <div className="app-import-inline-actions">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={navigateBack}
+                className="app-import-action-button"
+              >
                 <ArrowLeft className="h-4 w-4" />
                 Back
               </Button>
-              <Button type="button" variant="outline" asChild>
+              <Button type="button" variant="outline" size="sm" className="app-import-action-button" asChild>
                 <Link href="/workspace/upload/getjson">
                   <TableProperties className="h-4 w-4" />
                   Spreadsheet import
@@ -124,18 +130,18 @@ export default function UploadPage() {
             <CardHeader className="app-section-header">
               <CardTitle>Start a DOCX import draft</CardTitle>
               <CardDescription>
-                This flow parses the uploaded DOCX into a review draft. Nothing is published until you approve the questions.
+                Parse the uploaded DOCX into a review draft. Nothing is published until the review is complete.
               </CardDescription>
             </CardHeader>
             <CardContent className="app-section-body space-y-5">
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" asChild>
+              <div className="app-import-inline-actions">
+                <Button type="button" variant="outline" size="sm" className="app-import-action-button" asChild>
                   <a href="/api/question-import/template?format=docx">
                     <FileText className="h-4 w-4" />
-                    Download DOCX template
+                    Download template
                   </a>
                 </Button>
-                <Button type="button" variant="outline" asChild>
+                <Button type="button" variant="outline" size="sm" className="app-import-action-button" asChild>
                   <Link href="/workspace/upload/getjson">
                     <TableProperties className="h-4 w-4" />
                     Open spreadsheet flow
@@ -154,21 +160,23 @@ export default function UploadPage() {
                 />
               </div>
 
-              <div className="rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] px-4 py-3 text-sm text-muted-foreground">
-                Supported in this version: DOCX files created from the official template, embedded images inside stem/options/explanation blocks, and Word or Mathpix-style math that can be normalized into the app editor.
+              <div className="app-import-note-card">
+                Supported in this version: DOCX files created from the official template, embedded images inside stem, option, and explanation blocks, plus Word or Mathpix-style math that can be normalized into the editor.
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"
+                  size="sm"
+                  className="app-import-action-button-primary"
                   onClick={() => void handleCreateDraft()}
                   disabled={isUploading || !docxFile}
                 >
                   {isUploading ? <Spinner className="h-4 w-4" /> : null}
-                  Create review draft
+                  Create draft
                 </Button>
                 <p className="text-sm text-muted-foreground">
-                  After upload, you will land on the approval screen to review the paper and each parsed question.
+                  After upload, you will land on the review screen to confirm the paper and each parsed question.
                 </p>
               </div>
             </CardContent>
@@ -179,13 +187,13 @@ export default function UploadPage() {
               <CardTitle>What happens next</CardTitle>
             </CardHeader>
             <CardContent className="app-section-body space-y-3 text-sm text-muted-foreground">
-              <div className="rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] px-4 py-3">
+              <div className="app-import-note-card">
                 1. The DOCX is parsed into a review draft with paper metadata, sections, images, math fragments, and question blocks.
               </div>
-              <div className="rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] px-4 py-3">
+              <div className="app-import-note-card">
                 2. You review the parsed questions in a create-style editor, fix issues, and approve or exclude each item.
               </div>
-              <div className="rounded-[var(--app-radius-md)] border border-border/70 bg-[hsl(var(--app-surface-1)/0.92)] px-4 py-3">
+              <div className="app-import-note-card">
                 3. Publish creates the approved question-bank items first, then one draft question paper with the reviewed sections and mapped academic sections.
               </div>
             </CardContent>

@@ -219,7 +219,7 @@ export function PaperDetailsForm({
           Paper Details
         </CardTitle>
       </CardHeader>
-      <CardContent className={cn("app-section-body space-y-4", compact && "space-y-3.5")}>
+      <CardContent className={cn("app-section-body space-y-3.5", compact && "space-y-3")}>
         <div className="app-field-group">
           <Label htmlFor="paper-title" className="app-field-label">Paper Title</Label>
           <Input
@@ -230,7 +230,7 @@ export function PaperDetailsForm({
           />
         </div>
 
-        <div className={cn("grid gap-4 sm:grid-cols-2", compact && "gap-3")}>
+        <div className={cn("grid gap-3.5 sm:grid-cols-2", compact && "gap-3")}>
           <div className="app-field-group">
             <Label htmlFor="class" className="app-field-label">Class</Label>
             <Select value={classId} onValueChange={setClassId}>
@@ -245,7 +245,7 @@ export function PaperDetailsForm({
 
           <div className="app-field-group">
             <Label className="app-field-label">Paper Subjects</Label>
-            <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+            <div className="rounded-xl border border-border/60 bg-[hsl(var(--app-surface-1)/0.92)] p-3">
               {derivedSubjects.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {derivedSubjects.map((subject) => (
@@ -333,16 +333,16 @@ export function PaperDetailsForm({
 
           <div
             className={cn(
-              "app-field-group sm:col-span-2 rounded-2xl border border-border/60 bg-muted/20 p-4",
-              compact && "p-3.5",
+              "app-field-group sm:col-span-2 rounded-xl border border-border/60 bg-[hsl(var(--app-surface-1)/0.92)] p-3.5",
+              compact && "p-3",
             )}
           >
             <div className="space-y-1">
               <p className="app-form-section-title">Delivery Mode</p>
               <p className="app-form-section-copy">
                 {onlineEnabled
-                  ? 'Online delivery is enabled for student logins. Objective and matrix questions are auto-graded; descriptive answers still need manual review.'
-                  : 'Offline/manual workflow only. Enable online mode when students should log in and take the paper digitally.'}
+                  ? 'Students can log in and take the paper online. Descriptive responses still need manual review.'
+                  : 'Offline/manual workflow only. Enable online mode when students should take the paper digitally.'}
               </p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -460,8 +460,7 @@ export function PaperDetailsForm({
                         Online End
                       </Label>
                       <p className="app-field-note">
-                        Optional global cutoff. Student timers still respect the
-                        paper duration.
+                        Optional global cutoff. Student timers still respect the paper duration.
                       </p>
                     </div>
                     <Button

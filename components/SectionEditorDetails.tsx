@@ -29,15 +29,15 @@ export function SectionEditorDetails({
   }`;
 
   return (
-    <div className="rounded-[calc(var(--app-radius-lg)+0.125rem)] border border-border/60 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.98)_0%,hsl(var(--app-surface-tint)/0.18)_100%)] p-4 shadow-[0_18px_34px_-30px_hsl(var(--app-shadow-deep)/0.14)]">
+    <div className="rounded-[calc(var(--app-radius-lg)+0.125rem)] border border-border/60 bg-[hsl(var(--app-surface-1)/0.96)] p-3.5 shadow-[0_12px_24px_-24px_hsl(var(--app-shadow-deep)/0.08)]">
       <div className="space-y-1">
         <p className="text-sm font-semibold text-foreground">Section notes</p>
         <p className="text-xs leading-5 text-muted-foreground">
-          Both fields are optional. Use them only when this section needs extra context for admins or students.
+          Both fields are optional. Use them only when this section needs extra context.
         </p>
       </div>
 
-      <div className="mt-3.5 grid gap-3.5 xl:grid-cols-2">
+      <div className="mt-3 grid gap-3 xl:grid-cols-2">
         <div className="space-y-1.5">
           <Label className="app-field-label">Overview</Label>
           <Textarea
@@ -62,12 +62,12 @@ export function SectionEditorDetails({
       </div>
 
       {hasQuestionTags ? (
-        <div className="mt-4 rounded-[calc(var(--app-radius-lg)-0.08rem)] border border-primary/14 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.99)_0%,hsl(var(--app-surface-tint)/0.2)_100%)] px-3 py-3 shadow-sm">
+        <div className="mt-3.5 rounded-[calc(var(--app-radius-lg)-0.08rem)] border border-border/60 bg-[hsl(var(--app-surface-1)/0.92)] px-3 py-3 shadow-[0_8px_20px_-22px_hsl(var(--app-shadow-deep)/0.06)]">
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Tag Mix
             </p>
-            <span className="inline-flex items-center rounded-full border border-border/60 bg-background/90 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-sm">
+            <span className="inline-flex items-center rounded-full border border-border/60 bg-background/92 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
               {linkedPromptsLabel}
             </span>
           </div>

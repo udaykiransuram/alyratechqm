@@ -419,7 +419,7 @@ export default function QuestionEditorClient({
   }
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-3.5 sm:space-y-4">
       {initialMessage ? (
         <div className="app-feedback app-feedback-info">{initialMessage}</div>
       ) : null}
@@ -429,12 +429,12 @@ export default function QuestionEditorClient({
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <div className="space-y-1">
-                <CardTitle>Question Content</CardTitle>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Write the main prompt exactly as learners should see it in the paper.
-                </p>
-              </div>
-            </CardHeader>
+                  <CardTitle>Question Content</CardTitle>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Write the prompt exactly as learners should see it.
+                  </p>
+                </div>
+              </CardHeader>
             <CardContent className="app-section-body">
               <RichTextEditor
                 key={`${resetCounter}-content`}
@@ -450,15 +450,15 @@ export default function QuestionEditorClient({
                 <div className="space-y-1">
                   <CardTitle>Answer Options</CardTitle>
                   <p className="text-sm leading-6 text-muted-foreground">
-                    Add clear options and mark the correct answer set before saving the question.
+                    Add clear options and mark the correct answer set before saving.
                   </p>
                 </div>
               </CardHeader>
-              <CardContent className="app-section-body space-y-3">
+              <CardContent className="app-section-body space-y-2.5">
                 {options.map((option, index) => (
                   <div
                     key={index}
-                    className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/10 p-2.5"
+                    className="flex items-start gap-3 rounded-[1.15rem] border border-border/60 bg-[hsl(var(--app-surface-1)/0.92)] p-2 sm:p-2.5"
                   >
                     <div className="pt-2">
                       <Checkbox
@@ -489,7 +489,7 @@ export default function QuestionEditorClient({
                   </div>
                 ))}
               </CardContent>
-              <CardFooter className="app-section-body border-t border-border/60 pt-3.5">
+              <CardFooter className="app-section-body border-t border-border/60 pt-3">
                 <Button variant="outline" onClick={handleAddOption} className="app-button-inline w-full">
                   <PlusCircle className="h-4 w-4" />
                   Add Option
@@ -504,7 +504,7 @@ export default function QuestionEditorClient({
                 <div className="space-y-1">
                   <CardTitle>Matrix Configuration</CardTitle>
                   <p className="text-sm leading-6 text-muted-foreground">
-                    Define the row-column matching structure so the final interaction stays easy to evaluate.
+                    Define the row-column matching structure for a cleaner evaluation flow.
                   </p>
                 </div>
               </CardHeader>
@@ -527,7 +527,7 @@ export default function QuestionEditorClient({
                 <div className="space-y-1">
                   <CardTitle>Written Response</CardTitle>
                   <p className="text-sm leading-6 text-muted-foreground">
-                    Descriptive questions do not need options, but they still benefit from a strong explanation and precise metadata.
+                    Descriptive questions do not need options, but they still benefit from clear explanation and metadata.
                   </p>
                 </div>
               </CardHeader>
@@ -538,12 +538,12 @@ export default function QuestionEditorClient({
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <div className="space-y-1">
-                <CardTitle>Explanation</CardTitle>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Capture the reasoning, marking guidance, or teacher-facing explanation that should travel with this question.
-                </p>
-              </div>
-            </CardHeader>
+                  <CardTitle>Explanation</CardTitle>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Capture the reasoning or marking guidance that should travel with this question.
+                  </p>
+                </div>
+              </CardHeader>
             <CardContent className="app-section-body">
               <RichTextEditor
                 key={`${resetCounter}-explanation`}
@@ -576,13 +576,13 @@ export default function QuestionEditorClient({
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <div className="space-y-1">
-                <CardTitle>Question Setup</CardTitle>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Set the marks and response model before saving so the rest of the authoring flow stays predictable.
-                </p>
-              </div>
-            </CardHeader>
-            <CardContent className="app-section-body space-y-4">
+                  <CardTitle>Question Setup</CardTitle>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Set the marks and response model before saving.
+                  </p>
+                </div>
+              </CardHeader>
+            <CardContent className="app-section-body space-y-3.5">
               <div className="app-field-group">
                 <Label htmlFor="marks-input" className="app-field-label">
                   Marks <span className="text-destructive">*</span>
@@ -610,7 +610,7 @@ export default function QuestionEditorClient({
                       variant={type === "single" ? "default" : "outline"}
                       onClick={() => setType("single")}
                       size="sm"
-                      className="min-h-10 min-w-[8rem] flex-1 px-3 sm:flex-none"
+                      className="min-h-9 min-w-[7.25rem] flex-1 px-3 sm:flex-none"
                     >
                       Single
                     </Button>
@@ -618,7 +618,7 @@ export default function QuestionEditorClient({
                       variant={type === "multiple" ? "default" : "outline"}
                       onClick={() => setType("multiple")}
                       size="sm"
-                      className="min-h-10 min-w-[8rem] flex-1 px-3 sm:flex-none"
+                      className="min-h-9 min-w-[7.25rem] flex-1 px-3 sm:flex-none"
                     >
                       Multiple
                     </Button>
@@ -626,7 +626,7 @@ export default function QuestionEditorClient({
                       variant={type === "matrix-match" ? "default" : "outline"}
                       onClick={() => setType("matrix-match")}
                       size="sm"
-                      className="min-h-10 min-w-[8rem] flex-1 px-3 sm:flex-none"
+                      className="min-h-9 min-w-[7.25rem] flex-1 px-3 sm:flex-none"
                     >
                       Matrix
                     </Button>
@@ -634,7 +634,7 @@ export default function QuestionEditorClient({
                       variant={type === "descriptive" ? "default" : "outline"}
                       onClick={() => setType("descriptive")}
                       size="sm"
-                      className="min-h-10 min-w-[8rem] flex-1 px-3 sm:flex-none"
+                      className="min-h-9 min-w-[7.25rem] flex-1 px-3 sm:flex-none"
                     >
                       Descriptive
                     </Button>
@@ -647,20 +647,20 @@ export default function QuestionEditorClient({
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <div className="space-y-1">
-                <CardTitle>Actions</CardTitle>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Save once the content, answer logic, and metadata are all anchored.
-                </p>
-              </div>
-            </CardHeader>
-            <CardContent className="app-section-body">
-              <Button size="lg" className="w-full" disabled={loading} onClick={handleSave}>
+                  <CardTitle>Actions</CardTitle>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Save once the content, answer logic, and metadata are ready.
+                  </p>
+                </div>
+              </CardHeader>
+              <CardContent className="app-section-body">
+                <Button size="lg" className="w-full" disabled={loading} onClick={handleSave}>
                 {loading ? (
                   <Spinner />
                 ) : isEditMode ? (
-                  "Save Changes"
+                  "Update Question"
                 ) : (
-                  "Submit Question"
+                  "Save Question"
                 )}
               </Button>
             </CardContent>
