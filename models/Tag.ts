@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import mongoose, { Document, Model, Schema, Types } from 'mongoose';
 import { applyArchiveFields, hasArchiveFields } from '@/lib/archive';
 import { getModelRegistry } from '@/lib/mongoose-models';
 import type { ITagType } from './TagType.ts';
@@ -6,6 +6,9 @@ import type { ITagType } from './TagType.ts';
 export interface ITag extends Document {
   name: string;
   type: ITagType['_id'];
+  isArchived?: boolean;
+  archivedAt?: Date | null;
+  archivedBy?: Types.ObjectId | null;
 }
 
 const TagSchema: Schema<ITag> = new Schema(

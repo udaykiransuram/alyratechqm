@@ -86,10 +86,6 @@ export function getSidebarWidthPx(
     : resolveExpandedSidebarWidth(expandedWidth);
 }
 
-export function isCompanyRoute(pathname: string) {
-  return pathname === "/company" || pathname.startsWith("/company/");
-}
-
 function normalizeSidebarPath(pathname: string) {
   if (pathname.length > 1 && pathname.endsWith("/")) {
     return pathname.slice(0, -1);

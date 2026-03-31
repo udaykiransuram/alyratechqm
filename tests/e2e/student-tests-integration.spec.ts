@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 
 import { connectDB } from "../../lib/db";
 import { getTenantDb, getTenantModels } from "../../lib/db-tenant";
+import { getDefaultStudentPassword } from "../../lib/user-credentials";
 import School from "../../models/School";
 
 const testBaseURL = process.env.BASE_URL || "http://127.0.0.1:3000";
@@ -31,6 +32,12 @@ type SeedState = {
   };
 };
 
+type StudentSignInAttempt = {
+  payload: any;
+  sessionPayload: any;
+  authError: string;
+};
+
 test.describe.configure({ mode: "serial" });
 
 function toObjectIdString(value: unknown) {
@@ -46,6 +53,52 @@ async function parseJson(response: Awaited<ReturnType<APIRequestContext["fetch"]
   }
 }
 
+function extractAuthErrorCodeFromValue(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+
+  try {
+    const url = new URL(text, testBaseURL);
+    const error = String(url.searchParams.get("error") || "").trim();
+    if (error) {
+      return error;
+    }
+  } catch {}
+
+  const queryMatch = text.match(/[?&]error=([A-Za-z0-9_-]+)/);
+  if (queryMatch?.[1]) {
+    return queryMatch[1];
+  }
+
+  const directMatch = text.match(/\b(Student[A-Za-z0-9]+|SchoolNotFound)\b/);
+  return String(directMatch?.[1] || "").trim();
+}
+
+function extractAuthErrorCode(
+  payload: any,
+  responseHeaders: Record<string, string>,
+  responseBody: string,
+) {
+  const candidates = [
+    payload?.error,
+    payload?.url,
+    responseHeaders.location,
+    responseHeaders.Location,
+    responseBody,
+  ];
+
+  for (const candidate of candidates) {
+    const errorCode = extractAuthErrorCodeFromValue(candidate);
+    if (errorCode) {
+      return errorCode;
+    }
+  }
+
+  return "";
+}
+
 async function fetchCsrfToken(context: APIRequestContext) {
   const response = await context.fetch("/api/auth/csrf", {
     method: "GET",
@@ -57,7 +110,12 @@ async function fetchCsrfToken(context: APIRequestContext) {
   return String(payload.csrfToken);
 }
 
-async function signInStudent(context: APIRequestContext, schoolKey: string, identifier: string, password: string) {
+async function attemptStudentSignIn(
+  context: APIRequestContext,
+  schoolKey: string,
+  identifier: string,
+  password: string,
+): Promise<StudentSignInAttempt> {
   const csrfToken = await fetchCsrfToken(context);
   const response = await context.fetch("/api/auth/callback/school-user?json=true", {
     method: "POST",
@@ -71,14 +129,49 @@ async function signInStudent(context: APIRequestContext, schoolKey: string, iden
     },
     failOnStatusCode: false,
   });
-  expect(response.ok()).toBeTruthy();
+  const responseBody = await response.text();
+  let payload = null;
+  try {
+    payload = JSON.parse(responseBody);
+  } catch {
+    payload = null;
+  }
 
   const sessionResponse = await context.fetch("/api/auth/session", {
     method: "GET",
     failOnStatusCode: false,
   });
-  expect(sessionResponse.ok()).toBeTruthy();
   const sessionPayload = await parseJson(sessionResponse);
+
+  return {
+    payload,
+    sessionPayload,
+    authError: extractAuthErrorCode(
+      payload,
+      response.headers(),
+      responseBody,
+    ),
+  };
+}
+
+async function signInStudent(
+  context: APIRequestContext,
+  schoolKey: string,
+  identifier: string,
+  password: string,
+) {
+  const signInAttempt = await attemptStudentSignIn(
+    context,
+    schoolKey,
+    identifier,
+    password,
+  );
+
+  expect(
+    signInAttempt.authError,
+    "Expected student sign-in to succeed without an auth error.",
+  ).toBe("");
+  const sessionPayload = signInAttempt.sessionPayload;
   expect(sessionPayload?.user?.id).toBeTruthy();
   expect(sessionPayload?.user?.schoolKey).toBe(schoolKey);
 }
@@ -301,14 +394,26 @@ async function seedTenantForIntegration() {
     createdBy: admin._id,
   });
 
-  const createStudent = async (key: string, sectionId: string) => {
+  const createStudent = async (
+    key: string,
+    sectionId: string,
+    options?: { usePhoneDigitsDefaultPassword?: boolean },
+  ) => {
     const rollNumber = `IT${uniqueSuffix.slice(-4)}${key.slice(0, 2).toUpperCase()}`;
+    const mobileNumber = `91991${Math.floor(Math.random() * 100000)
+      .toString()
+      .padStart(5, "0")}`;
+    const defaultPhoneDigitsPassword = getDefaultStudentPassword(mobileNumber);
+    const studentPassword =
+      options?.usePhoneDigitsDefaultPassword && defaultPhoneDigitsPassword
+        ? defaultPhoneDigitsPassword
+        : password;
+    const studentPasswordHash = await bcrypt.hash(studentPassword, 10);
+
     const student = await UserModel.create({
       name: `Student ${key}`,
-      passwordHash,
-      mobileNumber: `91991${Math.floor(Math.random() * 100000)
-        .toString()
-        .padStart(5, "0")}`,
+      passwordHash: studentPasswordHash,
+      mobileNumber,
       role: "student",
       class: classDoc._id,
       academicSection: sectionId,
@@ -317,13 +422,16 @@ async function seedTenantForIntegration() {
     return {
       id: toObjectIdString(student._id),
       rollNumber,
-      password,
+      password: studentPassword,
       sectionId,
     };
   };
 
   const students = {
-    flow: await createStudent("flow", toObjectIdString(sectionA._id)),
+    // Keep one seeded student on the real phone-digits default password contract.
+    flow: await createStudent("flow", toObjectIdString(sectionA._id), {
+      usePhoneDigitsDefaultPassword: true,
+    }),
     resume: await createStudent("resume", toObjectIdString(sectionA._id)),
     conflict: await createStudent("conflict", toObjectIdString(sectionA._id)),
     future: await createStudent("future", toObjectIdString(sectionA._id)),
@@ -560,6 +668,56 @@ test.describe("Student tests API integration (real backend)", () => {
     } finally {
       await signOutStudent(resumedContext).catch(() => undefined);
       await resumedContext.dispose();
+    }
+  });
+
+  test("allows only one active student session at a time until sign-out", async () => {
+    if (!seed) throw new Error("Missing seeded test data.");
+
+    const primaryContext = await createStudentContext(
+      seed.schoolKey,
+      seed.students.unassigned.rollNumber,
+      seed.students.unassigned.password,
+    );
+    const secondaryContext = await request.newContext({
+      baseURL: testBaseURL,
+      extraHTTPHeaders: {
+        Accept: "application/json",
+        "x-school-key": seed.schoolKey,
+      },
+      ignoreHTTPSErrors: true,
+    });
+
+    try {
+      const blockedAttempt = await attemptStudentSignIn(
+        secondaryContext,
+        seed.schoolKey,
+        seed.students.unassigned.rollNumber,
+        seed.students.unassigned.password,
+      );
+      expect(blockedAttempt.sessionPayload?.user ?? null).toBeNull();
+      if (blockedAttempt.authError) {
+        expect(blockedAttempt.authError).toBe("StudentAlreadySignedIn");
+      }
+
+      await signOutStudent(primaryContext);
+
+      const releasedAttempt = await attemptStudentSignIn(
+        secondaryContext,
+        seed.schoolKey,
+        seed.students.unassigned.rollNumber,
+        seed.students.unassigned.password,
+      );
+      expect(releasedAttempt.authError).toBe("");
+      expect(releasedAttempt.sessionPayload?.user?.id).toBe(
+        seed.students.unassigned.id,
+      );
+      expect(releasedAttempt.sessionPayload?.user?.schoolKey).toBe(seed.schoolKey);
+    } finally {
+      await signOutStudent(primaryContext).catch(() => undefined);
+      await signOutStudent(secondaryContext).catch(() => undefined);
+      await primaryContext.dispose();
+      await secondaryContext.dispose();
     }
   });
 

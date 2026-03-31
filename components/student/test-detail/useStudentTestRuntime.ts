@@ -1065,9 +1065,12 @@ export function useStudentTestRuntime({
       }
 
       const currentAnswers = answersRef.current;
+      const previous = createQuestionAnswerState(question, currentAnswers[questionId]);
       const nextAnswers = applyQuestionAnswerUpdate(currentAnswers, question, {
-        ...createQuestionAnswerState(question, currentAnswers[questionId]),
-        selectedOptions: [optionIndex],
+        ...previous,
+        selectedOptions: previous.selectedOptions.includes(optionIndex)
+          ? []
+          : [optionIndex],
       });
 
       if (nextAnswers === currentAnswers) {

@@ -36,6 +36,7 @@ export interface Question {
   marks: number;
   createdAt: string;
   type: 'single' | 'multiple' | 'matrix-match' | 'descriptive';
+  detailLevel?: 'summary' | 'full';
 }
 
 export interface QuestionItemProps {
@@ -72,6 +73,7 @@ export function QuestionItem({
     ? classes.find(classItem => classItem._id === question.class)?.name
     : question.class?.name;
   const tags = Array.isArray(question.tags) ? question.tags : [];
+  const hasOptionPreview = Boolean(question.options?.length);
   const showFooter = compact ? tags.length > 0 || Boolean(question.createdAt) : true;
 
   return (
@@ -85,7 +87,8 @@ export function QuestionItem({
       >
         <CardHeader
           className={cn(
-            'flex flex-col gap-3 border-b border-border/60 sm:flex-row sm:items-start sm:justify-between',
+            'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between',
+            hasOptionPreview ? 'border-b border-border/60' : '',
             compact ? 'px-4 py-3' : 'px-5 py-4',
           )}
         >
@@ -119,7 +122,7 @@ export function QuestionItem({
           ) : null}
         </CardHeader>
 
-        {question.options?.length ? (
+        {hasOptionPreview ? (
           <CardContent className={cn('space-y-2', compact ? 'px-4 py-3' : 'px-5 py-4')}>
             {question.options.map((option, index) => {
               const isCorrect = question.answerIndexes?.includes(index);
@@ -148,7 +151,7 @@ export function QuestionItem({
           <CardFooter
             className={cn(
               'flex flex-col gap-3 border-t border-border/60 bg-muted/10 sm:flex-row sm:items-center sm:justify-between',
-              compact ? 'px-4 py-2.5' : 'px-5 py-3',
+              compact ? 'px-4 pb-3 pt-4' : 'px-5 pb-3 pt-4',
             )}
           >
             <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-muted-foreground">

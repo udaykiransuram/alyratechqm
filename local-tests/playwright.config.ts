@@ -25,15 +25,28 @@ const reuseExistingServer =
   !isCI && process.env.PLAYWRIGHT_REUSE_SERVER === "1";
 const configuredWorkers = Number(process.env.PLAYWRIGHT_WORKERS || "2");
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
+const managedServerScriptPath = fileURLToPath(
+  new URL("../scripts/playwright-web-server.mjs", import.meta.url),
+);
+const globalTeardownPath = fileURLToPath(
+  new URL("./playwright.global-teardown.mjs", import.meta.url),
+);
+const managedServerLogPath = fileURLToPath(
+  new URL("../test-results/playwright-web-server.log", import.meta.url),
+);
 const readinessUrl = new URL("/auth/company-signin", baseURL).toString();
-const webServerCommand = useDevServer
-  ? `BROWSERSLIST_IGNORE_OLD_DATA=1 npx next dev --hostname ${webServerHost} --port ${webServerPort}`
-  : `BROWSERSLIST_IGNORE_OLD_DATA=1 npx next build && npx next start --hostname ${webServerHost} --port ${webServerPort}`;
+const webServerCommand = `node ${JSON.stringify(managedServerScriptPath)}`;
+
+process.env.PLAYWRIGHT_FAIL_ON_RUNTIME_ERRORS =
+  process.env.PLAYWRIGHT_FAIL_ON_RUNTIME_ERRORS || "1";
+process.env.PLAYWRIGHT_MANAGED_SERVER_LOG_PATH =
+  process.env.PLAYWRIGHT_MANAGED_SERVER_LOG_PATH || managedServerLogPath;
 
 export default defineConfig({
   testDir: "tests/e2e",
   timeout: 90_000,
   expect: { timeout: 5_000 },
+  globalTeardown: globalTeardownPath,
   fullyParallel: false,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
@@ -73,6 +86,12 @@ export default defineConfig({
               process.env.NEXT_PUBLIC_E2E_MOCK_MODE || "1",
             NEXT_TELEMETRY_DISABLED:
               process.env.NEXT_TELEMETRY_DISABLED || "1",
+            PLAYWRIGHT_MANAGED_SERVER_MODE: useDevServer
+              ? "development"
+              : "production",
+            PLAYWRIGHT_MANAGED_SERVER_HOST: webServerHost,
+            PLAYWRIGHT_MANAGED_SERVER_PORT: webServerPort,
+            PLAYWRIGHT_MANAGED_SERVER_LOG_PATH: managedServerLogPath,
             NODE_ENV:
               process.env.NODE_ENV || (useDevServer ? "development" : "production"),
           },

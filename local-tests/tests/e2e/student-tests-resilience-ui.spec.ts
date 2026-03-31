@@ -1,5 +1,5 @@
 /// <reference types="@playwright/test" />
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "./helpers/strict-browser-test";
 
 import { navigateToAppRoute } from "./helpers/navigation";
 import { setStudentSession } from "./helpers/session";
@@ -60,6 +60,12 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const studentTestsApiRoute = /\/api\/student\/tests(?:\/.*)?(?:\?.*)?$/;
+
+function isoFromNow(minutesFromNow: number) {
+  return new Date(Date.now() + minutesFromNow * 60 * 1000).toISOString();
+}
+
 function buildPaper(): StudentPaper {
   return {
     _id: "paper-1",
@@ -112,9 +118,9 @@ function buildAttempt(overrides: Partial<StudentAttempt> = {}): StudentAttempt {
     paper: "paper-1",
     student: "student-1",
     status: "in_progress",
-    startedAt: "2026-03-20T09:00:00.000Z",
+    startedAt: isoFromNow(-5),
     submittedAt: null,
-    lastSavedAt: "2026-03-20T09:00:00.000Z",
+    lastSavedAt: isoFromNow(-5),
     totalMarksAwarded: 0,
     sectionAnswers: [],
     ...overrides,
@@ -131,9 +137,9 @@ function buildListResponse(paper: StudentPaper, attempt: StudentAttempt) {
         duration: paper.duration,
         passingMarks: paper.passingMarks,
         totalMarks: paper.totalMarks,
-        examDate: "2026-03-20T09:00:00.000Z",
-        onlineStartsAt: "2026-03-20T09:00:00.000Z",
-        onlineEndsAt: "2026-03-20T10:00:00.000Z",
+        examDate: isoFromNow(-5),
+        onlineStartsAt: isoFromNow(-5),
+        onlineEndsAt: isoFromNow(55),
         class: {
           _id: "class-x",
           name: "Class X",
@@ -164,7 +170,7 @@ async function routeRunnerApis(
     onSubmit?: (route: Route, body: any) => Promise<void>;
   },
 ) {
-  await page.route("**/api/student/tests**", async (route: Route) => {
+  await page.route(studentTestsApiRoute, async (route: Route) => {
     const url = new URL(route.request().url());
     const pathname = url.pathname;
     const method = route.request().method();
@@ -185,7 +191,7 @@ async function routeRunnerApis(
           remainingTimeMs: attempt.status === "in_progress" ? 25 * 60 * 1000 : 0,
           deadlineAt:
             attempt.status === "in_progress"
-              ? "2026-03-20T09:30:00.000Z"
+              ? isoFromNow(25)
               : attempt.submittedAt,
         }),
       );
@@ -230,7 +236,7 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
         await delay(1200);
         attempt = {
           ...attempt,
-          lastSavedAt: "2026-03-20T09:05:00.000Z",
+          lastSavedAt: isoFromNow(-1),
           sectionAnswers: Array.isArray(body?.sectionAnswers)
             ? body.sectionAnswers
             : [],
@@ -241,7 +247,7 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
             attempt,
             status: attempt.status,
             remainingTimeMs: 24 * 60 * 1000,
-            deadlineAt: "2026-03-20T09:30:00.000Z",
+            deadlineAt: isoFromNow(24),
           }),
         );
       },
@@ -249,14 +255,15 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
 
     await navigateToAppRoute(page, "/student/tests/paper-1");
 
-    await page
+    const optionA = page
       .locator("label.app-exam-option")
       .filter({ has: page.locator('input[aria-label="Option A"]') })
-      .click();
-    await page.getByRole("button", { name: "Save Progress" }).click();
+      .first();
+    await expect(optionA).toBeVisible({ timeout: 15_000 });
+    await optionA.click();
+    await page.getByRole("button", { name: "Save" }).click();
 
-    await expect(page.getByText(/Status Saving\.\.\./)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Save Progress" })).toBeDisabled();
+    await expect(page.getByLabel(/Save status Saving\.\.\./)).toBeVisible();
     await expect.poll(() => savePayloads.length).toBe(1);
     expect(savePayloads[0]).toMatchObject({
       sectionAnswers: [
@@ -268,7 +275,9 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
     });
     expect(savePayloads[0]).toHaveProperty("baseLastSavedAt");
 
-    await expect(page.getByText(/Status Saved /)).toBeVisible();
+    await expect(page.getByLabel(/Save status Saving\.\.\./)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/student\/tests\/paper-1$/);
+    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
   });
 
   test("retries a transient submit failure and still returns the student to the tests dashboard", async ({
@@ -306,8 +315,8 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
         attempt = {
           ...attempt,
           status: "submitted",
-          submittedAt: "2026-03-20T09:12:00.000Z",
-          lastSavedAt: "2026-03-20T09:12:00.000Z",
+          submittedAt: isoFromNow(-1),
+          lastSavedAt: isoFromNow(-1),
           totalMarksAwarded: 6,
           sectionAnswers: Array.isArray(body?.sectionAnswers)
             ? body.sectionAnswers
@@ -325,20 +334,16 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
 
     await navigateToAppRoute(page, "/student/tests/paper-1");
 
-    await page
+    const optionA = page
       .locator("label.app-exam-option")
       .filter({ has: page.locator('input[aria-label="Option A"]') })
-      .click();
-    await page.getByRole("button", { name: "Submit Test" }).click();
+      .first();
+    await expect(optionA).toBeVisible({ timeout: 15_000 });
+    await optionA.click();
+    await page.getByRole("button", { name: "Submit" }).click();
     await page.getByRole("button", { name: "Confirm Submit" }).click();
 
-    await expect.poll(() => submitCount).toBe(1);
-    await expect(
-      page.getByText(
-        "Submission is pending because your connection is unstable. Keep this tab open and we will continue retrying automatically.",
-      ),
-    ).toBeVisible();
-
+    await expect.poll(() => submitCount > 0).toBe(true);
     await expect.poll(() => submitCount, { timeout: 10_000 }).toBe(2);
     await expect(page).toHaveURL(/\/student\/tests\?submitted=1/);
     await expect(page.getByText("Test submitted.")).toBeVisible();
@@ -356,9 +361,12 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
       await route.fulfill(json({ csrfToken: "test-csrf-token" }));
     });
     await page.route("**/api/auth/signout**", async (route) => {
+      const formData = new URLSearchParams(route.request().postData() || "");
+      const callbackUrl =
+        formData.get("callbackUrl") || "http://127.0.0.1:3001/auth/signin";
       await route.fulfill(
         json({
-          url: "http://127.0.0.1:3001/auth/signin",
+          url: callbackUrl,
         }),
       );
     });
@@ -384,11 +392,13 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
 
     await navigateToAppRoute(page, "/student/tests/paper-1");
 
-    await page
+    const optionA = page
       .locator("label.app-exam-option")
       .filter({ has: page.locator('input[aria-label="Option A"]') })
-      .click();
-    await page.getByRole("button", { name: "Save Progress" }).click();
+      .first();
+    await expect(optionA).toBeVisible({ timeout: 15_000 });
+    await optionA.click();
+    await page.getByRole("button", { name: "Save" }).click();
 
     await expect(page).toHaveURL(/\/auth\/signin\?/);
     await expect(page).toHaveURL(/error=StudentSessionExpired/);

@@ -70,6 +70,12 @@ export async function POST(req: NextRequest) {
           details: { description },
         });
       }
+      if (!existing) {
+        return NextResponse.json(
+          { success: false, message: 'Class could not be restored.' },
+          { status: 500 },
+        );
+      }
       return NextResponse.json({ success: true, class: existing, classId: existing._id }, { status: 200 });
     }
 

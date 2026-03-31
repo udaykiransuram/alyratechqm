@@ -673,7 +673,7 @@ export async function POST(req: NextRequest) {
         ? "overwrite_existing"
         : "skip_existing";
 
-    const paperDoc = await QPModel.findOne({
+    const paperDoc: any = await QPModel.findOne({
       _id: paperId,
       ...buildArchiveFilter(false),
     })
@@ -700,7 +700,7 @@ export async function POST(req: NextRequest) {
 
     let teacherScope: ReturnType<typeof resolveTeacherPaperScope> | null = null;
     if (auth.session.user.role === "teacher") {
-      const scopedUser = await UserModel.findById(auth.session.user.id)
+      const scopedUser: any = await UserModel.findById(auth.session.user.id)
         .select(
           "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
         )
@@ -886,7 +886,7 @@ export async function GET(req: NextRequest) {
       "Class",
     ]);
     const isTeacherSession = auth.session.user.role === "teacher";
-    const scopedUser = isTeacherSession
+    const scopedUser: any = isTeacherSession
       ? await UserModel.findById(auth.session.user.id)
           .select(
             "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
@@ -924,7 +924,7 @@ export async function GET(req: NextRequest) {
     if (studentId) {
       let scopedStudentSectionId = "";
       if (isTeacherSession) {
-        const studentDoc = await UserModel.findOne({
+        const studentDoc: any = await UserModel.findOne({
           _id: studentId,
           role: "student",
           ...buildArchiveFilter(false),
@@ -979,7 +979,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      let responses = await QPRModel.find({ student: studentId })
+      let responses: any[] = await QPRModel.find({ student: studentId })
         .populate({
           path: "paper",
           model: QPModel,
@@ -1037,7 +1037,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, responses });
     }
 
-    const paper = await QPModel.findById(paperId)
+    const paper: any = await QPModel.findById(paperId)
       .select(
         summaryMode
           ? "class assignedAcademicSections"

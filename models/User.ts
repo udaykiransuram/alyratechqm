@@ -24,6 +24,9 @@ export interface IUser extends Document {
   enrolledAt?: Date;
   activeStudentSessionId?: string;
   activeStudentSessionLastSeenAt?: Date;
+  isArchived?: boolean;
+  archivedAt?: Date | null;
+  archivedBy?: Types.ObjectId | null;
 }
 
 const UserSchema: Schema<IUser> = new Schema(
@@ -107,6 +110,11 @@ UserSchema.pre("validate", function (next) {
     this.invalidate("mobileNumber", "Phone number is required.");
   }
 
+  if (typeof this.rollNumber === "string") {
+    const normalizedRollNumber = this.rollNumber.trim().toUpperCase();
+    this.rollNumber = normalizedRollNumber || undefined;
+  }
+
   if (this.role === "teacher") {
     if (!Array.isArray(this.classIds) || this.classIds.length === 0) {
       this.invalidate(
@@ -169,6 +177,18 @@ UserSchema.pre("validate", function (next) {
 UserSchema.index({ role: 1, class: 1, rollNumber: 1 });
 UserSchema.index({ role: 1, class: 1, academicSection: 1, rollNumber: 1 });
 UserSchema.index({ academicSection: 1 });
+UserSchema.index(
+  { role: 1, rollNumber: 1 },
+  {
+    name: "student_roll_unique_active_1",
+    unique: true,
+    partialFilterExpression: {
+      role: "student",
+      rollNumber: { $type: "string", $gt: "" },
+      $or: [{ isArchived: false }, { isArchived: { $exists: false } }],
+    },
+  },
+);
 
 applyArchiveFields(UserSchema);
 

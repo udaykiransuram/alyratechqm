@@ -1,50 +1,27 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Button }  from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { Plus, X } from 'lucide-react';
-import PageHero from '@/components/layout/PageHero';
+import { Plus } from 'lucide-react';
 import type { Question } from '@/components/question-items';
+import { PaperDetailsForm } from '@/components/PaperDetailsForm';
+import { PaperSummary } from '@/components/PaperSummary';
 import { useToast } from '@/components/ui/use-toast';
 import { useRouter } from 'next/navigation';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
-import { fetchApiJson, peekCachedApiJson } from '@/lib/client/api';
+import { fetchApiJson, peekCachedApiJson, prefetchApiJson } from '@/lib/client/api';
 import { announceNavigationStart } from '@/lib/client/navigation-feedback';
 import { calculateSectionTotalMarks } from '@/lib/question-paper/sections';
 import { resolvePaperSubjects } from '@/lib/question-paper/subjects';
+import { cn } from '@/lib/utils';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-
-function SidebarPanelSkeleton({
-  title,
-  rows = 4,
-}: {
-  title: string;
-  rows?: number;
-}) {
-  return (
-    <div className="app-surface overflow-hidden">
-      <div className="app-section-header">
-        <div className="text-base font-semibold text-foreground">{title}</div>
-      </div>
-      <div className="app-section-body space-y-3.5">
-        {Array.from({ length: rows }).map((_, index) => (
-          <div key={index} className="space-y-2">
-            <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-            <div className="h-10 w-full animate-pulse rounded-xl bg-muted/70" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function SectionEditorLoadingState() {
   return (
@@ -120,23 +97,6 @@ function QuestionFilterModalLoadingState() {
   );
 }
 
-const PaperDetailsForm = dynamic(
-  () =>
-    import('@/components/PaperDetailsForm').then(
-      (module) => module.PaperDetailsForm,
-    ),
-  {
-    loading: () => <SidebarPanelSkeleton title="Paper Details" rows={6} />,
-  },
-);
-
-const PaperSummary = dynamic(
-  () => import('@/components/PaperSummary').then((module) => module.PaperSummary),
-  {
-    loading: () => <SidebarPanelSkeleton title="Paper Summary" rows={5} />,
-  },
-);
-
 const SectionEditor = dynamic(
   () => import('@/components/SectionEditor').then((module) => module.SectionEditor),
   {
@@ -144,8 +104,11 @@ const SectionEditor = dynamic(
   },
 );
 
-const QuestionItem = dynamic(
-  () => import('@/components/question-items').then((module) => module.QuestionItem),
+const SelectedPaperQuestionCard = dynamic(
+  () =>
+    import('@/components/question-paper-builder/SelectedPaperQuestionCard').then(
+      (module) => module.SelectedPaperQuestionCard,
+    ),
   {
     loading: () => <CompactQuestionCardSkeleton />,
   },
@@ -185,6 +148,18 @@ interface Section {
   questions: QuestionInPaper[];
 }
 
+type QuestionPickerResponse = {
+  questions?: any[];
+  total?: number;
+  page?: number;
+  pages?: number;
+};
+
+type QuestionPickerIdsResponse = {
+  questionIds?: string[];
+  total?: number;
+};
+
 type QuestionPaperFormProps = {
   initialData?: any;
   isEditMode?: boolean;
@@ -207,6 +182,134 @@ function getAcademicSectionClassId(section: AcademicSectionItem) {
 }
 
 const SUPPORT_DATA_CACHE_TTL_MS = 60_000;
+const QUESTION_FILTER_PAGE_SIZE = 30;
+const QUESTION_FILTER_CACHE_TTL_MS = 15_000;
+const QUESTION_PICKER_FETCH_BY_IDS_CHUNK_SIZE = 40;
+
+function appendQuestionPickerFilters(
+  params: URLSearchParams,
+  {
+    activeSectionId,
+    sections,
+    classId = 'all',
+    subjectId = 'all',
+    selectedTagIdsKey = '',
+    questionTagMatchMode = 'any',
+    questionSearch = '',
+  }: {
+    activeSectionId: string | null;
+    sections: Section[];
+    classId?: string;
+    subjectId?: string;
+    selectedTagIdsKey?: string;
+    questionTagMatchMode?: 'any' | 'all';
+    questionSearch?: string;
+  },
+) {
+  const normalizedSearch = questionSearch.trim();
+  const excludedQuestionIds =
+    activeSectionId
+      ? Array.from(
+          new Set(
+            sections
+              .filter((section) => section.id !== activeSectionId)
+              .flatMap((section) =>
+                section.questions.map((question) => String(question.question._id || '')),
+              )
+              .filter(Boolean),
+          ),
+        )
+      : [];
+
+  if (classId !== 'all') params.append('class', classId);
+  if (subjectId !== 'all') params.append('subject', subjectId);
+  if (selectedTagIdsKey) {
+    params.append('tags', selectedTagIdsKey);
+    params.append('tagsMode', questionTagMatchMode === 'all' ? 'and' : 'or');
+  }
+  if (normalizedSearch) params.append('search', normalizedSearch);
+  if (excludedQuestionIds.length > 0) {
+    params.append('excludeIds', excludedQuestionIds.join(','));
+  }
+}
+
+function buildQuestionPickerEndpoint({
+  activeSectionId,
+  sections,
+  classId = 'all',
+  subjectId = 'all',
+  selectedTagIdsKey = '',
+  questionTagMatchMode = 'any',
+  questionSearch = '',
+  questionPage = 1,
+  questionPageSize = QUESTION_FILTER_PAGE_SIZE,
+}: {
+  activeSectionId: string | null;
+  sections: Section[];
+  classId?: string;
+  subjectId?: string;
+  selectedTagIdsKey?: string;
+  questionTagMatchMode?: 'any' | 'all';
+  questionSearch?: string;
+  questionPage?: number;
+  questionPageSize?: number;
+}) {
+  const params = new URLSearchParams();
+  appendQuestionPickerFilters(params, {
+    activeSectionId,
+    sections,
+    classId,
+    subjectId,
+    selectedTagIdsKey,
+    questionTagMatchMode,
+    questionSearch,
+  });
+  params.append('page', String(questionPage));
+  params.append('limit', String(questionPageSize));
+  params.append('view', 'picker');
+
+  return `/api/questions?${params.toString()}`;
+}
+
+function buildQuestionPickerIdsEndpoint({
+  activeSectionId,
+  sections,
+  classId = 'all',
+  subjectId = 'all',
+  selectedTagIdsKey = '',
+  questionTagMatchMode = 'any',
+  questionSearch = '',
+}: {
+  activeSectionId: string | null;
+  sections: Section[];
+  classId?: string;
+  subjectId?: string;
+  selectedTagIdsKey?: string;
+  questionTagMatchMode?: 'any' | 'all';
+  questionSearch?: string;
+}) {
+  const params = new URLSearchParams();
+  appendQuestionPickerFilters(params, {
+    activeSectionId,
+    sections,
+    classId,
+    subjectId,
+    selectedTagIdsKey,
+    questionTagMatchMode,
+    questionSearch,
+  });
+  params.append('view', 'picker-ids');
+
+  return `/api/questions?${params.toString()}`;
+}
+
+function buildQuestionPickerByIdsEndpoint(questionIds: string[]) {
+  const params = new URLSearchParams();
+  params.append('ids', questionIds.join(','));
+  params.append('view', 'picker');
+
+  return `/api/questions?${params.toString()}`;
+}
 
 export default function QuestionPaperForm({
   initialData,
@@ -283,6 +386,9 @@ export default function QuestionPaperForm({
   // Question Bank State
   const [availableQuestions, setAvailableQuestions] = useState<any[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [questionResultCount, setQuestionResultCount] = useState(0);
+  const [questionPage, setQuestionPage] = useState(1);
+  const [questionPageCount, setQuestionPageCount] = useState(1);
 
   // Filters
   const [selectedTags, setSelectedTags] = useState<TagItem[]>([]);
@@ -290,6 +396,8 @@ export default function QuestionPaperForm({
 
   // Global State
   const [saving, setSaving] = useState(false);
+  const [confirmingQuestions, setConfirmingQuestions] = useState(false);
+  const [selectingAllFilteredQuestions, setSelectingAllFilteredQuestions] = useState(false);
   const cachedClassesResponse = peekCachedApiJson<{ classes?: Class[] }>('/api/classes', {
     clientCacheTtlMs: SUPPORT_DATA_CACHE_TTL_MS,
   });
@@ -343,6 +451,34 @@ export default function QuestionPaperForm({
   const [modalSearch, setModalSearch] = useState('');
   const [questionFilterClassId, setQuestionFilterClassId] = useState('all');
   const [questionFilterSubjectId, setQuestionFilterSubjectId] = useState('all');
+  const selectedTagIdsKey = useMemo(
+    () => selectedTags.map((tag) => String(tag._id || '')).sort().join(','),
+    [selectedTags],
+  );
+  const hydrateQuestionPickerResults = useCallback((data: QuestionPickerResponse | null | undefined) => {
+    const questions = Array.isArray(data?.questions) ? data?.questions : [];
+    setAvailableQuestions(questions);
+    setQuestionResultCount(
+      Number.isFinite(Number(data?.total))
+        ? Number(data?.total)
+        : questions.length,
+    );
+    setQuestionPageCount(
+      Number.isFinite(Number(data?.pages)) && Number(data?.pages) > 0
+        ? Number(data?.pages)
+        : 1,
+    );
+    setQuestionPage(
+      Number.isFinite(Number(data?.page)) && Number(data?.page) > 0
+        ? Number(data?.page)
+        : 1,
+    );
+  }, []);
+  const clearQuestionPickerResults = useCallback(() => {
+    setAvailableQuestions([]);
+    setQuestionResultCount(0);
+    setQuestionPageCount(1);
+  }, []);
 
   // Fetch initial data
   useEffect(() => {
@@ -517,37 +653,37 @@ export default function QuestionPaperForm({
   useEffect(() => {
     if (!questionModalOpen) {
       setLoadingQuestions(false);
+      clearQuestionPickerResults();
       return;
     }
 
     const abortController = new AbortController();
-    const params = new URLSearchParams();
-    const questionSearch = modalSearch.trim();
-
-    if (questionFilterClassId !== 'all') params.append('class', questionFilterClassId);
-    if (questionFilterSubjectId !== 'all') params.append('subject', questionFilterSubjectId);
-    if (selectedTags.length) {
-      params.append('tags', selectedTags.map(t => t._id).join(','));
-      params.append('tagsMode', questionTagMatchMode === 'all' ? 'and' : 'or');
-    }
-    if (questionSearch) params.append('search', questionSearch);
-
     setLoadingQuestions(true);
-    const qs = params.toString();
-    const endpoint = qs ? `/api/questions?${qs}` : '/api/questions';
+    const endpoint = buildQuestionPickerEndpoint({
+      activeSectionId,
+      sections,
+      classId: questionFilterClassId,
+      subjectId: questionFilterSubjectId,
+      selectedTagIdsKey,
+      questionTagMatchMode,
+      questionSearch: modalSearch,
+      questionPage,
+      questionPageSize: QUESTION_FILTER_PAGE_SIZE,
+    });
 
-    fetchApiJson<{ questions?: any[] }>(endpoint, {
+    fetchApiJson<QuestionPickerResponse>(endpoint, {
       signal: abortController.signal,
       cache: 'no-store',
       fallbackMessage: 'Could not load questions for the current filters.',
-      clientCacheTtlMs: 15_000,
+      clientCacheTtlMs: QUESTION_FILTER_CACHE_TTL_MS,
       preferClientCache: true,
     })
       .then(data => {
-        setAvailableQuestions(data.questions || []);
+        hydrateQuestionPickerResults(data);
       })
       .catch(error => {
         if (error?.name !== 'AbortError') {
+          clearQuestionPickerResults();
           toast({
             title: 'Question bank load failed',
             description: 'Could not load questions for the current filters.',
@@ -565,13 +701,75 @@ export default function QuestionPaperForm({
       abortController.abort();
     };
   }, [
+    clearQuestionPickerResults,
+    hydrateQuestionPickerResults,
     modalSearch,
+    activeSectionId,
+    questionPage,
     questionFilterClassId,
     questionFilterSubjectId,
     questionModalOpen,
     questionTagMatchMode,
-    selectedTags,
+    sections,
+    selectedTagIdsKey,
     toast,
+  ]);
+
+  useEffect(() => {
+    if (questionModalOpen) {
+      return;
+    }
+
+    const prefetchableSections = sections.filter(
+      (section) =>
+        section.name.trim().length > 0 &&
+        typeof section.defaultMarks === 'number' &&
+        section.defaultMarks > 0,
+    );
+
+    if (prefetchableSections.length === 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      prefetchableSections.forEach((section) => {
+        const endpoint = buildQuestionPickerEndpoint({
+          activeSectionId: section.id,
+          sections,
+          classId: questionFilterClassId,
+          subjectId: questionFilterSubjectId,
+          selectedTagIdsKey,
+          questionTagMatchMode,
+          questionSearch: '',
+          questionPage: 1,
+          questionPageSize: QUESTION_FILTER_PAGE_SIZE,
+        });
+
+        const cachedResponse = peekCachedApiJson<QuestionPickerResponse>(endpoint, {
+          clientCacheTtlMs: QUESTION_FILTER_CACHE_TTL_MS,
+        });
+        if (cachedResponse) {
+          return;
+        }
+
+        void prefetchApiJson<QuestionPickerResponse>(endpoint, {
+          cache: 'no-store',
+          fallbackMessage: 'Could not preload picker results.',
+          clientCacheTtlMs: QUESTION_FILTER_CACHE_TTL_MS,
+        });
+      });
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    questionFilterClassId,
+    questionFilterSubjectId,
+    questionModalOpen,
+    questionTagMatchMode,
+    sections,
+    selectedTagIdsKey,
   ]);
 
   useEffect(() => {
@@ -627,20 +825,11 @@ export default function QuestionPaperForm({
       })),
     [allTags],
   );
-  const pageTitle = isEditMode ? 'Edit Question Paper' : 'Create Question Paper';
-  const pageSubtitle = isEditMode
-    ? 'Refine the paper structure, question mix, and grading rules before publishing.'
-    : 'Build a new paper with consistent sections, question selection, and scoring rules.';
-
   // Modal: Filter questions (exclude those already in other sections)
   const modalAvailableQuestions = useMemo(() => {
     if (!activeSectionId) return [];
-    const usedIds = sections
-      .filter(s => s.id !== activeSectionId)
-      .flatMap(s => s.questions.map(q => String(q.question._id)));
-    return availableQuestions
-      .filter(q => !usedIds.includes(String(q._id)));
-  }, [availableQuestions, sections, activeSectionId]);
+    return availableQuestions;
+  }, [availableQuestions, activeSectionId]);
 
   // Section Handlers
   const handleAddSection = () => {
@@ -724,6 +913,23 @@ export default function QuestionPaperForm({
   const openQuestionModal = (sectionId: string) => {
     const currentSectionQuestions =
       sections.find(s => s.id === sectionId)?.questions || [];
+    const cachedPickerEndpoint = buildQuestionPickerEndpoint({
+      activeSectionId: sectionId,
+      sections,
+      classId: questionFilterClassId,
+      subjectId: questionFilterSubjectId,
+      selectedTagIdsKey,
+      questionTagMatchMode,
+      questionSearch: '',
+      questionPage: 1,
+      questionPageSize: QUESTION_FILTER_PAGE_SIZE,
+    });
+    const cachedPickerResponse = peekCachedApiJson<QuestionPickerResponse>(
+      cachedPickerEndpoint,
+      {
+        clientCacheTtlMs: QUESTION_FILTER_CACHE_TTL_MS,
+      },
+    );
 
     setActiveSectionId(sectionId);
     setSelectedQuestionIds(currentSectionQuestions.map(q => String(q.question._id)));
@@ -737,54 +943,241 @@ export default function QuestionPaperForm({
       return nextCache;
     });
     setModalSearch('');
+    setQuestionPage(1);
+    if (cachedPickerResponse) {
+      hydrateQuestionPickerResults(cachedPickerResponse);
+      setLoadingQuestions(false);
+    } else {
+      clearQuestionPickerResults();
+      setLoadingQuestions(true);
+    }
     setQuestionModalOpen(true);
   };
 
-  const handleConfirmQuestions = () => {
+  const fetchPickerQuestionsByIds = useCallback(
+    async (questionIds: string[]) => {
+      const normalizedQuestionIds = Array.from(
+        new Set(questionIds.map((questionId) => String(questionId)).filter(Boolean)),
+      );
+
+      if (normalizedQuestionIds.length === 0) {
+        return [];
+      }
+
+      const questionChunks: string[][] = [];
+      for (
+        let index = 0;
+        index < normalizedQuestionIds.length;
+        index += QUESTION_PICKER_FETCH_BY_IDS_CHUNK_SIZE
+      ) {
+        questionChunks.push(
+          normalizedQuestionIds.slice(
+            index,
+            index + QUESTION_PICKER_FETCH_BY_IDS_CHUNK_SIZE,
+          ),
+        );
+      }
+
+      const chunkResponses = await Promise.all(
+        questionChunks.map((questionChunk) =>
+          fetchApiJson<QuestionPickerResponse>(
+            buildQuestionPickerByIdsEndpoint(questionChunk),
+            {
+              cache: 'no-store',
+              fallbackMessage: 'Could not fetch the selected questions.',
+              clientCacheTtlMs: QUESTION_FILTER_CACHE_TTL_MS,
+            },
+          ),
+        ),
+      );
+
+      const questionMap = new Map<string, any>();
+      chunkResponses.forEach((response) => {
+        (response.questions || []).forEach((question) => {
+          const questionId = String(question?._id || '');
+          if (questionId) {
+            questionMap.set(questionId, question);
+          }
+        });
+      });
+
+      return normalizedQuestionIds
+        .map((questionId) => questionMap.get(questionId))
+        .filter(Boolean);
+    },
+    [],
+  );
+
+  const handleSelectAllFilteredQuestions = useCallback(async () => {
+    if (!activeSectionId || selectingAllFilteredQuestions) {
+      return;
+    }
+
+    setSelectingAllFilteredQuestions(true);
+    try {
+      const data = await fetchApiJson<QuestionPickerIdsResponse>(
+        buildQuestionPickerIdsEndpoint({
+          activeSectionId,
+          sections,
+          classId: questionFilterClassId,
+          subjectId: questionFilterSubjectId,
+          selectedTagIdsKey,
+          questionTagMatchMode,
+          questionSearch: modalSearch,
+        }),
+        {
+          cache: 'no-store',
+          fallbackMessage: 'Could not select all filtered questions.',
+          clientCacheTtlMs: QUESTION_FILTER_CACHE_TTL_MS,
+        },
+      );
+
+      const filteredQuestionIds = Array.from(
+        new Set((data.questionIds || []).map((questionId) => String(questionId)).filter(Boolean)),
+      );
+
+      if (filteredQuestionIds.length === 0) {
+        toast({
+          title: 'No matching questions',
+          description: 'There are no filtered questions to add right now.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const currentlySelectedIds = new Set(
+        selectedQuestionIds.map((questionId) => String(questionId)),
+      );
+      const addedCount = filteredQuestionIds.filter(
+        (questionId) => !currentlySelectedIds.has(questionId),
+      ).length;
+
+      setSelectedQuestionIds((currentIds) => {
+        const nextIds = new Set(currentIds.map((questionId) => String(questionId)));
+        filteredQuestionIds.forEach((questionId) => nextIds.add(questionId));
+        return Array.from(nextIds);
+      });
+
+      toast({
+        title:
+          addedCount > 0
+            ? 'Filtered questions selected'
+            : 'All filtered questions already selected',
+        description:
+          addedCount > 0
+            ? `${addedCount} more question${addedCount === 1 ? '' : 's'} added from the current filters.`
+            : 'The current filtered result set is already in your selection.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Selection failed',
+        description: 'Could not select all filtered questions.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSelectingAllFilteredQuestions(false);
+    }
+  }, [
+    activeSectionId,
+    modalSearch,
+    questionFilterClassId,
+    questionFilterSubjectId,
+    questionTagMatchMode,
+    sections,
+    selectedQuestionIds,
+    selectedTagIdsKey,
+    selectingAllFilteredQuestions,
+    toast,
+  ]);
+
+  const handleConfirmQuestions = async () => {
     if (!activeSectionId) return;
     const activeSection = sections.find(s => s.id === activeSectionId);
     if (!activeSection) return;
     // Prevent adding if marks are not set
     if (typeof activeSection.defaultMarks !== 'number' || activeSection.defaultMarks <= 0) return;
 
+    if (confirmingQuestions) {
+      return;
+    }
+
     const normalizedSelectedQuestionIds = Array.from(
       new Set(selectedQuestionIds.map((questionId) => String(questionId))),
     );
 
-    const selectedQuestions = normalizedSelectedQuestionIds
-      .map((questionId) => selectedQuestionCache[String(questionId)])
-      .filter(Boolean);
+    setConfirmingQuestions(true);
+    try {
+      const missingSelectedQuestionIds = normalizedSelectedQuestionIds.filter(
+        (questionId) => !selectedQuestionCache[String(questionId)],
+      );
 
-    if (selectedQuestions.length !== normalizedSelectedQuestionIds.length) {
+      const fetchedMissingQuestions =
+        missingSelectedQuestionIds.length > 0
+          ? await fetchPickerQuestionsByIds(missingSelectedQuestionIds)
+          : [];
+
+      const mergedQuestionCache = { ...selectedQuestionCache };
+      fetchedMissingQuestions.forEach((question) => {
+        const questionId = String(question?._id || '');
+        if (questionId) {
+          mergedQuestionCache[questionId] = question;
+        }
+      });
+
+      if (fetchedMissingQuestions.length > 0) {
+        setSelectedQuestionCache((currentCache) => ({
+          ...currentCache,
+          ...Object.fromEntries(
+            fetchedMissingQuestions
+              .map((question) => [String(question?._id || ''), question] as const)
+              .filter(([questionId]) => questionId),
+          ),
+        }));
+      }
+
+      const selectedQuestions = normalizedSelectedQuestionIds
+        .map((questionId) => mergedQuestionCache[String(questionId)])
+        .filter(Boolean);
+
+      if (selectedQuestions.length !== normalizedSelectedQuestionIds.length) {
+        toast({
+          title: 'Question selection incomplete',
+          description: 'A few selected questions could not be loaded. Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setSections(prev =>
+        prev.map(s =>
+          s.id === activeSectionId
+            ? {
+                ...s,
+                questions: selectedQuestions
+                  .map(q => ({
+                    question: q,
+                    marks: activeSection.defaultMarks as number,
+                    negativeMarks: typeof activeSection.defaultNegativeMarks === 'number'
+                      ? activeSection.defaultNegativeMarks
+                      : 0,
+                  })),
+            }
+          : s
+        )
+      );
+      setQuestionModalOpen(false);
+      setActiveSectionId(null);
+      setSelectedQuestionIds([]);
+      setModalSearch('');
+    } catch (error) {
       toast({
-        title: 'Question selection incomplete',
-        description: 'A few selected questions are missing from the current cache. Please reopen the picker and try again.',
+        title: 'Could not add selected questions',
+        description: 'Please try again.',
         variant: 'destructive',
       });
-      return;
+    } finally {
+      setConfirmingQuestions(false);
     }
-
-    setSections(prev =>
-      prev.map(s =>
-        s.id === activeSectionId
-          ? {
-              ...s,
-              questions: selectedQuestions
-                .map(q => ({
-                  question: q,
-                  marks: activeSection.defaultMarks as number, // always a number here
-                  negativeMarks: typeof activeSection.defaultNegativeMarks === 'number'
-                    ? activeSection.defaultNegativeMarks
-                    : 0,
-                })),
-          }
-        : s
-      )
-    );
-    setQuestionModalOpen(false);
-    setActiveSectionId(null);
-    setSelectedQuestionIds([]);
-    setModalSearch('');
   };
 
   // Save Paper
@@ -944,57 +1337,46 @@ export default function QuestionPaperForm({
 
   // --- Render ---
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
-      <PageHero
-        variant="editor"
-        density="compact"
-        eyebrow="Assessments"
-        title={pageTitle}
-        description={pageSubtitle}
-        actions={
-          <Button type="button" variant="outline" onClick={navigateBack} className="app-button-back">
-            {isEditMode ? 'Back' : 'Cancel'}
-          </Button>
-        }
-        meta={
-          <>
-            <span className="app-meta-chip">{isEditMode ? 'Paper maintenance' : 'Paper builder'}</span>
-            <span className="app-meta-chip">{onlineEnabled ? 'Online delivery enabled' : 'Offline / manual delivery'}</span>
-          </>
-        }
-        stats={[
-          {
-            label: 'Sections',
-            value: String(sections.length),
-            meta: 'Each section can carry its own defaults and selected question set.',
-          },
-          {
-            label: 'Questions',
-            value: String(totalQuestions),
-            meta: 'Current total across every section in the paper.',
-          },
-          {
-            label: 'Total marks',
-            value: String(totalPaperMarks),
-            meta: 'Marks update automatically as you refine the paper structure.',
-          },
-        ]}
-      />
-
+    <div className="space-y-4 sm:space-y-5">
       {initialSupportMessage ? (
         <div className="app-feedback app-feedback-info">{initialSupportMessage}</div>
       ) : null}
 
       <div className="app-editor-grid app-editor-grid-builder">
         <main className="app-editor-main">
-          <div className="app-surface overflow-hidden">
-            <div className="app-section-header">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-foreground">Section Builder</h2>
-                  <p className="app-page-subtitle">Organize sections, set defaults, and add questions to each block.</p>
+          <div className="app-surface overflow-hidden border-border/70 shadow-[0_26px_46px_-38px_hsl(var(--app-shadow-deep)/0.18)]">
+            <div className="relative overflow-hidden app-section-header bg-[linear-gradient(145deg,hsl(var(--app-surface-tint)/0.42)_0%,hsl(var(--app-surface-1)/0.99)_46%,hsl(var(--app-surface-2)/0.92)_100%)]">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/36 to-transparent" />
+              <div className="pointer-events-none absolute -right-16 top-0 h-28 w-28 rounded-full bg-primary/10 blur-3xl" />
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full border border-primary/16 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+                      Builder
+                    </span>
+                    {sections.length > 0 ? (
+                      <>
+                        <span className="inline-flex items-center rounded-full border border-border/60 bg-background/88 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-sm">
+                          {sections.length} sections
+                        </span>
+                        <span className="inline-flex items-center rounded-full border border-border/60 bg-background/88 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-sm">
+                          {totalQuestions} questions
+                        </span>
+                        <span className="inline-flex items-center rounded-full border border-primary/16 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary shadow-sm">
+                          {totalPaperMarks} marks
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                  <h2 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
+                    Section Builder
+                  </h2>
                 </div>
-                <Button variant="outline" className="app-button-inline border-dashed" onClick={handleAddSection}>
+                <Button
+                  variant="default"
+                  className="app-button-inline shadow-[0_20px_34px_-24px_hsl(var(--primary)/0.36)]"
+                  onClick={handleAddSection}
+                >
                   <Plus className="h-4 w-4" />
                   Add New Section
                 </Button>
@@ -1014,30 +1396,62 @@ export default function QuestionPaperForm({
                       section.name.trim().length > 0 &&
                       typeof section.defaultMarks === 'number' &&
                       section.defaultMarks > 0;
+                    const sectionNumberLabel = String(sectionIndex + 1).padStart(2, '0');
 
                     return (
                       <AccordionItem
                         key={section.id}
                         value={section.id}
-                        className="overflow-hidden rounded-2xl border border-border/60 bg-background"
+                        className="group relative overflow-hidden rounded-[calc(var(--app-radius-xl)+0.125rem)] border border-border/72 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.998)_0%,hsl(var(--app-surface-2)/0.9)_100%)] shadow-[0_24px_40px_-36px_hsl(var(--app-shadow-deep)/0.16)] transition-[border-color,box-shadow] duration-200 data-[state=open]:border-primary/16 data-[state=open]:shadow-[0_28px_46px_-34px_hsl(var(--primary)/0.16)]"
                       >
-                        <AccordionTrigger className="px-4 py-3.5 text-left hover:no-underline">
-                          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <h3 className="truncate text-base font-semibold text-foreground">
-                              {section.name || `Section ${sectionIndex + 1}`}
-                            </h3>
-                            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                              <span className="rounded-full bg-muted px-2.5 py-1">
-                                {section.questions.length} question{section.questions.length === 1 ? '' : 's'}
-                              </span>
-                              <span className="rounded-full bg-muted px-2.5 py-1">
-                                +{section.defaultMarks ?? 0} / -{section.defaultNegativeMarks ?? 0}
-                              </span>
-                              <span className="rounded-full bg-muted px-2.5 py-1">{sectionTotalMarks} marks</span>
+                        <AccordionTrigger className="gap-4 px-4 py-4 text-left hover:no-underline data-[state=open]:bg-[hsl(var(--app-surface-tint)/0.18)] [&>svg]:mt-1 [&>svg]:text-muted-foreground data-[state=open]:[&>svg]:text-primary">
+                          <div className="flex min-w-0 flex-1 items-start gap-3.5">
+                            <div
+                              className={cn(
+                                "flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.15rem] border text-sm font-semibold shadow-sm",
+                                canAddQuestions
+                                  ? "border-primary/18 bg-primary/10 text-primary shadow-[0_18px_30px_-24px_hsl(var(--primary)/0.34)]"
+                                  : "border-border/70 bg-background/88 text-foreground/88",
+                              )}
+                            >
+                              {sectionNumberLabel}
+                            </div>
+                            <div className="flex min-w-0 flex-1 flex-col gap-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="inline-flex items-center rounded-full border border-primary/16 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+                                  Section {sectionIndex + 1}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]",
+                                    canAddQuestions
+                                      ? "border-emerald-300/55 bg-emerald-50 text-emerald-800 dark:border-emerald-700/45 dark:bg-emerald-950/35 dark:text-emerald-200"
+                                      : "border-amber-300/55 bg-amber-50 text-amber-800 dark:border-amber-700/45 dark:bg-amber-950/35 dark:text-amber-200",
+                                  )}
+                                >
+                                  {canAddQuestions ? 'Ready for Questions' : 'Setup Needed'}
+                                </span>
+                              </div>
+                              <div className="flex min-w-0 flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+                                <h3 className="truncate text-[18px] font-semibold tracking-[-0.04em] text-foreground">
+                                  {section.name || `Untitled Section ${sectionIndex + 1}`}
+                                </h3>
+                                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                  <span className="rounded-full border border-border/60 bg-background/88 px-3 py-1.5 text-xs font-semibold shadow-sm">
+                                    {section.questions.length} question{section.questions.length === 1 ? '' : 's'}
+                                  </span>
+                                  <span className="rounded-full border border-border/60 bg-background/88 px-3 py-1.5 text-xs font-semibold shadow-sm">
+                                    +{section.defaultMarks ?? 0} / -{section.defaultNegativeMarks ?? 0}
+                                  </span>
+                                  <span className="rounded-full border border-primary/16 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary shadow-sm">
+                                    {sectionTotalMarks} marks
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </AccordionTrigger>
-                        <AccordionContent className="border-t border-border/60">
+                        <AccordionContent className="border-t border-border/60 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.84)_0%,hsl(var(--app-surface-2)/0.62)_100%)]">
                           <SectionEditor
                             section={section}
                             onUpdate={(field, value) =>
@@ -1055,70 +1469,49 @@ export default function QuestionPaperForm({
                             {section.questions.length > 0 ? (
                               <div className="space-y-3">
                                 {section.questions.map((questionInPaper, questionIndex) => (
-                                  <div
+                                  <SelectedPaperQuestionCard
                                     key={questionInPaper.question._id}
-                                    className="rounded-2xl border border-border/60 bg-muted/10 p-2.5 transition"
-                                  >
-                                    <div className="flex items-start gap-3">
-                                      <div className="min-w-0 flex-1">
-                                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                                          <span className="rounded-full bg-background px-2 py-0.5 text-xs font-semibold text-foreground">
-                                            Q{questionIndex + 1}
-                                          </span>
-                                          <span className="text-xs text-muted-foreground">ID: {questionInPaper.question._id}</span>
-                                        </div>
-                                        <QuestionItem
-                                          compact
-                                          question={questionInPaper.question}
-                                          classes={classes}
-                                          subjects={subjects}
-                                          allTags={normalizedAllTags}
-                                          onSave={async updated => {
-                                            setSections(prev =>
-                                              prev.map(sectionItem => ({
-                                                ...sectionItem,
-                                                questions: sectionItem.questions.map(item =>
-                                                  item.question._id === updated._id
-                                                    ? { ...item, question: updated }
-                                                    : item,
-                                                ),
-                                              })),
-                                            );
-                                            setAvailableQuestions(prev =>
-                                              prev.map(item => (item._id === updated._id ? updated : item)),
-                                            );
-                                          }}
-                                        />
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => handleRemoveQuestionFromSection(section.id, questionInPaper.question._id)}
-                                        aria-label="Remove question"
-                                        title="Remove question"
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                    <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border/60 pt-3 text-xs">
-                                      <div className="flex items-center gap-1.5">
-                                        <Label className="font-semibold">Marks:</Label>
-                                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono">{questionInPaper.marks}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1.5">
-                                        <Label className="font-semibold">Negative:</Label>
-                                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono">{questionInPaper.negativeMarks}</span>
-                                      </div>
-                                    </div>
-                                  </div>
+                                    questionInPaper={questionInPaper}
+                                    questionIndex={questionIndex}
+                                    classes={classes}
+                                    subjects={subjects}
+                                    allTags={normalizedAllTags}
+                                    onRemove={() =>
+                                      handleRemoveQuestionFromSection(
+                                        section.id,
+                                        questionInPaper.question._id,
+                                      )
+                                    }
+                                    onSave={async updated => {
+                                      setSections(prev =>
+                                        prev.map(sectionItem => ({
+                                          ...sectionItem,
+                                          questions: sectionItem.questions.map(item =>
+                                            item.question._id === updated._id
+                                              ? { ...item, question: updated }
+                                              : item,
+                                          ),
+                                        })),
+                                      );
+                                      setAvailableQuestions(prev =>
+                                        prev.map(item => (item._id === updated._id ? updated : item)),
+                                      );
+                                      setSelectedQuestionCache((currentCache) => ({
+                                        ...currentCache,
+                                        [String(updated._id)]: updated,
+                                      }));
+                                    }}
+                                  />
                                 ))}
                               </div>
                             ) : (
-                              <div className="app-empty-state">
-                                <p>No questions in this section yet.</p>
+                              <div className="app-empty-state border-border/70 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.98)_0%,hsl(var(--app-surface-2)/0.78)_100%)] py-10">
+                                <p className="text-sm font-semibold text-foreground">
+                                  No questions in this section yet.
+                                </p>
                                 <div className="mt-4 flex justify-center">
                                   <Button
-                                    variant="outline"
+                                    variant={canAddQuestions ? "default" : "outline"}
                                     className="app-button-inline"
                                     onClick={() => openQuestionModal(section.id)}
                                     disabled={!canAddQuestions}
@@ -1128,9 +1521,9 @@ export default function QuestionPaperForm({
                                   </Button>
                                 </div>
                                 {!canAddQuestions ? (
-                                  <p className="mt-2 text-xs text-destructive">
-                                    Enter a section name and default marks before adding questions.
-                                  </p>
+                                  <span className="mt-3 inline-flex items-center rounded-full border border-amber-300/55 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm dark:border-amber-700/45 dark:bg-amber-950/35 dark:text-amber-200">
+                                    Add a name and default marks first
+                                  </span>
                                 ) : null}
                               </div>
                             )}
@@ -1141,10 +1534,10 @@ export default function QuestionPaperForm({
                   })}
                 </Accordion>
               ) : (
-                <div className="app-empty-state">
-                  <p>No sections added yet.</p>
+                <div className="app-empty-state border-border/70 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.98)_0%,hsl(var(--app-surface-2)/0.8)_100%)] py-10">
+                  <p className="text-sm font-semibold text-foreground">No sections added yet.</p>
                   <div className="mt-4 flex justify-center">
-                    <Button variant="outline" className="app-button-inline" onClick={handleAddSection}>
+                    <Button variant="default" className="app-button-inline" onClick={handleAddSection}>
                       <Plus className="h-4 w-4" />
                       Add Your First Section
                     </Button>
@@ -1209,18 +1602,28 @@ export default function QuestionPaperForm({
               setActiveSectionId(null);
               setSelectedQuestionIds([]);
               setModalSearch('');
+              setQuestionPage(1);
             }
           }}
           classes={classes}
           classId={questionFilterClassId}
-          setClassId={id => setQuestionFilterClassId(String(id))}
+          setClassId={id => {
+            setQuestionPage(1);
+            setQuestionFilterClassId(String(id));
+          }}
           subjects={questionFilterSubjects}
           subjectId={questionFilterSubjectId}
-          setSubjectId={id => setQuestionFilterSubjectId(String(id))}
+          setSubjectId={id => {
+            setQuestionPage(1);
+            setQuestionFilterSubjectId(String(id));
+          }}
           subjectsLoading={subjectsLoading || questionFilterSubjectsLoading}
           allTags={normalizedAllTags}
           selectedTags={selectedTags}
-          setSelectedTags={setSelectedTags}
+          setSelectedTags={(tags) => {
+            setQuestionPage(1);
+            setSelectedTags(tags);
+          }}
           questionTagMatchMode={questionTagMatchMode}
           setQuestionTagMatchMode={setQuestionTagMatchMode}
           initialDataLoading={initialDataLoading}
@@ -1228,9 +1631,17 @@ export default function QuestionPaperForm({
           setModalSearch={setModalSearch}
           loadingQuestions={loadingQuestions}
           modalAvailableQuestions={modalAvailableQuestions}
+          questionResultCount={questionResultCount}
+          questionPage={questionPage}
+          setQuestionPage={setQuestionPage}
+          questionPageCount={questionPageCount}
+          questionPageSize={QUESTION_FILTER_PAGE_SIZE}
           selectedQuestionIds={selectedQuestionIds}
           setSelectedQuestionIds={setSelectedQuestionIds}
           handleConfirmQuestions={handleConfirmQuestions}
+          handleSelectAllFilteredQuestions={handleSelectAllFilteredQuestions}
+          confirmingQuestions={confirmingQuestions}
+          selectingAllFilteredQuestions={selectingAllFilteredQuestions}
           handleEditQuestionSave={async updatedQuestion => {
             setSections(prev =>
               prev.map(section => ({

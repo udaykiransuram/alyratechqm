@@ -10,6 +10,9 @@ import {
 } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
 import { requireTenantSession } from "@/lib/api-auth";
+import { clearStudentSession } from "@/lib/redis";
+import { invalidateStudentSessionValidationCache } from "@/lib/student-session-cache";
+import { invalidateStudentTestResourceCache } from "@/lib/student-test-server";
 import {
   findStudentsByRollNumber,
   getDefaultStudentPassword,
@@ -42,6 +45,103 @@ function normalizeIds(value: unknown) {
 
 function normalizeId(value: unknown) {
   return value ? String(value).trim() : "";
+}
+
+function isDuplicateKeyError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
+function resolveDuplicateUserMessage(error: unknown) {
+  const keyPattern =
+    typeof error === "object" && error !== null
+      ? (error as { keyPattern?: Record<string, unknown> }).keyPattern
+      : undefined;
+  const keyValue =
+    typeof error === "object" && error !== null
+      ? (error as { keyValue?: Record<string, unknown> }).keyValue
+      : undefined;
+  const rawMessage =
+    typeof error === "object" && error !== null
+      ? String((error as { message?: unknown }).message || "")
+      : "";
+
+  if (keyPattern?.email || keyValue?.email) {
+    return "A user with this email already exists.";
+  }
+
+  if (
+    keyPattern?.rollNumber ||
+    keyValue?.rollNumber ||
+    rawMessage.includes("student_roll_unique_active_1")
+  ) {
+    return "Roll number must be unique within the school because students use it to sign in.";
+  }
+
+  return "A user with the same identity already exists.";
+}
+
+async function resetPersistedStudentSessionState(params: {
+  UserModel: any;
+  schoolKey: string;
+  studentId: string;
+}) {
+  const { UserModel, schoolKey, studentId } = params;
+  if (!schoolKey || !studentId) {
+    return;
+  }
+
+  await clearStudentSession(schoolKey, studentId).catch(() => undefined);
+  await UserModel.updateOne(
+    { _id: studentId },
+    {
+      $unset: {
+        activeStudentSessionId: 1,
+        activeStudentSessionLastSeenAt: 1,
+      },
+    },
+  ).catch(() => undefined);
+}
+
+function invalidateStudentAccessCaches(params: {
+  schoolKey: string;
+  studentId: string;
+  previousClassId?: string;
+  nextClassId?: string;
+}) {
+  const {
+    schoolKey,
+    studentId,
+    previousClassId = "",
+    nextClassId = "",
+  } = params;
+
+  invalidateStudentSessionValidationCache({
+    schoolKey,
+    studentId,
+  });
+  invalidateStudentTestResourceCache({
+    schoolKey,
+    studentId,
+  });
+
+  if (previousClassId) {
+    invalidateStudentTestResourceCache({
+      schoolKey,
+      classId: previousClassId,
+    });
+  }
+
+  if (nextClassId && nextClassId !== previousClassId) {
+    invalidateStudentTestResourceCache({
+      schoolKey,
+      classId: nextClassId,
+    });
+  }
 }
 
 function resolveUserScope({
@@ -189,6 +289,13 @@ export async function GET(
     };
     return NextResponse.json({ success: true, user });
   } catch (error: any) {
+    if (isDuplicateKeyError(error)) {
+      return NextResponse.json(
+        { success: false, message: resolveDuplicateUserMessage(error) },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },
       { status: 500 },
@@ -329,6 +436,19 @@ export async function PUT(
       _id: userId,
       ...buildArchiveFilter(false),
     });
+    if (!userToUpdate) {
+      return NextResponse.json(
+        { success: false, message: "User not found" },
+        { status: 404 },
+      );
+    }
+
+    const previousRole = String(userToUpdate.role || "");
+    const previousClassId = normalizeId(userToUpdate.class);
+    const previousAcademicSectionId = normalizeId(userToUpdate.academicSection);
+    const previousRollNumber = normalizeRollNumber(userToUpdate.rollNumber);
+    const previousMobileNumber = String(userToUpdate.mobileNumber || "").trim();
+
     if (userToUpdate && userToUpdate.role === "admin" && role !== "admin") {
       const adminCount = await UserModel.countDocuments({
         role: "admin",
@@ -509,8 +629,47 @@ export async function PUT(
       );
     }
 
+    const nextRole = String((updatedUser as any)?.role || "");
+    const nextClassId = normalizeId((updatedUser as any)?.class);
+    const nextAcademicSectionId = normalizeId(
+      (updatedUser as any)?.academicSection,
+    );
+    const nextRollNumber = normalizeRollNumber((updatedUser as any)?.rollNumber);
+    const shouldResetStudentSession =
+      previousRole !== nextRole ||
+      (previousRole === "student" &&
+        nextRole === "student" &&
+        (previousClassId !== nextClassId ||
+          previousAcademicSectionId !== nextAcademicSectionId ||
+          previousRollNumber !== nextRollNumber ||
+          previousMobileNumber !== normalizedMobileNumber));
+
+    if (previousRole === "student" || nextRole === "student") {
+      if (shouldResetStudentSession) {
+        await resetPersistedStudentSessionState({
+          UserModel,
+          schoolKey,
+          studentId: String(userId),
+        });
+      }
+
+      invalidateStudentAccessCaches({
+        schoolKey,
+        studentId: String(userId),
+        previousClassId,
+        nextClassId,
+      });
+    }
+
     return NextResponse.json({ success: true, user: updatedUser });
   } catch (error: any) {
+    if (isDuplicateKeyError(error)) {
+      return NextResponse.json(
+        { success: false, message: resolveDuplicateUserMessage(error) },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },
       { status: 500 },
@@ -577,11 +736,31 @@ export async function DELETE(
       details: { role: archivedUser.role },
     });
 
+    if (String(archivedUser.role || "") === "student") {
+      await resetPersistedStudentSessionState({
+        UserModel,
+        schoolKey,
+        studentId: String(archivedUser._id),
+      });
+      invalidateStudentAccessCaches({
+        schoolKey,
+        studentId: String(archivedUser._id),
+        previousClassId: normalizeId(archivedUser.class),
+      });
+    }
+
     return NextResponse.json({
       success: true,
       message: "User archived successfully",
     });
   } catch (error: any) {
+    if (isDuplicateKeyError(error)) {
+      return NextResponse.json(
+        { success: false, message: resolveDuplicateUserMessage(error) },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },
       { status: 500 },

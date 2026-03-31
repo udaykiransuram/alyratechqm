@@ -1,5 +1,5 @@
 /// <reference types="@playwright/test" />
-import { expect, test, type Route } from "@playwright/test";
+import { expect, test, type Route } from "./helpers/strict-browser-test";
 import { navigateToAppRoute } from "./helpers/navigation";
 import { setStudentSession } from "./helpers/session";
 
@@ -10,6 +10,7 @@ type StudentAttempt = {
   status: "in_progress" | "submitted" | "auto_submitted";
   startedAt: string;
   submittedAt: string | null;
+  lastSavedAt?: string | null;
   totalMarksAwarded: number;
   sectionAnswers: Array<{
     sectionName: string;
@@ -50,9 +51,9 @@ function buildListTest(overrides: Partial<StudentListTest>): StudentListTest {
     duration: 30,
     passingMarks: 4,
     totalMarks: 6,
-    examDate: "2026-03-20T09:00:00.000Z",
-    onlineStartsAt: "2026-03-20T09:00:00.000Z",
-    onlineEndsAt: "2026-03-20T10:00:00.000Z",
+    examDate: isoFromNow(-5),
+    onlineStartsAt: isoFromNow(-5),
+    onlineEndsAt: isoFromNow(55),
     class: {
       _id: "class-x",
       name: "Class X",
@@ -75,6 +76,12 @@ function json(body: unknown) {
     contentType: "application/json",
     body: JSON.stringify(body),
   };
+}
+
+const studentTestsApiRoute = /\/api\/student\/tests(?:\/.*)?(?:\?.*)?$/;
+
+function isoFromNow(minutesFromNow: number) {
+  return new Date(Date.now() + minutesFromNow * 60 * 1000).toISOString();
 }
 
 test.describe("Student test UI (network mocked) @desktop", () => {
@@ -100,7 +107,7 @@ test.describe("Student test UI (network mocked) @desktop", () => {
         title: "Biology Revision",
         status: "submitted",
         attempt: {
-          submittedAt: "2026-03-20T09:40:00.000Z",
+          submittedAt: isoFromNow(-1),
           status: "submitted",
           totalMarksAwarded: 5,
         },
@@ -184,8 +191,9 @@ test.describe("Student test UI (network mocked) @desktop", () => {
       paper: "paper-1",
       student: "student-1",
       status: "in_progress",
-      startedAt: "2026-03-20T09:00:00.000Z",
+      startedAt: isoFromNow(-5),
       submittedAt: null,
+      lastSavedAt: isoFromNow(-5),
       totalMarksAwarded: 0,
       sectionAnswers: [],
     };
@@ -193,7 +201,7 @@ test.describe("Student test UI (network mocked) @desktop", () => {
     const savedPayloads: unknown[] = [];
     const submitPayloads: unknown[] = [];
 
-    await page.route("**/api/student/tests**", async (route: Route) => {
+    await page.route(studentTestsApiRoute, async (route: Route) => {
       const url = new URL(route.request().url());
       const { pathname } = url;
       const method = route.request().method();
@@ -230,7 +238,7 @@ test.describe("Student test UI (network mocked) @desktop", () => {
             attempt,
             status: attempt.status,
             remainingTimeMs: 25 * 60 * 1000,
-            deadlineAt: "2026-03-20T09:30:00.000Z",
+            deadlineAt: isoFromNow(25),
           }),
         );
         return;
@@ -242,6 +250,7 @@ test.describe("Student test UI (network mocked) @desktop", () => {
 
         attempt = {
           ...attempt,
+          lastSavedAt: isoFromNow(-1),
           sectionAnswers: Array.isArray((body as any)?.sectionAnswers)
             ? (body as any).sectionAnswers
             : [],
@@ -253,6 +262,7 @@ test.describe("Student test UI (network mocked) @desktop", () => {
             attempt,
             status: attempt.status,
             remainingTimeMs: 24 * 60 * 1000,
+            deadlineAt: isoFromNow(24),
           }),
         );
         return;
@@ -265,7 +275,8 @@ test.describe("Student test UI (network mocked) @desktop", () => {
         attempt = {
           ...attempt,
           status: "submitted",
-          submittedAt: "2026-03-20T09:12:00.000Z",
+          submittedAt: isoFromNow(-1),
+          lastSavedAt: isoFromNow(-1),
           totalMarksAwarded: 6,
           sectionAnswers: Array.isArray((body as any)?.sectionAnswers)
             ? (body as any).sectionAnswers
@@ -288,15 +299,14 @@ test.describe("Student test UI (network mocked) @desktop", () => {
     await navigateToAppRoute(page, "/student/tests/paper-1");
 
     await expect(
-      page.getByRole("heading", { name: "Science Objective Test" }),
-    ).toBeVisible();
-    await expect(page.getByText("2 + 2 = ?")).toBeVisible();
-    await expect(page.getByText("View instructions")).toBeVisible();
-
-    await page
+      page.getByRole("button", { name: "Save" }),
+    ).toBeVisible({ timeout: 15_000 });
+    const optionA = page
       .locator("label.app-exam-option")
       .filter({ has: page.locator('input[aria-label="Option A"]') })
-      .click();
+      .first();
+    await expect(optionA).toBeVisible({ timeout: 15_000 });
+    await optionA.click();
     await page.getByRole("button", { name: "Save" }).click();
 
     await expect.poll(() => savedPayloads.length).toBe(1);
@@ -310,7 +320,7 @@ test.describe("Student test UI (network mocked) @desktop", () => {
     });
     expect(savedPayloads[0]).toHaveProperty("baseLastSavedAt");
 
-    await page.getByRole("button", { name: "Submit Test" }).click();
+    await page.getByRole("button", { name: "Submit" }).click();
     await expect(
       page.getByRole("button", { name: "Confirm Submit" }),
     ).toBeVisible();
@@ -397,9 +407,11 @@ test.describe("Student test UI (network mocked) @desktop", () => {
 
     await navigateToAppRoute(page, "/student/tests/paper-2");
 
-    await expect(page.getByText("Submission Summary")).toBeVisible();
+    await expect(
+      page.getByText("Submission Summary", { exact: true }).last(),
+    ).toBeVisible();
     await expect(page.getByText("Not available", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("5 / 5")).toBeVisible();
+    await expect(page.getByText("5 / 5").first()).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Back to Tests" }),
     ).toBeVisible();

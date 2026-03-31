@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   BarChart2,
   BookOpen,
@@ -39,6 +40,7 @@ const companySidebarGroups: SidebarGroup[] = [
         icon: BarChart2,
         children: [
           { href: "/company/activity", label: "Operations Activity" },
+          { href: "/company/health", label: "System Health" },
           { href: "/company/indexing", label: "Maintenance Console" },
           { href: "/company/talent-test", label: "Talent Test" },
         ],
@@ -61,11 +63,8 @@ const companySidebarGroups: SidebarGroup[] = [
   },
 ];
 
-export default function CompanySiteHeader({
-  pathname,
-}: {
-  pathname: string;
-}) {
+export default function CompanySiteHeader() {
+  const pathname = usePathname() || "/company/schools";
   const [collapsed, setCollapsed] = useState(false);
   const [expandedSidebarWidth, setExpandedSidebarWidth] = useState(() =>
     getSidebarWidthPx(false),

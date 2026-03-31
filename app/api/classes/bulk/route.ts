@@ -7,6 +7,7 @@ import { recordTenantAudit } from "@/lib/audit";
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { recordOpsFailure } from "@/lib/ops-runtime";
 
 function normalizeRecord(record: Record<string, unknown>) {
   const normalized: Record<string, unknown> = {};
@@ -25,13 +26,15 @@ export async function POST(req: NextRequest) {
   }
   const schoolKey = auth.schoolKey;
 
-  await connectDB();
-
-  const { Class: ClassModel } = await getTenantModels(schoolKey, ["Class"]);
+  let classRowCount: number | null = null;
 
   try {
+    await connectDB();
+    const { Class: ClassModel } = await getTenantModels(schoolKey, ["Class"]);
+
     const body = await req.json();
     const classes = Array.isArray(body?.classes) ? body.classes : [];
+    classRowCount = classes.length;
 
     if (classes.length === 0) {
       return NextResponse.json(
@@ -122,6 +125,24 @@ export async function POST(req: NextRequest) {
       count: results.filter((result) => result.success).length,
     });
   } catch (error: any) {
+    await recordOpsFailure({
+      schoolKey,
+      req,
+      action: "bulk_class_import",
+      message: error?.message || "Failed to import classes.",
+      error,
+      metadata: {
+        route: "/api/classes/bulk",
+        method: "POST",
+        uploadType: "classes",
+        rows: classRowCount,
+      },
+      entity: {
+        type: "bulk_upload",
+        label: "classes",
+      },
+      severity: "error",
+    });
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },
       { status: 500 },

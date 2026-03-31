@@ -312,9 +312,15 @@ async function main() {
     },
   );
 
-  console.log("\n== Manual operational checks required before go-live ==");
+  console.log("\n== Deployment checks still required before go-live ==");
   console.log(
-    "- Review docs/online-test-operational-checklist.md and record completion for session lock, exam-runtime toggle, and rollback checks.",
+    "- Session-lock coverage now runs in the real-backend integration suite.",
+  );
+  console.log(
+    "- Runtime on/off verification is automated for managed lanes when EXAM_RUNTIME_DATABASE_URL is configured; if this preflight targets an external environment, still verify that toggle there.",
+  );
+  console.log(
+    "- Review docs/online-test-operational-checklist.md and record rollback and canary completion before production rollout.",
   );
   console.log(`- Stress summary: ${stressOut}`);
   console.log(`- Gate report: ${gateOut}`);

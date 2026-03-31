@@ -1,0 +1,29 @@
+{
+  "startedAt": "2026-03-31T14:14:47.617Z",
+  "finishedAt": "2026-03-31T14:15:54.820Z",
+  "status": "failed",
+  "errorMessage": "Built server exited before becoming ready (exit code 1).",
+  "steps": [
+    {
+      "label": "Lint",
+      "status": "passed",
+      "durationMs": 5039,
+      "reason": null,
+      "timestamp": "2026-03-31T14:14:52.658Z"
+    },
+    {
+      "label": "Typecheck",
+      "status": "passed",
+      "durationMs": 14900,
+      "reason": null,
+      "timestamp": "2026-03-31T14:15:07.558Z"
+    },
+    {
+      "label": "Build",
+      "status": "passed",
+      "durationMs": 45989,
+      "reason": null,
+      "timestamp": "2026-03-31T14:15:53.547Z"
+    }
+  ]
+}

@@ -16,42 +16,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  release-health:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
     env:
       CI: true
+      BASE_URL: http://127.0.0.1:3001
       MONGODB_URI: mongodb://127.0.0.1:27017/test
       NEXTAUTH_SECRET: testsecret
-      NEXTAUTH_URL: http://127.0.0.1:3000
-      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Verify core checks
-        run: npm run verify:core
-
-  e2e-smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: verify
-    env:
-      CI: true
-      BASE_URL: http://127.0.0.1:3000
-      MONGODB_URI: mongodb://127.0.0.1:27017/test
-      NEXTAUTH_SECRET: testsecret
-      NEXTAUTH_URL: http://127.0.0.1:3000
-      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      NEXTAUTH_URL: http://127.0.0.1:3001
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3001
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -68,20 +52,41 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Run auth smoke tests
-        run: npm run test:e2e:smoke
+      - name: Run release health gate
+        run: npm run verify:release
 
-      - name: Upload Playwright report
+      - name: Upload release health report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-health-report
+          path: release-health-report
+          if-no-files-found: ignore
+
+      - name: Upload Playwright artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-smoke
-          path: playwright-report
+          name: playwright-report-release-health
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
 
   e2e-local-suite:
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    needs: verify
+    needs: release-health
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
     strategy:
       fail-fast: false
       matrix:
@@ -121,9 +126,76 @@ jobs:
       - name: Run local Playwright suite for ${{ matrix.project_name }}
         run: npm run ${{ matrix.command }}
 
-      - name: Upload Playwright report
+      - name: Upload Playwright artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: playwright-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  e2e-online-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: release-health
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: exam_runtime
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d exam_runtime"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      CI: true
+      BASE_URL: http://127.0.0.1:3000
+      MONGODB_URI: mongodb://127.0.0.1:27017/test
+      NEXTAUTH_SECRET: testsecret
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      EXAM_RUNTIME_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/exam_runtime?sslmode=disable
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run online integration verification
+        run: npm run verify:integration
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-online-integration
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore

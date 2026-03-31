@@ -5,8 +5,6 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
-import PageHero from "@/components/layout/PageHero";
-import PageShell from "@/components/layout/PageShell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,7 +67,7 @@ type StudentEditDraft = {
   enrolledAt: string;
 };
 
-type StudentsPageClientProps = {
+export type StudentsPageClientProps = {
   classes: ClassItem[];
   sections: AcademicSectionItem[];
   groups: StudentGroup[];
@@ -196,16 +194,6 @@ export default function StudentsPageClient({
     ],
     [availableSections],
   );
-
-  const selectedClassLabel = useMemo(() => {
-    if (selectedClass === "all") return "All Classes";
-    return classes.find((classItem) => classItem._id === selectedClass)?.name || "Selected Class";
-  }, [classes, selectedClass]);
-
-  const selectedSectionLabel = useMemo(() => {
-    if (selectedSection === "all") return "All Sections";
-    return sections.find((section) => section._id === selectedSection)?.name || "Selected Section";
-  }, [sections, selectedSection]);
 
   const activeFilterCount = [
     selectedClass !== "all",
@@ -347,57 +335,7 @@ export default function StudentsPageClient({
   };
 
   return (
-    <PageShell width="wide" padding="standard">
-      <PageHero
-        variant="directory"
-        eyebrow="People"
-        title="Students"
-        description="Browse students by class and section, then update assignments and enrollment details."
-        actions={
-          <Button asChild className="app-button-page">
-            <AppPrefetchLink
-              href="/workspace/students/create"
-              prefetchOnMount
-              relatedApiPrefetches={["/api/classes", "/api/sections"]}
-            >
-              Create Student
-            </AppPrefetchLink>
-          </Button>
-        }
-        meta={
-          <>
-            <span className="app-meta-chip">{selectedClassLabel}</span>
-            <span className="app-meta-chip">{selectedSectionLabel}</span>
-            {includeEmptyGroups ? (
-              <span className="app-meta-chip">Showing empty groups</span>
-            ) : null}
-            {isPending ? <span className="app-meta-chip">Refreshing...</span> : null}
-          </>
-        }
-        stats={[
-          {
-            label: "Total students",
-            value: String(totalStudents),
-            meta: "Students currently returned by the active filters.",
-          },
-          {
-            label: "Visible groups",
-            value: String(totalGroups),
-            meta: "Class and section groupings on the active page window.",
-          },
-          {
-            label: "Search query",
-            value: appliedQuery || "None",
-            meta: "Name, father name, email, and roll-number search across student groups.",
-          },
-          {
-            label: "Edit mode",
-            value: "Inline ready",
-            meta: "View, edit, export, and archive directly from the grouped list.",
-          },
-        ]}
-      />
-
+    <>
       <Card className="app-filter-panel">
         <CardHeader className="app-filter-panel-header">
           <div className="app-filter-panel-heading">
@@ -554,6 +492,6 @@ export default function StudentsPageClient({
           onSaved={() => router.refresh()}
         />
       ) : null}
-    </PageShell>
+    </>
   );
 }

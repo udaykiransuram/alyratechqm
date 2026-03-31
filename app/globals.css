@@ -699,6 +699,61 @@
         box-shadow: 0 14px 32px -24px hsl(var(--foreground) / 0.4);
       }
 
+      .content-renderer[data-image-zoom-enabled="true"] img {
+        cursor: zoom-in;
+        transition:
+          transform 180ms ease,
+          border-color 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .content-renderer[data-image-zoom-enabled="true"] img:hover,
+      .content-renderer[data-image-zoom-enabled="true"] img:focus-visible {
+        transform: translateY(-1px);
+        border-color: hsl(var(--primary) / 0.26);
+        box-shadow:
+          0 18px 34px -26px hsl(var(--app-shadow-deep) / 0.22),
+          0 0 0 3px hsl(var(--primary) / 0.08);
+        outline: none;
+      }
+
+      .app-content-image-zoom-dialog {
+        width: min(calc(100vw - 1rem), 76rem);
+        max-width: 76rem;
+        padding: 0.75rem;
+        background:
+          linear-gradient(
+            180deg,
+            hsl(var(--app-surface-1) / 0.985) 0%,
+            hsl(var(--app-surface-2) / 0.94) 100%
+          );
+      }
+
+      .app-content-image-zoom-stage {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: auto;
+        max-height: min(84dvh, 52rem);
+        border: 1px solid hsl(var(--border) / 0.76);
+        border-radius: calc(var(--app-radius-lg) + 0.125rem);
+        padding: 0.75rem;
+        background:
+          radial-gradient(circle at top, hsl(var(--primary) / 0.06) 0%, transparent 18rem),
+          hsl(var(--background));
+      }
+
+      .app-content-image-zoom-image {
+        display: block;
+        max-width: 100%;
+        max-height: min(78dvh, 48rem);
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        border-radius: calc(var(--app-radius-md) + 0.125rem);
+        box-shadow: 0 24px 44px -30px hsl(var(--app-shadow-deep) / 0.24);
+      }
+
       /* TipTap ProseMirror Custom Math Node Styles */
       .math-rendered {
         display: inline-block;
@@ -3198,28 +3253,48 @@
   .app-exam-focus-shell-fullscreen {
     max-width: none;
     width: 100%;
+    --app-exam-sticky-top: env(safe-area-inset-top);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-exam-runtime-feedback {
+    @apply gap-2.5 px-3 py-2 text-[12px] leading-5;
+  }
+
+  .app-exam-runtime-feedback > span {
+    margin-top: 0.125rem;
   }
 
   .app-exam-focus-topbar {
-    @apply sticky z-20 grid gap-1.5 rounded-[1.2rem] border px-2.5 py-2.5 sm:gap-2 sm:px-3 sm:py-3 xl:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)_minmax(18rem,22rem)] xl:items-stretch;
+    @apply sticky z-20 space-y-1.5 rounded-[1rem] border px-3 py-2 sm:px-3.5 sm:py-2.5;
     top: var(--app-exam-sticky-top);
-    border-color: hsl(var(--border) / 0.82);
+    border-color: hsl(var(--border) / 0.78);
     background:
-      radial-gradient(circle at top right, hsl(var(--primary) / 0.12) 0%, transparent 18rem),
-      radial-gradient(circle at bottom left, hsl(var(--app-surface-tint) / 0.52) 0%, transparent 18rem),
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.1) 0%, transparent 17rem),
+      radial-gradient(circle at bottom left, hsl(var(--app-surface-tint) / 0.48) 0%, transparent 16rem),
       linear-gradient(
         180deg,
         hsl(var(--app-surface-1) / 0.985) 0%,
-        hsl(var(--app-surface-2) / 0.9) 100%
+        hsl(var(--app-surface-2) / 0.92) 100%
       );
     box-shadow:
-      0 28px 48px -36px hsl(var(--app-shadow-deep) / 0.18),
+      0 24px 40px -34px hsl(var(--app-shadow-deep) / 0.15),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
-    backdrop-filter: blur(14px);
+    backdrop-filter: blur(10px);
+  }
+
+  .app-exam-focus-topbar-main {
+    @apply grid gap-1.5;
   }
 
   .app-exam-focus-topbar-copy {
-    @apply flex min-w-0 flex-col justify-center space-y-1 xl:self-stretch;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.35rem;
   }
 
   .app-exam-focus-topbar-title {
@@ -3227,63 +3302,91 @@
     text-overflow: ellipsis;
   }
 
+  .app-exam-focus-topbar-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    min-width: 0;
+  }
+
   .app-exam-focus-topbar-subtitle {
-    @apply text-[12.5px] leading-5 sm:text-[13px];
+    @apply text-[11.5px] leading-[1.45] sm:text-[12px];
+  }
+
+  .app-exam-focus-topbar-subjects {
+    @apply hidden flex-wrap gap-1 sm:flex;
+  }
+
+  .app-exam-focus-topbar-subjects .app-meta-chip {
+    min-height: 1.45rem;
+    padding: 0.14rem 0.58rem;
+    font-size: 10px;
+    line-height: 1.1;
   }
 
   .app-exam-focus-topbar-status {
-    @apply grid grid-cols-2 gap-1.5 rounded-[1.1rem] border p-1.5 sm:grid-cols-3 sm:p-2 xl:col-span-1 xl:grid-cols-1 xl:content-center xl:self-stretch;
-    border-color: hsl(var(--border) / 0.76);
+    @apply flex flex-wrap items-center gap-1.5 rounded-[0.95rem] border p-1.5;
+    border-color: hsl(var(--border) / 0.72);
     background:
       linear-gradient(
         180deg,
         hsl(var(--app-surface-1) / 0.992) 0%,
-        hsl(var(--app-surface-2) / 0.86) 100%
+        hsl(var(--app-surface-2) / 0.84) 100%
       );
     box-shadow:
-      0 20px 32px -32px hsl(var(--app-shadow-deep) / 0.12),
+      0 18px 30px -34px hsl(var(--app-shadow-deep) / 0.1),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
   }
 
   .app-exam-focus-topbar-stat {
-    @apply flex min-w-0 flex-col justify-center rounded-[0.95rem] border px-2.5 py-2 sm:px-3;
-    min-height: 4rem;
-    border-color: hsl(var(--border) / 0.72);
-    background-color: hsl(var(--app-surface-1) / 0.84);
+    @apply inline-flex min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5;
+    min-height: 0;
+    border-color: hsl(var(--border) / 0.68);
+    background-color: hsl(var(--app-surface-1) / 0.82);
   }
 
   .app-exam-focus-topbar-stat-label {
-    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+    @apply text-[9.5px] font-semibold uppercase tracking-[0.13em] text-muted-foreground;
   }
 
   .app-exam-focus-topbar-stat-value {
-    @apply mt-1 text-sm font-semibold text-foreground;
+    @apply text-[12.5px] font-semibold leading-none text-foreground sm:text-[13px];
   }
 
   .app-exam-focus-topbar-stat-value-soft {
-    @apply line-clamp-2 text-[13px] leading-5;
+    @apply text-[12px] leading-none sm:text-[12.5px];
+    display: block;
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-exam-focus-topbar-stat-save {
+    padding: 0.25rem;
   }
 
   .app-exam-focus-topbar-side {
-    @apply grid gap-1.5 xl:self-stretch;
+    @apply grid gap-1.5 sm:grid-cols-[minmax(9rem,9.75rem)_minmax(0,1fr)] xl:grid-cols-[minmax(9rem,9.75rem)_minmax(0,1fr)];
   }
 
   .app-exam-focus-topbar-actions {
-    @apply grid w-full grid-cols-2 gap-1.5 rounded-[1.1rem] border p-1.5 sm:grid-cols-3 xl:w-auto xl:min-w-[20rem] xl:self-stretch;
-    border-color: hsl(var(--border) / 0.76);
+    @apply grid w-full grid-cols-2 gap-1.5 rounded-[0.95rem] border p-1.5 sm:grid-cols-3 xl:min-w-0;
+    border-color: hsl(var(--border) / 0.72);
     background:
       linear-gradient(
         180deg,
         hsl(var(--app-surface-1) / 0.992) 0%,
-        hsl(var(--app-surface-2) / 0.86) 100%
+        hsl(var(--app-surface-2) / 0.84) 100%
       );
     box-shadow:
-      0 20px 32px -32px hsl(var(--app-shadow-deep) / 0.12),
+      0 18px 30px -34px hsl(var(--app-shadow-deep) / 0.1),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
   }
 
   .app-exam-topbar-action {
-    @apply min-h-11 w-full justify-center rounded-[0.95rem] whitespace-nowrap px-3 text-[13px] sm:text-sm;
+    @apply min-h-9 w-full justify-center rounded-[0.85rem] whitespace-nowrap px-3 text-[12px];
   }
 
   .app-exam-topbar-action-submit {
@@ -3291,18 +3394,18 @@
   }
 
   .app-exam-timer-card {
-    @apply flex min-w-0 flex-col rounded-[1.1rem] border px-2.5 py-2.5 sm:px-3.5 xl:self-stretch;
-    min-height: 5.25rem;
+    @apply flex min-w-0 rounded-[0.95rem] border px-2.5 py-2 sm:px-3;
+    min-height: 0;
     border-color: hsl(var(--primary) / 0.18);
     background:
-      radial-gradient(circle at top right, hsl(var(--primary) / 0.16) 0%, transparent 11rem),
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.14) 0%, transparent 10rem),
       linear-gradient(
         180deg,
         hsl(var(--app-surface-1) / 0.995) 0%,
         hsl(var(--app-surface-tint) / 0.86) 100%
       );
     box-shadow:
-      0 24px 34px -30px hsl(var(--app-shadow-deep) / 0.16),
+      0 20px 30px -30px hsl(var(--app-shadow-deep) / 0.14),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.86);
   }
 
@@ -3329,16 +3432,127 @@
   }
 
   .app-exam-timer-card-kicker {
-    @apply text-[10px] font-semibold uppercase tracking-[0.18em];
+    @apply text-[9.5px] font-semibold uppercase tracking-[0.16em];
     color: hsl(var(--muted-foreground));
   }
 
-  .app-exam-timer-card-head {
-    @apply flex items-center justify-between gap-2;
+  .app-exam-timer-card-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .app-exam-timer-card-copy {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
   }
 
   .app-exam-timer-card-value {
-    @apply mt-1.5 text-[1.22rem] font-semibold leading-none tracking-[-0.05em] text-foreground sm:text-[1.8rem];
+    @apply text-[1rem] font-semibold leading-none tracking-[-0.05em] text-foreground sm:text-[1.15rem];
+  }
+
+  @media (min-width: 1024px) {
+    .app-exam-focus-topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.5rem;
+      row-gap: 0.5rem;
+    }
+
+    .app-exam-focus-topbar-main {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .app-exam-focus-topbar-side {
+      grid-template-columns: minmax(9rem, 9.5rem) auto;
+      align-items: stretch;
+      gap: 0.5rem;
+    }
+
+    .app-exam-focus-topbar-actions {
+      display: flex;
+      width: auto;
+      min-width: 0;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: 0.375rem;
+      padding: 0.375rem;
+    }
+
+    .app-exam-topbar-action {
+      width: auto;
+      min-height: 2.25rem;
+      padding-inline: 0.75rem;
+    }
+
+    .app-exam-topbar-action-submit {
+      grid-column: auto;
+    }
+
+    .app-exam-focus-topbar-status {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: 0.375rem;
+      padding: 0.375rem;
+    }
+
+    .app-exam-focus-topbar-stat {
+      align-items: center;
+      gap: 0.5rem;
+      white-space: nowrap;
+      padding: 0.45rem 0.7rem;
+    }
+
+    .app-exam-focus-topbar-stat-value-soft {
+      max-width: 9rem;
+    }
+
+    .app-exam-timer-card {
+      padding: 0.55rem 0.75rem;
+    }
+
+    .app-exam-timer-card-kicker {
+      white-space: nowrap;
+    }
+
+    .app-exam-timer-card-value {
+      font-size: 1.02rem;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar-main {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar-side {
+      grid-template-columns: minmax(9rem, 9.5rem) minmax(0, 1fr);
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar-status {
+      flex-wrap: wrap;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar-stat {
+      flex: 1 1 10rem;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar-stat-current {
+      flex-basis: 12rem;
+    }
   }
 
   .app-exam-timer-card-warning .app-exam-timer-card-value {
@@ -3404,30 +3618,134 @@
     @apply gap-3 xl:grid-cols-[17.75rem_minmax(0,1fr)];
   }
 
+  .app-exam-shell-focus-compact-sidebar {
+    @apply xl:grid-cols-[13.5rem_minmax(0,1fr)];
+  }
+
+  .app-exam-shell-focus-no-sidebar {
+    @apply xl:grid-cols-[minmax(0,1fr)];
+  }
+
+  .app-exam-shell-focus-no-sidebar .app-exam-main-focus {
+    max-width: min(100%, 84rem);
+    margin-inline: auto;
+  }
+
+  .app-exam-shell-focus-fullscreen {
+    @apply gap-4;
+  }
+
   .app-exam-sidebar-focus {
     top: calc(var(--app-exam-sticky-top) + 1rem);
   }
 
+  .app-exam-sidebar-focus-fullscreen {
+    top: calc(var(--app-exam-sticky-top) + 0.75rem);
+  }
+
+  .app-exam-sidebar-focus-fullscreen .app-section-header {
+    background:
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.08) 0%, transparent 10rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-2) / 0.94) 0%,
+        hsl(var(--app-surface-1) / 0.98) 100%
+      );
+  }
+
+  .app-exam-sidebar-focus-fullscreen .app-section-header .app-meta-chip {
+    min-height: 1.65rem;
+    padding: 0.2rem 0.68rem;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+
+  .app-exam-sidebar-compact .app-section-header {
+    @apply pb-3;
+  }
+
+  .app-exam-sidebar-compact .app-section-body {
+    @apply space-y-2.5;
+  }
+
+  .app-exam-sidebar-compact-palette {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .app-exam-sidebar-compact .app-exam-palette-button {
+    min-height: 2.5rem;
+    padding-block: 0;
+    font-size: 12px;
+  }
+
   .app-exam-main-focus {
-    @apply min-w-0 space-y-4;
+    @apply min-w-0 space-y-3;
   }
 
   .app-exam-question-card {
     @apply flex flex-col;
   }
 
+  .app-exam-question-card > .app-section-header {
+    @apply px-3.5 pb-2.5 pt-3 sm:px-4 sm:pb-2.5 sm:pt-3;
+  }
+
   .app-exam-question-body {
-    @apply flex-1 space-y-4 sm:space-y-5;
+    @apply flex-1 space-y-3 sm:space-y-4;
   }
 
   .app-exam-question-header {
-    @apply flex flex-col gap-3 sm:gap-4;
+    @apply flex flex-col gap-2 sm:gap-2.5;
     min-width: 0;
   }
 
-  .app-exam-question-meta {
-    @apply flex flex-wrap items-center gap-2 self-start;
+  .app-exam-question-header-copy {
+    display: flex;
     min-width: 0;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .app-exam-question-title {
+    @apply text-[1rem] font-semibold tracking-[-0.028em] text-foreground sm:text-[1.14rem] xl:text-[1.2rem];
+    line-height: 1.2;
+  }
+
+  .app-exam-question-meta {
+    @apply flex flex-wrap items-center gap-1.5 self-start;
+    min-width: 0;
+  }
+
+  .app-exam-question-section-description {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .app-exam-question-section-meta {
+    @apply flex flex-wrap items-center gap-1.5 pt-0.5;
+  }
+
+  .app-exam-question-header .app-meta-chip,
+  .app-exam-question-section-meta .app-meta-chip,
+  .app-exam-question-meta .app-meta-chip {
+    min-height: 1.56rem;
+    padding: 0.14rem 0.58rem;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+
+  .app-exam-question-context-note {
+    @apply rounded-[0.92rem] border px-3 py-2 text-[12.5px];
+    color: hsl(var(--foreground) / 0.82);
+    border-color: hsl(var(--border) / 0.64);
+    line-height: 1.55;
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-2) / 0.4) 0%,
+        hsl(var(--app-surface-1) / 0.7) 100%
+      );
   }
 
   .app-exam-sidebar-subjects {
@@ -3535,6 +3853,70 @@
     @apply h-2.5 w-2.5 rounded-full;
   }
 
+  .app-exam-sidebar-section-list {
+    @apply space-y-2.5;
+  }
+
+  .app-exam-sidebar-section {
+    @apply overflow-hidden rounded-[1.15rem] border;
+    border-color: hsl(var(--border) / 0.74);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.74) 100%
+      );
+    box-shadow:
+      0 16px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.72);
+  }
+
+  .app-exam-sidebar-section-active {
+    border-color: hsl(var(--primary) / 0.22);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--primary) / 0.08) 0%,
+        hsl(var(--app-surface-1) / 0.95) 100%
+      );
+    box-shadow:
+      0 18px 30px -30px hsl(var(--primary) / 0.16),
+      inset 0 0 0 1px hsl(var(--primary) / 0.08);
+  }
+
+  .app-exam-sidebar-section-trigger {
+    @apply flex w-full items-start justify-between gap-3 px-3.5 py-3 text-left transition-colors;
+  }
+
+  .app-exam-sidebar-section-trigger:hover {
+    background-color: hsl(var(--app-surface-2) / 0.34);
+  }
+
+  .app-exam-sidebar-section-copy {
+    @apply min-w-0;
+  }
+
+  .app-exam-sidebar-section-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .app-exam-sidebar-section-summary {
+    @apply mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] leading-5 text-muted-foreground;
+  }
+
+  .app-exam-sidebar-section-body {
+    @apply space-y-3 border-t px-3.5 pb-3.5 pt-3;
+    border-color: hsl(var(--border) / 0.68);
+  }
+
+  .app-exam-sidebar-section-chevron {
+    @apply h-4 w-4 text-muted-foreground transition-transform duration-200;
+  }
+
+  .app-exam-sidebar-section-chevron-collapsed {
+    transform: rotate(180deg);
+  }
+
   .app-exam-sidebar-summary {
     @apply grid gap-2 sm:grid-cols-3 xl:grid-cols-1;
   }
@@ -3572,11 +3954,68 @@
   }
 
   .app-exam-question-shell {
-    @apply space-y-5;
+    @apply space-y-3.5;
+  }
+
+  .app-exam-question-content {
+    @apply rounded-[1.05rem] border px-3.5 py-3.5 sm:px-4 sm:py-4;
+    border-color: hsl(var(--border) / 0.72);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-2) / 0.62) 100%
+      );
+    box-shadow:
+      0 18px 30px -30px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.78);
+  }
+
+  .app-exam-question-content .prose {
+    @apply max-w-none text-[14px] text-foreground sm:text-[15px];
+    line-height: 1.65;
+  }
+
+  .app-exam-question-content .prose > * + * {
+    margin-top: 0.6rem;
+  }
+
+  .app-exam-question-content .prose > :first-child,
+  .app-exam-option-richtext > :first-child {
+    margin-top: 0;
+  }
+
+  .app-exam-question-content .prose > :last-child,
+  .app-exam-option-richtext > :last-child {
+    margin-bottom: 0;
+  }
+
+  .app-exam-question-content .prose :where(p, li, figcaption),
+  .app-exam-option-richtext :where(p, li, figcaption) {
+    overflow-wrap: anywhere;
+  }
+
+  .app-exam-question-content .prose figure,
+  .app-exam-option-richtext figure {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .app-exam-question-content .prose img {
+    display: block;
+    width: auto;
+    max-width: min(100%, 44rem);
+    max-height: 24rem;
+    margin: 1rem auto 0.25rem;
+    border: 1px solid hsl(var(--border) / 0.76);
+    border-radius: calc(var(--app-radius-lg) + 0.125rem);
+    background-color: hsl(var(--background));
+    object-fit: contain;
+    box-shadow: 0 18px 28px -24px hsl(var(--app-shadow-deep) / 0.18);
   }
 
   .app-exam-option {
-    @apply flex cursor-pointer items-start gap-2.5 rounded-2xl border px-3 py-3 transition-all duration-200 sm:gap-3 sm:px-4 sm:py-3.5;
+    @apply flex cursor-pointer items-start gap-2.5 rounded-[1.05rem] border px-3 py-2.5 transition-all duration-200 sm:px-3.5 sm:py-3;
     border-color: hsl(var(--border) / 0.76);
     background:
       linear-gradient(
@@ -3597,14 +4036,22 @@
 
   .app-exam-option-selected {
     border-color: hsl(var(--primary) / 0.28);
-    background-color: hsl(var(--primary) / 0.07);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--primary) / 0.1) 0%,
+        hsl(var(--app-surface-1) / 0.95) 100%
+      );
     box-shadow:
       inset 0 0 0 1px hsl(var(--primary) / 0.08),
-      0 16px 24px -28px hsl(var(--app-shadow-deep) / 0.12);
+      0 20px 30px -30px hsl(var(--primary) / 0.18);
   }
 
   .app-exam-option-indicator {
-    @apply mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold sm:h-7 sm:w-7 sm:text-[11px];
+    @apply flex shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold;
+    width: 1.45rem;
+    height: 1.45rem;
+    margin-top: 0.125rem;
     border-color: hsl(var(--border) / 0.82);
     background-color: hsl(var(--background) / 0.96);
     color: hsl(var(--muted-foreground));
@@ -3617,23 +4064,92 @@
   }
 
   .app-exam-option-content {
-    @apply min-w-0 flex-1 space-y-1;
+    @apply min-w-0 flex-1;
   }
 
-  .app-exam-option-kicker {
-    @apply text-[11px] font-medium tracking-[0.04em] text-muted-foreground;
+  .app-exam-question-option-list {
+    display: grid;
+    gap: 0.65rem;
+  }
+
+  .app-exam-option-richtext {
+    @apply max-w-none text-[13.5px] text-foreground sm:text-[14px];
+    line-height: 1.5;
+  }
+
+  .app-exam-option-richtext > * + * {
+    margin-top: 0.45rem;
+  }
+
+  .app-exam-option-richtext img {
+    display: block;
+    width: auto;
+    max-width: min(100%, 18rem);
+    max-height: 10.5rem;
+    margin-top: 0.6rem;
+    border: 1px solid hsl(var(--border) / 0.72);
+    border-radius: 0.85rem;
+    background-color: hsl(var(--background));
+    object-fit: contain;
+    box-shadow: 0 16px 24px -24px hsl(var(--app-shadow-deep) / 0.14);
   }
 
   .app-exam-nav-row {
-    @apply flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:pt-5;
+    @apply flex flex-col gap-2.5 rounded-[1rem] border p-2.5 sm:gap-2;
+    position: sticky;
+    bottom: calc(4.9rem + env(safe-area-inset-bottom));
+    z-index: 12;
+    border-color: hsl(var(--border) / 0.74);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.992) 0%,
+        hsl(var(--app-surface-2) / 0.88) 100%
+      );
+    box-shadow:
+      0 18px 30px -28px hsl(var(--app-shadow-deep) / 0.14),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+    backdrop-filter: blur(12px);
+  }
+
+  .app-exam-nav-row-single {
+    position: static;
+    bottom: auto;
+    gap: 0;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .app-exam-nav-row-copy {
+    @apply flex flex-wrap items-center gap-2;
+    min-width: 0;
+  }
+
+  .app-exam-nav-row-shortcuts {
+    @apply text-[11px] leading-4 text-muted-foreground;
+  }
+
+  .app-exam-nav-row-actions {
+    @apply flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  .app-exam-nav-row-actions-end {
+    @apply sm:justify-end;
   }
 
   .app-exam-nav-actions {
     @apply grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center;
   }
 
+  .app-exam-nav-actions-single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .app-exam-nav-button {
-    @apply min-h-11;
+    @apply min-h-9;
   }
 
   .app-exam-mobile-nav-bar {
@@ -3644,10 +4160,10 @@
     z-index: 40;
     display: flex;
     align-items: flex-end;
-    gap: 0.75rem;
+    gap: 0.625rem;
     border: 1px solid hsl(var(--border) / 0.82);
     border-radius: calc(var(--app-radius-lg) + 0.125rem);
-    padding: 0.75rem;
+    padding: 0.625rem 0.75rem;
     background:
       radial-gradient(circle at top right, hsl(var(--primary) / 0.12) 0%, transparent 12rem),
       linear-gradient(
@@ -3666,11 +4182,11 @@
   }
 
   .app-exam-mobile-nav-bar-label {
-    @apply text-[13px] font-semibold leading-5 text-foreground;
+    @apply text-[12.5px] font-semibold leading-5 text-foreground;
   }
 
   .app-exam-mobile-nav-bar-meta {
-    @apply mt-1.5 flex flex-wrap gap-1.5;
+    @apply mt-1 flex flex-wrap gap-1.5;
   }
 
   .app-exam-mobile-nav-bar-chip {
@@ -3950,6 +4466,10 @@
     .app-exam-mobile-nav-bar-chip-current {
       display: none;
     }
+
+    .app-exam-nav-row-shortcuts {
+      display: none;
+    }
   }
 
   @media (min-width: 640px) {
@@ -3974,25 +4494,202 @@
 
   @media (min-width: 1280px) {
     .app-exam-shell-focus {
-      min-height: calc(100dvh - 8.75rem);
+      min-height: calc(100dvh - 8.1rem);
+    }
+
+    .app-exam-focus-topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      column-gap: 0.625rem;
+      row-gap: 0.625rem;
+    }
+
+    .app-exam-focus-topbar > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 0;
+    }
+
+    .app-exam-focus-topbar-main {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.625rem;
+    }
+
+    .app-exam-focus-topbar-side {
+      grid-template-columns: minmax(11.75rem, 12.5rem) auto;
+      align-items: stretch;
+      gap: 0.625rem;
+    }
+
+    .app-exam-focus-topbar-status {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: 0.375rem;
+      min-width: 0;
+      padding: 0.25rem;
+    }
+
+    .app-exam-focus-topbar-stat {
+      min-width: 0;
+      padding-inline: 0.6rem;
+      flex: 0 0 auto;
+    }
+
+    .app-exam-focus-topbar-stat-current {
+      min-width: 6.5rem;
+      max-width: 8rem;
+    }
+
+    .app-exam-focus-topbar-stat-value-soft {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .app-exam-timer-card-main {
+      min-width: 0;
+      gap: 0.625rem;
+    }
+
+    .app-exam-timer-card-value {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar-main {
+      grid-template-columns: minmax(0, 1fr) minmax(31rem, 34rem);
+      align-items: center;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar-side {
+      grid-template-columns: minmax(11rem, 12rem) minmax(21rem, 23rem);
+      align-items: stretch;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar-status {
+      flex-wrap: nowrap;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar-stat {
+      flex: 0 0 auto;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-focus-topbar-stat-current {
+      flex-basis: auto;
+    }
+
+    .app-exam-shell-focus-fullscreen {
+      min-height: calc(100dvh - 7.4rem);
+      grid-template-columns: minmax(0, 1fr) 18.5rem;
+      align-items: start;
+    }
+
+    .app-exam-shell-focus-fullscreen.app-exam-shell-focus-compact-sidebar {
+      grid-template-columns: minmax(0, 1fr) 14rem;
+    }
+
+    .app-exam-shell-focus-fullscreen.app-exam-shell-focus-no-sidebar {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .app-exam-shell-focus-fullscreen .app-exam-main-focus {
+      order: 1;
+      width: 100%;
+      max-width: min(100%, 84rem);
+      margin-inline: 0 auto;
+      min-height: 0;
+    }
+
+    .app-exam-sidebar-focus-fullscreen {
+      order: 2;
+      max-height: calc(100vh - 7.75rem);
+      overflow-y: auto;
+      padding-left: 0.25rem;
+      padding-right: 0;
+    }
+
+    .app-exam-sidebar-focus-fullscreen .app-section-header {
+      @apply px-3 pb-2.5 pt-3;
+    }
+
+    .app-exam-sidebar-focus-fullscreen .app-section-body {
+      @apply px-3 pb-3 pt-3;
+    }
+
+    .app-exam-sidebar-focus-fullscreen .app-meta-chip {
+      min-height: 1.65rem;
+      padding: 0.18rem 0.68rem;
+      font-size: 10px;
+      line-height: 1.1;
+    }
+
+    .app-exam-sidebar-focus-fullscreen .app-exam-sidebar-section-summary {
+      gap: 0.25rem 0.5rem;
+      font-size: 10.5px;
+    }
+
+    .app-exam-sidebar-focus-fullscreen .app-exam-sidebar-section-trigger {
+      padding: 0.875rem;
+    }
+
+    .app-exam-sidebar-focus-fullscreen .app-exam-sidebar-section-title {
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .app-exam-sidebar-focus-fullscreen .app-exam-sidebar-section-body {
+      gap: 0.625rem;
+    }
+
+    .app-exam-sidebar-focus-fullscreen .app-exam-palette {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.45rem;
+    }
+
+    .app-exam-sidebar-focus-fullscreen .app-exam-palette-button {
+      min-height: 2.65rem;
+      padding-block: 0;
+      font-size: 12px;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-question-card {
+      min-height: 0;
+      height: auto;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-question-body {
+      min-height: 0;
+      overflow: visible;
     }
 
     .app-exam-sidebar-focus {
-      max-height: calc(100vh - 8.75rem);
+      max-height: calc(100vh - 8.1rem);
       overflow-y: auto;
       padding-right: 0.25rem;
     }
 
     .app-exam-question-card {
-      min-height: calc(100dvh - 8.75rem);
+      min-height: calc(100dvh - 8.1rem);
     }
 
     .app-exam-question-body {
       overflow-y: auto;
     }
 
+    .app-exam-nav-row {
+      bottom: 0.75rem;
+      gap: 0.75rem;
+    }
+
     .app-exam-question-header {
-      @apply flex-row items-start justify-between gap-5;
+      @apply flex-row items-start justify-between gap-3;
     }
 
     .app-exam-question-meta {

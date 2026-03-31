@@ -1,10 +1,11 @@
 import { connectDB } from "@/lib/db";
 import { buildArchiveFilter } from "@/lib/archive";
-import { getTenantModels } from "@/lib/db-tenant";
+import { getTenantDb, getTenantModels } from "@/lib/db-tenant";
 import {
   getStudentTestModels,
   loadOnlinePaperAssignmentsForClass,
   loadOnlinePaperById,
+  loadOnlinePaperRuntimeById,
   loadStudentUser,
 } from "@/lib/student-test-server";
 import {
@@ -12,18 +13,27 @@ import {
   validateStudentSectionAnswers,
 } from "@/lib/question-paper/grading";
 import {
+  autoSubmitExpiredAttemptIfNeeded as autoSubmitExpiredLegacyAttemptIfNeeded,
+  buildStudentPlacementSnapshot,
+  buildSectionAnswersSignature as buildLegacySectionAnswersSignature,
   deriveStudentTestStatus,
+  finalizeAttemptAsSubmitted,
+  findOrCreateStudentAttempt,
+  getAttemptDeadlineMs,
   getPaperWindowEnd,
   getPaperWindowStart,
+  getRemainingTimeMs,
   isStudentResultReleasedForPaper,
   isStudentEligibleForPaper,
   paperRequiresManualReview,
   paperSupportsOnlineDelivery,
+  sanitizeAttemptForStudentDelivery,
   sanitizePaperForStudent,
   sanitizeSerializedAttemptForStudentDelivery,
   summarizeSanitizedPaperForStudent,
   serializeStudentAttempt,
 } from "@/lib/student-tests";
+import { ATTEMPT_LOCK_TTL_SECONDS } from "@/lib/student-session";
 import { resolvePaperSubjectIds } from "@/lib/question-paper/subjects";
 import {
   cacheExamSnapshotPayload,
@@ -50,10 +60,21 @@ export type ExamRuntimeErrorCode =
   | "ATTEMPT_NOT_STARTED"
   | "ATTEMPT_ALREADY_SUBMITTED"
   | "ATTEMPT_LOCKED"
+  | "ATTEMPT_LOCK_UNAVAILABLE"
   | "ATTEMPT_SUBMIT_FAILED"
   | "ATTEMPT_STATE_CONFLICT"
   | "ATTEMPT_SAVE_RATE_LIMITED"
   | "INVALID_ANSWERS_PAYLOAD";
+
+export type ExamRuntimeDependencyStatus = "up" | "down" | "not_configured";
+
+export type ExamRuntimeHealthProbeResult = {
+  status: ExamRuntimeDependencyStatus;
+  configured: boolean;
+  schemaReady: boolean;
+  latencyMs: number | null;
+  error?: string;
+};
 
 type ExamRuntimeErrorShape = {
   success: false;
@@ -324,6 +345,11 @@ const EXAM_RUNTIME_ERROR_META_BY_MESSAGE: Record<
     httpStatus: 409,
     retryable: true,
   },
+  "The test is temporarily unable to coordinate updates safely. Please retry.": {
+    code: "ATTEMPT_LOCK_UNAVAILABLE",
+    httpStatus: 503,
+    retryable: true,
+  },
   "Too many save requests were sent at once. Please wait a few seconds and try again.": {
     code: "ATTEMPT_SAVE_RATE_LIMITED",
     httpStatus: 429,
@@ -457,6 +483,12 @@ const EXAM_RUNTIME_SNAPSHOT_CACHE_TTL_MS = Math.max(
     10,
   ) || 120_000,
 );
+const EXAM_ATTEMPT_LOCK_COLLECTION_NAME = "examattemptlocks";
+const EXAM_ATTEMPT_LOCK_UNIQUE_INDEX_NAME =
+  "attempt_lock_paper_student_unique_1";
+const EXAM_ATTEMPT_LOCK_TTL_INDEX_NAME = "attempt_lock_expiresAt_ttl_1";
+const LEGACY_ATTEMPT_RUNTIME_PROJECTION =
+  "paper student startedAt submittedAt status lastSavedAt totalMarksAwarded sectionAnswers";
 
 let examRuntimePoolPromise: Promise<ExamRuntimePool | null> | null = null;
 let examRuntimeSchemaPromise: Promise<boolean> | null = null;
@@ -785,6 +817,154 @@ function clearCachedExamRuntimeResourcesForSchool(schoolKey: string) {
   }
 }
 
+type ExamAttemptLockIndexState = {
+  ensurePromisesBySchool: Map<string, Promise<void>>;
+};
+
+function getExamAttemptLockIndexState() {
+  const globalState = globalThis as typeof globalThis & {
+    __examAttemptLockIndexState?: ExamAttemptLockIndexState;
+  };
+
+  if (!globalState.__examAttemptLockIndexState) {
+    globalState.__examAttemptLockIndexState = {
+      ensurePromisesBySchool: new Map(),
+    };
+  }
+
+  return globalState.__examAttemptLockIndexState;
+}
+
+function isMongoDuplicateKeyError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
+async function ensureExamAttemptFallbackLockIndexes(schoolKey: string) {
+  const normalizedSchoolKey = String(schoolKey || "").trim();
+  if (!normalizedSchoolKey) {
+    throw new Error("schoolKey is required to ensure exam attempt lock indexes.");
+  }
+
+  const state = getExamAttemptLockIndexState();
+  const existingPromise = state.ensurePromisesBySchool.get(normalizedSchoolKey);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const ensurePromise = (async () => {
+    const tenantDb = await getTenantDb(normalizedSchoolKey);
+    const db = tenantDb.db;
+    if (!db) {
+      throw new Error("Tenant database not available for exam attempt locks.");
+    }
+
+    const collection = db.collection(EXAM_ATTEMPT_LOCK_COLLECTION_NAME);
+    await Promise.all([
+      collection.createIndex(
+        { paper: 1, student: 1 },
+        {
+          name: EXAM_ATTEMPT_LOCK_UNIQUE_INDEX_NAME,
+          unique: true,
+        },
+      ),
+      collection.createIndex(
+        { expiresAt: 1 },
+        {
+          name: EXAM_ATTEMPT_LOCK_TTL_INDEX_NAME,
+          expireAfterSeconds: 0,
+        },
+      ),
+    ]);
+  })().catch((error) => {
+    state.ensurePromisesBySchool.delete(normalizedSchoolKey);
+    throw error;
+  });
+
+  state.ensurePromisesBySchool.set(normalizedSchoolKey, ensurePromise);
+  return ensurePromise;
+}
+
+async function claimExamAttemptFallbackLock(
+  schoolKey: string,
+  paperId: string,
+  studentId: string,
+  lockToken: string,
+) {
+  await connectDB();
+  await ensureExamAttemptFallbackLockIndexes(schoolKey);
+
+  const tenantDb = await getTenantDb(schoolKey);
+  const db = tenantDb.db;
+  if (!db) {
+    throw new Error("Tenant database not available for exam attempt locks.");
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + ATTEMPT_LOCK_TTL_SECONDS * 1000);
+
+  try {
+    const result = await db.collection(EXAM_ATTEMPT_LOCK_COLLECTION_NAME).updateOne(
+      {
+        paper: paperId,
+        student: studentId,
+        $or: [{ expiresAt: { $lte: now } }, { ownerToken: lockToken }],
+      },
+      {
+        $set: {
+          ownerToken: lockToken,
+          expiresAt,
+          updatedAt: now,
+        },
+        $setOnInsert: {
+          paper: paperId,
+          student: studentId,
+          createdAt: now,
+        },
+      },
+      { upsert: true },
+    );
+
+    return (
+      result.upsertedCount > 0 ||
+      result.matchedCount > 0 ||
+      result.modifiedCount > 0
+    );
+  } catch (error) {
+    if (isMongoDuplicateKeyError(error)) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+async function releaseExamAttemptFallbackLock(
+  schoolKey: string,
+  paperId: string,
+  studentId: string,
+  lockToken: string,
+) {
+  await connectDB();
+  const tenantDb = await getTenantDb(schoolKey);
+  const db = tenantDb.db;
+  if (!db) {
+    return null;
+  }
+
+  const result = await db.collection(EXAM_ATTEMPT_LOCK_COLLECTION_NAME).deleteOne({
+    paper: paperId,
+    student: studentId,
+    ownerToken: lockToken,
+  });
+
+  return result.deletedCount > 0;
+}
+
 async function loadExamRuntimePool() {
   if (!EXAM_RUNTIME_DATABASE_URL) {
     return null;
@@ -846,6 +1026,49 @@ export async function isExamRuntimeEnabled() {
   }
 
   return ensureExamRuntimeSchema();
+}
+
+export async function probeExamRuntimeHealth(): Promise<ExamRuntimeHealthProbeResult> {
+  if (!EXAM_RUNTIME_DATABASE_URL) {
+    return {
+      status: "not_configured",
+      configured: false,
+      schemaReady: false,
+      latencyMs: null,
+    };
+  }
+
+  const startedAt = Date.now();
+  try {
+    const schemaReady = await ensureExamRuntimeSchema();
+    const pool = await loadExamRuntimePool();
+    if (!schemaReady || !pool) {
+      return {
+        status: "down",
+        configured: true,
+        schemaReady: Boolean(schemaReady),
+        latencyMs: Date.now() - startedAt,
+        error: "Exam runtime schema is not ready.",
+      };
+    }
+
+    await pool.query("SELECT 1 AS ok");
+
+    return {
+      status: "up",
+      configured: true,
+      schemaReady: true,
+      latencyMs: Date.now() - startedAt,
+    };
+  } catch (error: any) {
+    return {
+      status: "down",
+      configured: true,
+      schemaReady: false,
+      latencyMs: Date.now() - startedAt,
+      error: error?.message || "Exam runtime probe failed.",
+    };
+  }
 }
 
 async function queryExamRuntime<Row = Record<string, unknown>>(
@@ -2831,40 +3054,90 @@ async function withAttemptLock<T>(
   paperId: string,
   studentId: string,
   handler: () => Promise<T>,
-  options?: {
-    enabled?: boolean;
-  },
 ) {
-  if (options?.enabled === false) {
-    return handler();
+  const lockToken = crypto.randomUUID();
+  let releaseLock:
+    | (() => Promise<unknown>)
+    | null = null;
+
+  let claimed: boolean | null = null;
+  try {
+    claimed = await claimExamAttemptLock(
+      schoolKey,
+      paperId,
+      studentId,
+      lockToken,
+    );
+  } catch {
+    claimed = null;
   }
 
-  const lockToken = crypto.randomUUID();
-  const claimed = await claimExamAttemptLock(
-    schoolKey,
-    paperId,
-    studentId,
-    lockToken,
-  );
-
-  if (claimed === false) {
+  if (claimed === true) {
+    releaseLock = () =>
+      releaseExamAttemptLock(
+        schoolKey,
+        paperId,
+        studentId,
+        lockToken,
+      );
+  } else if (claimed === false) {
     throwExamRuntimeError({
       message: "Another test update is already in progress. Please retry.",
       code: "ATTEMPT_LOCKED",
       httpStatus: 409,
       retryable: true,
     });
+  } else {
+    try {
+      const fallbackClaimed = await claimExamAttemptFallbackLock(
+        schoolKey,
+        paperId,
+        studentId,
+        lockToken,
+      );
+
+      if (!fallbackClaimed) {
+        throwExamRuntimeError({
+          message: "Another test update is already in progress. Please retry.",
+          code: "ATTEMPT_LOCKED",
+          httpStatus: 409,
+          retryable: true,
+        });
+      }
+
+      releaseLock = () =>
+        releaseExamAttemptFallbackLock(
+          schoolKey,
+          paperId,
+          studentId,
+          lockToken,
+        );
+    } catch (error) {
+      if (error instanceof ExamRuntimeError) {
+        throw error;
+      }
+
+      throwExamRuntimeError({
+        message:
+          "The test is temporarily unable to coordinate updates safely. Please retry.",
+        code: "ATTEMPT_LOCK_UNAVAILABLE",
+        httpStatus: 503,
+        retryable: true,
+        details:
+          process.env.NODE_ENV !== "production"
+            ? {
+                cause:
+                  error instanceof Error ? error.message : String(error || ""),
+              }
+            : undefined,
+      });
+    }
   }
 
   try {
     return await handler();
   } finally {
-    await releaseExamAttemptLock(
-      schoolKey,
-      paperId,
-      studentId,
-      lockToken,
-    ).catch(() => undefined);
+    await releaseLock?.().catch(() => undefined);
   }
 }
 
@@ -3342,6 +3615,522 @@ export async function getStudentExamRuntimeDetail(
   };
 }
 
+function buildLegacyAttemptProgressResponse(
+  paper: any,
+  attempt: any,
+  now: Date,
+) {
+  const deadlineMs = getAttemptDeadlineMs(paper, attempt);
+  return {
+    success: true,
+    attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
+    resultReleased: isStudentResultReleasedForPaper(paper, now),
+    status: deriveStudentTestStatus(paper, attempt, now),
+    remainingTimeMs: getRemainingTimeMs(paper, attempt, now),
+    deadlineAt: deadlineMs ? new Date(deadlineMs).toISOString() : null,
+  };
+}
+
+function buildLegacyAttemptSubmittedResponse(
+  paper: any,
+  attempt: any,
+  now: Date,
+) {
+  return {
+    success: true,
+    attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
+    resultReleased: isStudentResultReleasedForPaper(paper, now),
+    status: String(attempt?.status || "submitted"),
+    remainingTimeMs: 0,
+    deadlineAt: normalizeDateValue(attempt?.submittedAt),
+  };
+}
+
+async function loadLegacyStudentExamMutationContext(
+  schoolKey: string,
+  paperId: string,
+) {
+  const models = await getStudentTestModels(schoolKey);
+  const paper = await loadOnlinePaperRuntimeById(models, schoolKey, paperId);
+
+  if (!paper) {
+    throwExamRuntimeError({
+      message: "Online test not found.",
+      code: "ONLINE_TEST_NOT_FOUND",
+      httpStatus: 404,
+      retryable: false,
+    });
+  }
+
+  if (!paperSupportsOnlineDelivery(paper)) {
+    throwExamRuntimeError({
+      message:
+        "This paper cannot be delivered online because it contains unsupported question types.",
+      code: "ONLINE_TEST_UNSUPPORTED",
+      httpStatus: 400,
+      retryable: false,
+    });
+  }
+
+  return {
+    models,
+    paper,
+  };
+}
+
+async function loadLegacyStudentAttemptProjection(
+  QuestionPaperResponseModel: any,
+  paperId: string,
+  studentId: string,
+) {
+  return QuestionPaperResponseModel.findOne({
+    paper: paperId,
+    student: studentId,
+  })
+    .select(LEGACY_ATTEMPT_RUNTIME_PROJECTION)
+    .lean();
+}
+
+async function startStudentLegacyAttempt(
+  schoolKey: string,
+  studentId: string,
+  paperId: string,
+  studentContext?: StudentEligibilityContext,
+) {
+  return withAttemptLock(schoolKey, paperId, studentId, async () => {
+    const now = new Date();
+    const { models, paper } = await loadLegacyStudentExamMutationContext(
+      schoolKey,
+      paperId,
+    );
+    const {
+      QuestionPaperResponse: QuestionPaperResponseModel,
+      User: UserModel,
+    } = models;
+
+    let attempt = await loadLegacyStudentAttemptProjection(
+      QuestionPaperResponseModel,
+      paperId,
+      studentId,
+    );
+
+    if (attempt) {
+      attempt = await autoSubmitExpiredLegacyAttemptIfNeeded({
+        QuestionPaperResponseModel,
+        attempt,
+        paper,
+        now,
+      });
+    }
+
+    if (!attempt || (attempt.status !== "submitted" && attempt.status !== "auto_submitted")) {
+      if (!attempt) {
+        const sessionPlacement = buildStudentPlacementSnapshot(studentContext);
+        const student = hasStudentEligibilityContext(sessionPlacement)
+          ? sessionPlacement
+          : await loadStudentUser(UserModel, studentId, {
+              schoolKey,
+              useCache: true,
+            });
+
+        if (!student) {
+          throwExamRuntimeError({
+            message: "Student profile not found.",
+            code: "STUDENT_NOT_FOUND",
+            httpStatus: 404,
+            retryable: false,
+          });
+        }
+
+        if (!isStudentEligibleForPaper(paper, student)) {
+          throwExamRuntimeError({
+            message: "You are not assigned to this online test.",
+            code: "ONLINE_TEST_NOT_ASSIGNED",
+            httpStatus: 403,
+            retryable: false,
+          });
+        }
+
+        const windowStart = getPaperWindowStart(paper);
+        const windowEnd = getPaperWindowEnd(paper);
+
+        if (windowStart && now.getTime() < windowStart.getTime()) {
+          throwExamRuntimeError({
+            message: "This online test is not open yet.",
+            code: "ONLINE_TEST_NOT_OPEN_YET",
+            httpStatus: 403,
+            retryable: false,
+          });
+        }
+
+        if (windowEnd && now.getTime() > windowEnd.getTime()) {
+          throwExamRuntimeError({
+            message: "This online test is closed.",
+            code: "ONLINE_TEST_CLOSED",
+            httpStatus: 403,
+            retryable: false,
+          });
+        }
+
+        attempt = await findOrCreateStudentAttempt({
+          QuestionPaperResponseModel,
+          paperId,
+          studentId,
+          now,
+          lean: true,
+        });
+      }
+
+      return buildLegacyAttemptProgressResponse(paper, attempt, now);
+    }
+
+    return buildLegacyAttemptSubmittedResponse(paper, attempt, now);
+  });
+}
+
+async function saveStudentLegacyAttempt(params: {
+  schoolKey: string;
+  studentId: string;
+  paperId: string;
+  sectionAnswers: unknown;
+  baseLastSavedAt?: string | null;
+}) {
+  return withAttemptLock(
+    params.schoolKey,
+    params.paperId,
+    params.studentId,
+    async () => {
+      const now = new Date();
+      const rateLimit = await consumeAutosaveRateLimit(
+        params.schoolKey,
+        params.studentId,
+        params.paperId,
+      );
+      if (rateLimit?.limited) {
+        throwExamRuntimeError({
+          message:
+            "Too many save requests were sent at once. Please wait a few seconds and try again.",
+          code: "ATTEMPT_SAVE_RATE_LIMITED",
+          httpStatus: 429,
+          retryable: true,
+        });
+      }
+
+      const { models, paper } = await loadLegacyStudentExamMutationContext(
+        params.schoolKey,
+        params.paperId,
+      );
+      const { QuestionPaperResponse: QuestionPaperResponseModel } = models;
+
+      let attempt = await loadLegacyStudentAttemptProjection(
+        QuestionPaperResponseModel,
+        params.paperId,
+        params.studentId,
+      );
+
+      if (attempt) {
+        attempt = await autoSubmitExpiredLegacyAttemptIfNeeded({
+          QuestionPaperResponseModel,
+          attempt,
+          paper,
+          now,
+        });
+      }
+
+      if (!attempt) {
+        const windowStart = getPaperWindowStart(paper);
+        const windowEnd = getPaperWindowEnd(paper);
+
+        if (windowStart && now.getTime() < windowStart.getTime()) {
+          throwExamRuntimeError({
+            message: "This online test is not open yet.",
+            code: "ONLINE_TEST_NOT_OPEN_YET",
+            httpStatus: 403,
+            retryable: false,
+          });
+        }
+
+        if (windowEnd && now.getTime() > windowEnd.getTime()) {
+          throwExamRuntimeError({
+            message: "This online test is closed.",
+            code: "ONLINE_TEST_CLOSED",
+            httpStatus: 403,
+            retryable: false,
+          });
+        }
+
+        throwExamRuntimeError({
+          message: "Start the test before saving answers.",
+          code: "ATTEMPT_NOT_STARTED",
+          httpStatus: 409,
+          retryable: false,
+        });
+      }
+
+      if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
+        throwExamRuntimeError({
+          message: "This attempt has already been submitted.",
+          code: "ATTEMPT_ALREADY_SUBMITTED",
+          httpStatus: 409,
+          retryable: false,
+          details: {
+            attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
+            serverLastSavedAt: attempt?.lastSavedAt || null,
+          },
+        });
+      }
+
+      const normalized = validateStudentSectionAnswers(
+        params.sectionAnswers ?? [],
+        paper,
+        { allowEmpty: true },
+      );
+      if (!normalized.ok) {
+        throwExamRuntimeError({
+          message: normalized.issues[0] || "Invalid answers payload.",
+          code: "INVALID_ANSWERS_PAYLOAD",
+          httpStatus: 400,
+          retryable: false,
+          details: { issues: normalized.issues },
+        });
+      }
+
+      const nextSignature = buildLegacySectionAnswersSignature(
+        normalized.sectionAnswers,
+        paper,
+      );
+      const existingSignature = buildLegacySectionAnswersSignature(
+        attempt?.sectionAnswers || [],
+        paper,
+      );
+      const baseLastSavedAtMs = parseTimestampMs(params.baseLastSavedAt);
+      const serverLastSavedAtMs = parseTimestampMs(attempt?.lastSavedAt);
+
+      if (
+        baseLastSavedAtMs !== null &&
+        serverLastSavedAtMs !== null &&
+        baseLastSavedAtMs + 1000 < serverLastSavedAtMs &&
+        nextSignature !== existingSignature
+      ) {
+        throwExamRuntimeError({
+          message:
+            "This test was updated from another session. Reload to continue with the latest saved answers.",
+          code: "ATTEMPT_STATE_CONFLICT",
+          httpStatus: 409,
+          retryable: false,
+          details: {
+            attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
+            serverLastSavedAt: attempt?.lastSavedAt || null,
+          },
+        });
+      }
+
+      if (nextSignature === existingSignature) {
+        return buildLegacyAttemptProgressResponse(paper, attempt, now);
+      }
+
+      attempt = await QuestionPaperResponseModel.findOneAndUpdate(
+        {
+          _id: attempt._id,
+          status: { $nin: ["submitted", "auto_submitted"] },
+        },
+        {
+          $set: {
+            sectionAnswers: normalized.sectionAnswers,
+            lastSavedAt: now,
+          },
+        },
+        { new: true },
+      )
+        .select(LEGACY_ATTEMPT_RUNTIME_PROJECTION)
+        .lean();
+
+      if (!attempt) {
+        const submittedAttempt = await loadLegacyStudentAttemptProjection(
+          QuestionPaperResponseModel,
+          params.paperId,
+          params.studentId,
+        );
+        throwExamRuntimeError({
+          message: "This attempt has already been submitted.",
+          code: "ATTEMPT_ALREADY_SUBMITTED",
+          httpStatus: 409,
+          retryable: false,
+          details: {
+            attempt: sanitizeAttemptForStudentDelivery(
+              submittedAttempt,
+              paper,
+              now,
+            ),
+            serverLastSavedAt: submittedAttempt?.lastSavedAt || null,
+          },
+        });
+      }
+
+      return buildLegacyAttemptProgressResponse(paper, attempt, now);
+    },
+  );
+}
+
+async function submitStudentLegacyAttempt(params: {
+  schoolKey: string;
+  studentId: string;
+  paperId: string;
+  sectionAnswers?: unknown;
+  baseLastSavedAt?: string | null;
+}) {
+  return withAttemptLock(
+    params.schoolKey,
+    params.paperId,
+    params.studentId,
+    async () => {
+      const now = new Date();
+      const { models, paper } = await loadLegacyStudentExamMutationContext(
+        params.schoolKey,
+        params.paperId,
+      );
+      const { QuestionPaperResponse: QuestionPaperResponseModel } = models;
+
+      let attempt = await loadLegacyStudentAttemptProjection(
+        QuestionPaperResponseModel,
+        params.paperId,
+        params.studentId,
+      );
+
+      if (!attempt) {
+        throwExamRuntimeError({
+          message: "Start the test before submitting it.",
+          code: "ATTEMPT_NOT_STARTED",
+          httpStatus: 409,
+          retryable: false,
+        });
+      }
+
+      attempt = await autoSubmitExpiredLegacyAttemptIfNeeded({
+        QuestionPaperResponseModel,
+        attempt,
+        paper,
+        now,
+      });
+
+      if (attempt.status === "submitted" || attempt.status === "auto_submitted") {
+        return buildLegacyAttemptSubmittedResponse(paper, attempt, now);
+      }
+
+      const normalized = validateStudentSectionAnswers(
+        params.sectionAnswers ?? attempt.sectionAnswers ?? [],
+        paper,
+        { allowEmpty: true },
+      );
+      if (!normalized.ok) {
+        throwExamRuntimeError({
+          message: normalized.issues[0] || "Invalid answers payload.",
+          code: "INVALID_ANSWERS_PAYLOAD",
+          httpStatus: 400,
+          retryable: false,
+          details: { issues: normalized.issues },
+        });
+      }
+
+      const incomingSignature = buildLegacySectionAnswersSignature(
+        normalized.sectionAnswers,
+        paper,
+      );
+      const existingSignature = buildLegacySectionAnswersSignature(
+        attempt.sectionAnswers || [],
+        paper,
+      );
+      const baseLastSavedAtMs = parseTimestampMs(params.baseLastSavedAt);
+      const serverLastSavedAtMs = parseTimestampMs(attempt?.lastSavedAt);
+
+      if (
+        baseLastSavedAtMs !== null &&
+        serverLastSavedAtMs !== null &&
+        baseLastSavedAtMs + 1000 < serverLastSavedAtMs &&
+        incomingSignature !== existingSignature
+      ) {
+        throwExamRuntimeError({
+          message:
+            "This test was updated from another session. Reload to continue with the latest saved answers.",
+          code: "ATTEMPT_STATE_CONFLICT",
+          httpStatus: 409,
+          retryable: false,
+          details: {
+            attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
+            serverLastSavedAt: attempt?.lastSavedAt || null,
+          },
+        });
+      }
+
+      attempt = await finalizeAttemptAsSubmitted({
+        QuestionPaperResponseModel,
+        attempt,
+        paper,
+        sectionAnswers: normalized.sectionAnswers,
+        autoSubmitted: false,
+        submittedAt: now,
+      });
+
+      if (!attempt) {
+        throwExamRuntimeError({
+          message: "This attempt could not be submitted.",
+          code: "ATTEMPT_SUBMIT_FAILED",
+          httpStatus: 409,
+          retryable: false,
+        });
+      }
+
+      return buildLegacyAttemptSubmittedResponse(paper, attempt, now);
+    },
+  );
+}
+
+export async function startStudentExamAttempt(
+  schoolKey: string,
+  studentId: string,
+  paperId: string,
+  studentContext?: StudentEligibilityContext,
+) {
+  if (await isExamRuntimeEnabled()) {
+    return startStudentExamRuntimeAttempt(
+      schoolKey,
+      studentId,
+      paperId,
+      studentContext,
+    );
+  }
+
+  return startStudentLegacyAttempt(schoolKey, studentId, paperId, studentContext);
+}
+
+export async function saveStudentExamAttempt(params: {
+  schoolKey: string;
+  studentId: string;
+  paperId: string;
+  sectionAnswers: unknown;
+  baseLastSavedAt?: string | null;
+}) {
+  if (await isExamRuntimeEnabled()) {
+    return saveStudentExamRuntimeAttempt(params);
+  }
+
+  return saveStudentLegacyAttempt(params);
+}
+
+export async function submitStudentExamAttempt(params: {
+  schoolKey: string;
+  studentId: string;
+  paperId: string;
+  sectionAnswers?: unknown;
+  baseLastSavedAt?: string | null;
+}) {
+  if (await isExamRuntimeEnabled()) {
+    return submitStudentExamRuntimeAttempt(params);
+  }
+
+  return submitStudentLegacyAttempt(params);
+}
+
 export async function startStudentExamRuntimeAttempt(
   schoolKey: string,
   studentId: string,
@@ -3617,7 +4406,7 @@ export async function startStudentExamRuntimeAttempt(
       remainingTimeMs: getAttemptRemainingTimeMs(attempt, now),
       deadlineAt: attempt.deadlineAt,
     };
-  }, { enabled: false });
+  });
 }
 
 export async function saveStudentExamRuntimeAttempt(params: {

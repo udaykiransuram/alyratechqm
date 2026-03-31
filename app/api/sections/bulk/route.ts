@@ -8,6 +8,7 @@ import { recordTenantAudit } from "@/lib/audit";
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { recordOpsFailure } from "@/lib/ops-runtime";
 
 function normalizeRecord(record: Record<string, unknown>) {
   const normalized: Record<string, unknown> = {};
@@ -71,14 +72,16 @@ export async function POST(req: NextRequest) {
   }
   const schoolKey = auth.schoolKey;
 
-  await connectDB();
+  let sectionRowCount: number | null = null;
 
   try {
+    await connectDB();
     const { AcademicSection: AcademicSectionModel, Class: ClassModel } =
       await getTenantModels(schoolKey, ["AcademicSection", "Class"]);
 
     const body = await req.json();
     const sections = Array.isArray(body?.sections) ? body.sections : [];
+    sectionRowCount = sections.length;
 
     if (sections.length === 0) {
       return NextResponse.json(
@@ -214,6 +217,24 @@ export async function POST(req: NextRequest) {
       count: results.filter((result) => result.success).length,
     });
   } catch (error: any) {
+    await recordOpsFailure({
+      schoolKey,
+      req,
+      action: "bulk_section_import",
+      message: error?.message || "Failed to import sections.",
+      error,
+      metadata: {
+        route: "/api/sections/bulk",
+        method: "POST",
+        uploadType: "sections",
+        rows: sectionRowCount,
+      },
+      entity: {
+        type: "bulk_upload",
+        label: "sections",
+      },
+      severity: "error",
+    });
     return NextResponse.json(
       { success: false, message: error.message || "Server error" },
       { status: 500 },

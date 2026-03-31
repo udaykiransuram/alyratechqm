@@ -1,5 +1,5 @@
 // models/Subject.ts
-import mongoose, { Schema, Document, Model } from 'mongoose';
+import mongoose, { Schema, Document, Model, Types } from 'mongoose';
 import { applyArchiveFields, hasArchiveFields } from '@/lib/archive';
 import { getModelRegistry } from '@/lib/mongoose-models';
 import type { ITag } from './Tag.ts';
@@ -9,6 +9,9 @@ export interface ISubject extends Document {
   tags: ITag['_id'][];
   code?: string;
   description?: string;
+  isArchived?: boolean;
+  archivedAt?: Date | null;
+  archivedBy?: Types.ObjectId | null;
 }
 
 const SubjectSchema: Schema<ISubject> = new Schema(

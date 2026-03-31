@@ -76,6 +76,20 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function buildStableQuestionSort(
+  primaryField: string,
+  primaryOrder: 1 | -1,
+) {
+  if (!primaryField || primaryField === "_id") {
+    return { _id: primaryOrder };
+  }
+
+  return {
+    [primaryField]: primaryOrder,
+    _id: primaryOrder,
+  };
+}
+
 function normalizeForTransport<T>(value: T): T {
   if (value === null || typeof value === "undefined") {
     return value as T;
@@ -284,7 +298,7 @@ export async function listWorkspaceQuestions({
     .populate("subject", "name")
     .populate("class", "name")
     .populate({ path: "tags", populate: { path: "type", select: "name" } })
-    .sort({ createdAt: -1 })
+    .sort(buildStableQuestionSort("createdAt", -1))
     .skip((pageWithinBounds - 1) * safeLimit)
     .limit(safeLimit)
     .lean();

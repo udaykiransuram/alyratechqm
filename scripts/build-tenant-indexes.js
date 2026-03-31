@@ -26,6 +26,11 @@ async function ensureIndexesForTenant(dbName) {
       res[col].push('ERR: ' + e.message);
     }
   }
+  const activeStudentRollPartialFilter = {
+    role: 'student',
+    rollNumber: { $type: 'string', $gt: '' },
+    $or: [{ isArchived: false }, { isArchived: { $exists: false } }],
+  };
 
   // Questions
   await ix('questions', { content: 'text' }, { name: 'content_text' });
@@ -41,6 +46,14 @@ async function ensureIndexesForTenant(dbName) {
   await ix('questionpaperresponses', { paper: 1 }, { name: 'qpr_paper_1' });
   await ix('questionpaperresponses', { student: 1 }, { name: 'qpr_student_1' });
   await ix('questionpaperresponses', { paper: 1, student: 1 }, { name: 'qpr_paper_student_1' });
+  await ix('examattemptlocks', { paper: 1, student: 1 }, {
+    name: 'attempt_lock_paper_student_unique_1',
+    unique: true,
+  });
+  await ix('examattemptlocks', { expiresAt: 1 }, {
+    name: 'attempt_lock_expiresAt_ttl_1',
+    expireAfterSeconds: 0,
+  });
 
   // Subjects
   await ix('subjects', { name: 1 }, { name: 'subject_name_1' });
@@ -54,8 +67,14 @@ async function ensureIndexesForTenant(dbName) {
   // Users
   await ix('users', { role: 1 }, { name: 'user_role_1' });
   await ix('users', { name: 1 }, { name: 'user_name_1' });
+  await ix('users', { role: 1, rollNumber: 1 }, {
+    name: 'student_roll_unique_active_1',
+    unique: true,
+    partialFilterExpression: activeStudentRollPartialFilter,
+  });
   await ix('users', { role: 1, class: 1 }, { name: 'user_role_class_1' });
   await ix('users', { class: 1, rollNumber: 1 }, { name: 'user_class_roll_1' });
+  await ix('users', { class: 1, academicSection: 1, rollNumber: 1 }, { name: 'user_class_section_roll_1' });
   await ix('users', { email: 1 }, { name: 'user_email_1' });
 
   // Classes / TagTypes

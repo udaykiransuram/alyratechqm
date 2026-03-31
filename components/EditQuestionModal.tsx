@@ -1,21 +1,56 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import EditorLoadingState from '@/components/ui/editor-loading-state';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { MetadataSelector } from '@/components/MetadataSelector';
 import { Input } from '@/components/ui/input';
-import dynamic from 'next/dynamic';
 import { TagItem } from '@/components/ui/multi-select-tags';
 import { PlusCircle, X } from 'lucide-react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+function QuestionMetadataSkeleton() {
+  return (
+    <Card className="app-surface overflow-hidden shadow-none">
+      <CardHeader className="app-section-header">
+        <CardTitle>Metadata</CardTitle>
+      </CardHeader>
+      <CardContent className="app-section-body space-y-4">
+        <div className="space-y-2">
+          <div className="h-4 w-12 rounded bg-muted" />
+          <div className="h-10 w-full rounded-xl bg-muted/70" />
+        </div>
+        <div className="space-y-2">
+          <div className="h-4 w-16 rounded bg-muted" />
+          <div className="h-10 w-full rounded-xl bg-muted/70" />
+        </div>
+        <div className="space-y-2">
+          <div className="h-4 w-10 rounded bg-muted" />
+          <div className="h-16 w-full rounded-2xl bg-muted/70" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
-  ssr: false,
-  loading: () => <EditorLoadingState label="Loading rich text editor" />,
+  loading: () => <EditorLoadingState label="Loading editor" />,
 });
+
+const MetadataSelector = dynamic(
+  () =>
+    import('@/components/MetadataSelector').then(
+      (module) => module.MetadataSelector,
+    ),
+  {
+    loading: () => <QuestionMetadataSkeleton />,
+  },
+);
+
 const MatrixMatchConfigurator = dynamic(() => import('@/components/MatrixMatchConfigurator').then(mod => mod.default), {
   ssr: false,
   loading: () => <EditorLoadingState label="Loading matrix configurator" />,
@@ -24,7 +59,7 @@ const MatrixMatchConfigurator = dynamic(() => import('@/components/MatrixMatchCo
 interface EditQuestionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onClose?: () => void; // <-- Add this line
+  onClose?: () => void;
   question: any;
   classes: any[];
   subjects: any[];
@@ -33,7 +68,23 @@ interface EditQuestionModalProps {
   toast: any;
 }
 
-// Add this helper function at the top or in a utils/api file
+function QuestionDetailLoadingState() {
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden bg-muted/20 p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <Card className="app-surface overflow-hidden shadow-none">
+        <CardHeader className="app-section-header py-3.5">
+          <CardTitle>Loading question</CardTitle>
+        </CardHeader>
+        <CardContent className="app-section-body space-y-3">
+          <EditorLoadingState label="Loading question details" />
+          <EditorLoadingState label="Preparing answer editor" />
+        </CardContent>
+      </Card>
+      <QuestionMetadataSkeleton />
+    </div>
+  );
+}
+
 async function updateQuestionAPI(updated: any) {
   const res = await fetch(`/api/questions/${updated._id}`, {
     method: 'PATCH',
@@ -50,7 +101,7 @@ async function updateQuestionAPI(updated: any) {
 export function EditQuestionModal({
   open,
   onOpenChange,
-  onClose, // <-- Add this line
+  onClose,
   question,
   classes,
   subjects,
@@ -58,6 +109,10 @@ export function EditQuestionModal({
   onSave,
   toast,
 }: EditQuestionModalProps) {
+  const [resolvedQuestion, setResolvedQuestion] = useState<any>(question);
+  const [loadingQuestionDetails, setLoadingQuestionDetails] = useState(false);
+  const [questionDetailsError, setQuestionDetailsError] = useState<string | null>(null);
+  const [questionDetailsReloadKey, setQuestionDetailsReloadKey] = useState(0);
   // --- Form State ---
   const [type, setType] = useState<'single' | 'multiple' | 'matrix-match' | 'descriptive'>('single');
   const [classId, setClassId] = useState('');
@@ -75,34 +130,95 @@ export function EditQuestionModal({
   const [matrixCols, setMatrixCols] = useState<string[]>(['']);
   const [matrixAnswers, setMatrixAnswers] = useState<number[][]>([]);
   const initializedQuestionKeyRef = useRef<string | null>(null);
+  const activeQuestion = resolvedQuestion ?? question;
+  const isWaitingForQuestionDetails =
+    question?.detailLevel === 'summary' && activeQuestion?.detailLevel === 'summary';
+
+  useEffect(() => {
+    if (!open) {
+      setResolvedQuestion(question);
+      setLoadingQuestionDetails(false);
+      setQuestionDetailsError(null);
+      return;
+    }
+
+    if (!question?._id || question?.detailLevel !== 'summary') {
+      setResolvedQuestion(question);
+      setLoadingQuestionDetails(false);
+      setQuestionDetailsError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setResolvedQuestion(question);
+    setLoadingQuestionDetails(true);
+    setQuestionDetailsError(null);
+
+    fetch(`/api/questions/${question._id}`)
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.message || 'Could not load question details.');
+        }
+
+        if (!cancelled) {
+          setResolvedQuestion(data.question);
+        }
+      })
+      .catch((error: any) => {
+        if (!cancelled) {
+          setQuestionDetailsError(
+            error?.message || 'Could not load question details.',
+          );
+          toast({
+            title: 'Question load failed',
+            description: error?.message || 'Could not load question details.',
+            variant: 'destructive',
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingQuestionDetails(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, question, questionDetailsReloadKey, toast]);
 
   // --- Populate initial values when the modal opens or its source data changes ---
   useEffect(() => {
-    if (!open || !question) {
+    if (
+      !open ||
+      !activeQuestion ||
+      isWaitingForQuestionDetails
+    ) {
       initializedQuestionKeyRef.current = null;
       return;
     }
 
-    const questionKey = `${String(question._id || 'question')}::${allTags.map((tag) => tag._id).join('|')}`;
+    const questionKey = `${String(activeQuestion._id || 'question')}::${allTags.map((tag) => tag._id).join('|')}`;
     if (initializedQuestionKeyRef.current === questionKey) {
       return;
     }
 
     initializedQuestionKeyRef.current = questionKey;
-    setType(question.type || 'single');
+    setType(activeQuestion.type || 'single');
     setClassId(
-      typeof question.class === 'string'
-        ? question.class
-        : question.class?._id || ''
+      typeof activeQuestion.class === 'string'
+        ? activeQuestion.class
+        : activeQuestion.class?._id || ''
     );
     setSubjectId(
-      typeof question.subject === 'string'
-        ? question.subject
-        : question.subject?._id || ''
+      typeof activeQuestion.subject === 'string'
+        ? activeQuestion.subject
+        : activeQuestion.subject?._id || ''
     );
     // Map tag IDs to tag objects
-    if (question.tags && Array.isArray(question.tags) && allTags.length > 0) {
-      const tagObjs = question.tags.map((tag: any) =>
+    if (activeQuestion.tags && Array.isArray(activeQuestion.tags) && allTags.length > 0) {
+      const tagObjs = activeQuestion.tags.map((tag: any) =>
         typeof tag === 'string'
           ? allTags.find(t => t._id === tag)
           : allTags.find(t => t._id === tag._id)
@@ -111,21 +227,21 @@ export function EditQuestionModal({
     } else {
       setSelectedTags([]);
     }
-    setContent(question.content || '');
-    setExplanation(question.explanation || '');
-    setMarks(question.marks || 1);
-    setOptions(question.options || [{ content: '' }]);
-    setAnswerIndexes(question.answerIndexes ?? []);
-    if (question.type === 'matrix-match') {
-      setMatrixRows(question.matrixOptions?.map((opt: any) => opt.left || '') || ['']);
-      setMatrixCols(question.matrixOptions?.map((opt: any) => opt.right || '') || ['']);
-      setMatrixAnswers(question.matrixAnswers || []);
+    setContent(activeQuestion.content || '');
+    setExplanation(activeQuestion.explanation || '');
+    setMarks(activeQuestion.marks || 1);
+    setOptions(activeQuestion.options || [{ content: '' }]);
+    setAnswerIndexes(activeQuestion.answerIndexes ?? []);
+    if (activeQuestion.type === 'matrix-match') {
+      setMatrixRows(activeQuestion.matrixOptions?.map((opt: any) => opt.left || '') || ['']);
+      setMatrixCols(activeQuestion.matrixOptions?.map((opt: any) => opt.right || '') || ['']);
+      setMatrixAnswers(activeQuestion.matrixAnswers || []);
     } else {
       setMatrixRows(['']);
       setMatrixCols(['']);
       setMatrixAnswers([]);
     }
-  }, [allTags, open, question]);
+  }, [activeQuestion, allTags, isWaitingForQuestionDetails, open]);
 
   // --- Option handlers ---
   const handleAddOption = () => {
@@ -186,7 +302,7 @@ export function EditQuestionModal({
     }
 
     let updated: any = {
-      ...question,
+      ...activeQuestion,
       subject: subjectId,
       class: classId,
       tags: selectedTags,
@@ -269,6 +385,38 @@ export function EditQuestionModal({
         </DialogHeader>
 
         <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col">
+          {isWaitingForQuestionDetails ? (
+            questionDetailsError ? (
+              <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden bg-muted/20 p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                <Card className="app-surface overflow-hidden shadow-none xl:col-span-2">
+                  <CardHeader className="app-section-header py-3.5">
+                    <CardTitle>Could not load question details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="app-section-body space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      {questionDetailsError}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          setQuestionDetailsReloadKey((current) => current + 1)
+                        }
+                      >
+                        Retry
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={handleClose}>
+                        Close
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+            <QuestionDetailLoadingState />
+            )
+          ) : (
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden bg-muted/20 p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_320px]">
             <main className="min-h-0 space-y-3 overflow-y-auto pr-1">
               <Card className="app-surface overflow-hidden shadow-none">
@@ -278,7 +426,7 @@ export function EditQuestionModal({
                 <CardContent className="app-section-body">
                   <RichTextEditor
                     compact
-                    key={question?._id || 'main-content'}
+                    key={activeQuestion?._id || 'main-content'}
                     initialContent={content}
                     onChange={setContent}
                   />
@@ -306,7 +454,7 @@ export function EditQuestionModal({
                         <div className="flex-1">
                           <RichTextEditor
                             compact
-                            key={`${question?._id}-option-${index}`}
+                            key={`${activeQuestion?._id}-option-${index}`}
                             initialContent={opt.content}
                             onChange={value => handleOptionChange(index, value)}
                           />
@@ -370,7 +518,7 @@ export function EditQuestionModal({
                 <CardContent className="app-section-body">
                   <RichTextEditor
                     compact
-                    key={`${question?._id}-explanation`}
+                    key={`${activeQuestion?._id}-explanation`}
                     initialContent={explanation}
                     onChange={setExplanation}
                   />
@@ -432,12 +580,21 @@ export function EditQuestionModal({
               </Card>
             </aside>
           </div>
+          )}
 
           <DialogFooter className="border-t border-border/60 bg-muted/10 px-4 py-3 sm:px-5">
             <Button variant="outline" type="button" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button
+              type="submit"
+              disabled={
+                loading ||
+                loadingQuestionDetails ||
+                isWaitingForQuestionDetails ||
+                Boolean(questionDetailsError)
+              }
+            >
               {loading ? <Spinner /> : 'Save Changes'}
             </Button>
           </DialogFooter>

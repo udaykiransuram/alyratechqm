@@ -56,13 +56,15 @@ npm run dev
 - `npm start` starts the production server
 - `npm run lint` runs ESLint
 - `npm run verify:core` runs lint, typecheck, and production build
-- `npm run verify:full` runs the core checks plus the full local Playwright suite
+- `npm run verify:integration` runs the real-backend student online-test integration verifier and, when the app server is managed locally and `EXAM_RUNTIME_DATABASE_URL` is configured, exercises both exam-runtime-off and exam-runtime-on lanes
+- `npm run verify:full` runs release health, the full local Playwright suite, and student online-test integration verification
+- `npm run verify:extended` runs `verify:full` plus the online-test preflight/load gate
 - `npm run test:e2e` runs Playwright end-to-end tests
 - `npm run test:e2e:list` lists the local Playwright suite without starting the app server
 - `npm run test:e2e:desktop` runs the desktop Playwright project only
 - `npm run test:e2e:mobile` runs the mobile Playwright project only
 - `npm run test:e2e:report` opens the latest Playwright HTML report
-- `npm run test:e2e:online-integration` runs real backend student online-test integration e2e
+- `npm run test:e2e:online-integration` runs the raw single-lane real-backend student online-test integration suite
 - `npm run stress:student-tests -- --school=<key> --paper=<paperId> --students=<jsonFile>` runs the low-level online exam stress harness directly
 - `npm run stress:online-test -- --seed-students=100 --concurrency=50` auto-seeds disposable online-exam data if needed, holds a local server open when `BASE_URL` is loopback, and runs the gated stress lane
 - `npm run gate:student-tests:seed -- --students=100` seeds disposable load-gate data
@@ -103,6 +105,7 @@ Notes:
 - Auto-seeded runs also write seed metadata to `/tmp/online-test-stress-seed-*.json`.
 - `npm run stress:online-test -- --help`, `npm run gate:student-tests:load -- --help`, and `npm run preflight:online-test -- --help` print the supported flags.
 - GitHub Actions includes a manual `Online Test Stress` workflow for staged load runs without editing code.
+- GitHub Actions CI now verifies the real-backend online-test integration lane with exam runtime both disabled and enabled.
 
 ## Project Structure
 

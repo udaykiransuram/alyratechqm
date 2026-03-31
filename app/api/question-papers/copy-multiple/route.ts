@@ -5,6 +5,7 @@ import { buildArchiveFilter } from "@/lib/archive";
 import { requireTenantSession } from "@/lib/api-auth";
 import { recordTenantAudit } from "@/lib/audit";
 import { syncExamPaperSnapshotForPaperId } from "@/lib/exam-runtime";
+import { invalidateStudentTestResourceCache } from "@/lib/student-test-server";
 import {
   buildStoredPaperSubjectFields,
   derivePaperSubjectIdsFromQuestions,
@@ -360,6 +361,12 @@ export async function POST(req: NextRequest) {
           );
         });
       }
+
+      invalidateStudentTestResourceCache({
+        schoolKey,
+        paperId: String(newPaper._id),
+        classId: String(classId),
+      });
 
       const paperObject = newPaper?.toObject?.() ?? newPaper;
       createdPapers.push({

@@ -7,28 +7,158 @@ const PAPER_RUNTIME_TTL_MS = 120_000;
 const PAPER_DELIVERY_TTL_MS = 60_000;
 const CLASS_PAPER_LIST_TTL_MS = 60_000;
 const CLASS_PAPER_ASSIGNMENT_TTL_MS = 60_000;
+const STUDENT_TEST_CACHE_MAX_ENTRIES = Math.max(
+  500,
+  Number.parseInt(
+    String(process.env.STUDENT_TEST_CACHE_MAX_ENTRIES || "6000"),
+    10,
+  ) || 6000,
+);
+const STUDENT_TEST_CACHE_PRUNE_INTERVAL_MS = Math.max(
+  250,
+  Number.parseInt(
+    String(process.env.STUDENT_TEST_CACHE_PRUNE_INTERVAL_MS || "2000"),
+    10,
+  ) || 2000,
+);
+
+const STUDENT_USER_CACHE_NAMESPACE = "student-user";
+const STUDENT_PAPER_RUNTIME_CACHE_NAMESPACE = "student-paper-runtime";
+const STUDENT_PAPER_DELIVERY_CACHE_NAMESPACE = "student-paper-delivery";
+const STUDENT_CLASS_PAPER_LIST_CACHE_NAMESPACE = "student-class-paper-list";
+const STUDENT_CLASS_PAPER_ASSIGNMENTS_CACHE_NAMESPACE =
+  "student-class-paper-assignments";
 
 type CacheEntry<T> = {
   expiresAt: number;
   hasValue: boolean;
+  createdAt: number;
+  lastAccessedAt: number;
   value?: T;
   promise?: Promise<T>;
 };
 
-function getStudentTestResourceCache() {
+type StudentTestResourceCacheState = {
+  cache: Map<string, CacheEntry<unknown>>;
+  lastPrunedAt: number;
+};
+
+function getStudentTestResourceCacheState() {
   const globalState = global as typeof globalThis & {
-    __studentTestResourceCache?: Map<string, CacheEntry<unknown>>;
+    __studentTestResourceCacheState?: StudentTestResourceCacheState;
   };
 
-  if (!globalState.__studentTestResourceCache) {
-    globalState.__studentTestResourceCache = new Map();
+  if (!globalState.__studentTestResourceCacheState) {
+    globalState.__studentTestResourceCacheState = {
+      cache: new Map(),
+      lastPrunedAt: 0,
+    };
   }
 
-  return globalState.__studentTestResourceCache;
+  return globalState.__studentTestResourceCacheState;
 }
 
 function createCacheKey(namespace: string, ...parts: unknown[]) {
   return [namespace, ...parts.map((part) => String(part || "").trim())].join("::");
+}
+
+function maybePruneStudentTestResourceCache(now: number) {
+  const state = getStudentTestResourceCacheState();
+  if (now - state.lastPrunedAt < STUDENT_TEST_CACHE_PRUNE_INTERVAL_MS) {
+    return;
+  }
+
+  state.lastPrunedAt = now;
+  const cache = state.cache;
+
+  for (const [cacheKey, entry] of cache.entries()) {
+    if (entry.expiresAt <= now && !entry.promise) {
+      cache.delete(cacheKey);
+    }
+  }
+
+  if (cache.size <= STUDENT_TEST_CACHE_MAX_ENTRIES) {
+    return;
+  }
+
+  const entriesByLastAccess = Array.from(cache.entries()).sort(
+    (left, right) => left[1].lastAccessedAt - right[1].lastAccessedAt,
+  );
+  const removeCount = Math.max(0, cache.size - STUDENT_TEST_CACHE_MAX_ENTRIES);
+  for (let index = 0; index < removeCount; index += 1) {
+    cache.delete(entriesByLastAccess[index][0]);
+  }
+}
+
+function invalidateStudentTestResourceCacheByPrefix(prefix: string) {
+  if (!prefix) {
+    return;
+  }
+
+  const { cache } = getStudentTestResourceCacheState();
+  for (const cacheKey of cache.keys()) {
+    if (cacheKey.startsWith(prefix)) {
+      cache.delete(cacheKey);
+    }
+  }
+}
+
+function invalidateStudentTestResourceCacheBySchoolKey(schoolKey: string) {
+  if (!schoolKey) {
+    return;
+  }
+
+  const { cache } = getStudentTestResourceCacheState();
+  for (const cacheKey of cache.keys()) {
+    const [, cacheSchoolKey] = cacheKey.split("::", 3);
+    if (cacheSchoolKey === schoolKey) {
+      cache.delete(cacheKey);
+    }
+  }
+}
+
+export function invalidateStudentTestResourceCache(params: {
+  schoolKey: string;
+  studentId?: string | null;
+  paperId?: string | null;
+  classId?: string | null;
+  clearSchool?: boolean;
+}) {
+  const schoolKey = String(params.schoolKey || "").trim();
+  if (!schoolKey) {
+    return;
+  }
+
+  if (params.clearSchool) {
+    invalidateStudentTestResourceCacheBySchoolKey(schoolKey);
+  }
+
+  const studentId = String(params.studentId || "").trim();
+  if (studentId) {
+    invalidateStudentTestResourceCacheByPrefix(
+      `${STUDENT_USER_CACHE_NAMESPACE}::${schoolKey}::${studentId}`,
+    );
+  }
+
+  const paperId = String(params.paperId || "").trim();
+  if (paperId) {
+    invalidateStudentTestResourceCacheByPrefix(
+      `${STUDENT_PAPER_RUNTIME_CACHE_NAMESPACE}::${schoolKey}::${paperId}`,
+    );
+    invalidateStudentTestResourceCacheByPrefix(
+      `${STUDENT_PAPER_DELIVERY_CACHE_NAMESPACE}::${schoolKey}::${paperId}`,
+    );
+  }
+
+  const classId = String(params.classId || "").trim();
+  if (classId) {
+    invalidateStudentTestResourceCacheByPrefix(
+      `${STUDENT_CLASS_PAPER_LIST_CACHE_NAMESPACE}::${schoolKey}::${classId}`,
+    );
+    invalidateStudentTestResourceCacheByPrefix(
+      `${STUDENT_CLASS_PAPER_ASSIGNMENTS_CACHE_NAMESPACE}::${schoolKey}::${classId}`,
+    );
+  }
 }
 
 async function getCachedResource<T>(
@@ -36,23 +166,31 @@ async function getCachedResource<T>(
   ttlMs: number,
   loader: () => Promise<T>,
 ) {
-  const cache = getStudentTestResourceCache();
+  const state = getStudentTestResourceCacheState();
+  const cache = state.cache;
   const now = Date.now();
+  maybePruneStudentTestResourceCache(now);
   const existingEntry = cache.get(cacheKey) as CacheEntry<T> | undefined;
 
   if (existingEntry?.hasValue && existingEntry.expiresAt > now) {
+    existingEntry.lastAccessedAt = now;
     return existingEntry.value as T;
   }
 
   if (existingEntry?.promise) {
+    existingEntry.lastAccessedAt = now;
     return existingEntry.promise;
   }
 
   const promise = loader()
     .then((value) => {
+      const resolvedAt = Date.now();
+      maybePruneStudentTestResourceCache(resolvedAt);
       cache.set(cacheKey, {
-        expiresAt: Date.now() + ttlMs,
+        expiresAt: resolvedAt + ttlMs,
         hasValue: true,
+        createdAt: resolvedAt,
+        lastAccessedAt: resolvedAt,
         value,
       });
       return value;
@@ -65,6 +203,8 @@ async function getCachedResource<T>(
   cache.set(cacheKey, {
     expiresAt: now + ttlMs,
     hasValue: false,
+    createdAt: now,
+    lastAccessedAt: now,
     promise,
   });
 
@@ -109,7 +249,7 @@ export async function loadStudentUser(
   }
 
   return getCachedResource(
-    createCacheKey("student-user", options.schoolKey, studentId),
+    createCacheKey(STUDENT_USER_CACHE_NAMESPACE, options.schoolKey, studentId),
     STUDENT_SNAPSHOT_TTL_MS,
     load,
   );
@@ -150,7 +290,7 @@ export async function loadOnlinePaperRuntimeById(
   paperId: string,
 ) {
   return getCachedResource(
-    createCacheKey("student-paper-runtime", schoolKey, paperId),
+    createCacheKey(STUDENT_PAPER_RUNTIME_CACHE_NAMESPACE, schoolKey, paperId),
     PAPER_RUNTIME_TTL_MS,
     () => loadOnlinePaperRuntimeByIdUncached(models, paperId),
   );
@@ -210,7 +350,7 @@ export async function loadOnlinePaperById(
   paperId: string,
 ) {
   return getCachedResource(
-    createCacheKey("student-paper-delivery", schoolKey, paperId),
+    createCacheKey(STUDENT_PAPER_DELIVERY_CACHE_NAMESPACE, schoolKey, paperId),
     PAPER_DELIVERY_TTL_MS,
     () => loadOnlinePaperDeliveryByIdUncached(models, paperId),
   );
@@ -278,7 +418,7 @@ export async function loadOnlinePapersForClass(
   classId: string,
 ) {
   return getCachedResource(
-    createCacheKey("student-class-paper-list", schoolKey, classId),
+    createCacheKey(STUDENT_CLASS_PAPER_LIST_CACHE_NAMESPACE, schoolKey, classId),
     CLASS_PAPER_LIST_TTL_MS,
     () => loadOnlinePapersForClassUncached(models, classId),
   );
@@ -292,7 +432,11 @@ export async function loadOnlinePaperAssignmentsForClass(
   classId: string,
 ) {
   return getCachedResource(
-    createCacheKey("student-class-paper-assignments", schoolKey, classId),
+    createCacheKey(
+      STUDENT_CLASS_PAPER_ASSIGNMENTS_CACHE_NAMESPACE,
+      schoolKey,
+      classId,
+    ),
     CLASS_PAPER_ASSIGNMENT_TTL_MS,
     () => loadOnlinePaperAssignmentsForClassUncached(models, classId),
   );

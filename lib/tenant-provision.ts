@@ -51,5 +51,25 @@ export async function provisionTenant(schoolKey: string) {
     }
   }
 
+  try {
+    const attemptLockCollection = conn.collection('examattemptlocks');
+    await attemptLockCollection.createIndex(
+      { paper: 1, student: 1 },
+      {
+        name: 'attempt_lock_paper_student_unique_1',
+        unique: true,
+      },
+    );
+    await attemptLockCollection.createIndex(
+      { expiresAt: 1 },
+      {
+        name: 'attempt_lock_expiresAt_ttl_1',
+        expireAfterSeconds: 0,
+      },
+    );
+  } catch (e) {
+    // Ignore provisioning-time failures; the app also lazily ensures these indexes.
+  }
+
   return { ok: true };
 }

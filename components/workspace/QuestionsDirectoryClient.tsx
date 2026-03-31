@@ -10,11 +10,7 @@ import {
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
 
-import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
-import PageHero from "@/components/layout/PageHero";
-import PageShell from "@/components/layout/PageShell";
 import type { Question } from "@/components/question-item";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,7 +67,7 @@ type QuestionBankFilters = {
   search: string;
 };
 
-type QuestionsDirectoryClientProps = {
+export type QuestionsDirectoryClientProps = {
   questions: Question[];
   classes: FilterOption[];
   tags: FilterOption[];
@@ -301,13 +297,6 @@ export default function QuestionsDirectoryClient({
 
   const hasPendingFilterChanges = !areFiltersEqual(draftFilters, appliedFilters);
   const hasAnyAppliedFilters = countActiveFilters(appliedFilters) > 0;
-  const appliedFilterCount = countActiveFilters(appliedFilters);
-  const appliedTagModeLabel =
-    appliedFilters.selectedTagIds.length > 1
-      ? appliedFilters.questionTagMatchMode === "all"
-        ? "All selected tags"
-        : "Any selected tag"
-      : null;
 
   const pushWithFilters = useCallback(
     (
@@ -461,73 +450,7 @@ export default function QuestionsDirectoryClient({
   }, [appliedFilters, page, pushWithFilters, router, rows, schoolKey, toast]);
 
   return (
-    <PageShell width="wide" padding="standard" className="app-directory-stack">
-      <PageHero
-        variant="directory"
-        density="compact"
-        eyebrow="Question Bank"
-        title="Questions"
-        description="Search, filter, and review the question bank from one directory built for assessment authorship and quick paper-building."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" className="app-button-page">
-              <AppPrefetchLink href="/workspace/questions/bulk-upload">
-                Bulk Upload
-              </AppPrefetchLink>
-            </Button>
-            <Button asChild className="app-button-page">
-              <AppPrefetchLink
-                href="/workspace/questions/create"
-                prefetchOnMount
-                relatedApiPrefetches={[
-                  "/api/classes",
-                  "/api/subjects",
-                  "/api/tags/with-subjects",
-                ]}
-              >
-                <Plus className="h-4 w-4" />
-                Create Question
-              </AppPrefetchLink>
-            </Button>
-          </div>
-        }
-        meta={
-          <>
-            <span className="app-meta-chip">
-              {appliedFilterCount === 0
-                ? "All questions"
-                : `${appliedFilterCount} active filter${appliedFilterCount === 1 ? "" : "s"}`}
-            </span>
-            {appliedTagModeLabel ? (
-              <span className="app-meta-chip">{appliedTagModeLabel}</span>
-            ) : null}
-            {isPending ? <span className="app-meta-chip">Updating…</span> : null}
-          </>
-        }
-        stats={[
-          {
-            label: "Questions",
-            value: String(totalQuestions),
-            meta: "Current filtered result count.",
-          },
-          {
-            label: "Available classes",
-            value: String(classes.length),
-            meta: "School class filters.",
-          },
-          {
-            label: "Tag library",
-            value: String(tags.length),
-            meta: "Reusable tag filters.",
-          },
-          {
-            label: "Current page",
-            value: `${page} / ${pages}`,
-            meta: "Server-paginated view.",
-          },
-        ]}
-      />
-
+    <>
       {setupNotice ? <div className="app-feedback app-feedback-info">{setupNotice}</div> : null}
 
       <div className="app-filter-panel app-filter-panel-tight">
@@ -784,6 +707,6 @@ export default function QuestionsDirectoryClient({
           onConfirm={confirmArchive}
         />
       ) : null}
-    </PageShell>
+    </>
   );
 }
