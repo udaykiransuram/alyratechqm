@@ -1,6 +1,7 @@
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ContentRenderer } from './ContentRenderer';
+import QuestionTagList from '@/components/questions/QuestionTagList';
 
 interface TagType {
   _id: string;
@@ -79,13 +80,13 @@ export function QuestionItemPaper({ question }: QuestionItemPaperProps) {
       </CardContent>
 
       <CardFooter className="bg-muted/40 px-6 py-3 flex justify-between items-center print:bg-transparent">
-        <div className="flex flex-wrap gap-2">
-          {tags.map(tag => (
-            <Badge key={tag._id} variant="secondary" className="capitalize font-normal text-xs px-2 py-1">
-              {tag.type.name}: {tag.name}
-            </Badge>
-          ))}
-        </div>
+        <QuestionTagList
+          tags={tags}
+          maxVisible={4}
+          className="min-w-0"
+          badgeClassName="text-xs px-2 py-1"
+          moreBadgeClassName="text-xs px-2 py-1"
+        />
         <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
           {createdAtLabel ? <span>{createdAtLabel}</span> : null}
         </div>

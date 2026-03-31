@@ -50,13 +50,13 @@ const schoolSidebarGroups: SidebarGroup[] = [
     title: "Assessments",
     items: [
       {
-        label: "Question Papers",
+        label: "Papers",
         icon: BookOpen,
         children: [
-          { href: "/workspace/question-papers", label: "All Question Papers" },
+          { href: "/workspace/question-papers", label: "All Papers" },
           {
             href: "/workspace/question-papers/create",
-            label: "Create Question Paper",
+            label: "Create Paper",
           },
         ],
       },
@@ -128,7 +128,7 @@ const schoolSidebarGroups: SidebarGroup[] = [
         ],
       },
       {
-        label: "Classes & Sections",
+        label: "Classes",
         icon: Layers,
         children: [
           { href: "/workspace/manage/classes", label: "All Classes" },
@@ -178,8 +178,8 @@ const schoolSidebarGroups: SidebarGroup[] = [
         label: "Upload Tools",
         icon: Upload,
         children: [
-          { href: "/workspace/upload", label: "Upload" },
-          { href: "/workspace/upload/getjson", label: "Get JSON" },
+          { href: "/workspace/upload", label: "DOCX Import" },
+          { href: "/workspace/upload/getjson", label: "Spreadsheet Import" },
         ],
       },
     ],

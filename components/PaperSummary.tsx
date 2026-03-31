@@ -2,6 +2,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { Layers, ListOrdered, Clock, Award, CalendarDays, Hash, CheckCircle, Tag as TagIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { formatQuestionTagTypeLabel } from '@/lib/question-display';
 import { calculateSectionTotalMarks } from '@/lib/question-paper/sections';
 import { resolveSectionSubjects } from '@/lib/question-paper/subjects';
 
@@ -215,12 +216,12 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
                     </div>
                   </div>
                   {section.description ? (
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    <p className="mt-2 whitespace-pre-line text-xs leading-5 text-muted-foreground">
                       {section.description}
                     </p>
                   ) : null}
                   {section.instructions ? (
-                    <p className="mt-2 text-xs leading-5 text-foreground/80">
+                    <p className="mt-2 whitespace-pre-line text-xs leading-5 text-foreground/80">
                       {section.instructions}
                     </p>
                   ) : null}
@@ -241,10 +242,16 @@ export function PaperSummary({ sections, totalPaperMarks, duration, passingMarks
           </h4>
           {Object.keys(tagTypeCounts).length > 0 ? (
             <div className="space-y-3">
-              {Object.entries(tagTypeCounts).map(([type, tags]) => (
+              {Object.entries(tagTypeCounts)
+                .sort(([typeA], [typeB]) =>
+                  formatQuestionTagTypeLabel(typeA).localeCompare(
+                    formatQuestionTagTypeLabel(typeB),
+                  ),
+                )
+                .map(([type, tags]) => (
                 <div key={type} className="space-y-1.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    {type}
+                  <p className="text-[11px] font-semibold tracking-[0.04em] text-muted-foreground">
+                    {formatQuestionTagTypeLabel(type)}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(tags).map(([name, count]) => (

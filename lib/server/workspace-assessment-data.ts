@@ -2,6 +2,7 @@ import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { serializePaperSubjects } from "@/lib/question-paper/subjects";
+import { sanitizeRichTextToPlainText } from "@/lib/security/html-sanitize";
 
 function normalizeForTransport<T>(value: T): T {
   if (value === null || typeof value === "undefined") {
@@ -112,7 +113,25 @@ export async function getWorkspaceQuestionPaperById(
     })
     .lean();
 
-  return paper
-    ? normalizeForTransport({ ...paper, ...serializePaperSubjects(paper) })
-    : null;
+  if (!paper) {
+    return null;
+  }
+
+  const normalizedPaper = normalizeForTransport({
+    ...paper,
+    ...serializePaperSubjects(paper),
+  }) as any;
+
+  normalizedPaper.instructions = sanitizeRichTextToPlainText(
+    normalizedPaper.instructions,
+  );
+  normalizedPaper.sections = Array.isArray(normalizedPaper.sections)
+    ? normalizedPaper.sections.map((section: any) => ({
+        ...section,
+        description: sanitizeRichTextToPlainText(section?.description),
+        instructions: sanitizeRichTextToPlainText(section?.instructions),
+      }))
+    : [];
+
+  return normalizedPaper;
 }

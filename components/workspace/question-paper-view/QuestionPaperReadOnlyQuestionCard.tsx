@@ -1,5 +1,7 @@
 import StaticContentRenderer from "@/components/StaticContentRenderer";
+import QuestionTagList from "@/components/questions/QuestionTagList";
 import { Badge } from "@/components/ui/badge";
+import { getQuestionTypeLabel } from "@/lib/question-display";
 
 type QuestionTagType = {
   name?: string | null;
@@ -18,6 +20,7 @@ type QuestionOption = {
 export type ReadOnlyPaperQuestion = {
   _id?: string;
   content?: string | null;
+  type?: string | null;
   tags?: QuestionTag[] | null;
   options?: QuestionOption[] | null;
   answerIndexes?: number[] | null;
@@ -58,6 +61,7 @@ export function QuestionPaperReadOnlyQuestionCard({
         </p>
         <div className="flex items-center gap-2">
           <Badge variant="outline">{marks} Marks</Badge>
+          <Badge variant="outline">{getQuestionTypeLabel(question.type || undefined)}</Badge>
           {negativeMarks > 0 ? (
             <Badge variant="destructive">{negativeMarks} Negative</Badge>
           ) : null}
@@ -114,18 +118,16 @@ export function QuestionPaperReadOnlyQuestionCard({
 
         {tags.length > 0 || createdAtLabel ? (
           <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/50 pt-3">
-            <div className="flex flex-wrap gap-2">
-              {tags.map((tag, tagIndex) => (
-                <Badge
-                  key={tag._id || `${tag.name || "tag"}-${tagIndex}`}
-                  variant="secondary"
-                  className="px-2 py-1 text-xs font-normal capitalize"
-                >
-                  {tag?.type?.name ? `${tag.type.name}: ` : ""}
-                  {tag.name || "-"}
-                </Badge>
-              ))}
-            </div>
+            <QuestionTagList
+              tags={tags.map((tag, tagIndex) => ({
+                ...tag,
+                _id: tag._id || `${tag.name || "tag"}-${tagIndex}`,
+              }))}
+              maxVisible={4}
+              className="min-w-0"
+              badgeClassName="px-2 py-1 text-xs"
+              moreBadgeClassName="px-2 py-1 text-xs"
+            />
             {createdAtLabel ? (
               <span className="text-xs text-muted-foreground">{createdAtLabel}</span>
             ) : null}

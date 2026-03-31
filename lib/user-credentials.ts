@@ -104,36 +104,60 @@ export function buildStudentRollNumberMatcher(rollNumber: string) {
   return new RegExp(`^${escapeRegExp(normalizeRollNumber(rollNumber))}$`, "i");
 }
 
+type FindStudentsByRollNumberOptions = {
+  excludeUserId?: string;
+  includeArchived?: boolean;
+  limit?: number;
+  projection?: string;
+  lean?: boolean;
+};
+
 export async function findStudentsByRollNumber(
   UserModel: any,
   rollNumber: string,
-  options?: {
-    excludeUserId?: string;
-    includeArchived?: boolean;
-    limit?: number;
-  },
+  options?: FindStudentsByRollNumberOptions,
 ) {
   const normalizedRollNumber = normalizeRollNumber(rollNumber);
   if (!normalizedRollNumber) {
     return [];
   }
 
-  const query: Record<string, unknown> = {
+  const baseQuery: Record<string, unknown> = {
     role: "student",
-    rollNumber: buildStudentRollNumberMatcher(normalizedRollNumber),
     ...buildArchiveFilter(options?.includeArchived === true),
   };
 
   if (options?.excludeUserId) {
-    query._id = { $ne: options.excludeUserId };
+    baseQuery._id = { $ne: options.excludeUserId };
   }
 
-  let cursor = UserModel.find(query);
-  if (typeof options?.limit === "number") {
-    cursor = cursor.limit(options.limit);
+  const runQuery = async (query: Record<string, unknown>) => {
+    let cursor = UserModel.find(query);
+    if (options?.projection) {
+      cursor = cursor.select(options.projection);
+    }
+    if (options?.lean) {
+      cursor = cursor.lean();
+    }
+    if (typeof options?.limit === "number") {
+      cursor = cursor.limit(options.limit);
+    }
+
+    return await cursor;
+  };
+
+  const exactMatches = await runQuery({
+    ...baseQuery,
+    rollNumber: normalizedRollNumber.toUpperCase(),
+  });
+  if (exactMatches.length > 0) {
+    return exactMatches;
   }
 
-  return await cursor;
+  return runQuery({
+    ...baseQuery,
+    rollNumber: buildStudentRollNumberMatcher(normalizedRollNumber),
+  });
 }
 
 export function resolveUserPasswordInput({

@@ -606,6 +606,7 @@ export function useStudentTestRuntime({
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
+                attemptId: attempt?._id ? String(attempt._id) : null,
                 sectionAnswers: payload,
                 baseLastSavedAt: requestBaseLastSavedAt,
               }),
@@ -724,6 +725,7 @@ export function useStudentTestRuntime({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            attemptId: attempt?._id ? String(attempt._id) : null,
             sectionAnswers: payload,
             baseLastSavedAt: requestBaseLastSavedAt,
           }),

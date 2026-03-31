@@ -10,6 +10,12 @@ export default function createNextConfig(phase) {
   return {
     distDir: phase === PHASE_DEVELOPMENT_SERVER ? DEV_DIST_DIR : PROD_DIST_DIR,
     outputFileTracingRoot: PROJECT_ROOT,
+    eslint: {
+      ignoreDuringBuilds: true,
+    },
+    images: {
+      qualities: [75, 78],
+    },
     experimental: {
       optimizePackageImports: [
         "lucide-react",

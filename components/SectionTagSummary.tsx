@@ -1,4 +1,4 @@
-import { Badge } from '@/components/ui/badge';
+import { formatQuestionTagTypeLabel } from '@/lib/question-display';
 
 interface Tag {
   _id: string;
@@ -36,41 +36,35 @@ export function SectionTagSummary({ section }: { section: Section }) {
   }
 
   const sortedTagTypes = Object.entries(tagTypeCounts).sort(([typeA], [typeB]) =>
-    typeA.localeCompare(typeB),
+    formatQuestionTagTypeLabel(typeA).localeCompare(formatQuestionTagTypeLabel(typeB)),
   );
 
   return (
-    <div className="grid gap-2.5 xl:grid-cols-2">
+    <div className="app-section-tag-summary">
       {sortedTagTypes.map(([type, tags]) => {
         const sortedTags = Object.entries(tags).sort(
           ([nameA, countA], [nameB, countB]) => countB - countA || nameA.localeCompare(nameB),
         );
+        const tagCountLabel = `${sortedTags.length} ${
+          sortedTags.length === 1 ? 'tag' : 'tags'
+        }`;
 
         return (
-          <div
-            key={type}
-            className="rounded-[calc(var(--app-radius-md)+0.125rem)] border border-border/60 bg-[linear-gradient(180deg,hsl(var(--app-surface-1)/0.98)_0%,hsl(var(--app-surface-2)/0.76)_100%)] px-3 py-3 shadow-sm"
-          >
-            <div className="mb-2.5 flex items-center justify-between gap-3">
-              <span className="inline-flex items-center rounded-full border border-primary/16 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
-                {type}
+          <div key={type} className="app-section-tag-row">
+            <div className="app-section-tag-row-header">
+              <span className="app-section-tag-type">
+                {formatQuestionTagTypeLabel(type)}
               </span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                {sortedTags.length} tags
-              </span>
+              <span className="app-section-tag-count">{tagCountLabel}</span>
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="app-section-tag-chip-list">
               {sortedTags.map(([name, count]) => (
-                <Badge
-                  key={name}
-                  variant="outline"
-                  className="border-border/70 bg-background/92 font-medium text-[11px] text-foreground shadow-sm"
-                >
+                <span key={name} className="app-section-tag-chip">
                   {name}
-                  <span className="ml-1.5 inline-flex min-w-[1.45rem] items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  <span className="app-section-tag-chip-count">
                     {count}
                   </span>
-                </Badge>
+                </span>
               ))}
             </div>
           </div>

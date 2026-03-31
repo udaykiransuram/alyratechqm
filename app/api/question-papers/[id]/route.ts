@@ -27,6 +27,7 @@ import {
 } from "@/lib/question-paper/sections";
 import { isOnlineQuestionType } from "@/lib/question-paper/grading";
 import { resolveTeacherPaperScope } from "@/lib/question-paper/access";
+import { sanitizeRichTextToPlainText } from "@/lib/security/html-sanitize";
 
 function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
@@ -251,14 +252,23 @@ export async function GET(
     });
 
     const paperObject = paper?.toObject?.() ?? paper;
+    const serializedPaper = {
+      ...paperObject,
+      ...serializePaperSubjects(paperObject),
+      instructions: sanitizeRichTextToPlainText(paperObject?.instructions),
+      sections: Array.isArray(paperObject?.sections)
+        ? paperObject.sections.map((section: any) => ({
+            ...section,
+            description: sanitizeRichTextToPlainText(section?.description),
+            instructions: sanitizeRichTextToPlainText(section?.instructions),
+          }))
+        : [],
+    };
 
     return NextResponse.json(
       {
         success: true,
-        paper: {
-          ...paperObject,
-          ...serializePaperSubjects(paperObject),
-        },
+        paper: serializedPaper,
       },
       { status: 200 },
     );

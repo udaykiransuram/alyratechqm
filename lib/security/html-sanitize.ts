@@ -332,6 +332,36 @@ export function sanitizeRichTextHtml(value: unknown) {
   });
 }
 
+export function trimTrailingBlankRichTextBlocks(value: string) {
+  return value.replace(
+    /(?:<(p|div)(?:\s[^>]*)?>\s*(?:<br\s*\/?>|&nbsp;|&#160;|\u00a0|\s)*<\/\1>\s*)+$/gi,
+    "",
+  );
+}
+
+export function sanitizeRichTextToPlainText(value: unknown) {
+  const sanitizedHtml = sanitizeRichTextHtml(value);
+  if (!sanitizedHtml) {
+    return "";
+  }
+
+  return decodeHtmlEntities(
+    sanitizedHtml
+      .replace(/<(?:br|hr)\s*\/?>/gi, "\n")
+      .replace(/<li\b[^>]*>/gi, "- ")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<\/(?:p|div|blockquote|pre|h[1-6]|tr)>/gi, "\n\n")
+      .replace(/<\/(?:ul|ol|table|thead|tbody)>/gi, "\n")
+      .replace(/<[^>]+>/g, ""),
+  )
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function sanitizeQuestionOptions(options: unknown) {
   if (!Array.isArray(options)) {
     return [];

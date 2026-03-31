@@ -5,11 +5,13 @@ import dynamic from 'next/dynamic';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import QuestionTagList from '@/components/questions/QuestionTagList';
 import { Edit, Trash2 } from 'lucide-react';
 import { Spinner } from './ui/spinner';
 import { ContentRenderer } from './ContentRenderer';
 import { toast as showToast } from 'sonner';
 import { Separator } from './ui/separator';
+import { getQuestionTypeLabel } from '@/lib/question-display';
 import { cn } from '@/lib/utils';
 
 const EditQuestionModal = dynamic(
@@ -97,6 +99,7 @@ export function QuestionItem({
               {classNameValue ? <Badge variant="secondary">{classNameValue}</Badge> : null}
               {subjectName ? <Badge variant="outline">{subjectName}</Badge> : null}
               <Badge variant="secondary">{question.marks} Mark(s)</Badge>
+              <Badge variant="outline">{getQuestionTypeLabel(question.type)}</Badge>
             </div>
             <div className="prose prose-sm max-w-none font-medium text-foreground dark:prose-invert">
               <ContentRenderer htmlContent={question.content} />
@@ -158,14 +161,11 @@ export function QuestionItem({
               {!compact && classNameValue ? <Badge variant="outline">{classNameValue}</Badge> : null}
               {!compact && subjectName ? <Badge variant="outline">{subjectName}</Badge> : null}
               {!compact && tags.length > 0 ? <Separator orientation="vertical" className="hidden h-4 sm:block" /> : null}
-              {tags.slice(0, compact ? 4 : 3).map(tag => (
-                <Badge key={tag._id} variant="secondary" className="font-normal">
-                  {tag.name}
-                </Badge>
-              ))}
-              {tags.length > (compact ? 4 : 3) ? (
-                <Badge variant="outline" className="font-normal">+{tags.length - (compact ? 4 : 3)} more</Badge>
-              ) : null}
+              <QuestionTagList
+                tags={tags}
+                maxVisible={compact ? 4 : 4}
+                className="min-w-0"
+              />
             </div>
             {question.createdAt ? (
               <p className="text-xs text-muted-foreground sm:text-right">

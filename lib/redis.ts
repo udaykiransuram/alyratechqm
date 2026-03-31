@@ -465,6 +465,67 @@ export async function claimExamAttemptLock(
   return result === "OK";
 }
 
+export async function claimExamAttemptLockAndConsumeAutosaveRateLimit(
+  schoolKey: string,
+  paperId: string,
+  studentId: string,
+  lockToken: string,
+) {
+  if (!isRedisConfigured()) {
+    return null;
+  }
+
+  const result = await runRedisEval<Array<string | number>>(
+    [
+      "local lockResult = redis.call('SET', KEYS[1], ARGV[1], 'EX', tonumber(ARGV[2]), 'NX')",
+      "if not lockResult then",
+      "  return {0, 0, 0}",
+      "end",
+      "local nextCount = redis.call('INCR', KEYS[2])",
+      "if nextCount == 1 then",
+      "  redis.call('EXPIRE', KEYS[2], tonumber(ARGV[3]))",
+      "end",
+      "local limited = 0",
+      "if nextCount > tonumber(ARGV[4]) then",
+      "  limited = 1",
+      "end",
+      "return {1, limited, nextCount}",
+    ].join("\n"),
+    [
+      buildAttemptLockKey(schoolKey, paperId, studentId),
+      buildAutosaveRateLimitKey(schoolKey, studentId, paperId),
+    ],
+    [
+      lockToken,
+      ATTEMPT_LOCK_TTL_SECONDS,
+      AUTOSAVE_RATE_WINDOW_SECONDS,
+      AUTOSAVE_RATE_LIMIT_MAX,
+    ],
+  );
+
+  if (!Array.isArray(result) || result.length < 3) {
+    return null;
+  }
+
+  const claimed = Number(result[0] || 0) === 1;
+  if (!claimed) {
+    return {
+      claimed: false as const,
+      rateLimit: null,
+    };
+  }
+
+  const count = Number(result[2] || 0);
+  return {
+    claimed: true as const,
+    rateLimit: {
+      limited: Number(result[1] || 0) === 1,
+      count,
+      limit: AUTOSAVE_RATE_LIMIT_MAX,
+    } satisfies RedisRateLimitResult,
+  };
+}
+
 export async function releaseExamAttemptLock(
   schoolKey: string,
   paperId: string,

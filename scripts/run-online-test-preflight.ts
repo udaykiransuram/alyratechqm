@@ -175,7 +175,7 @@ function ensureManagedExamRuntimePoolMax(args: ParsedArgs, serverMode: string) {
     return;
   }
 
-  const derivedPoolMax = Math.min(100, Math.max(20, args.concurrency));
+  const derivedPoolMax = Math.min(200, Math.max(40, args.concurrency * 2));
   process.env.EXAM_RUNTIME_POOL_MAX = String(derivedPoolMax);
   console.log(`Exam runtime pool max: ${process.env.EXAM_RUNTIME_POOL_MAX}`);
 }
@@ -249,21 +249,7 @@ async function main() {
   runCommand("npm", ["run", "typecheck"], "Typecheck");
   runCommand(
     "npm",
-    [
-      "run",
-      "lint",
-      "--",
-      "--file",
-      "app/api/student/tests/route.ts",
-      "--file",
-      "app/api/student/tests/[paperId]/route.ts",
-      "--file",
-      "app/api/student/tests/[paperId]/attempt/route.ts",
-      "--file",
-      "app/api/student/tests/[paperId]/submit/route.ts",
-      "--file",
-      "app/api/student/session/heartbeat/route.ts",
-    ],
+    ["run", "lint:online-test"],
     "Targeted lint",
   );
 
