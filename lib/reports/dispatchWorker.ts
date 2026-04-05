@@ -1,5 +1,12 @@
+import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { resolveExamRuntimeMongoResponseIdWithCooldown } from "@/lib/exam-runtime-sync-cache";
+import {
+  claimRedisPartitionQueueItems,
+  enqueueRedisPartitionQueueItems,
+  REPORT_DISPATCH_REDIS_QUEUE,
+  setRedisPartitionQueuePartitionActive,
+} from "@/lib/redis";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 import {
   createPendingDeliveryAttempt,
@@ -130,6 +137,7 @@ async function recoverStaleProcessingJobs({
 
   let recoveredStale = 0;
   let awaitingProviderAck = 0;
+  const jobsByRetryAt = new Map<number, string[]>();
 
   for (const job of staleJobs) {
     const pendingAckUntil = job.activeAttemptKey
@@ -158,6 +166,20 @@ async function recoverStaleProcessingJobs({
 
     await job.save();
     recoveredStale += 1;
+
+    const retryAtMs = (job.nextRetryAt || recoveryTime).getTime();
+    if (!jobsByRetryAt.has(retryAtMs)) {
+      jobsByRetryAt.set(retryAtMs, []);
+    }
+    jobsByRetryAt.get(retryAtMs)?.push(String(job._id));
+  }
+
+  for (const [retryAtMs, jobIds] of jobsByRetryAt.entries()) {
+    await enqueueReportDispatchJobIds({
+      schoolKey,
+      jobIds,
+      availableAt: new Date(retryAtMs),
+    }).catch(() => null);
   }
 
   return {
@@ -209,6 +231,48 @@ async function claimQueuedReportJobs({
     }
 
     return claimedJobs;
+  }
+
+  const redisClaimedJobIds = await claimRedisPartitionQueueItems({
+    queueName: REPORT_DISPATCH_REDIS_QUEUE,
+    partitionKey: schoolKey,
+    limit: Math.min(100, Math.max(limit * 3, limit)),
+  });
+
+  if (redisClaimedJobIds !== null) {
+    for (const redisJobId of redisClaimedJobIds) {
+      if (claimedJobs.length >= limit) {
+        break;
+      }
+
+      const claimTime = new Date();
+      const claimedJob = await ReportDispatchJob.findOneAndUpdate(
+        {
+          _id: redisJobId,
+          ...buildQueuedJobQuery({
+            schoolKey,
+            now: claimTime,
+          }),
+        },
+        {
+          $set: {
+            status: "processing",
+            lastAttemptAt: claimTime,
+            processingStartedAt: claimTime,
+          },
+          $inc: {
+            attempts: 1,
+          },
+        },
+        {
+          new: true,
+        },
+      );
+
+      if (claimedJob) {
+        claimedJobs.push(claimedJob);
+      }
+    }
   }
 
   while (claimedJobs.length < limit) {
@@ -264,6 +328,11 @@ async function ensureReadyForAuthoritativeSend(job: any) {
       job.nextRetryAt = ackWaitUntil;
       job.error = `Waiting for provider acknowledgement before retrying at ${ackWaitUntil.toISOString()}.`;
       await job.save();
+      await enqueueReportDispatchJobIds({
+        schoolKey: job.schoolKey,
+        jobIds: [String(job._id)],
+        availableAt: ackWaitUntil,
+      }).catch(() => null);
       return {
         deferredUntil: ackWaitUntil,
         attemptKey: null,
@@ -353,12 +422,62 @@ function resolveProcessingLimit(limit?: number) {
   return DEFAULT_MAX_PER_RUN;
 }
 
+async function enqueueReportDispatchJobIds(params: {
+  schoolKey: string;
+  jobIds: string[];
+  availableAt?: Date | null;
+}) {
+  const jobIds = Array.from(
+    new Set(
+      (Array.isArray(params.jobIds) ? params.jobIds : [])
+        .map((jobId) => String(jobId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (!params.schoolKey || jobIds.length === 0) {
+    return null;
+  }
+
+  return enqueueRedisPartitionQueueItems({
+    queueName: REPORT_DISPATCH_REDIS_QUEUE,
+    partitionKey: params.schoolKey,
+    itemIds: jobIds,
+    availableAt: params.availableAt || new Date(),
+  });
+}
+
+async function syncReportDispatchQueuePartition(schoolKey: string) {
+  const [remainingQueued, processingCount] = await Promise.all([
+    ReportDispatchJob.countDocuments({
+      schoolKey,
+      status: "queued",
+    }),
+    ReportDispatchJob.countDocuments({
+      schoolKey,
+      status: "processing",
+    }),
+  ]);
+
+  await setRedisPartitionQueuePartitionActive({
+    queueName: REPORT_DISPATCH_REDIS_QUEUE,
+    partitionKey: schoolKey,
+    active: remainingQueued + processingCount > 0,
+  }).catch(() => null);
+
+  return {
+    remainingQueued,
+    processingCount,
+  };
+}
+
 export async function runReportDispatchWorker({
   origin,
   schoolKey,
   limit,
   jobIds = [],
 }: RunReportDispatchWorkerParams): Promise<RunReportDispatchWorkerResult> {
+  await connectDB();
   const deliveryMode = resolveDeliveryMode();
   const staleRecovery = await recoverStaleProcessingJobs({
     schoolKey,
@@ -589,18 +708,25 @@ export async function runReportDispatchWorker({
       }
 
       await job.save();
+
+      if (job.status === "queued") {
+        await enqueueReportDispatchJobIds({
+          schoolKey: job.schoolKey,
+          jobIds: [String(job._id)],
+          availableAt: job.nextRetryAt || new Date(),
+        }).catch(() => null);
+      }
       failed += 1;
     }
   }
+
+  const { remainingQueued } = await syncReportDispatchQueuePartition(schoolKey);
 
   return {
     processed,
     sent,
     failed,
-    remainingQueued: await ReportDispatchJob.countDocuments({
-      schoolKey,
-      status: "queued",
-    }),
+    remainingQueued,
     recoveredStale: staleRecovery.recoveredStale,
     awaitingProviderAck: staleRecovery.awaitingProviderAck,
     deliveryMode,

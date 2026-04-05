@@ -12,23 +12,12 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Image from '@tiptap/extension-image';
 import MathExtension from '@/extensions/MathExtension';
+import { validatePublicImageFile } from '@/lib/uploads/public-image';
 
 import { Toolbar } from './Toolbar';
 import MathModal from './MathModal';
 import { Spinner } from './ui/spinner';
 import { useToast } from './ui/use-toast';
-
-const MAX_IMAGE_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
-const MAX_IMAGE_UPLOAD_SIZE_LABEL = '5 MB';
-const SUPPORTED_IMAGE_FORMATS_LABEL = 'PNG, JPG/JPEG, WEBP, GIF, AVIF, and SVG';
-const ALLOWED_IMAGE_MIME_TYPES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'image/avif',
-  'image/svg+xml',
-]);
 
 // --- FIX: Correctly type the custom event listener ---
 declare module '@tiptap/core' {
@@ -58,24 +47,17 @@ function normalizeImageFiles(fileList: FileList | File[] | null | undefined) {
 }
 
 function validateImageFile(file: File) {
-  const mimeType = String(file.type || '').toLowerCase();
+  const validation = validatePublicImageFile(
+    {
+      fileName: file.name,
+      mimeType: file.type,
+      size: file.size,
+    },
+    { emptySource: 'selected' },
+  );
 
-  if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
-    throw new Error(
-      `Unsupported image format. Upload ${SUPPORTED_IMAGE_FORMATS_LABEL} files only.`,
-    );
-  }
-
-  if (file.size <= 0) {
-    throw new Error(
-      `The selected image is empty. Upload a ${SUPPORTED_IMAGE_FORMATS_LABEL} file up to ${MAX_IMAGE_UPLOAD_SIZE_LABEL}.`,
-    );
-  }
-
-  if (file.size > MAX_IMAGE_UPLOAD_SIZE_BYTES) {
-    throw new Error(
-      `Image too large. Upload ${SUPPORTED_IMAGE_FORMATS_LABEL} files up to ${MAX_IMAGE_UPLOAD_SIZE_LABEL}.`,
-    );
+  if (!validation.ok) {
+    throw new Error(validation.message);
   }
 }
 
@@ -122,28 +104,6 @@ function getErrorMessage(error: unknown) {
   }
 
   return 'Something went wrong while uploading the image.';
-}
-
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      if (!result) {
-        reject(new Error('The selected image could not be read.'));
-        return;
-      }
-
-      resolve(result);
-    };
-
-    reader.onerror = () => {
-      reject(new Error('The selected image could not be read.'));
-    };
-
-    reader.readAsDataURL(file);
-  });
 }
 
 // --- Component Props and Payloads ---
@@ -194,27 +154,6 @@ const RichTextEditor = ({
     return String(payload.url);
   }, [imageUploadEndpoint]);
 
-  const resolveImageSource = useCallback(async (file: File) => {
-    validateImageFile(file);
-
-    try {
-      return {
-        src: await uploadImageFile(file),
-        storage: 'uploaded' as const,
-      };
-    } catch (uploadError) {
-      try {
-        return {
-          src: await readFileAsDataUrl(file),
-          storage: 'inline' as const,
-          uploadError,
-        };
-      } catch {
-        throw uploadError;
-      }
-    }
-  }, [uploadImageFile]);
-
   const uploadImagesToEditor = useCallback(async (files: File[]) => {
     if (!files.length) return;
 
@@ -224,21 +163,16 @@ const RichTextEditor = ({
     setUploadingImageCount((count) => count + files.length);
 
     const failures: string[] = [];
-    let inlineFallbackCount = 0;
 
     try {
       for (const file of files) {
         try {
-          const resolvedImage = await resolveImageSource(file);
-          if (resolvedImage.storage === 'inline') {
-            inlineFallbackCount += 1;
-          }
-
+          const src = await uploadImageFile(file);
           currentEditor
             .chain()
             .focus()
             .setImage({
-              src: resolvedImage.src,
+              src,
               alt: getImageAltText(file.name),
             })
             .run();
@@ -248,16 +182,6 @@ const RichTextEditor = ({
       }
     } finally {
       setUploadingImageCount((count) => Math.max(0, count - files.length));
-    }
-
-    if (inlineFallbackCount > 0) {
-      toast({
-        title: inlineFallbackCount === 1 ? 'Image embedded inline' : 'Images embedded inline',
-        description:
-          inlineFallbackCount === 1
-            ? 'The image was inserted directly because the upload service was unavailable.'
-            : `${inlineFallbackCount} images were inserted directly because the upload service was unavailable.`,
-      });
     }
 
     if (failures.length > 0) {
@@ -270,7 +194,7 @@ const RichTextEditor = ({
         variant: 'destructive',
       });
     }
-  }, [resolveImageSource, toast]);
+  }, [toast, uploadImageFile]);
 
   const editor = useEditor({
     extensions: [

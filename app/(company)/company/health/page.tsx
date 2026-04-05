@@ -65,6 +65,31 @@ function formatDateTime(value: string) {
   }).format(date);
 }
 
+function formatCount(value: number | null | undefined) {
+  if (!Number.isFinite(value as number) || value == null) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("en-IN").format(value);
+}
+
+function formatMemory(value: number | null | undefined) {
+  if (!Number.isFinite(value as number) || value == null) {
+    return "—";
+  }
+
+  return `${value} MB`;
+}
+
+function formatHitRate(hits: number, misses: number) {
+  const total = Number(hits || 0) + Number(misses || 0);
+  if (total <= 0) {
+    return "—";
+  }
+
+  return `${Math.round((Number(hits || 0) / total) * 100)}%`;
+}
+
 function getMongoReadyStateLabel(readyState: number | null) {
   if (readyState === 1) return "Connected";
   if (readyState === 2) return "Connecting";
@@ -201,7 +226,7 @@ export default async function CompanyHealthPage() {
       <PageHero
         eyebrow="Company Admin"
         title="System Health"
-        description="Track the live status of MongoDB, the online-exam runtime, Redis, and Redis locking from one company-level health dashboard."
+        description="Track dependency status alongside tenant-cache pressure, process memory, and local cache behavior from one company-level health dashboard."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/company/activity">
@@ -252,6 +277,11 @@ export default async function CompanyHealthPage() {
                 ? "Temporarily unavailable."
                 : "Primary cache path available."
               : "Not configured.",
+          },
+          {
+            label: "Heap used",
+            value: formatMemory(health.scale.process.memoryMb.heapUsed),
+            meta: `Tenant DBs cached: ${formatCount(health.scale.tenancy.activeConnections)}`,
           },
         ]}
       />
@@ -391,6 +421,195 @@ export default async function CompanyHealthPage() {
         </div>
 
         <div className="space-y-4">
+          <Card className="app-surface overflow-hidden shadow-none">
+            <CardHeader className="app-section-header gap-2">
+              <CardTitle>Scale Signals</CardTitle>
+              <CardDescription>
+                Watch the process, queue, cache, and service-split signals that usually move first when load ramps up.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="app-section-body space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-border/60 bg-muted/20 px-3.5 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Heap used
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">
+                    {formatMemory(health.scale.process.memoryMb.heapUsed)}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-muted/20 px-3.5 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Resident memory
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">
+                    {formatMemory(health.scale.process.memoryMb.rss)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {[
+                  {
+                    label: "Process uptime",
+                    value: `${formatCount(health.scale.process.uptimeSeconds)} s`,
+                  },
+                  {
+                    label: "App service mode",
+                    value: health.service.mode,
+                  },
+                  {
+                    label: "Student app origin",
+                    value: health.service.studentOrigin || "—",
+                  },
+                  {
+                    label: "Staff app origin",
+                    value: health.service.staffOrigin || "—",
+                  },
+                  {
+                    label: "Tenant DB cache",
+                    value: `${formatCount(health.scale.tenancy.activeConnections)} active`,
+                  },
+                  {
+                    label: "Compiled tenant models",
+                    value: formatCount(health.scale.tenancy.compiledModelCount),
+                  },
+                  {
+                    label: "Student test cache",
+                    value: `${formatCount(health.scale.caches.studentTests.entries)} entries`,
+                  },
+                  {
+                    label: "Student test hit rate",
+                    value: formatHitRate(
+                      health.scale.caches.studentTests.localHits +
+                        health.scale.caches.studentTests.redisHits,
+                      health.scale.caches.studentTests.localMisses +
+                        health.scale.caches.studentTests.redisMisses,
+                    ),
+                  },
+                  {
+                    label: "Workspace support cache",
+                    value: `${formatCount(health.scale.caches.workspaceSupportData.entries)} entries`,
+                  },
+                  {
+                    label: "Workspace support hit rate",
+                    value: formatHitRate(
+                      health.scale.caches.workspaceSupportData.localHits +
+                        health.scale.caches.workspaceSupportData.redisHits,
+                      health.scale.caches.workspaceSupportData.localMisses +
+                        health.scale.caches.workspaceSupportData.redisMisses,
+                    ),
+                  },
+                  {
+                    label: "Student dashboard cache",
+                    value: `${formatCount(health.scale.caches.studentDashboard.entries)} entries`,
+                  },
+                  {
+                    label: "Student dashboard hit rate",
+                    value: formatHitRate(
+                      health.scale.caches.studentDashboard.localHits +
+                        health.scale.caches.studentDashboard.redisHits,
+                      health.scale.caches.studentDashboard.localMisses +
+                        health.scale.caches.studentDashboard.redisMisses,
+                    ),
+                  },
+                  {
+                    label: "Notification jobs queued",
+                    value: formatCount(
+                      health.scale.caches.studentNotifications.queued,
+                    ),
+                  },
+                  {
+                    label: "Notification jobs processing",
+                    value: formatCount(
+                      health.scale.caches.studentNotifications.processing,
+                    ),
+                  },
+                  {
+                    label: "Notification jobs failed",
+                    value: formatCount(
+                      health.scale.caches.studentNotifications.failed,
+                    ),
+                  },
+                  {
+                    label: "Notification queue ready",
+                    value: formatCount(
+                      health.scale.caches.studentNotifications.redisReady,
+                    ),
+                  },
+                  {
+                    label: "Notification queue delayed",
+                    value: formatCount(
+                      health.scale.caches.studentNotifications.redisDelayed,
+                    ),
+                  },
+                  {
+                    label: "Notification queue partitions",
+                    value: formatCount(
+                      health.scale.caches.studentNotifications.redisPartitions,
+                    ),
+                  },
+                  {
+                    label: "Report jobs queued",
+                    value: formatCount(health.scale.caches.reportDispatch.queued),
+                  },
+                  {
+                    label: "Report jobs processing",
+                    value: formatCount(
+                      health.scale.caches.reportDispatch.processing,
+                    ),
+                  },
+                  {
+                    label: "Report jobs failed",
+                    value: formatCount(health.scale.caches.reportDispatch.failed),
+                  },
+                  {
+                    label: "Report queue ready",
+                    value: formatCount(
+                      health.scale.caches.reportDispatch.redisReady,
+                    ),
+                  },
+                  {
+                    label: "Report queue delayed",
+                    value: formatCount(
+                      health.scale.caches.reportDispatch.redisDelayed,
+                    ),
+                  },
+                  {
+                    label: "Report queue partitions",
+                    value: formatCount(
+                      health.scale.caches.reportDispatch.redisPartitions,
+                    ),
+                  },
+                  {
+                    label: "Public school cache",
+                    value: `${formatCount(health.scale.caches.publicSchoolData.allCount)} schools`,
+                  },
+                ].map((row) => (
+                  <div
+                    key={row.label}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/75 px-3.5 py-2.5"
+                  >
+                    <span className="text-sm text-muted-foreground">{row.label}</span>
+                    <span className="text-sm font-medium text-foreground">{row.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {health.scale.tenancy.sampleTenantDbNames.length > 0 ? (
+                <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Sample cached tenant DBs
+                  </div>
+                  <div className="mt-2 text-sm text-foreground/88">
+                    {health.scale.tenancy.sampleTenantDbNames.join(", ")}
+                    {health.scale.tenancy.truncated ? " ..." : ""}
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
           <Card className="app-surface overflow-hidden shadow-none">
             <CardHeader className="app-section-header gap-2">
               <CardTitle>Quick Actions</CardTitle>

@@ -178,6 +178,10 @@ UserSchema.index({ role: 1, class: 1, rollNumber: 1 });
 UserSchema.index({ role: 1, class: 1, academicSection: 1, rollNumber: 1 });
 UserSchema.index({ academicSection: 1 });
 UserSchema.index(
+  { role: 1, class: 1, academicSection: 1, isArchived: 1 },
+  { name: "user_student_scope_archived_lookup_1" },
+);
+UserSchema.index(
   { role: 1, rollNumber: 1 },
   {
     name: "student_roll_unique_active_1",

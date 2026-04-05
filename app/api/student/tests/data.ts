@@ -3,7 +3,11 @@ import {
   listStudentExamRuntimeTests,
 } from "@/lib/exam-runtime";
 import { serializePaperSubjects } from "@/lib/question-paper/subjects";
-import { getStudentTestModels, loadOnlinePapersForClass } from "@/lib/student-test-server";
+import {
+  getStudentTestModels,
+  loadOnlinePapersByIds,
+  loadOnlinePapersForClass,
+} from "@/lib/student-test-server";
 import {
   autoSubmitExpiredAttemptsForPapers,
   deriveStudentTestStatus,
@@ -39,16 +43,32 @@ export async function listStudentTestsData(params: {
   schoolKey: string;
   studentId: string;
   studentPlacement?: StudentPlacementInput | null;
+  paperIds?: string[] | null;
+  autoSubmitExpiredAttempts?: boolean;
   now?: Date;
 }) {
   const now = params.now || new Date();
   const placement = normalizePlacement(params.studentPlacement);
+  const requestedPaperIds = Array.from(
+    new Set(
+      (Array.isArray(params.paperIds) ? params.paperIds : [])
+        .map((paperId) => String(paperId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const shouldAutoSubmitExpiredAttempts =
+    params.autoSubmitExpiredAttempts !== false;
 
   if (await isExamRuntimeEnabled()) {
     return listStudentExamRuntimeTests(
       params.schoolKey,
       params.studentId,
       placement,
+      {
+        paperIds: requestedPaperIds,
+        autoSubmitExpiredAttempts: shouldAutoSubmitExpiredAttempts,
+        now,
+      },
     );
   }
 
@@ -64,16 +84,20 @@ export async function listStudentTestsData(params: {
     Subject: SubjectModel,
   } = await getStudentTestModels(params.schoolKey);
 
-  const papers = await loadOnlinePapersForClass(
-    {
-      QuestionPaper: QuestionPaperModel,
-      Question: QuestionModel,
-      Class: ClassModel,
-      Subject: SubjectModel,
-    },
-    params.schoolKey,
-    placement.classId,
-  );
+  const paperLoaderModels = {
+    QuestionPaper: QuestionPaperModel,
+    Question: QuestionModel,
+    Class: ClassModel,
+    Subject: SubjectModel,
+  };
+  const papers =
+    requestedPaperIds.length > 0
+      ? await loadOnlinePapersByIds(paperLoaderModels, requestedPaperIds)
+      : await loadOnlinePapersForClass(
+          paperLoaderModels,
+          params.schoolKey,
+          placement.classId,
+        );
 
   const eligiblePapers = papers.filter(
     (paper: any) =>
@@ -96,13 +120,15 @@ export async function listStudentTestsData(params: {
     attempts.map((attempt: any) => [String(attempt.paper), attempt]),
   );
 
-  await autoSubmitExpiredAttemptsForPapers({
-    attemptsByPaperId,
-    papers: eligiblePapers,
-    now,
-    QuestionPaperResponseModel,
-    maxConcurrency: 6,
-  });
+  if (shouldAutoSubmitExpiredAttempts) {
+    await autoSubmitExpiredAttemptsForPapers({
+      attemptsByPaperId,
+      papers: eligiblePapers,
+      now,
+      QuestionPaperResponseModel,
+      maxConcurrency: 6,
+    });
+  }
 
   const tests = [];
 

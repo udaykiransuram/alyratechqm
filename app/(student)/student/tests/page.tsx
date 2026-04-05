@@ -13,6 +13,7 @@ import {
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 type StudentTestsPageProps = {
   searchParams: Promise<{

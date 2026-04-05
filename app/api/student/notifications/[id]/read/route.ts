@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
@@ -6,6 +7,9 @@ import mongoose from "mongoose";
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { bumpStudentNotificationSignalVersion } from "@/lib/redis";
+import { invalidateStudentDashboardCacheForStudent } from "@/lib/server/student-dashboard-cache";
+import { broadcastStudentNotification } from "@/lib/server/student-notifications-stream";
 
 export async function POST(
   req: NextRequest,
@@ -30,10 +34,28 @@ export async function POST(
       ["StudentNotification"],
     );
 
-    await StudentNotificationModel.updateOne(
+    const result = await StudentNotificationModel.updateOne(
       { _id: id, studentId: auth.session.user.id, readAt: null },
       { $set: { readAt: new Date() } },
     );
+
+    if (Number(result.modifiedCount || 0) > 0) {
+      await invalidateStudentDashboardCacheForStudent(
+        auth.schoolKey,
+        auth.session.user.id,
+      );
+
+      const signalVersion = await bumpStudentNotificationSignalVersion(
+        auth.schoolKey,
+        auth.session.user.id,
+      ).catch(() => null);
+
+      broadcastStudentNotification(auth.schoolKey, auth.session.user.id, {
+        id,
+        type: "sync",
+        signalVersion,
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

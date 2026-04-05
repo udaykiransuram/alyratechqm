@@ -6,15 +6,23 @@ import PageShell from "@/components/layout/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ListPaginationLinks from "@/components/ui/list-pagination-links";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 import {
+  buildWorkspaceListPageHref,
   requireWorkspaceStaffSession,
+  resolveWorkspaceListPage,
 } from "@/lib/server/workspace-user-directory";
 import { listWorkspaceCourses } from "@/lib/server/workspace-courses";
 
 export const dynamic = "force-dynamic";
 
 const COURSES_BASE_PATH = "/workspace/courses";
+const COURSES_PAGE_SIZE = 12;
+
+type CoursesPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
 
 function formatCourseDate(value?: string | null) {
   if (!value) {
@@ -33,24 +41,43 @@ function formatCourseDate(value?: string | null) {
   }).format(date);
 }
 
-export default async function CoursesPage() {
+export default async function CoursesPage({ searchParams }: CoursesPageProps) {
   const { schoolKey, viewerRole, viewerId } = await requireWorkspaceStaffSession();
+  const resolvedSearchParams = await searchParams;
+  const requestedPage = resolveWorkspaceListPage(resolvedSearchParams?.page);
 
-  let courses: Awaited<ReturnType<typeof listWorkspaceCourses>> = [];
+  let courses: Awaited<ReturnType<typeof listWorkspaceCourses>>["courses"] = [];
+  let totalCourses = 0;
+  let page = requestedPage;
+  let pages = 1;
   let error: string | null = null;
 
   try {
-    courses = await listWorkspaceCourses({
+    const courseDirectory = await listWorkspaceCourses({
       schoolKey,
       viewerId,
       viewerRole,
+      page: requestedPage,
+      limit: COURSES_PAGE_SIZE,
     });
+    courses = courseDirectory.courses;
+    totalCourses = courseDirectory.total;
+    page = courseDirectory.page;
+    pages = courseDirectory.pages;
   } catch (loadError) {
     error =
       loadError instanceof Error
         ? loadError.message
         : "Failed to load courses.";
   }
+
+  const currentPath = buildWorkspaceListPageHref(COURSES_BASE_PATH, page);
+  const previousHref =
+    page > 1 ? buildWorkspaceListPageHref(COURSES_BASE_PATH, page - 1) : null;
+  const nextHref =
+    page < pages
+      ? buildWorkspaceListPageHref(COURSES_BASE_PATH, page + 1)
+      : null;
 
   return (
     <PageShell width="wide" padding="standard">
@@ -79,18 +106,18 @@ export default async function CoursesPage() {
           stats={[
             {
               label: "Courses",
-              value: String(courses.length),
+              value: String(totalCourses),
               meta: "Visible in this school workspace.",
+            },
+            {
+              label: "This page",
+              value: String(courses.length),
+              meta: `${courses.length} courses loaded in the current slice.`,
             },
             {
               label: "Published",
               value: String(courses.filter((course) => course.status === "published").length),
-              meta: "Currently visible to students.",
-            },
-            {
-              label: "Drafts",
-              value: String(courses.filter((course) => course.status === "draft").length),
-              meta: "Still in author review.",
+              meta: "Published courses in the current page.",
             },
             {
               label: "Assessment-linked",
@@ -106,7 +133,7 @@ export default async function CoursesPage() {
           <div className="app-feedback app-feedback-error">{error}</div>
         ) : null}
 
-        {!error && courses.length === 0 ? (
+        {!error && totalCourses === 0 ? (
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>No courses yet</CardTitle>
@@ -121,11 +148,21 @@ export default async function CoursesPage() {
         ) : null}
 
         {!error && courses.length > 0 ? (
-          <div className="app-course-list-grid">
+          <div className="space-y-3">
+            <ListPaginationLinks
+              page={page}
+              totalPages={pages}
+              totalItems={totalCourses}
+              pageSize={COURSES_PAGE_SIZE}
+              itemLabel="courses"
+              previousHref={previousHref}
+              nextHref={nextHref}
+            />
+            <div className="app-course-list-grid">
             {courses.map((course) => {
               const viewHref = buildHrefWithReturnTo(
                 `${COURSES_BASE_PATH}/${course._id}`,
-                COURSES_BASE_PATH,
+                currentPath,
               );
               const editHref = buildHrefWithReturnTo(
                 `${COURSES_BASE_PATH}/edit/${course._id}`,
@@ -256,6 +293,7 @@ export default async function CoursesPage() {
                 </Card>
               );
             })}
+            </div>
           </div>
         ) : null}
       </div>

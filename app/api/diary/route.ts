@@ -143,7 +143,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const entries = await listWorkspaceDiaryEntries({
+    const pageParam = req.nextUrl.searchParams.get("page");
+    const limitParam = req.nextUrl.searchParams.get("limit");
+    const diaryDirectory = await listWorkspaceDiaryEntries({
       schoolKey: auth.schoolKey,
       viewerId: auth.session.user.id,
       filters: {
@@ -153,11 +155,17 @@ export async function GET(req: NextRequest) {
         subjectId: req.nextUrl.searchParams.get("subjectId") || undefined,
         status: req.nextUrl.searchParams.get("status") || undefined,
       },
+      page: pageParam ? Number(pageParam) : undefined,
+      limit: limitParam ? Number(limitParam) : undefined,
     });
 
     return NextResponse.json({
       success: true,
-      entries,
+      entries: diaryDirectory.entries,
+      total: diaryDirectory.total,
+      page: diaryDirectory.page,
+      pages: diaryDirectory.pages,
+      limit: diaryDirectory.limit,
     });
   } catch (error: any) {
     return NextResponse.json(

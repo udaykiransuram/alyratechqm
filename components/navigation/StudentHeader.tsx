@@ -129,15 +129,19 @@ export default function StudentHeader() {
     const handleCreated = () => {
       void loadNotifications();
     };
+    const handleConnected = () => {
+      void loadNotifications();
+    };
 
     source.addEventListener("notification.created", handleCreated);
-    source.addEventListener("connected", () => undefined);
+    source.addEventListener("connected", handleConnected);
     source.onerror = () => {
-      source.close();
+      console.warn("Student notification stream disconnected; waiting for reconnect.");
     };
 
     return () => {
       source.removeEventListener("notification.created", handleCreated);
+      source.removeEventListener("connected", handleConnected);
       source.close();
     };
   }, []);

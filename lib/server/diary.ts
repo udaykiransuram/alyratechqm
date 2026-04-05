@@ -31,6 +31,7 @@ import {
   getWorkspaceSections,
   getWorkspaceSubjects,
 } from "@/lib/server/workspace-support-data";
+import { invalidateStudentDashboardCacheForStudent } from "@/lib/server/student-dashboard-cache";
 import {
   getMockStudentDiaryDetail,
   getMockStudentDiarySummaries,
@@ -56,6 +57,14 @@ type StudentDiaryFilters = {
   subjectId?: string;
 };
 
+type WorkspaceDiaryListResult = {
+  entries: WorkspaceDiarySummary[];
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+};
+
 function isValidDiaryObjectId(value: unknown) {
   const normalized = String(value || "").trim();
   return Boolean(normalized) && mongoose.Types.ObjectId.isValid(normalized);
@@ -64,6 +73,107 @@ function isValidDiaryObjectId(value: unknown) {
 function toOptionalString(value: unknown) {
   const normalized = String(value || "").trim();
   return normalized || undefined;
+}
+
+function resolveListPage(value: unknown) {
+  const normalized = Number(value || "");
+  if (!Number.isFinite(normalized) || normalized < 1) {
+    return 1;
+  }
+
+  return Math.floor(normalized);
+}
+
+function resolveListLimit(value: unknown, defaultLimit: number) {
+  const normalized = Number(value || "");
+  if (!Number.isFinite(normalized) || normalized < 1) {
+    return defaultLimit;
+  }
+
+  return Math.min(Math.floor(normalized), 100);
+}
+
+function mergeMongoQueries(baseQuery: Record<string, any>, extraQuery: Record<string, any>) {
+  if (!extraQuery || Object.keys(extraQuery).length === 0) {
+    return baseQuery;
+  }
+
+  if (!baseQuery || Object.keys(baseQuery).length === 0) {
+    return extraQuery;
+  }
+
+  return {
+    $and: [baseQuery, extraQuery],
+  };
+}
+
+function buildArrayIntersectionOrEmptyQuery(field: string, allowedIds: string[]) {
+  return {
+    $or: [
+      { [field]: { $exists: false } },
+      { [field]: { $size: 0 } },
+      { [field]: { $in: allowedIds } },
+    ],
+  };
+}
+
+function buildDiarySectionIntersectionQuery(sectionIds: string[]) {
+  return {
+    assignedAcademicSections: { $in: sectionIds },
+  };
+}
+
+function buildDiaryStudentQuery(entries: any[]) {
+  const classAssignments = new Map<
+    string,
+    {
+      includeAllSections: boolean;
+      sectionIds: Set<string>;
+    }
+  >();
+
+  (Array.isArray(entries) ? entries : []).forEach((entry) => {
+    const classId = toDiaryId(entry?.class?._id || entry?.class);
+    if (!classId) {
+      return;
+    }
+
+    if (!classAssignments.has(classId)) {
+      classAssignments.set(classId, {
+        includeAllSections: false,
+        sectionIds: new Set<string>(),
+      });
+    }
+
+    const assignment = classAssignments.get(classId)!;
+    const assignedSectionIds = uniqueSortedDiaryIds(entry?.assignedAcademicSections);
+
+    if (assignedSectionIds.length === 0) {
+      assignment.includeAllSections = true;
+      return;
+    }
+
+    assignedSectionIds.forEach((sectionId) => assignment.sectionIds.add(sectionId));
+  });
+
+  const clauses = Array.from(classAssignments.entries()).map(([classId, assignment]) => {
+    if (assignment.includeAllSections || assignment.sectionIds.size === 0) {
+      return {
+        class: classId,
+      };
+    }
+
+    return {
+      class: classId,
+      academicSection: { $in: Array.from(assignment.sectionIds) },
+    };
+  });
+
+  if (clauses.length === 0) {
+    return null;
+  }
+
+  return clauses.length === 1 ? clauses[0] : { $or: clauses };
 }
 
 export async function getScopedAuthorUser(schoolKey: string, userId: string) {
@@ -325,13 +435,9 @@ async function getDiaryStudentRosterData(
   schoolKey: string,
   entries: any[],
 ) {
-  const uniqueClassIds = Array.from(
-    new Set(
-      entries.map((entry) => toDiaryId(entry?.class?._id || entry?.class)).filter(Boolean),
-    ),
-  );
+  const studentQuery = buildDiaryStudentQuery(entries);
 
-  if (uniqueClassIds.length === 0) {
+  if (!studentQuery) {
     return {
       progressByEntryId: new Map<string, DiaryProgressSummary>(),
       rosterByEntryId: new Map<string, DiaryRosterStudentState[]>(),
@@ -352,8 +458,8 @@ async function getDiaryStudentRosterData(
 
   const students = await UserModel.find({
     role: "student",
-    class: { $in: uniqueClassIds },
     ...buildArchiveFilter(false),
+    ...studentQuery,
   })
     .select("_id name rollNumber class academicSection")
     .populate({
@@ -425,9 +531,39 @@ export async function listWorkspaceDiaryEntries(params: {
   schoolKey: string;
   viewerId: string;
   filters?: WorkspaceDiaryFilters;
+  page?: number;
+  limit?: number;
 }) {
+  const requestedPage = resolveListPage(params.page);
+  const requestedLimit =
+    typeof params.limit === "number" || typeof params.limit === "string"
+      ? resolveListLimit(params.limit, 10)
+      : null;
+
   if (isMockedE2ETestMode()) {
-    return getMockWorkspaceDiarySummaries(params.filters);
+    const allEntries = getMockWorkspaceDiarySummaries(params.filters);
+    const total = allEntries.length;
+
+    if (!requestedLimit) {
+      return {
+        entries: allEntries,
+        total,
+        page: 1,
+        pages: 1,
+        limit: Math.max(total, 1),
+      } satisfies WorkspaceDiaryListResult;
+    }
+
+    const pages = Math.max(1, Math.ceil(total / requestedLimit));
+    const page = Math.min(requestedPage, pages);
+
+    return {
+      entries: allEntries.slice((page - 1) * requestedLimit, page * requestedLimit),
+      total,
+      page,
+      pages,
+      limit: requestedLimit,
+    } satisfies WorkspaceDiaryListResult;
   }
 
   await connectDB();
@@ -446,20 +582,75 @@ export async function listWorkspaceDiaryEntries(params: {
   ]);
 
   const filters = params.filters || {};
-  const query: Record<string, any> = {
+  const scopedUser = await getScopedAuthorUser(params.schoolKey, params.viewerId);
+
+  if (!scopedUser) {
+    return {
+      entries: [],
+      total: 0,
+      page: 1,
+      pages: 1,
+      limit: requestedLimit || 1,
+    } satisfies WorkspaceDiaryListResult;
+  }
+
+  let query: Record<string, any> = {
     ...buildArchiveFilter(false),
   };
+  const allowedClassIds = uniqueSortedDiaryIds(scopedUser?.classIds);
+  const allowedSubjectIds = uniqueSortedDiaryIds(scopedUser?.subjectIds);
+  const allowedSectionIds = uniqueSortedDiaryIds(scopedUser?.academicSectionIds);
 
   if (filters.entryDate) {
     query.entryDate = String(filters.entryDate).trim();
   }
 
   if (filters.classId && mongoose.Types.ObjectId.isValid(filters.classId)) {
+    if (!scopedUser?.hasAllClasses && !allowedClassIds.includes(filters.classId)) {
+      return {
+        entries: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+        limit: requestedLimit || 1,
+      } satisfies WorkspaceDiaryListResult;
+    }
     query.class = filters.classId;
+  } else if (!scopedUser?.hasAllClasses) {
+    if (allowedClassIds.length === 0) {
+      return {
+        entries: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+        limit: requestedLimit || 1,
+      } satisfies WorkspaceDiaryListResult;
+    }
+    query.class = { $in: allowedClassIds };
   }
 
   if (filters.subjectId && mongoose.Types.ObjectId.isValid(filters.subjectId)) {
+    if (!scopedUser?.hasAllSubjects && !allowedSubjectIds.includes(filters.subjectId)) {
+      return {
+        entries: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+        limit: requestedLimit || 1,
+      } satisfies WorkspaceDiaryListResult;
+    }
     query.subject = filters.subjectId;
+  } else if (!scopedUser?.hasAllSubjects) {
+    if (allowedSubjectIds.length === 0) {
+      return {
+        entries: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+        limit: requestedLimit || 1,
+      } satisfies WorkspaceDiaryListResult;
+    }
+    query.subject = { $in: allowedSubjectIds };
   }
 
   if (filters.status === "draft" || filters.status === "published") {
@@ -467,55 +658,86 @@ export async function listWorkspaceDiaryEntries(params: {
   }
 
   if (filters.sectionId && mongoose.Types.ObjectId.isValid(filters.sectionId)) {
-    query.$or = [
-      { assignedAcademicSections: { $size: 0 } },
-      { assignedAcademicSections: filters.sectionId },
-    ];
+    if (!scopedUser?.hasAllSections && !allowedSectionIds.includes(filters.sectionId)) {
+      return {
+        entries: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+        limit: requestedLimit || 1,
+      } satisfies WorkspaceDiaryListResult;
+    }
+
+    const sectionQuery = scopedUser?.hasAllSections
+      ? buildArrayIntersectionOrEmptyQuery("assignedAcademicSections", [filters.sectionId])
+      : buildDiarySectionIntersectionQuery([filters.sectionId]);
+    query = mergeMongoQueries(query, sectionQuery);
+  } else if (!scopedUser?.hasAllSections) {
+    if (allowedSectionIds.length === 0) {
+      return {
+        entries: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+        limit: requestedLimit || 1,
+      } satisfies WorkspaceDiaryListResult;
+    }
+
+    query = mergeMongoQueries(
+      query,
+      buildDiarySectionIntersectionQuery(allowedSectionIds),
+    );
   }
 
-  const [entries, scopedUser] = await Promise.all([
-    DiaryEntryModel.find(query)
-      .select(
-        "_id title entryDate class assignedAcademicSections subject status lessonSummaryHtml homeworkHtml teacherNoteHtml resources publishedAt createdBy updatedBy createdAt updatedAt",
-      )
-      .populate({ path: "class", model: ClassModel, select: "name" })
-      .populate({ path: "subject", model: SubjectModel, select: "name" })
-      .populate({
-        path: "assignedAcademicSections",
-        model: AcademicSectionModel,
-        select: "name class",
-        populate: {
-          path: "class",
-          model: ClassModel,
-          select: "name",
-        },
-      })
-      .populate({ path: "createdBy", model: UserModel, select: "name role" })
-      .populate({ path: "updatedBy", model: UserModel, select: "name role" })
-      .sort({ entryDate: -1, updatedAt: -1, title: 1 })
-      .lean(),
-    getScopedAuthorUser(params.schoolKey, params.viewerId),
-  ]);
+  const total = await DiaryEntryModel.countDocuments(query);
+  const limit = requestedLimit || Math.max(total, 1);
+  const pages = requestedLimit ? Math.max(1, Math.ceil(total / limit)) : 1;
+  const page = requestedLimit ? Math.min(requestedPage, pages) : 1;
 
-  if (!scopedUser) {
-    return [] as WorkspaceDiarySummary[];
+  let entryQuery = DiaryEntryModel.find(query)
+    .select(
+      "_id title entryDate class assignedAcademicSections subject status lessonSummaryHtml homeworkHtml teacherNoteHtml resources publishedAt createdBy updatedBy createdAt updatedAt",
+    )
+    .populate({ path: "class", model: ClassModel, select: "name" })
+    .populate({ path: "subject", model: SubjectModel, select: "name" })
+    .populate({
+      path: "assignedAcademicSections",
+      model: AcademicSectionModel,
+      select: "name class",
+      populate: {
+        path: "class",
+        model: ClassModel,
+        select: "name",
+      },
+    })
+    .populate({ path: "createdBy", model: UserModel, select: "name role" })
+    .populate({ path: "updatedBy", model: UserModel, select: "name role" })
+    .sort({ entryDate: -1, updatedAt: -1, title: 1 })
+    .lean();
+
+  if (requestedLimit) {
+    entryQuery = entryQuery.skip((page - 1) * limit).limit(limit);
   }
 
-  const filteredEntries = (Array.isArray(entries) ? entries : []).filter((entry) =>
-    canAuthorAccessDiaryEntry(entry, scopedUser),
-  );
+  const entries = await entryQuery;
 
   const { progressByEntryId } = await getDiaryStudentRosterData(
     params.schoolKey,
-    filteredEntries,
+    entries,
   );
 
-  return filteredEntries.map((entry) =>
-    serializeWorkspaceDiarySummary(
-      entry,
-      progressByEntryId.get(toDiaryId(entry?._id)),
+  return {
+    entries: (Array.isArray(entries) ? entries : []).map((entry) =>
+      serializeWorkspaceDiarySummary(
+        entry,
+        progressByEntryId.get(toDiaryId(entry?._id)),
+      ),
     ),
-  );
+    total,
+    page,
+    pages,
+    limit,
+  } satisfies WorkspaceDiaryListResult;
 }
 
 export async function getWorkspaceDiaryById(params: {
@@ -929,6 +1151,11 @@ export async function updateStudentDiaryState(params: {
     await concurrentState.save();
     nextState = concurrentState;
   }
+
+  await invalidateStudentDashboardCacheForStudent(
+    params.schoolKey,
+    params.studentId,
+  );
 
   return mapDiaryStateSnapshot(nextState.toObject());
 }

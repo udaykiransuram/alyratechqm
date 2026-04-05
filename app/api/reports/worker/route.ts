@@ -2,6 +2,10 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { requireTenantSession } from "@/lib/api-auth";
+import {
+  listRedisPartitionQueuePartitions,
+  REPORT_DISPATCH_REDIS_QUEUE,
+} from "@/lib/redis";
 import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
 import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
@@ -61,19 +65,21 @@ async function runScheduledDispatchWorker({
   schoolKey,
   limitPerSchool,
   maxSchools,
+  jobIds,
 }: {
   origin: string;
   schoolKey?: string;
   limitPerSchool: number;
   maxSchools: number;
+  jobIds?: string[];
 }) {
+  const redisQueuedSchoolKeys =
+    schoolKey
+      ? null
+      : await listRedisPartitionQueuePartitions(REPORT_DISPATCH_REDIS_QUEUE);
   const queuedSchoolKeys = schoolKey
     ? [schoolKey]
-    : (
-        await ReportDispatchJob.distinct("schoolKey", {
-          status: "queued",
-        })
-      )
+    : (redisQueuedSchoolKeys || [])
         .map((value) => String(value || "").trim())
         .filter(Boolean);
 
@@ -81,22 +87,29 @@ async function runScheduledDispatchWorker({
     ? queuedSchoolKeys
     : (() => {
         const prioritizedSchoolKeys = queuedSchoolKeys.slice(0, maxSchools);
-        if (prioritizedSchoolKeys.length >= maxSchools) {
+        if (
+          prioritizedSchoolKeys.length >= maxSchools &&
+          redisQueuedSchoolKeys !== null
+        ) {
           return prioritizedSchoolKeys;
         }
 
         const queuedSet = new Set(prioritizedSchoolKeys);
 
-        return ReportDispatchJob.distinct("schoolKey", {
-          status: "processing",
-        }).then((processingSchoolKeys) =>
+        return Promise.all([
+          prioritizedSchoolKeys.length < maxSchools
+            ? ReportDispatchJob.distinct("schoolKey", {
+                status: "queued",
+              })
+            : Promise.resolve([]),
+          ReportDispatchJob.distinct("schoolKey", {
+            status: "processing",
+          }),
+        ]).then(([mongoQueuedSchoolKeys, processingSchoolKeys]) =>
           prioritizedSchoolKeys.concat(
-            processingSchoolKeys
+            [...mongoQueuedSchoolKeys, ...processingSchoolKeys]
               .map((value) => String(value || "").trim())
-              .filter(
-                (value) =>
-                  value && !queuedSet.has(value),
-              )
+              .filter((value) => value && !queuedSet.has(value))
               .slice(0, Math.max(0, maxSchools - prioritizedSchoolKeys.length)),
           ),
         );
@@ -111,6 +124,10 @@ async function runScheduledDispatchWorker({
       origin,
       schoolKey: queuedSchoolKey,
       limit: limitPerSchool,
+      jobIds:
+        schoolKey && Array.isArray(jobIds) && queuedSchoolKey === schoolKey
+          ? jobIds
+          : [],
     });
 
     schools.push({
@@ -153,11 +170,19 @@ export async function POST(req: NextRequest) {
       100,
     );
     const maxSchools = normalizePositiveInteger(body?.maxSchools, 25, 100);
+    const jobIds: string[] = Array.from(
+      new Set(
+        (Array.isArray(body?.jobIds) ? body.jobIds : [])
+          .map((jobId: any) => String(jobId || "").trim())
+          .filter(Boolean),
+      ),
+    );
     const result = await runScheduledDispatchWorker({
       origin: trustedOrigin,
       schoolKey,
       limitPerSchool,
       maxSchools,
+      jobIds,
     });
 
     return NextResponse.json({ success: true, ...result });

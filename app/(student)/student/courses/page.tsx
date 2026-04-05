@@ -10,6 +10,7 @@ import { authOptions } from "@/lib/auth";
 import { listStudentCourses } from "@/lib/server/student-courses";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 function formatCourseDate(value?: string | null) {
   if (!value) {

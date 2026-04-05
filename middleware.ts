@@ -6,6 +6,13 @@ import {
   getNextAuthSecret,
 } from "@/lib/auth-runtime";
 import { isPublicPathname } from "@/lib/navigation/canonical-paths";
+import {
+  buildCounterpartUrl,
+  classifyTrafficSurface,
+  describeTrafficSurface,
+  getAppServiceConfig,
+  isTrafficSurfaceAllowed,
+} from "@/lib/service-mode";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 type RateLimitStore = Map<string, number[]>;
@@ -236,6 +243,24 @@ function applyResponseHeaders(
   return res;
 }
 
+function applyServiceHeaders(
+  res: NextResponse,
+  params: {
+    serviceMode: string;
+    trafficSurface: string;
+    counterpartOrigin?: string | null;
+  },
+) {
+  res.headers.set("x-app-service-mode", params.serviceMode);
+  res.headers.set("x-app-traffic-surface", params.trafficSurface);
+
+  if (params.counterpartOrigin) {
+    res.headers.set("x-app-counterpart-origin", params.counterpartOrigin);
+  }
+
+  return res;
+}
+
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname || "";
   const isDev = process.env.NODE_ENV !== "production";
@@ -252,7 +277,23 @@ export async function middleware(req: NextRequest) {
     path.startsWith("/fonts/") ||
     path.startsWith("/public/") ||
     /\.[a-zA-Z0-9]+$/.test(path);
-
+  const shouldApplyCsp = !isApiRoute && !isStaticAsset;
+  const cspNonce = shouldApplyCsp && !isDev ? generateCspNonce() : null;
+  const cspHeader = cspNonce ? buildContentSecurityPolicy(path, cspNonce) : null;
+  const serviceConfig = getAppServiceConfig();
+  const trafficSurface = classifyTrafficSurface(path);
+  const finalizeResponse = (
+    res: NextResponse,
+    counterpartOrigin?: string | null,
+  ) =>
+    applyResponseHeaders(
+      applyServiceHeaders(res, {
+        serviceMode: serviceConfig.mode,
+        trafficSurface,
+        counterpartOrigin,
+      }),
+      cspHeader,
+    );
 
   const authSecret = getNextAuthSecret();
   const mockedE2ETestMode = isMockedE2ETestMode();
@@ -264,23 +305,72 @@ export async function middleware(req: NextRequest) {
       : null;
 
   if (
+    !isStaticAsset &&
+    !isTrafficSurfaceAllowed(serviceConfig.mode, trafficSurface)
+  ) {
+    const counterpartOrigin =
+      trafficSurface === "student"
+        ? serviceConfig.studentOrigin
+        : trafficSurface === "staff"
+          ? serviceConfig.staffOrigin
+          : null;
+    const redirectUrl =
+      counterpartOrigin && counterpartOrigin !== req.nextUrl.origin
+        ? buildCounterpartUrl(
+            counterpartOrigin,
+            req.nextUrl.pathname,
+            req.nextUrl.search,
+          )
+        : null;
+    const surfaceLabel = describeTrafficSurface(trafficSurface);
+    const modeLabel =
+      serviceConfig.mode === "student" ? "student" : "staff/admin";
+    const message = redirectUrl
+      ? `This ${modeLabel} deployment cannot serve ${surfaceLabel} traffic here. Retry against the paired ${surfaceLabel} deployment.`
+      : `This deployment only serves ${modeLabel} traffic. ${surfaceLabel} requests require a paired deployment.`;
+
+    if (redirectUrl && !isApiRoute && ["GET", "HEAD"].includes(req.method)) {
+      return finalizeResponse(
+        NextResponse.redirect(redirectUrl, 307),
+        counterpartOrigin,
+      );
+    }
+
+    return finalizeResponse(
+      isApiRoute
+        ? NextResponse.json(
+            {
+              success: false,
+              message,
+              ...(redirectUrl ? { redirectUrl } : {}),
+            },
+            { status: redirectUrl ? 421 : 503 },
+          )
+        : new NextResponse(message, {
+            status: redirectUrl ? 421 : 503,
+          }),
+      counterpartOrigin,
+    );
+  }
+
+  if (
     process.env.NODE_ENV === "production" &&
     authConfigurationIssue &&
     !isStaticAsset &&
     !isApiRoute
   ) {
     if (isPublicRoute || !isProtectedRoute) {
-      return NextResponse.next();
+      return finalizeResponse(NextResponse.next());
     }
 
-        if (
-          isAuthRoute &&
-          allowsAuthPageWithExistingSession(
-                req.nextUrl.searchParams.get("error"),
-          )
-        ) {
-          return NextResponse.next();
-        }
+    if (
+      isAuthRoute &&
+      allowsAuthPageWithExistingSession(
+        req.nextUrl.searchParams.get("error"),
+      )
+    ) {
+      return finalizeResponse(NextResponse.next());
+    }
 
     const signInUrl = req.nextUrl.clone();
     if (!isAuthRoute) {
@@ -291,7 +381,7 @@ export async function middleware(req: NextRequest) {
       signInUrl.searchParams.set("callbackUrl", req.url);
     }
     signInUrl.searchParams.set("error", "Configuration");
-    return NextResponse.redirect(signInUrl);
+    return finalizeResponse(NextResponse.redirect(signInUrl));
   }
 
   const token =
@@ -311,7 +401,7 @@ export async function middleware(req: NextRequest) {
         : "/auth/signin";
       const signInUrl = new URL(signInPath, req.url);
       signInUrl.searchParams.set("callbackUrl", req.url);
-      return NextResponse.redirect(signInUrl);
+      return finalizeResponse(NextResponse.redirect(signInUrl));
     }
 
     if (token) {
@@ -327,22 +417,30 @@ export async function middleware(req: NextRequest) {
             req.nextUrl.searchParams.get("error"),
           )
         ) {
-          return NextResponse.next();
+          return finalizeResponse(NextResponse.next());
         }
 
-        return NextResponse.redirect(new URL(defaultPath, req.url));
+        return finalizeResponse(
+          NextResponse.redirect(new URL(defaultPath, req.url)),
+        );
       }
 
       if (isCompanyRoute && !isCompanyAdmin) {
-        return NextResponse.redirect(new URL(defaultPath, req.url));
+        return finalizeResponse(
+          NextResponse.redirect(new URL(defaultPath, req.url)),
+        );
       }
 
       if (isStudentRoute && !isStudent) {
-        return NextResponse.redirect(new URL(defaultPath, req.url));
+        return finalizeResponse(
+          NextResponse.redirect(new URL(defaultPath, req.url)),
+        );
       }
 
       if (isSchoolWorkspaceRoute && (isCompanyAdmin || isStudent)) {
-        return NextResponse.redirect(new URL(defaultPath, req.url));
+        return finalizeResponse(
+          NextResponse.redirect(new URL(defaultPath, req.url)),
+        );
       }
     }
   }
@@ -356,14 +454,13 @@ export async function middleware(req: NextRequest) {
   if (schoolKey) {
     headers.set("X-School-Key", schoolKey);
   }
-  const shouldApplyCsp = !isApiRoute && !isStaticAsset;
-  const cspNonce = shouldApplyCsp && !isDev ? generateCspNonce() : null;
-  const cspHeader = cspNonce ? buildContentSecurityPolicy(path, cspNonce) : null;
+  headers.set("x-app-service-mode", serviceConfig.mode);
+  headers.set("x-app-traffic-surface", trafficSurface);
   if (cspHeader) {
     headers.set("Content-Security-Policy", cspHeader);
     headers.set("x-nonce", cspNonce || "");
   }
-  // Simple in-memory rate limiter for analytics APIs (best-effort; not durable across serverless instances)
+
   try {
     const requestIp = getClientIp(req);
     const isAuthCallbackRequest =
@@ -378,7 +475,9 @@ export async function middleware(req: NextRequest) {
       });
 
       if (authRateLimit.limited) {
-        return buildRateLimitResponse(authRateLimit.retryAfterSeconds);
+        return finalizeResponse(
+          buildRateLimitResponse(authRateLimit.retryAfterSeconds),
+        );
       }
     }
 
@@ -392,14 +491,14 @@ export async function middleware(req: NextRequest) {
       });
 
       if (analyticsRateLimit.limited) {
-        return buildRateLimitResponse(analyticsRateLimit.retryAfterSeconds);
+        return finalizeResponse(
+          buildRateLimitResponse(analyticsRateLimit.retryAfterSeconds),
+        );
       }
     }
   } catch {}
-  return applyResponseHeaders(
-    NextResponse.next({ request: { headers } }),
-    cspHeader,
-  );
+
+  return finalizeResponse(NextResponse.next({ request: { headers } }));
 }
 
 export const config = {

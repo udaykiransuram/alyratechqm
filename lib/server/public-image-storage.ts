@@ -2,14 +2,12 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 
-const IMAGE_EXTENSION_BY_MIME_TYPE = new Map<string, string>([
-  ["image/png", "png"],
-  ["image/jpeg", "jpg"],
-  ["image/webp", "webp"],
-  ["image/gif", "gif"],
-  ["image/avif", "avif"],
-  ["image/svg+xml", "svg"],
-]);
+import {
+  PUBLIC_IMAGE_EXTENSION_BY_MIME_TYPE,
+  resolvePublicImageMimeType,
+} from "@/lib/uploads/public-image";
+
+const BLOB_CACHE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 function sanitizePathSegment(value: string) {
   return String(value || "")
@@ -32,31 +30,6 @@ function sanitizeFileBaseName(fileName: string) {
   return normalized || "image";
 }
 
-function guessMimeTypeFromFileName(fileName: string) {
-  const extension = String(fileName || "")
-    .toLowerCase()
-    .split(".")
-    .pop();
-
-  switch (extension) {
-    case "png":
-      return "image/png";
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "webp":
-      return "image/webp";
-    case "gif":
-      return "image/gif";
-    case "avif":
-      return "image/avif";
-    case "svg":
-      return "image/svg+xml";
-    default:
-      return null;
-  }
-}
-
 export type StorePublicImageInput = {
   buffer: Buffer;
   schoolKey: string;
@@ -65,6 +38,124 @@ export type StorePublicImageInput = {
   relativeFolder: string;
 };
 
+type StoredPublicImage = {
+  url: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+};
+
+type VercelBlobPutOptions = {
+  access: "public";
+  addRandomSuffix: boolean;
+  cacheControlMaxAge: number;
+  contentType: string;
+  token: string;
+};
+
+type VercelBlobPutResult = {
+  url: string;
+  pathname: string;
+  contentType?: string | null;
+};
+
+type VercelBlobModule = {
+  put: (
+    pathname: string,
+    body: Buffer,
+    options: VercelBlobPutOptions,
+  ) => Promise<VercelBlobPutResult>;
+};
+
+function shouldUseBlobStorage() {
+  return process.env.NODE_ENV === "production";
+}
+
+async function loadBlobModule() {
+  const dynamicImport = new Function(
+    "specifier",
+    "return import(specifier)",
+  ) as (specifier: string) => Promise<VercelBlobModule>;
+
+  try {
+    const blobModule = await dynamicImport("@vercel/blob");
+    if (typeof blobModule?.put !== "function") {
+      throw new Error("Missing Vercel Blob put() export.");
+    }
+
+    return blobModule;
+  } catch (error) {
+    const reason =
+      error instanceof Error && error.message.trim()
+        ? ` ${error.message.trim()}`
+        : "";
+    throw new Error(
+      `Vercel Blob SDK is unavailable for production image uploads.${reason}`,
+    );
+  }
+}
+
+async function storePublicImageLocally({
+  buffer,
+  normalizedMimeType,
+  relativeDir,
+  storedFileName,
+}: {
+  buffer: Buffer;
+  normalizedMimeType: string;
+  relativeDir: string;
+  storedFileName: string;
+}): Promise<StoredPublicImage> {
+  const absoluteDir = path.join(process.cwd(), "public", relativeDir);
+
+  await mkdir(absoluteDir, { recursive: true });
+  await writeFile(path.join(absoluteDir, storedFileName), buffer);
+
+  return {
+    url: `/${relativeDir}/${storedFileName}`,
+    fileName: storedFileName,
+    mimeType: normalizedMimeType,
+    size: buffer.length,
+  };
+}
+
+async function storePublicImageInBlob({
+  buffer,
+  normalizedMimeType,
+  relativeDir,
+  storedFileName,
+}: {
+  buffer: Buffer;
+  normalizedMimeType: string;
+  relativeDir: string;
+  storedFileName: string;
+}): Promise<StoredPublicImage> {
+  const token = String(process.env.BLOB_READ_WRITE_TOKEN || "").trim();
+
+  if (!token) {
+    throw new Error(
+      "Vercel Blob is not configured. Set BLOB_READ_WRITE_TOKEN for production image uploads.",
+    );
+  }
+
+  const { put } = await loadBlobModule();
+  const pathname = path.posix.join(relativeDir, storedFileName);
+  const blob = await put(pathname, buffer, {
+    access: "public",
+    addRandomSuffix: false,
+    cacheControlMaxAge: BLOB_CACHE_MAX_AGE_SECONDS,
+    contentType: normalizedMimeType,
+    token,
+  });
+
+  return {
+    url: blob.url,
+    fileName: path.posix.basename(blob.pathname || pathname),
+    mimeType: String(blob.contentType || normalizedMimeType),
+    size: buffer.length,
+  };
+}
+
 export async function storePublicImage({
   buffer,
   schoolKey,
@@ -72,12 +163,13 @@ export async function storePublicImage({
   mimeType,
   relativeFolder,
 }: StorePublicImageInput) {
-  const providedMimeType = String(mimeType || "").toLowerCase();
-  const guessedMimeType = guessMimeTypeFromFileName(fileName) || "";
-  const normalizedMimeType = IMAGE_EXTENSION_BY_MIME_TYPE.has(providedMimeType)
-    ? providedMimeType
-    : guessedMimeType;
-  const extension = IMAGE_EXTENSION_BY_MIME_TYPE.get(normalizedMimeType);
+  const normalizedMimeType = resolvePublicImageMimeType({ fileName, mimeType });
+
+  if (!normalizedMimeType) {
+    throw new Error("Unsupported image format.");
+  }
+
+  const extension = PUBLIC_IMAGE_EXTENSION_BY_MIME_TYPE.get(normalizedMimeType);
 
   if (!extension) {
     throw new Error("Unsupported image format.");
@@ -93,22 +185,25 @@ export async function storePublicImage({
     .join("/");
   const baseName = sanitizeFileBaseName(fileName);
   const storedFileName = `${Date.now()}-${randomUUID()}-${baseName}.${extension}`;
-  const relativeDir = path.join(
+  const relativeDir = path.posix.join(
     "uploads",
     folderSegment,
     schoolKeySegment,
     year,
     month,
   );
-  const absoluteDir = path.join(process.cwd(), "public", relativeDir);
 
-  await mkdir(absoluteDir, { recursive: true });
-  await writeFile(path.join(absoluteDir, storedFileName), buffer);
-
-  return {
-    url: `/${relativeDir.replace(/\\/g, "/")}/${storedFileName}`,
-    fileName: storedFileName,
-    mimeType: normalizedMimeType,
-    size: buffer.length,
-  };
+  return shouldUseBlobStorage()
+    ? storePublicImageInBlob({
+        buffer,
+        normalizedMimeType,
+        relativeDir,
+        storedFileName,
+      })
+    : storePublicImageLocally({
+        buffer,
+        normalizedMimeType,
+        relativeDir,
+        storedFileName,
+      });
 }

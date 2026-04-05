@@ -1,5 +1,5 @@
 import type { NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
+import CredentialsProviderImport from "next-auth/providers/credentials";
 
 import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
@@ -44,6 +44,18 @@ const FORWARDED_AUTH_ERRORS = new Set([
   STUDENT_SIGN_IN_FAILED_ERROR,
   STUDENT_SIGN_IN_RATE_LIMITED_ERROR,
 ]);
+const CredentialsProvider =
+  typeof CredentialsProviderImport === "function"
+    ? CredentialsProviderImport
+    : (
+        CredentialsProviderImport as {
+          default?: typeof CredentialsProviderImport;
+        }
+      ).default;
+
+if (typeof CredentialsProvider !== "function") {
+  throw new Error("Failed to initialize NextAuth credentials provider.");
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [

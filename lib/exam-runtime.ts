@@ -1599,16 +1599,36 @@ async function getActiveExamSnapshotByPaperIdInTransaction(
 async function listExamAttemptsForStudent(
   schoolKey: string,
   studentId: string,
+  paperIds?: string[] | null,
 ) {
+  const normalizedPaperIds = Array.from(
+    new Set(
+      (Array.isArray(paperIds) ? paperIds : [])
+        .map((paperId) => String(paperId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const queryParams: string[] = [schoolKey, studentId];
+  const paperFilterSql =
+    normalizedPaperIds.length > 0
+      ? (() => {
+          const placeholders = normalizedPaperIds.map(
+            (_, index) => `$${index + 3}`,
+          );
+          queryParams.push(...normalizedPaperIds);
+          return `\n        AND mongo_paper_id IN (${placeholders.join(", ")})`;
+        })()
+      : "";
   const result = await queryExamRuntime(
     `
       SELECT ${ATTEMPT_COLUMNS}
       FROM exam_attempts
       WHERE school_key = $1
         AND student_id = $2
+        ${paperFilterSql}
       ORDER BY started_at DESC
     `,
-    [schoolKey, studentId],
+    queryParams,
   );
 
   return result.rows.map(mapAttemptRow);
@@ -3432,8 +3452,23 @@ export async function listStudentExamRuntimeTests(
   schoolKey: string,
   studentId: string,
   studentContext?: StudentEligibilityContext,
+  options?: {
+    paperIds?: string[] | null;
+    autoSubmitExpiredAttempts?: boolean;
+    now?: Date;
+  },
 ) {
-  const now = new Date();
+  const now = options?.now || new Date();
+  const requestedPaperIds = Array.from(
+    new Set(
+      (Array.isArray(options?.paperIds) ? options.paperIds : [])
+        .map((paperId) => String(paperId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const requestedPaperIdSet = new Set(requestedPaperIds);
+  const shouldAutoSubmitExpiredAttempts =
+    options?.autoSubmitExpiredAttempts !== false;
   let modelsPromise: Promise<Awaited<ReturnType<typeof getStudentTestModels>>> | null =
     null;
   const getModels = () => {
@@ -3463,11 +3498,34 @@ export async function listStudentExamRuntimeTests(
   }
 
   const studentClassId = getStudentClassId(student);
+  const loadCurrentSnapshots = async () => {
+    if (!studentClassId) {
+      return [] as Array<ExamPaperSnapshotSummary | ExamPaperSnapshot>;
+    }
+
+    if (requestedPaperIds.length === 0) {
+      return listActiveExamSnapshotsForClassId(schoolKey, studentClassId);
+    }
+
+    const snapshots = await Promise.all(
+      requestedPaperIds.map(async (paperId) => {
+        const activeSnapshot = await getActiveExamSnapshotSummaryByPaperId(
+          schoolKey,
+          paperId,
+        );
+        return activeSnapshot || (await ensureActiveExamSnapshotForPaperId(schoolKey, paperId));
+      }),
+    );
+
+    return snapshots.filter(
+      (
+        snapshot,
+      ): snapshot is ExamPaperSnapshotSummary | ExamPaperSnapshot => Boolean(snapshot),
+    );
+  };
   const [activeSnapshotsForClass, attempts] = await Promise.all([
-    studentClassId
-      ? listActiveExamSnapshotsForClassId(schoolKey, studentClassId)
-      : Promise.resolve([]),
-    listExamAttemptsForStudent(schoolKey, studentId),
+    loadCurrentSnapshots(),
+    listExamAttemptsForStudent(schoolKey, studentId, requestedPaperIds),
   ]);
 
   const eligibleCurrentSnapshotsByPaperId = new Map<
@@ -3476,7 +3534,11 @@ export async function listStudentExamRuntimeTests(
   >();
   activeSnapshotsForClass.forEach((snapshot) => {
     const paperId = String(snapshot.mongoPaperId || "").trim();
-    if (!paperId || !isStudentEligibleForSnapshot(snapshot, student)) {
+    if (
+      !paperId ||
+      (requestedPaperIdSet.size > 0 && !requestedPaperIdSet.has(paperId)) ||
+      !isStudentEligibleForSnapshot(snapshot, student)
+    ) {
       return;
     }
 
@@ -3485,7 +3547,11 @@ export async function listStudentExamRuntimeTests(
 
   let missingEligiblePaperIds: string[] = [];
 
-  if (studentClassId && activeSnapshotsForClass.length === 0) {
+  if (
+    studentClassId &&
+    requestedPaperIds.length === 0 &&
+    activeSnapshotsForClass.length === 0
+  ) {
     const models = await getModels();
     const eligiblePaperCandidates = await loadOnlinePaperAssignmentsForClass(
       models,
@@ -3555,7 +3621,10 @@ export async function listStudentExamRuntimeTests(
       continue;
     }
 
-    if (!shouldAutoSubmitAttempt(attempt, now)) {
+    if (
+      !shouldAutoSubmitExpiredAttempts ||
+      !shouldAutoSubmitAttempt(attempt, now)
+    ) {
       nextAttempts.push(attempt);
       continue;
     }

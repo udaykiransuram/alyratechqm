@@ -69,6 +69,10 @@ npm run dev
 - `npm run stress:online-test -- --seed-students=100 --concurrency=50` auto-seeds disposable online-exam data if needed, holds a local server open when `BASE_URL` is loopback, and runs the gated stress lane
 - `npm run gate:student-tests:seed -- --students=100` seeds disposable load-gate data
 - `npm run gate:student-tests:load -- --school=<key> --paper=<paperId> --students=<jsonFile>` runs load gate with latency/failure/audit thresholds
+- `npm run gate:learning-content:seed -- --students=100` seeds a disposable course/diary/dashboard/notification school for learning-content load tests
+- `npm run stress:learning-content -- --meta=<jsonFile>` runs the raw learning-content stress harness against real student auth and the live course/diary endpoints
+- `npm run gate:learning-content:load -- --meta=<jsonFile>` runs the learning-content load gate with latency/failure thresholds plus persistence audits
+- `npm run gate:learning-content:cleanup -- --meta=<jsonFile>` removes the seeded learning-content load-gate school and artifacts
 - `npm run preflight:online-test` runs typecheck, targeted lint, integration e2e, and load gate in one command
 
 ## Online Exam Stress
@@ -106,6 +110,45 @@ Notes:
 - `npm run stress:online-test -- --help`, `npm run gate:student-tests:load -- --help`, and `npm run preflight:online-test -- --help` print the supported flags.
 - GitHub Actions includes a manual `Online Test Stress` workflow for staged load runs without editing code.
 - GitHub Actions CI now verifies the real-backend online-test integration lane with exam runtime both disabled and enabled.
+
+## Learning Content Load Gate
+
+Seed a disposable school:
+
+```bash
+npm run gate:learning-content:seed -- --students=100
+```
+
+Run the gated course/diary/dashboard/notification lane with the emitted metadata file:
+
+```bash
+npm run gate:learning-content:load -- \
+  --meta=/tmp/learning-content-readiness-<schoolKey>.meta.json \
+  --base=http://127.0.0.1:3000 \
+  --concurrency=60
+```
+
+Clean it up when finished:
+
+```bash
+npm run gate:learning-content:cleanup -- \
+  --meta=/tmp/learning-content-readiness-<schoolKey>.meta.json
+```
+
+Notes:
+
+- The raw harness signs real students in, loads `/student`, `/student/courses`, `/student/diary`, and the matching APIs, then writes course progress and diary completion state.
+- The gated wrapper samples persisted `CourseProgress` and `DiaryStudentState` documents after the run so the lane catches lost-write regressions instead of only measuring latency.
+
+## Split Deployments
+
+To isolate student and staff traffic at deployment level, set:
+
+- `APP_SERVICE_MODE=full|student|staff`
+- `STUDENT_APP_ORIGIN=https://student.example.com`
+- `STAFF_APP_ORIGIN=https://staff.example.com`
+
+`middleware.ts` now classifies every request as `student`, `staff`, or `shared`, adds `x-app-service-mode` and `x-app-traffic-surface` headers, and redirects page traffic to the paired origin when a split deployment is configured.
 
 ## Project Structure
 

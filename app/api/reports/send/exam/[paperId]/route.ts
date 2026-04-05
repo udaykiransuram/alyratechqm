@@ -11,19 +11,11 @@ import {
 } from "@/lib/question-paper/access";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 import { requireTenantSession } from "@/lib/api-auth";
-import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
+import {
+  enqueueReportDispatchJobs,
+  scheduleReportDispatchWorker,
+} from "@/lib/reports/dispatchQueue";
 import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
-
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
-    .toString()
-    .trim();
-}
 
 function normalizeMobileNumber(input: string): string {
   const digits = String(input || "").replace(/\D/g, "");
@@ -489,15 +481,18 @@ export async function POST(
   let workerResult = null;
 
   if (queuedJobIds.size > 0) {
-    try {
-      workerResult = await runReportDispatchWorker({
-        origin: getTrustedInternalOrigin(),
-        schoolKey,
-        jobIds: Array.from(queuedJobIds),
-      });
-    } catch (error) {
-      console.error("Failed to auto-trigger report worker", error);
-    }
+    await enqueueReportDispatchJobs({
+      schoolKey,
+      jobIds: Array.from(queuedJobIds),
+    }).catch(() => null);
+    scheduleReportDispatchWorker({
+      schoolKey,
+      jobIds: Array.from(queuedJobIds),
+    });
+    workerResult = {
+      queued: true,
+      jobCount: queuedJobIds.size,
+    };
   }
 
   return NextResponse.json({

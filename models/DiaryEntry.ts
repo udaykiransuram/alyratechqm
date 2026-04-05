@@ -4,10 +4,10 @@ import { applyArchiveFields, hasArchiveFields } from "@/lib/archive";
 import { hasDiaryHtmlContent } from "@/lib/diary/shared";
 import { getModelRegistry } from "@/lib/mongoose-models";
 
-import "./AcademicSection";
-import "./Class";
-import "./Subject";
-import "./User";
+import "./AcademicSection.ts";
+import "./Class.ts";
+import "./Subject.ts";
+import "./User.ts";
 
 export interface IDiaryResource {
   id: string;
@@ -221,6 +221,14 @@ DiaryEntrySchema.index(
   { assignedAcademicSections: 1, entryDate: -1 },
   { name: "diary_sections_lookup_1" },
 );
+DiaryEntrySchema.index(
+  { class: 1, subject: 1, status: 1, isArchived: 1, entryDate: -1, updatedAt: -1, title: 1 },
+  { name: "diary_workspace_feed_lookup_1" },
+);
+DiaryEntrySchema.index(
+  { class: 1, status: 1, isArchived: 1, entryDate: -1, updatedAt: -1, title: 1 },
+  { name: "diary_student_feed_lookup_1" },
+);
 
 applyArchiveFields(DiaryEntrySchema);
 
@@ -246,4 +254,3 @@ const DiaryEntry: Model<IDiaryEntry> =
   mongoose.model<IDiaryEntry>("DiaryEntry", DiaryEntrySchema);
 
 export default DiaryEntry;
-

@@ -2,6 +2,11 @@ import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import {
+  isRedisConfigured,
+  readSharedCacheEntry,
+  writeSharedCacheEntry,
+} from "@/lib/redis";
+import {
   getMockWorkspaceClasses,
   getMockWorkspaceSections,
   getMockWorkspaceSubjects,
@@ -33,6 +38,20 @@ type SupportDataCacheEntry<T> = {
   promise?: Promise<T>;
 };
 
+type WorkspaceSupportDataCacheStats = {
+  localHits: number;
+  localMisses: number;
+  redisHits: number;
+  redisMisses: number;
+  redisWrites: number;
+  loaderRuns: number;
+};
+
+type WorkspaceSupportDataCacheState = {
+  cache: Map<string, SupportDataCacheEntry<unknown>>;
+  stats: WorkspaceSupportDataCacheStats;
+};
+
 function cloneForTransport<T>(value: T): T {
   if (typeof value === "undefined") {
     return value;
@@ -41,16 +60,41 @@ function cloneForTransport<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function getWorkspaceSupportDataCache() {
+function getWorkspaceSupportDataCacheState() {
   const globalState = global as typeof globalThis & {
-    __workspaceSupportDataCache?: Map<string, SupportDataCacheEntry<unknown>>;
+    __workspaceSupportDataCache?: WorkspaceSupportDataCacheState;
   };
 
   if (!globalState.__workspaceSupportDataCache) {
-    globalState.__workspaceSupportDataCache = new Map();
+    globalState.__workspaceSupportDataCache = {
+      cache: new Map(),
+      stats: {
+        localHits: 0,
+        localMisses: 0,
+        redisHits: 0,
+        redisMisses: 0,
+        redisWrites: 0,
+        loaderRuns: 0,
+      },
+    };
   }
 
   return globalState.__workspaceSupportDataCache;
+}
+
+function getWorkspaceSupportDataCache() {
+  return getWorkspaceSupportDataCacheState().cache;
+}
+
+export function getWorkspaceSupportDataCacheStats() {
+  const state = getWorkspaceSupportDataCacheState();
+
+  return {
+    entries: state.cache.size,
+    maxEntries: SUPPORT_DATA_CACHE_MAX_ENTRIES,
+    redisConfigured: isRedisConfigured(),
+    ...state.stats,
+  };
 }
 
 function pruneWorkspaceSupportDataCache() {
@@ -88,6 +132,7 @@ async function getCachedWorkspaceSupportData<T>(
       ? ttlMs
       : Math.min(ttlMs, DEV_SUPPORT_DATA_CACHE_TTL_MS);
 
+  const state = getWorkspaceSupportDataCacheState();
   const cache = getWorkspaceSupportDataCache();
   const now = Date.now();
   const existingEntry = cache.get(cacheKey) as
@@ -95,6 +140,7 @@ async function getCachedWorkspaceSupportData<T>(
     | undefined;
 
   if (existingEntry?.hasValue && existingEntry.expiresAt > now) {
+    state.stats.localHits += 1;
     return cloneForTransport(existingEntry.value as T);
   }
 
@@ -102,17 +148,50 @@ async function getCachedWorkspaceSupportData<T>(
     return existingEntry.promise;
   }
 
-  const promise = loader()
-    .then((value) => {
-      const normalizedValue = cloneForTransport(value);
+  state.stats.localMisses += 1;
+
+  const promise = (async () => {
+    const sharedEntry = await readSharedCacheEntry<T>(cacheKey);
+    if (sharedEntry) {
+      const normalizedValue = cloneForTransport(sharedEntry.value);
+      state.stats.redisHits += 1;
       cache.set(cacheKey, {
         expiresAt: Date.now() + effectiveTtlMs,
         hasValue: true,
         value: normalizedValue,
       });
       pruneWorkspaceSupportDataCache();
-      return normalizedValue;
-    })
+      return cloneForTransport(normalizedValue);
+    }
+
+    if (isRedisConfigured()) {
+      state.stats.redisMisses += 1;
+    }
+
+    state.stats.loaderRuns += 1;
+    const value = await loader();
+    const normalizedValue = cloneForTransport(value);
+    cache.set(cacheKey, {
+      expiresAt: Date.now() + effectiveTtlMs,
+      hasValue: true,
+      value: normalizedValue,
+    });
+    pruneWorkspaceSupportDataCache();
+
+    if (isRedisConfigured()) {
+      const wroteToSharedCache = await writeSharedCacheEntry(
+        cacheKey,
+        normalizedValue,
+        Math.max(1, Math.ceil(effectiveTtlMs / 1000)),
+      ).catch(() => false);
+
+      if (wroteToSharedCache) {
+        state.stats.redisWrites += 1;
+      }
+    }
+
+    return cloneForTransport(normalizedValue);
+  })()
     .catch((error) => {
       cache.delete(cacheKey);
       throw error;

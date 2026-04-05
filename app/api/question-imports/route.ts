@@ -151,15 +151,22 @@ export async function POST(req: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to create the question import draft.";
+    const normalizedMessage = message.toLowerCase();
+    const isStorageConfigurationError =
+      normalizedMessage.includes("vercel blob") ||
+      normalizedMessage.includes("blob_read_write_token") ||
+      normalizedMessage.includes("production image uploads");
+
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to create the question import draft.",
+        message,
       },
-      { status: 400 },
+      { status: isStorageConfigurationError ? 500 : 400 },
     );
   }
 }

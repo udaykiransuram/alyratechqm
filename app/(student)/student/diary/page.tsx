@@ -13,6 +13,7 @@ import { listStudentDiaryEntries } from "@/lib/server/diary";
 import { getWorkspaceSubjects } from "@/lib/server/workspace-support-data";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 type StudentDiaryPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;

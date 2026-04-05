@@ -899,7 +899,7 @@ export default function DiaryEditorClient({
                                 url: event.target.value,
                               }))
                             }
-                            placeholder="/uploads/diary-images/..."
+                            placeholder="https://example.com/diary-image.webp"
                           />
                           <FilePickerField
                             id={`diary-image-${resource.id}`}
