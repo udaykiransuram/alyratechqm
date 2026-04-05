@@ -2,8 +2,8 @@ import mongoose, { Document, Model, Schema, Types } from "mongoose";
 
 import { getModelRegistry } from "@/lib/mongoose-models";
 
-import "./DiaryEntry";
-import "./User";
+import "./DiaryEntry.ts";
+import "./User.ts";
 
 export interface IDiaryStudentState extends Document {
   entry: Types.ObjectId;
@@ -84,4 +84,3 @@ const DiaryStudentState: Model<IDiaryStudentState> =
   );
 
 export default DiaryStudentState;
-

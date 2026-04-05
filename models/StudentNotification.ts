@@ -2,7 +2,7 @@ import mongoose, { Document, Model, Schema, Types } from "mongoose";
 
 import { getModelRegistry } from "@/lib/mongoose-models";
 
-import "./User";
+import "./User.ts";
 
 export type StudentNotificationType =
   | "course_assigned"

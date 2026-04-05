@@ -35,6 +35,14 @@ import {
 } from "@/lib/test-fixtures/learning-content";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
+type WorkspaceCourseListResult = {
+  courses: WorkspaceCourseSummary[];
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+};
+
 function toId(value: unknown) {
   if (!value) return "";
   if (typeof value === "object" && value !== null && "_id" in (value as Record<string, unknown>)) {
@@ -46,6 +54,103 @@ function toId(value: unknown) {
 function toOptionalString(value: unknown) {
   const normalized = String(value || "").trim();
   return normalized || undefined;
+}
+
+function resolveListPage(value: unknown) {
+  const normalized = Number(value || "");
+  if (!Number.isFinite(normalized) || normalized < 1) {
+    return 1;
+  }
+
+  return Math.floor(normalized);
+}
+
+function resolveListLimit(value: unknown, defaultLimit: number) {
+  const normalized = Number(value || "");
+  if (!Number.isFinite(normalized) || normalized < 1) {
+    return defaultLimit;
+  }
+
+  return Math.min(Math.floor(normalized), 100);
+}
+
+function getScopedIds(value: unknown) {
+  return Array.from(
+    new Set(
+      (Array.isArray(value) ? value : [])
+        .map((item) => toId(item))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function buildFullArrayCoverageQuery(field: string, allowedIds: string[]) {
+  return {
+    $or: [
+      { [field]: { $exists: false } },
+      { [field]: { $size: 0 } },
+      { [field]: { $not: { $elemMatch: { $nin: allowedIds } } } },
+    ],
+  };
+}
+
+function buildArrayIntersectionOrEmptyQuery(field: string, allowedIds: string[]) {
+  return {
+    $or: [
+      { [field]: { $exists: false } },
+      { [field]: { $size: 0 } },
+      { [field]: { $in: allowedIds } },
+    ],
+  };
+}
+
+function mergeMongoQueries(baseQuery: Record<string, any>, extraQuery: Record<string, any>) {
+  if (!extraQuery || Object.keys(extraQuery).length === 0) {
+    return baseQuery;
+  }
+
+  if (!baseQuery || Object.keys(baseQuery).length === 0) {
+    return extraQuery;
+  }
+
+  return {
+    $and: [baseQuery, extraQuery],
+  };
+}
+
+function buildTeacherScopedCourseQuery(scopedUser: any) {
+  const query: Record<string, any> = {};
+  const andClauses: Record<string, any>[] = [];
+
+  if (!scopedUser?.hasAllClasses) {
+    const classIds = getScopedIds(scopedUser?.classIds);
+    if (classIds.length === 0) {
+      return null;
+    }
+    query.class = { $in: classIds };
+  }
+
+  if (!scopedUser?.hasAllSubjects) {
+    andClauses.push(
+      buildFullArrayCoverageQuery("subjectIds", getScopedIds(scopedUser?.subjectIds)),
+    );
+  }
+
+  if (!scopedUser?.hasAllSections) {
+    const sectionIds = getScopedIds(scopedUser?.academicSectionIds);
+    if (sectionIds.length === 0) {
+      return null;
+    }
+    andClauses.push(
+      buildArrayIntersectionOrEmptyQuery("assignedAcademicSections", sectionIds),
+    );
+  }
+
+  if (andClauses.length > 0) {
+    query.$and = andClauses;
+  }
+
+  return query;
 }
 
 function mapClassSummary(value: any): CourseClassSummary | null {
@@ -298,9 +403,27 @@ function canTeacherAccessCourse(course: any, scopedUser: any) {
   );
 }
 
-async function getAllQuestionPaperOptions(schoolKey: string) {
+async function getAllQuestionPaperOptions(
+  schoolKey: string,
+  options?: {
+    onlineEnabledOnly?: boolean;
+    paperIds?: string[];
+    scopedUser?: any;
+  },
+) {
   if (isMockedE2ETestMode()) {
-    return getMockWorkspaceCourseSupportData().papers;
+    const requestedPaperIds = new Set(getScopedIds(options?.paperIds));
+    return getMockWorkspaceCourseSupportData().papers.filter((paper) => {
+      if (options?.onlineEnabledOnly && !paper.onlineEnabled) {
+        return false;
+      }
+
+      if (requestedPaperIds.size > 0 && !requestedPaperIds.has(paper._id)) {
+        return false;
+      }
+
+      return !options?.scopedUser || canTeacherAccessPaper(paper, options.scopedUser);
+    });
   }
 
   const {
@@ -315,7 +438,28 @@ async function getAllQuestionPaperOptions(schoolKey: string) {
     "AcademicSection",
   ]);
 
-  const papers = await QuestionPaperModel.find(buildArchiveFilter(false))
+  let query: Record<string, any> = {
+    ...buildArchiveFilter(false),
+  };
+
+  if (options?.onlineEnabledOnly) {
+    query.onlineEnabled = true;
+  }
+
+  const requestedPaperIds = getScopedIds(options?.paperIds);
+  if (requestedPaperIds.length > 0) {
+    query._id = { $in: requestedPaperIds };
+  }
+
+  if (options?.scopedUser) {
+    const scopedQuery = buildTeacherScopedCourseQuery(options.scopedUser);
+    if (!scopedQuery) {
+      return [];
+    }
+    query = mergeMongoQueries(query, scopedQuery);
+  }
+
+  const papers = await QuestionPaperModel.find(query)
     .select(
       "_id title class subject subjectIds onlineEnabled duration totalMarks passingMarks assignedAcademicSections",
     )
@@ -335,7 +479,13 @@ async function getAllQuestionPaperOptions(schoolKey: string) {
     .sort({ updatedAt: -1, title: 1 })
     .lean();
 
-  return Array.isArray(papers) ? papers.map(mapPaperOption) : [];
+  const paperOptions = Array.isArray(papers) ? papers.map(mapPaperOption) : [];
+
+  if (options?.scopedUser) {
+    return paperOptions.filter((paper) => canTeacherAccessPaper(paper, options.scopedUser));
+  }
+
+  return paperOptions;
 }
 
 export async function getWorkspaceCourseSupportData(params: {
@@ -347,23 +497,34 @@ export async function getWorkspaceCourseSupportData(params: {
     return getMockWorkspaceCourseSupportData();
   }
 
-  const [classes, sections, subjects, paperOptions] = await Promise.all([
-    getWorkspaceClasses(params.schoolKey),
-    getWorkspaceSections(params.schoolKey),
-    getWorkspaceSubjects(params.schoolKey),
-    getAllQuestionPaperOptions(params.schoolKey),
-  ]);
-
   if (params.viewerRole !== "teacher") {
+    const [classes, sections, subjects, paperOptions] = await Promise.all([
+      getWorkspaceClasses(params.schoolKey),
+      getWorkspaceSections(params.schoolKey),
+      getWorkspaceSubjects(params.schoolKey),
+      getAllQuestionPaperOptions(params.schoolKey, {
+        onlineEnabledOnly: true,
+      }),
+    ]);
+
     return {
       classes,
       sections,
       subjects,
-      papers: paperOptions.filter((paper) => paper.onlineEnabled),
+      papers: paperOptions,
     };
   }
 
   const scopedUser = await getTeacherScopedUser(params.schoolKey, params.viewerId);
+  const [classes, sections, subjects, paperOptions] = await Promise.all([
+    getWorkspaceClasses(params.schoolKey),
+    getWorkspaceSections(params.schoolKey),
+    getWorkspaceSubjects(params.schoolKey),
+    getAllQuestionPaperOptions(params.schoolKey, {
+      onlineEnabledOnly: true,
+      scopedUser,
+    }),
+  ]);
   const allowedSubjectIds = new Set(
     Array.isArray(scopedUser?.subjectIds)
       ? scopedUser.subjectIds.map((subjectId: any) => toId(subjectId))
@@ -376,9 +537,7 @@ export async function getWorkspaceCourseSupportData(params: {
     subjects: Boolean(scopedUser?.hasAllSubjects)
       ? subjects
       : subjects.filter((subject) => allowedSubjectIds.has(String(subject?._id || ""))),
-    papers: paperOptions.filter(
-      (paper) => paper.onlineEnabled && canTeacherAccessPaper(paper, scopedUser),
-    ),
+    papers: paperOptions,
   };
 }
 
@@ -386,9 +545,39 @@ export async function listWorkspaceCourses(params: {
   schoolKey: string;
   viewerId: string;
   viewerRole: "admin" | "teacher";
+  page?: number;
+  limit?: number;
 }) {
+  const requestedPage = resolveListPage(params.page);
+  const requestedLimit =
+    typeof params.limit === "number" || typeof params.limit === "string"
+      ? resolveListLimit(params.limit, 12)
+      : null;
+
   if (isMockedE2ETestMode()) {
-    return getMockWorkspaceCourseSummaries();
+    const allCourses = getMockWorkspaceCourseSummaries();
+    const total = allCourses.length;
+
+    if (!requestedLimit) {
+      return {
+        courses: allCourses,
+        total,
+        page: 1,
+        pages: 1,
+        limit: Math.max(total, 1),
+      } satisfies WorkspaceCourseListResult;
+    }
+
+    const pages = Math.max(1, Math.ceil(total / requestedLimit));
+    const page = Math.min(requestedPage, pages);
+
+    return {
+      courses: allCourses.slice((page - 1) * requestedLimit, page * requestedLimit),
+      total,
+      page,
+      pages,
+      limit: requestedLimit,
+    } satisfies WorkspaceCourseListResult;
   }
 
   await connectDB();
@@ -404,7 +593,32 @@ export async function listWorkspaceCourses(params: {
     "AcademicSection",
   ]);
 
-  const courses = await CourseModel.find(buildArchiveFilter(false))
+  let query: Record<string, any> = {
+    ...buildArchiveFilter(false),
+  };
+
+  if (params.viewerRole === "teacher") {
+    const scopedUser = await getTeacherScopedUser(params.schoolKey, params.viewerId);
+    const scopedQuery = buildTeacherScopedCourseQuery(scopedUser);
+    if (!scopedQuery) {
+      return {
+        courses: [],
+        total: 0,
+        page: 1,
+        pages: 1,
+        limit: requestedLimit || 1,
+      } satisfies WorkspaceCourseListResult;
+    }
+
+    query = mergeMongoQueries(query, scopedQuery);
+  }
+
+  const total = await CourseModel.countDocuments(query);
+  const limit = requestedLimit || Math.max(total, 1);
+  const pages = requestedLimit ? Math.max(1, Math.ceil(total / limit)) : 1;
+  const page = requestedLimit ? Math.min(requestedPage, pages) : 1;
+
+  let courseQuery = CourseModel.find(query)
     .select(
       "_id title summary coverImageUrl coverImageAltText startsAt dueAt completionBadgeLabel enforceSequentialProgress allowNotes allowBookmarks isTemplate class subjectIds assignedAcademicSections status blocks publishedAt createdAt updatedAt",
     )
@@ -419,16 +633,19 @@ export async function listWorkspaceCourses(params: {
     .sort({ updatedAt: -1, title: 1 })
     .lean();
 
-  let filteredCourses = Array.isArray(courses) ? courses : [];
-
-  if (params.viewerRole === "teacher") {
-    const scopedUser = await getTeacherScopedUser(params.schoolKey, params.viewerId);
-    filteredCourses = filteredCourses.filter((course) =>
-      canTeacherAccessCourse(course, scopedUser),
-    );
+  if (requestedLimit) {
+    courseQuery = courseQuery.skip((page - 1) * limit).limit(limit);
   }
 
-  return filteredCourses.map(serializeWorkspaceCourseSummary);
+  const courses = await courseQuery;
+
+  return {
+    courses: (Array.isArray(courses) ? courses : []).map(serializeWorkspaceCourseSummary),
+    total,
+    page,
+    pages,
+    limit,
+  } satisfies WorkspaceCourseListResult;
 }
 
 function isCourseAssignedToStudent(student: any, assignedSectionIds: string[]) {
@@ -505,7 +722,9 @@ export async function getWorkspaceCourseById(params: {
   const normalizedBlocks = normalizeCourseBlocks(course.blocks);
   const linkedPaperIds = getCourseAssessmentPaperIds(normalizedBlocks);
   const requiredPaperIds = getRequiredCourseAssessmentPaperIds(normalizedBlocks);
-  const paperOptions = await getAllQuestionPaperOptions(params.schoolKey);
+  const paperOptions = await getAllQuestionPaperOptions(params.schoolKey, {
+    paperIds: linkedPaperIds,
+  });
   const paperOptionsById = new Map(paperOptions.map((paper) => [paper._id, paper]));
 
   const assignedStudents = await UserModel.find({

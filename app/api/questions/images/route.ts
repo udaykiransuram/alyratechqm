@@ -5,10 +5,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireTenantSession } from '@/lib/api-auth';
 import { storePublicImage } from '@/lib/server/public-image-storage';
+import { validatePublicImageFile } from '@/lib/uploads/public-image';
 
-const MAX_IMAGE_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
-const MAX_IMAGE_UPLOAD_SIZE_LABEL = '5 MB';
-const SUPPORTED_IMAGE_FORMATS_LABEL = 'PNG, JPG/JPEG, WEBP, GIF, AVIF, and SVG';
 export async function POST(req: NextRequest) {
   const auth = await requireTenantSession(req, {
     allowRoles: ['admin', 'teacher'],
@@ -27,34 +25,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const mimeType = String(file.type || '').toLowerCase();
-  if (!mimeType) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: `Unsupported image format. Upload ${SUPPORTED_IMAGE_FORMATS_LABEL} files only.`,
-      },
-      { status: 400 },
-    );
-  }
+  const validation = validatePublicImageFile(
+    {
+      fileName: file.name,
+      mimeType: file.type,
+      size: file.size,
+    },
+    { emptySource: 'uploaded' },
+  );
 
-  if (file.size <= 0) {
+  if (!validation.ok) {
     return NextResponse.json(
       {
         success: false,
-        message: `Uploaded image is empty. Upload a ${SUPPORTED_IMAGE_FORMATS_LABEL} file up to ${MAX_IMAGE_UPLOAD_SIZE_LABEL}.`,
+        message: validation.message,
       },
-      { status: 400 },
-    );
-  }
-
-  if (file.size > MAX_IMAGE_UPLOAD_SIZE_BYTES) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: `Image too large. Upload ${SUPPORTED_IMAGE_FORMATS_LABEL} files up to ${MAX_IMAGE_UPLOAD_SIZE_LABEL}.`,
-      },
-      { status: 413 },
+      { status: validation.status },
     );
   }
 
@@ -65,16 +51,22 @@ export async function POST(req: NextRequest) {
       buffer,
       schoolKey: auth.schoolKey,
       fileName: file.name,
-      mimeType,
+      mimeType: validation.mimeType,
       relativeFolder: 'question-images',
     });
-  } catch {
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.trim()
+        ? error.message
+        : 'Failed to upload the image.';
+    const isValidationError = message.toLowerCase().includes('unsupported image format');
+
     return NextResponse.json(
       {
         success: false,
-        message: `Unsupported image format. Upload ${SUPPORTED_IMAGE_FORMATS_LABEL} files only.`,
+        message,
       },
-      { status: 400 },
+      { status: isValidationError ? 400 : 500 },
     );
   }
 

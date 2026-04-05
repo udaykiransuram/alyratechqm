@@ -25,6 +25,7 @@ import type {
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
+import { invalidateStudentDashboardCacheForStudent } from "@/lib/server/student-dashboard-cache";
 import { listStudentTestsData } from "@/app/api/student/tests/data";
 import {
   getMockStudentCourseDetail,
@@ -59,6 +60,14 @@ function roundPercent(value: number) {
 }
 
 type StudentTestListItem = Awaited<ReturnType<typeof listStudentTestsData>>[number];
+type PersistedCourseProgressState = {
+  _id?: unknown;
+  updatedAt?: unknown;
+};
+
+const COURSE_PROGRESS_SELECT =
+  "status startedAt lastViewedBlockId viewedBlockIds completedBlockIds bookmarkedBlockIds notes completionPercent completedAssessmentPaperIds lastActivityAt completedAt updatedAt";
+const MAX_COURSE_PROGRESS_WRITE_RETRIES = 4;
 
 function mapClassSummary(value: any): CourseClassSummary | null {
   if (!value) return null;
@@ -238,6 +247,147 @@ function normalizeExistingProgress(existingProgress: any): CourseProgressSnapsho
   };
 }
 
+function hasCourseProgressActivity(
+  operations:
+    | {
+        lastViewedBlockId?: string | null;
+        viewedBlockId?: string | null;
+        completedBlockId?: string | null;
+        completed?: boolean;
+        bookmarkedBlockId?: string | null;
+        bookmarked?: boolean;
+        note?: {
+          blockId: string;
+          text: string | null;
+        } | null;
+      }
+    | undefined,
+) {
+  if (!operations) {
+    return false;
+  }
+
+  return (
+    "lastViewedBlockId" in operations ||
+    "viewedBlockId" in operations ||
+    "completedBlockId" in operations ||
+    "bookmarkedBlockId" in operations ||
+    "note" in operations
+  );
+}
+
+function areCourseProgressSnapshotsEqual(
+  left: CourseProgressSnapshot,
+  right: CourseProgressSnapshot,
+) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function buildCourseProgressUpdateDocument(params: {
+  courseId: string;
+  studentId: string;
+  snapshot: CourseProgressSnapshot;
+}) {
+  const { snapshot } = params;
+
+  return {
+    $set: {
+      status: snapshot.status,
+      startedAt: snapshot.startedAt ? new Date(snapshot.startedAt) : null,
+      lastViewedBlockId: snapshot.lastViewedBlockId,
+      viewedBlockIds: snapshot.viewedBlockIds,
+      completedBlockIds: snapshot.completedBlockIds,
+      bookmarkedBlockIds: snapshot.bookmarkedBlockIds,
+      notes: snapshot.notes.map((note) => ({
+        blockId: note.blockId,
+        text: note.text,
+        updatedAt: new Date(note.updatedAt),
+      })),
+      completionPercent: snapshot.completionPercent,
+      completedAssessmentPaperIds: snapshot.completedAssessmentPaperIds,
+      lastActivityAt: snapshot.lastActivityAt ? new Date(snapshot.lastActivityAt) : null,
+      completedAt: snapshot.completedAt ? new Date(snapshot.completedAt) : null,
+    },
+    $setOnInsert: {
+      course: params.courseId,
+      student: params.studentId,
+    },
+  };
+}
+
+async function persistStudentCourseProgressWithRetry(params: {
+  CourseProgressModel: any;
+  courseId: string;
+  studentId: string;
+  computeSnapshot: (existingProgress: PersistedCourseProgressState | null) => CourseProgressSnapshot;
+}) {
+  for (let attempt = 0; attempt < MAX_COURSE_PROGRESS_WRITE_RETRIES; attempt += 1) {
+    const existingProgress = await params.CourseProgressModel.findOne({
+      course: params.courseId,
+      student: params.studentId,
+    })
+      .select(COURSE_PROGRESS_SELECT)
+      .lean();
+
+    const normalizedExistingProgress = normalizeExistingProgress(existingProgress);
+    const nextSnapshot = params.computeSnapshot(existingProgress);
+
+    if (areCourseProgressSnapshotsEqual(normalizedExistingProgress, nextSnapshot)) {
+      return {
+        progress: normalizedExistingProgress,
+        previousProgress: existingProgress,
+      };
+    }
+
+    try {
+      const persistedProgress = await params.CourseProgressModel.findOneAndUpdate(
+        existingProgress
+          ? {
+              _id: existingProgress._id,
+              updatedAt: existingProgress.updatedAt,
+            }
+          : {
+              course: params.courseId,
+              student: params.studentId,
+              updatedAt: { $exists: false },
+            },
+        buildCourseProgressUpdateDocument({
+          courseId: params.courseId,
+          studentId: params.studentId,
+          snapshot: nextSnapshot,
+        }),
+        {
+          new: true,
+          lean: true,
+          upsert: !existingProgress,
+          setDefaultsOnInsert: true,
+        },
+      );
+
+      if (persistedProgress) {
+        return {
+          progress: normalizeExistingProgress(persistedProgress),
+          previousProgress: existingProgress,
+        };
+      }
+    } catch (error: any) {
+      if (error?.code !== 11000) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Course progress changed during save. Please retry.");
+}
+
+function collectAssessmentPaperIdsFromCourses(courses: any[]) {
+  return uniqueIds(
+    (Array.isArray(courses) ? courses : []).flatMap((course) =>
+      getCourseAssessmentPaperIds(normalizeCourseBlocks(course?.blocks)),
+    ),
+  );
+}
+
 function isNonAssessmentBlockCompleted(params: {
   block: CourseBlock;
   viewedBlockIds: string[];
@@ -279,6 +429,7 @@ function buildComputedProgressState(params: {
     } | null;
   };
   markStarted?: boolean;
+  touchLastActivity?: boolean;
   now: Date;
 }) {
   const currentProgress = normalizeExistingProgress(params.existingProgress);
@@ -387,7 +538,7 @@ function buildComputedProgressState(params: {
       : null;
 
   const lastActivityAt =
-    hasStarted || status === "completed"
+    params.touchLastActivity
       ? params.now.toISOString()
       : currentProgress.lastActivityAt;
 
@@ -559,11 +710,19 @@ async function buildStudentTestsMap(params: {
     classId?: string | null;
     academicSectionId?: string | null;
   };
+  paperIds?: string[];
 }) {
+  const paperIds = uniqueIds(params.paperIds || []);
+  if (paperIds.length === 0) {
+    return new Map<string, StudentTestListItem>();
+  }
+
   const tests = await listStudentTestsData({
     schoolKey: params.schoolKey,
     studentId: params.studentId,
     studentPlacement: params.studentPlacement,
+    paperIds,
+    autoSubmitExpiredAttempts: false,
     now: new Date(),
   });
 
@@ -651,7 +810,10 @@ export async function listStudentCourses(params: {
   const progressByCourseId = new Map(
     progressDocs.map((progress: any) => [toId(progress?.course), progress]),
   );
-  const testsByPaperId = await buildStudentTestsMap(params);
+  const testsByPaperId = await buildStudentTestsMap({
+    ...params,
+    paperIds: collectAssessmentPaperIdsFromCourses(courses),
+  });
 
   return courses.map((course) =>
     serializeStudentCourseSummary({
@@ -720,19 +882,13 @@ export async function getStudentCourseDetail(params: {
     return null;
   }
 
-  const existingProgress = await CourseProgressModel.findOne({
-    course: course._id,
-    student: params.studentId,
-  })
-    .select(
-      "status startedAt lastViewedBlockId viewedBlockIds completedBlockIds bookmarkedBlockIds notes completionPercent completedAssessmentPaperIds lastActivityAt completedAt",
-    )
-    .lean();
-
   const blocks = normalizeCourseBlocks(course.blocks);
   const metadata = normalizeCourseMetadata(course);
   const linkedPaperIds = getCourseAssessmentPaperIds(blocks);
-  const testsByPaperId = await buildStudentTestsMap(params);
+  const testsByPaperId = await buildStudentTestsMap({
+    ...params,
+    paperIds: linkedPaperIds,
+  });
 
   const linkedPapers =
     linkedPaperIds.length > 0
@@ -751,53 +907,34 @@ export async function getStudentCourseDetail(params: {
   const markStarted =
     startsAtTime === null || Number.isNaN(startsAtTime) || startsAtTime <= now.getTime();
 
-  const syncedProgress = buildComputedProgressState({
-    blocks,
-    metadata,
-    testsByPaperId,
-    existingProgress,
-    markStarted,
-    now,
-  });
+  const { progress: normalizedProgress, previousProgress } =
+    await persistStudentCourseProgressWithRetry({
+      CourseProgressModel,
+      courseId: toId(course._id),
+      studentId: params.studentId,
+      computeSnapshot: (existingProgress) => {
+        const currentProgress = normalizeExistingProgress(existingProgress);
 
-  const persistedProgress = await CourseProgressModel.findOneAndUpdate(
-    {
-      course: course._id,
-      student: params.studentId,
-    },
-    {
-      $set: {
-        status: syncedProgress.status,
-        startedAt: syncedProgress.startedAt ? new Date(syncedProgress.startedAt) : null,
-        lastViewedBlockId: syncedProgress.lastViewedBlockId,
-        viewedBlockIds: syncedProgress.viewedBlockIds,
-        completedBlockIds: syncedProgress.completedBlockIds,
-        bookmarkedBlockIds: syncedProgress.bookmarkedBlockIds,
-        notes: syncedProgress.notes.map((note) => ({
-          blockId: note.blockId,
-          text: note.text,
-          updatedAt: new Date(note.updatedAt),
-        })),
-        completionPercent: syncedProgress.completionPercent,
-        completedAssessmentPaperIds: syncedProgress.completedAssessmentPaperIds,
-        lastActivityAt: syncedProgress.lastActivityAt
-          ? new Date(syncedProgress.lastActivityAt)
-          : null,
-        completedAt: syncedProgress.completedAt ? new Date(syncedProgress.completedAt) : null,
+        return buildComputedProgressState({
+          blocks,
+          metadata,
+          testsByPaperId,
+          existingProgress,
+          markStarted,
+          touchLastActivity: Boolean(markStarted) && !currentProgress.startedAt,
+          now,
+        });
       },
-      $setOnInsert: {
-        course: course._id,
-        student: params.studentId,
-      },
-    },
-    {
-      upsert: true,
-      new: true,
-      lean: true,
-    },
-  );
+    });
+  const previousSnapshot = normalizeExistingProgress(previousProgress);
 
-  const normalizedProgress = normalizeExistingProgress(persistedProgress || syncedProgress);
+  if (!areCourseProgressSnapshotsEqual(previousSnapshot, normalizedProgress)) {
+    await invalidateStudentDashboardCacheForStudent(
+      params.schoolKey,
+      params.studentId,
+    );
+  }
+
   const availabilityStatus = resolveCourseAvailabilityStatus({
     startsAt: metadata.startsAt,
     dueAt: metadata.dueAt,
@@ -944,15 +1081,6 @@ export async function updateStudentCourseProgress(params: {
     throw new Error("Notes are disabled for this course.");
   }
 
-  const existingProgress = await CourseProgressModel.findOne({
-    course: course._id,
-    student: params.studentId,
-  })
-    .select(
-      "status startedAt lastViewedBlockId viewedBlockIds completedBlockIds bookmarkedBlockIds notes completionPercent completedAssessmentPaperIds lastActivityAt completedAt",
-    )
-    .lean();
-
   const lessonBlocksById = new Map(
     blocks
       .filter((block) => block.type === "lesson")
@@ -960,10 +1088,36 @@ export async function updateStudentCourseProgress(params: {
   );
 
   const viewedBlockId = params.operations?.viewedBlockId || null;
+  const completedBlockId = params.operations?.completedBlockId || null;
+  const testsByPaperId = await buildStudentTestsMap({
+    ...params,
+    paperIds: getCourseAssessmentPaperIds(blocks),
+  });
+  const hasActivity = hasCourseProgressActivity(params.operations);
+  const { progress, previousProgress } = await persistStudentCourseProgressWithRetry({
+    CourseProgressModel,
+    courseId: toId(course._id),
+    studentId: params.studentId,
+    computeSnapshot: (existingProgress) =>
+      buildComputedProgressState({
+        blocks,
+        metadata,
+        testsByPaperId,
+        existingProgress,
+        operations: params.operations,
+        markStarted: hasActivity,
+        touchLastActivity: hasActivity,
+        now,
+      }),
+  });
+
+  const previousSnapshot = normalizeExistingProgress(previousProgress);
+
   if (
     viewedBlockId &&
     lessonBlocksById.has(viewedBlockId) &&
-    !existingProgress?.viewedBlockIds?.includes(viewedBlockId)
+    !previousSnapshot.viewedBlockIds.includes(viewedBlockId) &&
+    progress.viewedBlockIds.includes(viewedBlockId)
   ) {
     const lessonBlock = lessonBlocksById.get(viewedBlockId);
     void recordTenantAudit({
@@ -985,12 +1139,12 @@ export async function updateStudentCourseProgress(params: {
     });
   }
 
-  const completedBlockId = params.operations?.completedBlockId || null;
   if (
     completedBlockId &&
     params.operations?.completed !== false &&
     lessonBlocksById.has(completedBlockId) &&
-    !existingProgress?.completedBlockIds?.includes(completedBlockId)
+    !previousSnapshot.completedBlockIds.includes(completedBlockId) &&
+    progress.completedBlockIds.includes(completedBlockId)
   ) {
     const lessonBlock = lessonBlocksById.get(completedBlockId);
     void recordTenantAudit({
@@ -1012,59 +1166,12 @@ export async function updateStudentCourseProgress(params: {
     });
   }
 
-  const testsByPaperId = await buildStudentTestsMap(params);
-  const syncedProgress = buildComputedProgressState({
-    blocks,
-    metadata,
-    testsByPaperId,
-    existingProgress,
-    operations: params.operations,
-    markStarted: Boolean(
-      params.operations?.lastViewedBlockId ||
-        params.operations?.viewedBlockId ||
-        params.operations?.completedBlockId ||
-        params.operations?.bookmarkedBlockId ||
-        params.operations?.note,
-    ),
-    now,
-  });
+  if (!areCourseProgressSnapshotsEqual(previousSnapshot, progress)) {
+    await invalidateStudentDashboardCacheForStudent(
+      params.schoolKey,
+      params.studentId,
+    );
+  }
 
-  const progress = await CourseProgressModel.findOneAndUpdate(
-    {
-      course: course._id,
-      student: params.studentId,
-    },
-    {
-      $set: {
-        status: syncedProgress.status,
-        startedAt: syncedProgress.startedAt ? new Date(syncedProgress.startedAt) : null,
-        lastViewedBlockId: syncedProgress.lastViewedBlockId,
-        viewedBlockIds: syncedProgress.viewedBlockIds,
-        completedBlockIds: syncedProgress.completedBlockIds,
-        bookmarkedBlockIds: syncedProgress.bookmarkedBlockIds,
-        notes: syncedProgress.notes.map((note) => ({
-          blockId: note.blockId,
-          text: note.text,
-          updatedAt: new Date(note.updatedAt),
-        })),
-        completionPercent: syncedProgress.completionPercent,
-        completedAssessmentPaperIds: syncedProgress.completedAssessmentPaperIds,
-        lastActivityAt: syncedProgress.lastActivityAt
-          ? new Date(syncedProgress.lastActivityAt)
-          : null,
-        completedAt: syncedProgress.completedAt ? new Date(syncedProgress.completedAt) : null,
-      },
-      $setOnInsert: {
-        course: course._id,
-        student: params.studentId,
-      },
-    },
-    {
-      upsert: true,
-      new: true,
-      lean: true,
-    },
-  );
-
-  return normalizeExistingProgress(progress || syncedProgress);
+  return progress;
 }

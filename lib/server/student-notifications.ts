@@ -1,137 +1,185 @@
 import { buildArchiveFilter } from "@/lib/archive";
+import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
-import { broadcastStudentNotification } from "@/lib/server/student-notifications-stream";
+import {
+  enqueueRedisPartitionQueueItems,
+  STUDENT_NOTIFICATION_REDIS_QUEUE,
+} from "@/lib/redis";
+import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
+import {
+  normalizeId,
+  normalizeIds,
+} from "@/lib/server/student-notification-delivery";
+import { runStudentNotificationWorker } from "@/lib/server/student-notification-worker";
+import type {
+  StudentNotificationEntityType,
+  StudentNotificationType,
+} from "@/models/StudentNotification";
+import StudentNotificationJob from "@/models/StudentNotificationJob";
 
-type StudentNotificationType =
-  | "course_assigned"
-  | "course_due_soon"
-  | "test_assigned"
-  | "diary_update";
-
-type StudentNotificationEntityType = "course" | "test" | "diary";
-
-type StudentNotificationCreateInput = {
+type QueueStudentNotificationJobInput = {
   schoolKey: string;
-  studentIds: string[];
   type: StudentNotificationType;
   title: string;
   message: string;
   linkUrl: string;
   entityId: string;
   entityType: StudentNotificationEntityType;
+  classId?: string;
+  assignedAcademicSections?: unknown[];
+  studentIds?: string[];
 };
 
-function normalizeId(value: unknown) {
-  if (!value) return "";
-  if (typeof value === "object" && value !== null && "_id" in (value as Record<string, unknown>)) {
-    return String((value as Record<string, unknown>)._id || "").trim();
-  }
-  return String(value || "").trim();
+function getStudentNotificationWorkerSecret() {
+  return String(process.env.STUDENT_NOTIFICATION_WORKER_SECRET || "").trim();
 }
 
-function normalizeIds(value: unknown) {
-  if (!Array.isArray(value)) return [] as string[];
-  return Array.from(
-    new Set(value.map((item) => normalizeId(item)).filter(Boolean)),
-  );
-}
-
-function buildStudentScopeQuery({
-  classId,
-  assignedSectionIds,
-}: {
-  classId: string;
-  assignedSectionIds: string[];
-}) {
-  const query: Record<string, any> = {
-    role: "student",
-    class: classId,
-    ...buildArchiveFilter(false),
-  };
-
-  if (assignedSectionIds.length > 0) {
-    query.academicSection = { $in: assignedSectionIds };
-  }
-
-  return query;
-}
-
-async function listStudentIdsInScope({
-  schoolKey,
-  classId,
-  assignedSectionIds,
-}: {
+function scheduleStudentNotificationWorker(params: {
   schoolKey: string;
-  classId: string;
-  assignedSectionIds: string[];
+  jobIds: string[];
 }) {
-  const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
-  const students = await UserModel.find(
-    buildStudentScopeQuery({ classId, assignedSectionIds }),
-  )
-    .select("_id")
-    .lean();
+  const normalizedJobIds = Array.from(
+    new Set(
+      (Array.isArray(params.jobIds) ? params.jobIds : [])
+        .map((jobId) => String(jobId || "").trim())
+        .filter(Boolean),
+    ),
+  );
 
-  return students.map((student: any) => normalizeId(student?._id)).filter(Boolean);
+  if (!params.schoolKey || normalizedJobIds.length === 0) {
+    return;
+  }
+
+  queueMicrotask(() => {
+    void triggerStudentNotificationWorker({
+      schoolKey: params.schoolKey,
+      jobIds: normalizedJobIds,
+    }).catch((error) => {
+      console.error("Failed to auto-trigger student notification worker", error);
+    });
+  });
 }
 
-async function upsertStudentNotifications({
-  schoolKey,
-  studentIds,
-  type,
-  title,
-  message,
-  linkUrl,
-  entityId,
-  entityType,
-}: StudentNotificationCreateInput) {
-  const normalizedIds = Array.from(new Set(studentIds.map((id) => String(id || "").trim()))).filter(
-    Boolean,
+export async function triggerStudentNotificationWorker(params: {
+  schoolKey: string;
+  jobIds?: string[];
+}) {
+  const normalizedJobIds = Array.from(
+    new Set(
+      (Array.isArray(params.jobIds) ? params.jobIds : [])
+        .map((jobId) => String(jobId || "").trim())
+        .filter(Boolean),
+    ),
   );
 
-  if (normalizedIds.length === 0) return;
+  if (!params.schoolKey) {
+    return null;
+  }
 
-  const { StudentNotification: StudentNotificationModel } = await getTenantModels(
-    schoolKey,
-    ["StudentNotification"],
-  );
-
-  const now = new Date();
-
-  await StudentNotificationModel.bulkWrite(
-    normalizedIds.map((studentId) => ({
-      updateOne: {
-        filter: { studentId, type, entityId },
-        update: {
-          $setOnInsert: {
-            studentId,
-            type,
-            title,
-            message,
-            linkUrl,
-            entityId,
-            entityType,
-            readAt: null,
-            createdAt: now,
-            updatedAt: now,
-          },
+  const workerSecret = getStudentNotificationWorkerSecret();
+  if (workerSecret) {
+    const response = await fetch(
+      `${getTrustedInternalOrigin()}/api/student/notifications/worker`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-student-notification-worker-secret": workerSecret,
         },
-        upsert: true,
+        cache: "no-store",
+        body: JSON.stringify({
+          schoolKey: params.schoolKey,
+          jobIds: normalizedJobIds,
+          limitPerSchool: Math.max(10, normalizedJobIds.length || 0),
+          maxSchools: 1,
+        }),
       },
-    })),
-    { ordered: false },
-  ).catch((error: any) => {
-    if (error?.code !== 11000) {
-      console.error("Failed to upsert student notifications:", error);
-    }
-  });
+    );
 
-  for (const studentId of normalizedIds) {
-    broadcastStudentNotification(studentId, {
-      id: entityId,
-      type,
+    if (!response.ok) {
+      throw new Error(
+        `Student notification worker trigger failed with status ${response.status}.`,
+      );
+    }
+
+    return response.json().catch(() => null);
+  }
+
+  return runStudentNotificationWorker({
+    schoolKey: params.schoolKey,
+    jobIds: normalizedJobIds,
+    limit: Math.max(10, normalizedJobIds.length || 0),
+  });
+}
+
+async function queueStudentNotificationJobs(
+  inputs: QueueStudentNotificationJobInput[],
+) {
+  const normalizedInputs = (Array.isArray(inputs) ? inputs : []).filter(
+    (input) =>
+      input &&
+      String(input.schoolKey || "").trim() &&
+      String(input.entityId || "").trim() &&
+      (String(input.classId || "").trim() ||
+        (Array.isArray(input.studentIds) && input.studentIds.length > 0)),
+  );
+
+  if (normalizedInputs.length === 0) {
+    return [] as string[];
+  }
+
+  await connectDB();
+  const now = new Date();
+  const jobs = await StudentNotificationJob.insertMany(
+    normalizedInputs.map((input) => ({
+      schoolKey: String(input.schoolKey || "").trim(),
+      type: input.type,
+      title: String(input.title || "").trim(),
+      message: String(input.message || "").trim(),
+      linkUrl: String(input.linkUrl || "").trim(),
+      entityId: String(input.entityId || "").trim(),
+      entityType: input.entityType,
+      targetClassId: String(input.classId || "").trim() || undefined,
+      targetAcademicSectionIds: normalizeIds(input.assignedAcademicSections),
+      targetStudentIds: Array.from(
+        new Set(
+          (Array.isArray(input.studentIds) ? input.studentIds : [])
+            .map((studentId) => String(studentId || "").trim())
+            .filter(Boolean),
+        ),
+      ),
+      status: "queued",
+      attempts: 0,
+      maxAttempts: 4,
+      nextRetryAt: now,
+    })),
+    { ordered: true },
+  );
+
+  const jobIds = jobs.map((job) => String(job._id));
+  const schoolKeys = Array.from(
+    new Set(jobs.map((job) => String(job.schoolKey || "").trim()).filter(Boolean)),
+  );
+
+  for (const schoolKey of schoolKeys) {
+    const schoolJobIds = jobs
+      .filter((job) => String(job.schoolKey || "").trim() === schoolKey)
+      .map((job) => String(job._id));
+
+    await enqueueRedisPartitionQueueItems({
+      queueName: STUDENT_NOTIFICATION_REDIS_QUEUE,
+      partitionKey: schoolKey,
+      itemIds: schoolJobIds,
+      availableAt: now,
+    }).catch(() => null);
+
+    scheduleStudentNotificationWorker({
+      schoolKey,
+      jobIds: schoolJobIds,
     });
   }
+
+  return jobIds;
 }
 
 export async function createCourseAssignedNotifications({
@@ -147,23 +195,19 @@ export async function createCourseAssignedNotifications({
   classId: string;
   assignedAcademicSections: unknown[];
 }) {
-  const assignedSectionIds = normalizeIds(assignedAcademicSections);
-  const studentIds = await listStudentIdsInScope({
-    schoolKey,
-    classId,
-    assignedSectionIds,
-  });
-
-  await upsertStudentNotifications({
-    schoolKey,
-    studentIds,
-    type: "course_assigned",
-    title: "New course assigned",
-    message: `You have a new course: ${title}.`,
-    linkUrl: `/student/courses/${courseId}`,
-    entityId: String(courseId),
-    entityType: "course",
-  });
+  return queueStudentNotificationJobs([
+    {
+      schoolKey,
+      type: "course_assigned",
+      title: "New course assigned",
+      message: `You have a new course: ${title}.`,
+      linkUrl: `/student/courses/${courseId}`,
+      entityId: String(courseId),
+      entityType: "course",
+      classId: String(classId || "").trim(),
+      assignedAcademicSections,
+    },
+  ]);
 }
 
 export async function createCourseDueSoonNotifications({
@@ -181,13 +225,6 @@ export async function createCourseDueSoonNotifications({
   assignedAcademicSections: unknown[];
   dueAt: Date;
 }) {
-  const assignedSectionIds = normalizeIds(assignedAcademicSections);
-  const studentIds = await listStudentIdsInScope({
-    schoolKey,
-    classId,
-    assignedSectionIds,
-  });
-
   const dueLabel = dueAt
     ? dueAt.toLocaleDateString("en-IN", {
         day: "numeric",
@@ -196,18 +233,21 @@ export async function createCourseDueSoonNotifications({
       })
     : "";
 
-  await upsertStudentNotifications({
-    schoolKey,
-    studentIds,
-    type: "course_due_soon",
-    title: "Course due soon",
-    message: dueLabel
-      ? `${title} is due on ${dueLabel}.`
-      : `${title} is due soon.`,
-    linkUrl: `/student/courses/${courseId}`,
-    entityId: String(courseId),
-    entityType: "course",
-  });
+  return queueStudentNotificationJobs([
+    {
+      schoolKey,
+      type: "course_due_soon",
+      title: "Course due soon",
+      message: dueLabel
+        ? `${title} is due on ${dueLabel}.`
+        : `${title} is due soon.`,
+      linkUrl: `/student/courses/${courseId}`,
+      entityId: String(courseId),
+      entityType: "course",
+      classId: String(classId || "").trim(),
+      assignedAcademicSections,
+    },
+  ]);
 }
 
 export async function createTestAssignedNotifications({
@@ -225,13 +265,6 @@ export async function createTestAssignedNotifications({
   assignedAcademicSections: unknown[];
   examDate?: Date | null;
 }) {
-  const assignedSectionIds = normalizeIds(assignedAcademicSections);
-  const studentIds = await listStudentIdsInScope({
-    schoolKey,
-    classId,
-    assignedSectionIds,
-  });
-
   const examLabel = examDate
     ? examDate.toLocaleDateString("en-IN", {
         day: "numeric",
@@ -240,18 +273,21 @@ export async function createTestAssignedNotifications({
       })
     : "";
 
-  await upsertStudentNotifications({
-    schoolKey,
-    studentIds,
-    type: "test_assigned",
-    title: "New test assigned",
-    message: examLabel
-      ? `${title} is scheduled for ${examLabel}.`
-      : `${title} is now available.`,
-    linkUrl: `/student/tests/${paperId}`,
-    entityId: String(paperId),
-    entityType: "test",
-  });
+  return queueStudentNotificationJobs([
+    {
+      schoolKey,
+      type: "test_assigned",
+      title: "New test assigned",
+      message: examLabel
+        ? `${title} is scheduled for ${examLabel}.`
+        : `${title} is now available.`,
+      linkUrl: `/student/tests/${paperId}`,
+      entityId: String(paperId),
+      entityType: "test",
+      classId: String(classId || "").trim(),
+      assignedAcademicSections,
+    },
+  ]);
 }
 
 export async function createDiaryUpdateNotifications({
@@ -269,25 +305,21 @@ export async function createDiaryUpdateNotifications({
   assignedAcademicSections: unknown[];
   entryDate?: string;
 }) {
-  const assignedSectionIds = normalizeIds(assignedAcademicSections);
-  const studentIds = await listStudentIdsInScope({
-    schoolKey,
-    classId,
-    assignedSectionIds,
-  });
-
   const dateLabel = entryDate ? ` (${entryDate})` : "";
 
-  await upsertStudentNotifications({
-    schoolKey,
-    studentIds,
-    type: "diary_update",
-    title: "Diary update",
-    message: `${title}${dateLabel} is available.`,
-    linkUrl: `/student/diary/${entryId}`,
-    entityId: String(entryId),
-    entityType: "diary",
-  });
+  return queueStudentNotificationJobs([
+    {
+      schoolKey,
+      type: "diary_update",
+      title: "Diary update",
+      message: `${title}${dateLabel} is available.`,
+      linkUrl: `/student/diary/${entryId}`,
+      entityId: String(entryId),
+      entityType: "diary",
+      classId: String(classId || "").trim(),
+      assignedAcademicSections,
+    },
+  ]);
 }
 
 export async function createCourseDueSoonNotificationsForSchool({
@@ -314,18 +346,36 @@ export async function createCourseDueSoonNotificationsForSchool({
     .select("title class assignedAcademicSections dueAt")
     .lean();
 
+  const jobsToQueue: QueueStudentNotificationJobInput[] = [];
+
   for (const course of courses) {
     const dueAt = course?.dueAt ? new Date(course.dueAt) : null;
-    if (!dueAt) continue;
-    await createCourseDueSoonNotifications({
+    if (!dueAt) {
+      continue;
+    }
+
+    const dueLabel = dueAt.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    jobsToQueue.push({
       schoolKey,
-      courseId: normalizeId(course?._id),
-      title: String(course?.title || "Course"),
+      type: "course_due_soon",
+      title: "Course due soon",
+      message: dueLabel
+        ? `${String(course?.title || "Course")} is due on ${dueLabel}.`
+        : `${String(course?.title || "Course")} is due soon.`,
+      linkUrl: `/student/courses/${normalizeId(course?._id)}`,
+      entityId: normalizeId(course?._id),
+      entityType: "course",
       classId: normalizeId(course?.class),
       assignedAcademicSections: Array.isArray(course?.assignedAcademicSections)
         ? course.assignedAcademicSections
         : [],
-      dueAt,
     });
   }
+
+  return queueStudentNotificationJobs(jobsToQueue);
 }

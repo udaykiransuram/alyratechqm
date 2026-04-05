@@ -8,6 +8,7 @@ import {
 import { getStudentTestDetailData } from "@/app/api/student/tests/[paperId]/data";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(
   req: NextRequest,

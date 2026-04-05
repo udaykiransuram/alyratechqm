@@ -71,6 +71,72 @@ function deleteTenantModel(conn: mongoose.Connection, name: string) {
   delete (conn.models as Record<string, mongoose.Model<unknown>>)[name];
 }
 
+function collectTenantConnections(
+  source: unknown,
+  seen: Set<mongoose.Connection>,
+  out: mongoose.Connection[],
+) {
+  if (!source) {
+    return;
+  }
+
+  const values = Array.isArray(source)
+    ? source
+    : source instanceof Map
+      ? Array.from(source.values())
+      : typeof source === "object"
+        ? Object.values(source as Record<string, unknown>)
+        : [];
+
+  values.forEach((value) => {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+
+    const connection = value as mongoose.Connection;
+    if (connection === mongoose.connection || seen.has(connection)) {
+      return;
+    }
+
+    seen.add(connection);
+    out.push(connection);
+  });
+}
+
+export function getTenantDbCacheStats() {
+  const connection = mongoose.connection as mongoose.Connection & {
+    relatedDbs?: unknown;
+    otherDbs?: unknown;
+  };
+  const seen = new Set<mongoose.Connection>();
+  const cachedTenantConnections: mongoose.Connection[] = [];
+
+  collectTenantConnections(connection.relatedDbs, seen, cachedTenantConnections);
+  collectTenantConnections(connection.otherDbs, seen, cachedTenantConnections);
+
+  const tenantDbNames = cachedTenantConnections
+    .map((tenantConnection) =>
+      String(
+        tenantConnection?.name ||
+          tenantConnection?.db?.databaseName ||
+          "",
+      ).trim(),
+    )
+    .filter(Boolean)
+    .sort();
+
+  const compiledModelCount = cachedTenantConnections.reduce((count, tenantConnection) => {
+    return count + Object.keys(tenantConnection?.models || {}).length;
+  }, 0);
+
+  return {
+    activeConnections: cachedTenantConnections.length,
+    compiledModelCount,
+    sampleTenantDbNames: tenantDbNames.slice(0, 8),
+    truncated: tenantDbNames.length > 8,
+  };
+}
+
 /**
  * Return a cached per-school DB connection on the same cluster.
  * We keep a stable tenant connection per db name so repeated API calls

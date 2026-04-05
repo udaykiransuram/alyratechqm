@@ -7,8 +7,10 @@ import {
   startStudentExamAttempt,
 } from "@/lib/exam-runtime";
 import { recordOpsFailure } from "@/lib/ops-runtime";
+import { invalidateStudentDashboardCacheForStudent } from "@/lib/server/student-dashboard-cache";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(
   req: NextRequest,
@@ -30,6 +32,11 @@ export async function POST(
         classId: auth.session.user.studentClassId,
         academicSectionId: auth.session.user.studentAcademicSectionId,
       },
+    );
+
+    await invalidateStudentDashboardCacheForStudent(
+      auth.schoolKey,
+      auth.session.user.id,
     );
 
     return NextResponse.json(result);
@@ -80,6 +87,11 @@ export async function PATCH(
       baseLastSavedAt:
         typeof body?.baseLastSavedAt === "string" ? body.baseLastSavedAt : null,
     });
+
+    await invalidateStudentDashboardCacheForStudent(
+      auth.schoolKey,
+      auth.session.user.id,
+    );
 
     return NextResponse.json(result);
   } catch (error) {

@@ -5,14 +5,16 @@ import { resolveExamRuntimeMongoResponseIdWithCooldown } from "@/lib/exam-runtim
 import ReportDispatchJob from "../../../../../../models/ReportDispatchJob";
 import { hydrateResponsesWithStudents } from "@/lib/analytics/hydrateResponses";
 import { requireTenantSession } from "@/lib/api-auth";
-import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
+import {
+  enqueueReportDispatchJobs,
+  scheduleReportDispatchWorker,
+} from "@/lib/reports/dispatchQueue";
 import { resolvePaperSubjectIds } from "@/lib/question-paper/subjects";
 import {
   isSectionInScope,
   normalizeScopeId,
   resolveTeacherPaperScope,
 } from "@/lib/question-paper/access";
-import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
 
 function normalizeMobileNumber(input: string): string {
   const digits = String(input || "").replace(/\D/g, "");
@@ -23,17 +25,6 @@ function normalizeMobileNumber(input: string): string {
     return digits;
   }
   return digits;
-}
-
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
-    .toString()
-    .trim();
 }
 
 export async function POST(
@@ -201,15 +192,14 @@ export async function POST(
 
   if (existingQueued) {
     if (shouldTriggerWorker && existingQueued.status === "queued") {
-      try {
-        await runReportDispatchWorker({
-          origin: getTrustedInternalOrigin(),
-          schoolKey,
-          jobIds: [String(existingQueued._id)],
-        });
-      } catch (error) {
-        console.error("Failed to auto-trigger report worker", error);
-      }
+      await enqueueReportDispatchJobs({
+        schoolKey,
+        jobIds: [String(existingQueued._id)],
+      }).catch(() => null);
+      scheduleReportDispatchWorker({
+        schoolKey,
+        jobIds: [String(existingQueued._id)],
+      });
     }
 
     return NextResponse.json({
@@ -249,16 +239,16 @@ export async function POST(
     nextRetryAt: new Date(),
   });
 
+  await enqueueReportDispatchJobs({
+    schoolKey,
+    jobIds: [String(job._id)],
+  }).catch(() => null);
+
   if (shouldTriggerWorker) {
-    try {
-      await runReportDispatchWorker({
-        origin: getTrustedInternalOrigin(),
-        schoolKey,
-        jobIds: [String(job._id)],
-      });
-    } catch (error) {
-      console.error("Failed to auto-trigger report worker", error);
-    }
+    scheduleReportDispatchWorker({
+      schoolKey,
+      jobIds: [String(job._id)],
+    });
   }
 
   return NextResponse.json({

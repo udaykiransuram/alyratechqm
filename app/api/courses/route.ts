@@ -110,15 +110,23 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const courses = await listWorkspaceCourses({
+    const pageParam = req.nextUrl.searchParams.get("page");
+    const limitParam = req.nextUrl.searchParams.get("limit");
+    const courseDirectory = await listWorkspaceCourses({
       schoolKey: auth.schoolKey,
       viewerId: auth.session.user.id,
       viewerRole: auth.session.user.role as "admin" | "teacher",
+      page: pageParam ? Number(pageParam) : undefined,
+      limit: limitParam ? Number(limitParam) : undefined,
     });
 
     return NextResponse.json({
       success: true,
-      courses,
+      courses: courseDirectory.courses,
+      total: courseDirectory.total,
+      page: courseDirectory.page,
+      pages: courseDirectory.pages,
+      limit: courseDirectory.limit,
     });
   } catch (error: any) {
     return NextResponse.json(

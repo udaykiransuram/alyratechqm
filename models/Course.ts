@@ -482,6 +482,14 @@ CourseSchema.index(
   { assignedAcademicSections: 1, isArchived: 1 },
   { name: "course_sections_archived_lookup" },
 );
+CourseSchema.index(
+  { isArchived: 1, updatedAt: -1, title: 1 },
+  { name: "course_workspace_feed_lookup_1" },
+);
+CourseSchema.index(
+  { class: 1, status: 1, isArchived: 1, publishedAt: -1, updatedAt: -1, title: 1 },
+  { name: "course_student_feed_lookup_1" },
+);
 
 applyArchiveFields(CourseSchema);
 

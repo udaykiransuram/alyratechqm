@@ -4,8 +4,10 @@ import ReportDispatchJob from "../../../../../../models/ReportDispatchJob";
 import mongoose from "mongoose";
 import { requireTenantSession } from "@/lib/api-auth";
 import { expireActiveDeliveryAttempt } from "@/lib/reports/dispatchAttempts";
-import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
-import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
+import {
+  enqueueReportDispatchJobs,
+  scheduleReportDispatchWorker,
+} from "@/lib/reports/dispatchQueue";
 
 function normalizeMobileNumber(input: string): string {
   const digits = String(input || "").replace(/\D/g, "");
@@ -14,17 +16,6 @@ function normalizeMobileNumber(input: string): string {
     return digits;
   }
   return digits;
-}
-
-function resolveSchoolKey(req: NextRequest) {
-  const url = new URL(req.url);
-  const schoolFromHeader =
-    req.headers.get("x-school-key") || req.headers.get("X-School-Key");
-  const schoolFromQuery = url.searchParams.get("school");
-  const schoolFromCookie = req.cookies?.get?.("schoolKey")?.value;
-  return (schoolFromHeader || schoolFromQuery || schoolFromCookie || "")
-    .toString()
-    .trim();
 }
 
 export async function POST(
@@ -80,16 +71,21 @@ export async function POST(
   }
   await job.save();
 
+  await enqueueReportDispatchJobs({
+    schoolKey,
+    jobIds: [String(job._id)],
+    availableAt: job.nextRetryAt || new Date(),
+  }).catch(() => null);
+
   let workerResult = null;
-    try {
-      workerResult = await runReportDispatchWorker({
-      origin: getTrustedInternalOrigin(),
-        schoolKey,
-        jobIds: [String(job._id)],
-      });
-  } catch (error) {
-    console.error("Failed to auto-trigger report worker", error);
-  }
+  scheduleReportDispatchWorker({
+    schoolKey,
+    jobIds: [String(job._id)],
+  });
+  workerResult = {
+    queued: true,
+    jobCount: 1,
+  };
 
   return NextResponse.json({ success: true, jobId: job._id, worker: workerResult });
 }

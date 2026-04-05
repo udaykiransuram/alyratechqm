@@ -1,6 +1,12 @@
 import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import {
+  deleteSharedCacheEntries,
+  isRedisConfigured,
+  readSharedCacheEntry,
+  writeSharedCacheEntry,
+} from "@/lib/redis";
 
 const STUDENT_SNAPSHOT_TTL_MS = 30_000;
 const PAPER_RUNTIME_TTL_MS = 120_000;
@@ -38,9 +44,19 @@ type CacheEntry<T> = {
   promise?: Promise<T>;
 };
 
+type StudentTestResourceCacheStats = {
+  localHits: number;
+  localMisses: number;
+  redisHits: number;
+  redisMisses: number;
+  redisWrites: number;
+  loaderRuns: number;
+};
+
 type StudentTestResourceCacheState = {
   cache: Map<string, CacheEntry<unknown>>;
   lastPrunedAt: number;
+  stats: StudentTestResourceCacheStats;
 };
 
 function getStudentTestResourceCacheState() {
@@ -52,6 +68,14 @@ function getStudentTestResourceCacheState() {
     globalState.__studentTestResourceCacheState = {
       cache: new Map(),
       lastPrunedAt: 0,
+      stats: {
+        localHits: 0,
+        localMisses: 0,
+        redisHits: 0,
+        redisMisses: 0,
+        redisWrites: 0,
+        loaderRuns: 0,
+      },
     };
   }
 
@@ -159,6 +183,50 @@ export function invalidateStudentTestResourceCache(params: {
       `${STUDENT_CLASS_PAPER_ASSIGNMENTS_CACHE_NAMESPACE}::${schoolKey}::${classId}`,
     );
   }
+
+  const sharedCacheKeys: string[] = [];
+  if (studentId) {
+    sharedCacheKeys.push(
+      createCacheKey(STUDENT_USER_CACHE_NAMESPACE, schoolKey, studentId),
+    );
+  }
+
+  if (paperId) {
+    sharedCacheKeys.push(
+      createCacheKey(STUDENT_PAPER_RUNTIME_CACHE_NAMESPACE, schoolKey, paperId),
+      createCacheKey(STUDENT_PAPER_DELIVERY_CACHE_NAMESPACE, schoolKey, paperId),
+    );
+  }
+
+  if (classId) {
+    sharedCacheKeys.push(
+      createCacheKey(
+        STUDENT_CLASS_PAPER_LIST_CACHE_NAMESPACE,
+        schoolKey,
+        classId,
+      ),
+      createCacheKey(
+        STUDENT_CLASS_PAPER_ASSIGNMENTS_CACHE_NAMESPACE,
+        schoolKey,
+        classId,
+      ),
+    );
+  }
+
+  if (sharedCacheKeys.length > 0) {
+    void deleteSharedCacheEntries(sharedCacheKeys).catch(() => undefined);
+  }
+}
+
+export function getStudentTestResourceCacheStats() {
+  const state = getStudentTestResourceCacheState();
+
+  return {
+    entries: state.cache.size,
+    maxEntries: STUDENT_TEST_CACHE_MAX_ENTRIES,
+    redisConfigured: isRedisConfigured(),
+    ...state.stats,
+  };
 }
 
 async function getCachedResource<T>(
@@ -173,6 +241,7 @@ async function getCachedResource<T>(
   const existingEntry = cache.get(cacheKey) as CacheEntry<T> | undefined;
 
   if (existingEntry?.hasValue && existingEntry.expiresAt > now) {
+    state.stats.localHits += 1;
     existingEntry.lastAccessedAt = now;
     return existingEntry.value as T;
   }
@@ -182,19 +251,55 @@ async function getCachedResource<T>(
     return existingEntry.promise;
   }
 
-  const promise = loader()
-    .then((value) => {
+  state.stats.localMisses += 1;
+
+  const promise = (async () => {
+    const sharedEntry = await readSharedCacheEntry<T>(cacheKey);
+    if (sharedEntry) {
       const resolvedAt = Date.now();
+      state.stats.redisHits += 1;
       maybePruneStudentTestResourceCache(resolvedAt);
       cache.set(cacheKey, {
         expiresAt: resolvedAt + ttlMs,
         hasValue: true,
         createdAt: resolvedAt,
         lastAccessedAt: resolvedAt,
-        value,
+        value: sharedEntry.value,
       });
-      return value;
-    })
+
+      return sharedEntry.value;
+    }
+
+    if (isRedisConfigured()) {
+      state.stats.redisMisses += 1;
+    }
+
+    state.stats.loaderRuns += 1;
+    const value = await loader();
+    const resolvedAt = Date.now();
+    maybePruneStudentTestResourceCache(resolvedAt);
+    cache.set(cacheKey, {
+      expiresAt: resolvedAt + ttlMs,
+      hasValue: true,
+      createdAt: resolvedAt,
+      lastAccessedAt: resolvedAt,
+      value,
+    });
+
+    if (isRedisConfigured()) {
+      const wroteToSharedCache = await writeSharedCacheEntry(
+        cacheKey,
+        value,
+        Math.max(1, Math.ceil(ttlMs / 1000)),
+      ).catch(() => false);
+
+      if (wroteToSharedCache) {
+        state.stats.redisWrites += 1;
+      }
+    }
+
+    return value;
+  })()
     .catch((error) => {
       cache.delete(cacheKey);
       throw error;
@@ -390,6 +495,52 @@ async function loadOnlinePapersForClassUncached(
     .lean();
 }
 
+async function loadOnlinePapersByIdsUncached(
+  {
+    QuestionPaper: QuestionPaperModel,
+    Question: QuestionModel,
+    Class: ClassModel,
+    Subject: SubjectModel,
+  }: {
+    QuestionPaper: any;
+    Question: any;
+    Class: any;
+    Subject: any;
+  },
+  paperIds: string[],
+) {
+  const uniquePaperIds = Array.from(
+    new Set(
+      (Array.isArray(paperIds) ? paperIds : [])
+        .map((paperId) => String(paperId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (uniquePaperIds.length === 0) {
+    return [];
+  }
+
+  return QuestionPaperModel.find({
+    _id: { $in: uniquePaperIds },
+    onlineEnabled: true,
+    ...buildArchiveFilter(false),
+  })
+    .select(
+      "title class subject subjectIds duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections.name sections.questions.question",
+    )
+    .populate({ path: "class", model: ClassModel, select: "name" })
+    .populate({ path: "subject", model: SubjectModel, select: "name" })
+    .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
+    .populate({
+      path: "sections.questions.question",
+      model: QuestionModel,
+      select: "type matrixOptions subject",
+      populate: { path: "subject", model: SubjectModel, select: "name" },
+    })
+    .lean();
+}
+
 async function loadOnlinePaperAssignmentsForClassUncached(
   {
     QuestionPaper: QuestionPaperModel,
@@ -422,6 +573,18 @@ export async function loadOnlinePapersForClass(
     CLASS_PAPER_LIST_TTL_MS,
     () => loadOnlinePapersForClassUncached(models, classId),
   );
+}
+
+export async function loadOnlinePapersByIds(
+  models: {
+    QuestionPaper: any;
+    Question: any;
+    Class: any;
+    Subject: any;
+  },
+  paperIds: string[],
+) {
+  return loadOnlinePapersByIdsUncached(models, paperIds);
 }
 
 export async function loadOnlinePaperAssignmentsForClass(

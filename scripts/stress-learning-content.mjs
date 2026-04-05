@@ -5,14 +5,6 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 
 import { request } from "@playwright/test";
-import { encode } from "next-auth/jwt";
-
-const MOCK_CLASS_ID = "111111111111111111111111";
-const MOCK_SECTION_ID = "222222222222222222222222";
-const MOCK_COURSE_ID = "666666666666666666666666";
-const MOCK_DIARY_ID = "777777777777777777777777";
-const SCHOOL_KEY = "demo-school";
-const SCHOOL_DISPLAY_NAME = "Demo School";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((entry) => {
@@ -21,6 +13,31 @@ const args = Object.fromEntries(
     return [key, rest.length ? rest.join("=") : "true"];
   }),
 );
+
+function printHelp() {
+  console.log(
+    [
+      "Usage: npm run stress:learning-content -- --meta=<jsonFile> [options]",
+      "",
+      "Required:",
+      "  --meta=<jsonFile>            Metadata file created by gate:learning-content:seed",
+      "",
+      "Options:",
+      "  --base=<url>                 App base URL (default: http://127.0.0.1:3000)",
+      "  --concurrency=<n>            Concurrent student flows (default: 40)",
+      "  --rounds=<n>                 Course/diary interaction rounds per student (default: 2)",
+      "  --delay-ms=<ms>              Delay between rounds per student (default: 150)",
+      "  --jitter-ms=<ms>             Random round delay jitter (default: 75)",
+      "  --timeout-ms=<ms>            Per-request timeout (default: 15000)",
+      "  --out=<jsonFile>             Write JSON summary to a file",
+      "  --help                       Show this help text",
+      "",
+      "Notes:",
+      "  - This script signs real students in and hits the actual dashboard/course/diary/notification routes.",
+      "  - Use data created by gate:learning-content:seed so the writes are disposable.",
+    ].join("\n"),
+  );
+}
 
 function parsePositiveInteger(value, fallback) {
   const normalized = String(value ?? "").trim();
@@ -34,14 +51,47 @@ function parsePositiveInteger(value, fallback) {
   return Math.floor(parsed);
 }
 
+function parseNonNegativeInteger(value, fallback) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return fallback;
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid non-negative integer value: ${value}`);
+  }
+  return Math.floor(parsed);
+}
+
+function normalizeBaseUrl(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) {
+    return "http://127.0.0.1:3000";
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/\/$/, "");
+  }
+  return `http://${trimmed.replace(/\/$/, "")}`;
+}
+
 function sleep(ms) {
+  if (!ms || ms <= 0) {
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
 
+function withJitter(baseMs, jitterMs) {
+  if (!jitterMs) {
+    return baseMs;
+  }
+  return baseMs + Math.floor(Math.random() * (jitterMs + 1));
+}
+
 function percentile(values, percentileValue) {
-  if (!values.length) {
+  if (!Array.isArray(values) || values.length === 0) {
     return null;
   }
   const sorted = [...values].sort((left, right) => left - right);
@@ -53,134 +103,37 @@ function percentile(values, percentileValue) {
 }
 
 function average(values) {
-  if (!values.length) {
+  if (!Array.isArray(values) || values.length === 0) {
     return null;
   }
-  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return Math.round(total / values.length);
 }
 
-function normalizeBaseUrl(value) {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) {
-    return "http://127.0.0.1:3000";
-  }
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
-  return `http://${trimmed}`;
-}
-
-function printHelp() {
-  console.log(
-    [
-      "Usage: npm run stress:learning-content -- [options]",
-      "",
-      "Options:",
-      "  --base=<url>           App base URL (default: http://127.0.0.1:3000)",
-      "  --concurrency=<n>      Concurrent workers (default: 6)",
-      "  --iterations=<n>       Iterations per worker (default: 5)",
-      "  --delay-ms=<ms>        Delay between iterations per worker (default: 100)",
-      "  --timeout-ms=<ms>      Per-request timeout (default: 15000)",
-      "  --out=<jsonFile>       Optional JSON summary output path",
-      "  --help                 Show this help text",
-      "",
-      "Notes:",
-      "  - Start the app first, or point --base to an existing dev/prod server.",
-      "  - This runner uses the repo's E2E mock-mode session shape for Courses and E-Diary.",
-    ].join("\n"),
-  );
-}
-
-async function createSessionCookie(params) {
-  const nextAuthSecret = process.env.NEXTAUTH_SECRET || "testsecret";
-  const sessionToken = await encode({
-    secret: nextAuthSecret,
-    token: {
-      sub: params.id,
-      id: params.id,
-      name: params.name,
-      email: params.email,
-      accountType: "school_user",
-      role: params.role,
-      schoolKey: SCHOOL_KEY,
-      ...(params.role === "student"
-        ? {
-            studentSessionId: params.studentSessionId,
-            studentClassId: MOCK_CLASS_ID,
-            studentAcademicSectionId: MOCK_SECTION_ID,
-          }
-        : {}),
-    },
-    maxAge: 60 * 60,
-  });
-
-  return [
-    `next-auth.session-token=${encodeURIComponent(sessionToken)}`,
-    `schoolKey=${encodeURIComponent(SCHOOL_KEY)}`,
-    `schoolDisplayName=${encodeURIComponent(SCHOOL_DISPLAY_NAME)}`,
-  ].join("; ");
-}
-
-async function createApiContext(baseURL, session) {
-  const cookie = await createSessionCookie(session);
-  return request.newContext({
-    baseURL,
-    extraHTTPHeaders: {
-      cookie,
-      "x-school-key": SCHOOL_KEY,
-    },
-    ignoreHTTPSErrors: true,
-  });
-}
-
-async function executeStep(apiContext, step, timeoutMs) {
-  const startedAt = performance.now();
-  let response;
-
-  if (step.method === "PATCH") {
-    response = await apiContext.patch(step.url, {
-      data: step.body,
-      timeout: timeoutMs,
-    });
-  } else {
-    response = await apiContext.get(step.url, {
-      timeout: timeoutMs,
-    });
+function parseMaybeJson(text) {
+  const normalized = String(text || "").trim();
+  if (!normalized) {
+    return null;
   }
 
-  const durationMs = Math.round(performance.now() - startedAt);
-  const text = await response.text();
-  const contentType = String(response.headers()["content-type"] || "");
-  let parsed = null;
-
-  if (contentType.includes("application/json") && text) {
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = null;
-    }
+  try {
+    return JSON.parse(normalized);
+  } catch {
+    return null;
   }
-
-  const ok =
-    response.ok() &&
-    (!parsed ||
-      typeof parsed !== "object" ||
-      !("success" in parsed) ||
-      parsed.success !== false);
-
-  return {
-    step: step.label,
-    ok,
-    status: response.status(),
-    durationMs,
-    message:
-      parsed && typeof parsed.message === "string"
-        ? parsed.message
-        : response.statusText(),
-  };
 }
 
-function summarizeEvents(events) {
+function extractMessage(payload) {
+  if (payload && typeof payload.message === "string" && payload.message.trim()) {
+    return payload.message.trim();
+  }
+  if (payload && typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error.trim();
+  }
+  return "";
+}
+
+function summarizeRequestEvents(events) {
   const grouped = new Map();
 
   for (const event of events) {
@@ -190,24 +143,571 @@ function summarizeEvents(events) {
     grouped.get(event.step).push(event);
   }
 
-  return Array.from(grouped.entries()).map(([step, entries]) => {
-    const durations = entries.map((entry) => entry.durationMs);
-    const failures = entries.filter((entry) => !entry.ok);
+  return Array.from(grouped.entries())
+    .map(([step, stepEvents]) => {
+      const durations = stepEvents.map((event) => event.durationMs);
+      const failures = stepEvents.filter((event) => !event.ok);
+      return {
+        step,
+        count: stepEvents.length,
+        failures: failures.length,
+        avgMs: average(durations),
+        p50Ms: percentile(durations, 50),
+        p95Ms: percentile(durations, 95),
+        p99Ms: percentile(durations, 99),
+        maxMs: durations.length > 0 ? Math.round(Math.max(...durations)) : null,
+        sampleFailure: failures[0]
+          ? {
+              status: failures[0].status,
+              message: failures[0].message,
+            }
+          : null,
+      };
+    })
+    .sort((left, right) => left.step.localeCompare(right.step));
+}
+
+async function loadMeta(filePath) {
+  const resolvedPath = path.resolve(filePath);
+  const raw = await fs.readFile(resolvedPath, "utf8");
+  const parsed = JSON.parse(raw);
+  const studentsFile = String(parsed?.studentsFile || "").trim();
+  const courseProgress = parsed?.courseProgress || {};
+
+  if (
+    !parsed?.schoolKey ||
+    !parsed?.courseId ||
+    !parsed?.diaryEntryId ||
+    !studentsFile ||
+    !courseProgress?.viewedBlockId ||
+    !courseProgress?.completedBlockId ||
+    !courseProgress?.bookmarkedBlockId ||
+    !courseProgress?.noteBlockId
+  ) {
+    throw new Error(
+      `Invalid learning-content metadata file: ${resolvedPath}`,
+    );
+  }
+
+  return {
+    resolvedPath,
+    schoolKey: String(parsed.schoolKey),
+    courseId: String(parsed.courseId),
+    diaryEntryId: String(parsed.diaryEntryId),
+    studentsFile: path.isAbsolute(studentsFile)
+      ? studentsFile
+      : path.resolve(path.dirname(resolvedPath), studentsFile),
+    courseProgress: {
+      viewedBlockId: String(courseProgress.viewedBlockId),
+      completedBlockId: String(courseProgress.completedBlockId),
+      bookmarkedBlockId: String(courseProgress.bookmarkedBlockId),
+      noteBlockId: String(courseProgress.noteBlockId),
+    },
+  };
+}
+
+async function loadStudents(filePath) {
+  const resolvedPath = path.resolve(filePath);
+  const raw = await fs.readFile(resolvedPath, "utf8");
+  const parsed = JSON.parse(raw);
+  const source = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.students)
+      ? parsed.students
+      : null;
+
+  if (!source) {
+    throw new Error(
+      `Student file must be an array or an object with a students array: ${resolvedPath}`,
+    );
+  }
+
+  return source.map((entry, index) => {
+    const identifier = String(
+      entry?.identifier || entry?.rollNumber || entry?.email || "",
+    ).trim();
+    const password = String(entry?.password || "").trim();
+    const label = String(
+      entry?.label || entry?.name || identifier || `student-${index + 1}`,
+    ).trim();
+
+    if (!identifier || !password) {
+      throw new Error(
+        `Student entry ${index + 1} in ${resolvedPath} is missing identifier or password.`,
+      );
+    }
+
     return {
-      step,
-      count: entries.length,
-      failures: failures.length,
-      avgMs: average(durations),
-      p95Ms: percentile(durations, 95),
-      maxMs: durations.length ? Math.max(...durations) : null,
-      sampleFailure: failures[0]
-        ? {
-            status: failures[0].status,
-            message: failures[0].message,
-          }
-        : null,
+      identifier,
+      password,
+      label,
     };
   });
+}
+
+async function runRequest(context, metrics, studentLabel, step, url, options = {}) {
+  const startedAt = performance.now();
+  const { timeoutMs, ...requestOptions } = options;
+
+  try {
+    const response = await context.fetch(url, {
+      failOnStatusCode: false,
+      timeout: timeoutMs,
+      ...requestOptions,
+    });
+    const durationMs = Math.round(performance.now() - startedAt);
+    const text = await response.text();
+    const data = parseMaybeJson(text);
+
+    if (Array.isArray(metrics)) {
+      metrics.push({
+        student: studentLabel,
+        step,
+        durationMs,
+        ok:
+          response.ok() &&
+          !(
+            data &&
+            typeof data === "object" &&
+            "success" in data &&
+            data.success === false
+          ),
+        status: response.status(),
+        message: extractMessage(data),
+      });
+    }
+
+    return {
+      response,
+      data,
+      durationMs,
+      rawText: text,
+    };
+  } catch (error) {
+    const durationMs = Math.round(performance.now() - startedAt);
+    if (Array.isArray(metrics)) {
+      metrics.push({
+        student: studentLabel,
+        step,
+        durationMs,
+        ok: false,
+        status: 0,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+}
+
+function ensureRequestSuccess(result, fallbackMessage) {
+  const apiMessage = extractMessage(result.data);
+  if (!result.response.ok()) {
+    throw new Error(
+      apiMessage || `${fallbackMessage} (HTTP ${result.response.status()})`,
+    );
+  }
+  if (
+    result.data &&
+    typeof result.data === "object" &&
+    "success" in result.data &&
+    result.data.success === false
+  ) {
+    throw new Error(apiMessage || fallbackMessage);
+  }
+  return result.data;
+}
+
+async function fetchCsrfToken(context, metrics, studentLabel, timeoutMs) {
+  const response = await runRequest(
+    context,
+    metrics,
+    studentLabel,
+    "auth.csrf",
+    "/api/auth/csrf",
+    {
+      method: "GET",
+      timeoutMs,
+    },
+  );
+
+  if (!response.response.ok() || !response.data?.csrfToken) {
+    throw new Error(
+      extractMessage(response.data) || "Failed to obtain a CSRF token.",
+    );
+  }
+
+  return String(response.data.csrfToken);
+}
+
+function getNextAuthCallbackError(baseUrl, payload) {
+  const callbackUrl =
+    payload && typeof payload.url === "string" ? payload.url.trim() : "";
+  if (!callbackUrl) {
+    return "";
+  }
+  try {
+    const url = new URL(callbackUrl, baseUrl);
+    return String(url.searchParams.get("error") || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+async function signInStudent({
+  context,
+  baseUrl,
+  schoolKey,
+  student,
+  metrics,
+  timeoutMs,
+}) {
+  const csrfToken = await fetchCsrfToken(
+    context,
+    metrics,
+    student.label,
+    timeoutMs,
+  );
+
+  const signInResult = await runRequest(
+    context,
+    metrics,
+    student.label,
+    "auth.signin",
+    "/api/auth/callback/school-user?json=true",
+    {
+      method: "POST",
+      form: {
+        csrfToken,
+        identifier: student.identifier,
+        password: student.password,
+        schoolKey,
+        callbackUrl: `${baseUrl}/student`,
+        json: "true",
+      },
+      timeoutMs,
+    },
+  );
+
+  if (!signInResult.response.ok()) {
+    throw new Error(
+      extractMessage(signInResult.data) ||
+        `Student sign in failed (HTTP ${signInResult.response.status()}).`,
+    );
+  }
+
+  const callbackError = getNextAuthCallbackError(baseUrl, signInResult.data);
+  if (callbackError) {
+    throw new Error(`Student sign in failed: ${callbackError}`);
+  }
+
+  const sessionResult = await runRequest(
+    context,
+    metrics,
+    student.label,
+    "auth.session",
+    "/api/auth/session",
+    {
+      method: "GET",
+      timeoutMs,
+    },
+  );
+
+  if (!sessionResult.response.ok() || !sessionResult.data?.user?.id) {
+    throw new Error("Student sign in did not produce a usable session.");
+  }
+
+  return sessionResult.data;
+}
+
+async function signOutStudent({
+  context,
+  baseUrl,
+  student,
+  metrics,
+  timeoutMs,
+}) {
+  const csrfToken = await fetchCsrfToken(
+    context,
+    metrics,
+    student.label,
+    timeoutMs,
+  );
+
+  await runRequest(
+    context,
+    metrics,
+    student.label,
+    "auth.signout",
+    "/api/auth/signout?json=true",
+    {
+      method: "POST",
+      form: {
+        csrfToken,
+        callbackUrl: `${baseUrl}/auth/signin`,
+        json: "true",
+      },
+      timeoutMs,
+    },
+  );
+}
+
+function buildCourseNoteText(identifier, round) {
+  return `Load gate note ${identifier} round ${round}`;
+}
+
+async function runStudentFlow({
+  baseUrl,
+  schoolKey,
+  meta,
+  student,
+  rounds,
+  roundDelayMs,
+  jitterMs,
+  timeoutMs,
+  metrics,
+}) {
+  const context = await request.newContext({
+    baseURL: baseUrl,
+    extraHTTPHeaders: {
+      "x-school-key": schoolKey,
+    },
+    ignoreHTTPSErrors: true,
+  });
+  const startedAt = performance.now();
+  let signedIn = false;
+  let session = null;
+
+  try {
+    session = await signInStudent({
+      context,
+      baseUrl,
+      schoolKey,
+      student,
+      metrics,
+      timeoutMs,
+    });
+    signedIn = true;
+
+    for (let round = 1; round <= rounds; round += 1) {
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "page.student.dashboard",
+          "/student",
+          {
+            method: "GET",
+            timeoutMs,
+          },
+        ),
+        "Failed to load the student dashboard page.",
+      );
+
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "api.student.dashboard",
+          "/api/student/dashboard",
+          {
+            method: "GET",
+            timeoutMs,
+          },
+        ),
+        "Failed to load the student dashboard API.",
+      );
+
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "page.student.courses",
+          "/student/courses",
+          {
+            method: "GET",
+            timeoutMs,
+          },
+        ),
+        "Failed to load the student courses page.",
+      );
+
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "api.student.courses",
+          "/api/student/courses",
+          {
+            method: "GET",
+            timeoutMs,
+          },
+        ),
+        "Failed to load the student courses API.",
+      );
+
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "api.student.course.detail",
+          `/api/student/courses/${meta.courseId}`,
+          {
+            method: "GET",
+            timeoutMs,
+          },
+        ),
+        "Failed to load the student course detail API.",
+      );
+
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "api.student.course.progress",
+          `/api/student/courses/${meta.courseId}/progress`,
+          {
+            method: "PATCH",
+            data: {
+              lastViewedBlockId: meta.courseProgress.viewedBlockId,
+              viewedBlockId: meta.courseProgress.viewedBlockId,
+              completedBlockId: meta.courseProgress.completedBlockId,
+              completed: true,
+              bookmarkedBlockId: meta.courseProgress.bookmarkedBlockId,
+              bookmarked: true,
+              note: {
+                blockId: meta.courseProgress.noteBlockId,
+                text: buildCourseNoteText(student.identifier, round),
+              },
+            },
+            timeoutMs,
+          },
+        ),
+        "Failed to update student course progress.",
+      );
+
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "page.student.diary",
+          "/student/diary",
+          {
+            method: "GET",
+            timeoutMs,
+          },
+        ),
+        "Failed to load the student diary page.",
+      );
+
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "api.student.diary",
+          "/api/student/diary",
+          {
+            method: "GET",
+            timeoutMs,
+          },
+        ),
+        "Failed to load the student diary API.",
+      );
+
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "api.student.diary.detail",
+          `/api/student/diary/${meta.diaryEntryId}`,
+          {
+            method: "GET",
+            timeoutMs,
+          },
+        ),
+        "Failed to load the student diary detail API.",
+      );
+
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "api.student.diary.state",
+          `/api/student/diary/${meta.diaryEntryId}/state`,
+          {
+            method: "PATCH",
+            data: {
+              markSeen: true,
+              markCompleted: true,
+            },
+            timeoutMs,
+          },
+        ),
+        "Failed to update student diary state.",
+      );
+
+      ensureRequestSuccess(
+        await runRequest(
+          context,
+          metrics,
+          student.label,
+          "api.student.notifications",
+          "/api/student/notifications",
+          {
+            method: "GET",
+            timeoutMs,
+          },
+        ),
+        "Failed to load student notifications.",
+      );
+
+      if (round < rounds) {
+        await sleep(withJitter(roundDelayMs, jitterMs));
+      }
+    }
+
+    const totalDurationMs = Math.round(performance.now() - startedAt);
+
+    return {
+      student: student.label,
+      identifier: student.identifier,
+      studentId: String(session?.user?.id || ""),
+      ok: true,
+      totalDurationMs,
+    };
+  } catch (error) {
+    return {
+      student: student.label,
+      identifier: student.identifier,
+      studentId: String(session?.user?.id || ""),
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      totalDurationMs: Math.round(performance.now() - startedAt),
+    };
+  } finally {
+    if (signedIn) {
+      try {
+        await signOutStudent({
+          context,
+          baseUrl,
+          student,
+          metrics,
+          timeoutMs,
+        });
+      } catch {}
+    }
+
+    await context.dispose().catch(() => undefined);
+  }
 }
 
 async function main() {
@@ -216,158 +716,91 @@ async function main() {
     return;
   }
 
-  const baseURL = normalizeBaseUrl(args.base || process.env.BASE_URL);
-  const concurrency = parsePositiveInteger(args.concurrency, 6);
-  const iterations = parsePositiveInteger(args.iterations, 5);
-  const delayMs = parsePositiveInteger(args["delay-ms"], 100);
-  const timeoutMs = parsePositiveInteger(args["timeout-ms"], 15_000);
-  const outPath = String(args.out || "").trim();
-
-  const startedAt = new Date().toISOString();
-  const allEvents = [];
-
-  const adminContext = await createApiContext(baseURL, {
-    id: "stress-admin-1",
-    name: "Stress Admin",
-    email: "stress-admin@example.com",
-    role: "admin",
-  });
-
-  const createStudentSteps = (workerIndex) => {
-    const studentId = `stress-student-${workerIndex + 1}`;
-    return {
-      session: {
-        id: studentId,
-        name: `Stress Student ${workerIndex + 1}`,
-        email: `${studentId}@example.com`,
-        role: "student",
-        studentSessionId: `stress-session-${workerIndex + 1}`,
-      },
-      steps: [
-        { label: "student courses page", method: "GET", url: "/student/courses" },
-        { label: "student diary page", method: "GET", url: "/student/diary" },
-        { label: "student courses api", method: "GET", url: "/api/student/courses" },
-        {
-          label: "student course detail api",
-          method: "GET",
-          url: `/api/student/courses/${MOCK_COURSE_ID}`,
-        },
-        {
-          label: "student course progress patch",
-          method: "PATCH",
-          url: `/api/student/courses/${MOCK_COURSE_ID}/progress`,
-          body: {
-            note: {
-              blockId: "course-lesson-1",
-              text: `Stress note ${workerIndex + 1}`,
-            },
-          },
-        },
-        { label: "student diary api", method: "GET", url: "/api/student/diary" },
-        {
-          label: "student diary detail api",
-          method: "GET",
-          url: `/api/student/diary/${MOCK_DIARY_ID}`,
-        },
-        {
-          label: "student diary state patch",
-          method: "PATCH",
-          url: `/api/student/diary/${MOCK_DIARY_ID}/state`,
-          body: { markSeen: true },
-        },
-      ],
-    };
-  };
-
-  const adminSteps = [
-    { label: "workspace courses page", method: "GET", url: "/workspace/courses" },
-    { label: "workspace diary page", method: "GET", url: "/workspace/diary" },
-    { label: "workspace courses api", method: "GET", url: "/api/courses" },
-    {
-      label: "workspace course detail api",
-      method: "GET",
-      url: `/api/courses/${MOCK_COURSE_ID}`,
-    },
-    { label: "workspace diary api", method: "GET", url: "/api/diary" },
-    {
-      label: "workspace diary detail api",
-      method: "GET",
-      url: `/api/diary/${MOCK_DIARY_ID}`,
-    },
-    {
-      label: "workspace course create page",
-      method: "GET",
-      url: "/workspace/courses/create",
-    },
-    {
-      label: "workspace diary create page",
-      method: "GET",
-      url: "/workspace/diary/create",
-    },
-  ];
-
-  try {
-    for (let iteration = 0; iteration < iterations; iteration += 1) {
-      const adminPromises = adminSteps.map((step) =>
-        executeStep(adminContext, step, timeoutMs).then((event) => {
-          allEvents.push(event);
-          return event;
-        }),
-      );
-
-      const studentWorkers = Array.from({ length: concurrency }, (_, workerIndex) =>
-        (async () => {
-          const studentBundle = createStudentSteps(workerIndex);
-          const studentContext = await createApiContext(baseURL, studentBundle.session);
-
-          try {
-            for (const step of studentBundle.steps) {
-              const event = await executeStep(studentContext, step, timeoutMs);
-              allEvents.push(event);
-            }
-          } finally {
-            await studentContext.dispose();
-          }
-        })(),
-      );
-
-      await Promise.all([...adminPromises, ...studentWorkers]);
-
-      if (iteration < iterations - 1) {
-        await sleep(delayMs);
-      }
-    }
-  } finally {
-    await adminContext.dispose();
+  const metaFile = String(args.meta || "").trim();
+  if (!metaFile) {
+    throw new Error("Missing required --meta argument.");
   }
 
-  const summary = {
-    startedAt,
-    finishedAt: new Date().toISOString(),
-    baseURL,
-    concurrency,
-    iterations,
-    totalRequests: allEvents.length,
-    failedRequests: allEvents.filter((event) => !event.ok).length,
-    steps: summarizeEvents(allEvents),
-  };
+  const baseUrl = normalizeBaseUrl(args.base || process.env.BASE_URL);
+  const concurrency = parsePositiveInteger(args.concurrency, 40);
+  const rounds = parsePositiveInteger(args.rounds, 2);
+  const roundDelayMs = parseNonNegativeInteger(args["delay-ms"], 150);
+  const jitterMs = parseNonNegativeInteger(args["jitter-ms"], 75);
+  const timeoutMs = parsePositiveInteger(args["timeout-ms"], 15_000);
+  const outPath = String(args.out || "").trim();
+  const meta = await loadMeta(metaFile);
+  const students = await loadStudents(meta.studentsFile);
+  const startedAt = performance.now();
+  const requestEvents = [];
+  const results = new Array(students.length);
+  let cursor = 0;
 
-  console.log(JSON.stringify(summary, null, 2));
+  const workers = Array.from(
+    { length: Math.min(concurrency, students.length) },
+    async () => {
+      while (true) {
+        const currentIndex = cursor;
+        cursor += 1;
+        if (currentIndex >= students.length) {
+          return;
+        }
+
+        results[currentIndex] = await runStudentFlow({
+          baseUrl,
+          schoolKey: meta.schoolKey,
+          meta,
+          student: students[currentIndex],
+          rounds,
+          roundDelayMs,
+          jitterMs,
+          timeoutMs,
+          metrics: requestEvents,
+        });
+      }
+    },
+  );
+
+  await Promise.all(workers);
+
+  const totalDurationMs = Math.round(performance.now() - startedAt);
+  const normalizedResults = results.filter(Boolean);
+  const succeeded = normalizedResults.filter((result) => result.ok).length;
+  const failed = normalizedResults.length - succeeded;
+  const output = {
+    generatedAt: new Date().toISOString(),
+    config: {
+      baseUrl,
+      concurrency,
+      rounds,
+      roundDelayMs,
+      jitterMs,
+      timeoutMs,
+      metaFile: meta.resolvedPath,
+      schoolKey: meta.schoolKey,
+      courseId: meta.courseId,
+      diaryEntryId: meta.diaryEntryId,
+    },
+    summary: {
+      students: normalizedResults.length,
+      succeeded,
+      failed,
+      totalDurationMs,
+    },
+    requestSummary: summarizeRequestEvents(requestEvents),
+    results: normalizedResults,
+  };
 
   if (outPath) {
     const resolvedOutPath = path.resolve(outPath);
     await fs.mkdir(path.dirname(resolvedOutPath), { recursive: true });
-    await fs.writeFile(resolvedOutPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
-  }
-
-  if (summary.failedRequests > 0) {
-    process.exitCode = 1;
+    await fs.writeFile(resolvedOutPath, JSON.stringify(output, null, 2), "utf8");
+    console.log(`[stress-learning-content] wrote ${resolvedOutPath}`);
+  } else {
+    console.log(JSON.stringify(output, null, 2));
   }
 }
 
 main().catch((error) => {
-  console.error(
-    error instanceof Error ? error.stack || error.message : String(error),
-  );
+  console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });

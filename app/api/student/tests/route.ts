@@ -12,6 +12,7 @@ import {
 } from "@/lib/student-tests";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, {

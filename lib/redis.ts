@@ -43,7 +43,24 @@ export type RedisHealthProbeResult = {
   };
 };
 
+export const STUDENT_NOTIFICATION_REDIS_QUEUE = "student-notification-jobs";
+export const REPORT_DISPATCH_REDIS_QUEUE = "report-dispatch-jobs";
+
+export type RedisPartitionQueueName =
+  | typeof STUDENT_NOTIFICATION_REDIS_QUEUE
+  | typeof REPORT_DISPATCH_REDIS_QUEUE;
+
+export type RedisPartitionQueueStats = {
+  configured: boolean;
+  queueName: RedisPartitionQueueName;
+  partitions: number;
+  ready: number;
+  delayed: number;
+};
+
 const REDIS_FAILURE_BACKOFF_MS = 30_000;
+const STUDENT_NOTIFICATION_SIGNAL_TTL_SECONDS = 24 * 60 * 60;
+const REDIS_QUEUE_ENQUEUE_CHUNK_SIZE = 250;
 
 type RedisRuntimeState = {
   unavailableUntil: number;
@@ -193,6 +210,35 @@ function buildSnapshotCacheKey(
   snapshotVersion: number,
 ) {
   return `exam:snapshot-cache:${schoolKey}:${paperId}:${snapshotVersion}`;
+}
+
+function buildSharedCacheKey(key: string) {
+  return `shared-cache:${String(key || "").trim()}`;
+}
+
+function buildStudentNotificationSignalKey(
+  schoolKey: string,
+  studentId: string,
+) {
+  return `student:notification-signal:${schoolKey}:${studentId}`;
+}
+
+function buildPartitionQueuePartitionSetKey(queueName: RedisPartitionQueueName) {
+  return `queue:${queueName}:partitions`;
+}
+
+function buildPartitionQueueReadyKey(
+  queueName: RedisPartitionQueueName,
+  partitionKey: string,
+) {
+  return `queue:${queueName}:${partitionKey}:ready`;
+}
+
+function buildPartitionQueueDelayedKey(
+  queueName: RedisPartitionQueueName,
+  partitionKey: string,
+) {
+  return `queue:${queueName}:${partitionKey}:delayed`;
 }
 
 function buildStudentLoginRateLimitKey(
@@ -588,6 +634,399 @@ export async function readCachedExamSnapshotPayload<T>(
   ]);
 
   return decodeRedisValue<T>(payload);
+}
+
+export async function writeSharedCacheEntry(
+  key: string,
+  value: unknown,
+  ttlSeconds: number,
+) {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey || !isRedisConfigured()) {
+    return false;
+  }
+
+  const normalizedTtlSeconds = Math.max(1, Math.floor(ttlSeconds || 0));
+  const result = await runRedisCommand<string>([
+    "SET",
+    buildSharedCacheKey(normalizedKey),
+    encodeRedisValue({ value }),
+    "EX",
+    normalizedTtlSeconds,
+  ]);
+
+  return result === "OK";
+}
+
+export async function readSharedCacheEntry<T>(key: string) {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey || !isRedisConfigured()) {
+    return null;
+  }
+
+  const payload = await runRedisCommand<string>([
+    "GET",
+    buildSharedCacheKey(normalizedKey),
+  ]);
+
+  if (typeof payload !== "string") {
+    return null;
+  }
+
+  const decoded = decodeRedisValue<{ value: T }>(payload);
+  if (!decoded || typeof decoded !== "object" || !("value" in decoded)) {
+    return null;
+  }
+
+  return {
+    value: decoded.value as T,
+  };
+}
+
+function chunkValues<T>(values: T[], chunkSize: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < values.length; index += chunkSize) {
+    chunks.push(values.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+}
+
+function normalizePartitionQueueName(queueName: RedisPartitionQueueName) {
+  return queueName;
+}
+
+function normalizePartitionQueuePartitionKey(partitionKey: string) {
+  return String(partitionKey || "").trim();
+}
+
+export async function enqueueRedisPartitionQueueItems(params: {
+  queueName: RedisPartitionQueueName;
+  partitionKey: string;
+  itemIds: string[];
+  availableAt?: Date | number | string | null;
+}) {
+  const queueName = normalizePartitionQueueName(params.queueName);
+  const partitionKey = normalizePartitionQueuePartitionKey(params.partitionKey);
+  const itemIds = Array.from(
+    new Set(
+      (Array.isArray(params.itemIds) ? params.itemIds : [])
+        .map((itemId) => String(itemId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (!partitionKey || itemIds.length === 0 || !isRedisConfigured()) {
+    return null;
+  }
+
+  const availableAtMs =
+    params.availableAt instanceof Date
+      ? params.availableAt.getTime()
+      : typeof params.availableAt === "number"
+        ? params.availableAt
+        : typeof params.availableAt === "string" && params.availableAt.trim()
+          ? new Date(params.availableAt).getTime()
+          : Date.now();
+  const normalizedAvailableAtMs = Number.isFinite(availableAtMs)
+    ? Math.max(0, Math.floor(availableAtMs))
+    : Date.now();
+  const partitionSetKey = buildPartitionQueuePartitionSetKey(queueName);
+  const readyKey = buildPartitionQueueReadyKey(queueName, partitionKey);
+  const delayedKey = buildPartitionQueueDelayedKey(queueName, partitionKey);
+
+  let enqueuedCount = 0;
+
+  for (const chunk of chunkValues(itemIds, REDIS_QUEUE_ENQUEUE_CHUNK_SIZE)) {
+    const insertedCount = await runRedisEval<number>(
+      [
+        "local partitionKey = ARGV[1]",
+        "local availableAtMs = tonumber(ARGV[2])",
+        "local nowMs = tonumber(ARGV[3])",
+        "local itemCount = tonumber(ARGV[4])",
+        "redis.call('SADD', KEYS[1], partitionKey)",
+        "for index = 1, itemCount do",
+        "  local itemId = ARGV[index + 4]",
+        "  if availableAtMs > nowMs then",
+        "    redis.call('ZADD', KEYS[3], availableAtMs, itemId)",
+        "  else",
+        "    redis.call('RPUSH', KEYS[2], itemId)",
+        "  end",
+        "end",
+        "return itemCount",
+      ].join("\n"),
+      [partitionSetKey, readyKey, delayedKey],
+      [partitionKey, normalizedAvailableAtMs, Date.now(), chunk.length, ...chunk],
+    );
+
+    if (insertedCount === null) {
+      return enqueuedCount > 0 ? enqueuedCount : null;
+    }
+
+    enqueuedCount += Number(insertedCount || 0);
+  }
+
+  return enqueuedCount;
+}
+
+export async function claimRedisPartitionQueueItems(params: {
+  queueName: RedisPartitionQueueName;
+  partitionKey: string;
+  limit: number;
+  now?: Date | number | string | null;
+}) {
+  const queueName = normalizePartitionQueueName(params.queueName);
+  const partitionKey = normalizePartitionQueuePartitionKey(params.partitionKey);
+  const limit = Math.max(1, Math.min(250, Math.floor(params.limit || 0) || 1));
+
+  if (!partitionKey || !isRedisConfigured()) {
+    return null;
+  }
+
+  const nowMs =
+    params.now instanceof Date
+      ? params.now.getTime()
+      : typeof params.now === "number"
+        ? params.now
+        : typeof params.now === "string" && params.now.trim()
+          ? new Date(params.now).getTime()
+          : Date.now();
+  const normalizedNowMs = Number.isFinite(nowMs)
+    ? Math.max(0, Math.floor(nowMs))
+    : Date.now();
+
+  return runRedisEval<string[]>(
+    [
+      "local nowMs = tonumber(ARGV[1])",
+      "local limit = tonumber(ARGV[2])",
+      "local dueIds = redis.call('ZRANGEBYSCORE', KEYS[2], '-inf', nowMs, 'LIMIT', 0, limit)",
+      "for _, itemId in ipairs(dueIds) do",
+      "  redis.call('RPUSH', KEYS[1], itemId)",
+      "  redis.call('ZREM', KEYS[2], itemId)",
+      "end",
+      "local claimed = {}",
+      "for index = 1, limit do",
+      "  local itemId = redis.call('LPOP', KEYS[1])",
+      "  if not itemId then",
+      "    break",
+      "  end",
+      "  table.insert(claimed, itemId)",
+      "end",
+      "return claimed",
+    ].join("\n"),
+    [
+      buildPartitionQueueReadyKey(queueName, partitionKey),
+      buildPartitionQueueDelayedKey(queueName, partitionKey),
+    ],
+    [normalizedNowMs, limit],
+  );
+}
+
+export async function listRedisPartitionQueuePartitions(
+  queueName: RedisPartitionQueueName,
+) {
+  if (!isRedisConfigured()) {
+    return null;
+  }
+
+  const partitions = await runRedisCommand<string[]>([
+    "SMEMBERS",
+    buildPartitionQueuePartitionSetKey(normalizePartitionQueueName(queueName)),
+  ]);
+
+  if (partitions === null) {
+    return null;
+  }
+
+  if (!Array.isArray(partitions)) {
+    return [];
+  }
+
+  return partitions
+    .map((partitionKey) => String(partitionKey || "").trim())
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+export async function setRedisPartitionQueuePartitionActive(params: {
+  queueName: RedisPartitionQueueName;
+  partitionKey: string;
+  active: boolean;
+}) {
+  const queueName = normalizePartitionQueueName(params.queueName);
+  const partitionKey = normalizePartitionQueuePartitionKey(params.partitionKey);
+
+  if (!partitionKey || !isRedisConfigured()) {
+    return null;
+  }
+
+  const command = params.active ? "SADD" : "SREM";
+  const result = await runRedisCommand<number>([
+    command,
+    buildPartitionQueuePartitionSetKey(queueName),
+    partitionKey,
+  ]);
+
+  if (result === null) {
+    return null;
+  }
+
+  return Number(result || 0);
+}
+
+export async function getRedisPartitionQueueStats(
+  queueName: RedisPartitionQueueName,
+): Promise<RedisPartitionQueueStats> {
+  const normalizedQueueName = normalizePartitionQueueName(queueName);
+
+  if (!isRedisConfigured()) {
+    return {
+      configured: false,
+      queueName: normalizedQueueName,
+      partitions: 0,
+      ready: 0,
+      delayed: 0,
+    };
+  }
+
+  const partitions =
+    (await listRedisPartitionQueuePartitions(normalizedQueueName)) || [];
+
+  if (partitions.length === 0) {
+    return {
+      configured: true,
+      queueName: normalizedQueueName,
+      partitions: 0,
+      ready: 0,
+      delayed: 0,
+    };
+  }
+
+  const counts = await runRedisEval<[number, number]>(
+    [
+      "local ready = 0",
+      "local delayed = 0",
+      "for index = 1, #KEYS, 2 do",
+      "  ready = ready + tonumber(redis.call('LLEN', KEYS[index]) or 0)",
+      "  delayed = delayed + tonumber(redis.call('ZCARD', KEYS[index + 1]) or 0)",
+      "end",
+      "return {ready, delayed}",
+    ].join("\n"),
+    partitions.flatMap((partitionKey) => [
+      buildPartitionQueueReadyKey(normalizedQueueName, partitionKey),
+      buildPartitionQueueDelayedKey(normalizedQueueName, partitionKey),
+    ]),
+    [],
+  );
+
+  return {
+    configured: true,
+    queueName: normalizedQueueName,
+    partitions: partitions.length,
+    ready:
+      Array.isArray(counts) && counts.length > 0
+        ? Number(counts[0] || 0)
+        : 0,
+    delayed:
+      Array.isArray(counts) && counts.length > 1
+        ? Number(counts[1] || 0)
+        : 0,
+  };
+}
+
+export async function readStudentNotificationSignalVersion(
+  schoolKey: string,
+  studentId: string,
+) {
+  const normalizedSchoolKey = String(schoolKey || "").trim();
+  const normalizedStudentId = String(studentId || "").trim();
+
+  if (
+    !normalizedSchoolKey ||
+    !normalizedStudentId ||
+    !isRedisConfigured()
+  ) {
+    return null;
+  }
+
+  const payload = await runRedisCommand<string | number>([
+    "GET",
+    buildStudentNotificationSignalKey(normalizedSchoolKey, normalizedStudentId),
+  ]);
+
+  if (payload === null || typeof payload === "undefined") {
+    return 0;
+  }
+
+  const parsed = Number(payload);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+
+  return Math.floor(parsed);
+}
+
+export async function bumpStudentNotificationSignalVersion(
+  schoolKey: string,
+  studentId: string,
+) {
+  const normalizedSchoolKey = String(schoolKey || "").trim();
+  const normalizedStudentId = String(studentId || "").trim();
+
+  if (
+    !normalizedSchoolKey ||
+    !normalizedStudentId ||
+    !isRedisConfigured()
+  ) {
+    return null;
+  }
+
+  const nextVersion = await runRedisEval<number>(
+    [
+      "local nextVersion = redis.call('INCR', KEYS[1])",
+      "redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1]))",
+      "return nextVersion",
+    ].join("\n"),
+    [buildStudentNotificationSignalKey(normalizedSchoolKey, normalizedStudentId)],
+    [STUDENT_NOTIFICATION_SIGNAL_TTL_SECONDS],
+  );
+
+  if (nextVersion === null) {
+    return null;
+  }
+
+  const parsed = Number(nextVersion);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+
+  return Math.floor(parsed);
+}
+
+export async function deleteSharedCacheEntries(keys: string[]) {
+  const normalizedKeys = Array.from(
+    new Set(
+      (Array.isArray(keys) ? keys : [])
+        .map((key) => String(key || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (normalizedKeys.length === 0 || !isRedisConfigured()) {
+    return null;
+  }
+
+  const result = await runRedisCommand<number>([
+    "DEL",
+    ...normalizedKeys.map(buildSharedCacheKey),
+  ]);
+
+  if (result === null) {
+    return null;
+  }
+
+  return Number(result || 0);
 }
 
 export async function probeRedisHealth(): Promise<RedisHealthProbeResult> {

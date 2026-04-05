@@ -1873,7 +1873,7 @@ export default function CourseEditorClient({
                   <Input
                     value={coverImageUrl}
                     onChange={(event) => setCoverImageUrl(event.target.value)}
-                    placeholder="/uploads/course-images/..."
+                    placeholder="https://example.com/course-cover.webp"
                   />
                   <FilePickerField
                     id="course-cover-image"
@@ -2411,7 +2411,7 @@ export default function CourseEditorClient({
                                             }),
                                           )
                                         }
-                                        placeholder="/uploads/course-images/..."
+                                        placeholder="https://example.com/lesson-image.webp"
                                       />
                                       <FilePickerField
                                         id={`lesson-image-${item.id}`}

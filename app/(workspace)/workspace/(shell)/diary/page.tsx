@@ -7,12 +7,18 @@ import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ListPaginationLinks from "@/components/ui/list-pagination-links";
 import { formatDiaryDateLabel, getTodayDiaryEntryDate } from "@/lib/diary/shared";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 import { getWorkspaceDiarySupportData, listWorkspaceDiaryEntries } from "@/lib/server/diary";
-import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
+import {
+  requireWorkspaceStaffSession,
+  resolveWorkspaceListPage,
+} from "@/lib/server/workspace-user-directory";
 
 export const dynamic = "force-dynamic";
+const DIARY_BASE_PATH = "/workspace/diary";
+const DIARY_PAGE_SIZE = 10;
 
 type DiaryPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -29,6 +35,7 @@ function getSearchParam(
 export default async function DiaryPage({ searchParams }: DiaryPageProps) {
   const { schoolKey, viewerId } = await requireWorkspaceStaffSession();
   const resolvedSearchParams = await searchParams;
+  const requestedPage = resolveWorkspaceListPage(resolvedSearchParams?.page);
 
   const selectedDate =
     getSearchParam(resolvedSearchParams, "entryDate") || getTodayDiaryEntryDate();
@@ -37,7 +44,7 @@ export default async function DiaryPage({ searchParams }: DiaryPageProps) {
   const selectedSubjectId = getSearchParam(resolvedSearchParams, "subjectId") || "all";
   const selectedStatus = getSearchParam(resolvedSearchParams, "status") || "all";
 
-  const [supportData, entries] = await Promise.all([
+  const [supportData, diaryDirectory] = await Promise.all([
     getWorkspaceDiarySupportData({
       schoolKey,
       viewerId,
@@ -52,8 +59,14 @@ export default async function DiaryPage({ searchParams }: DiaryPageProps) {
         subjectId: selectedSubjectId !== "all" ? selectedSubjectId : undefined,
         status: selectedStatus !== "all" ? selectedStatus : undefined,
       },
+      page: requestedPage,
+      limit: DIARY_PAGE_SIZE,
     }),
   ]);
+  const entries = diaryDirectory.entries;
+  const totalEntries = diaryDirectory.total;
+  const page = diaryDirectory.page;
+  const pages = diaryDirectory.pages;
 
   const filteredSections =
     selectedClassId !== "all"
@@ -65,6 +78,32 @@ export default async function DiaryPage({ searchParams }: DiaryPageProps) {
       : supportData.sections;
   const canCreateDiary =
     supportData.classes.length > 0 && supportData.subjects.length > 0;
+  const buildDiaryPageHref = (nextPage: number) => {
+    const nextSearchParams = new URLSearchParams();
+
+    nextSearchParams.set("entryDate", selectedDate);
+    if (selectedClassId !== "all") {
+      nextSearchParams.set("classId", selectedClassId);
+    }
+    if (selectedSectionId !== "all") {
+      nextSearchParams.set("sectionId", selectedSectionId);
+    }
+    if (selectedSubjectId !== "all") {
+      nextSearchParams.set("subjectId", selectedSubjectId);
+    }
+    if (selectedStatus !== "all") {
+      nextSearchParams.set("status", selectedStatus);
+    }
+    if (nextPage > 1) {
+      nextSearchParams.set("page", String(nextPage));
+    }
+
+    const query = nextSearchParams.toString();
+    return `${DIARY_BASE_PATH}${query ? `?${query}` : ""}`;
+  };
+  const currentPath = buildDiaryPageHref(page);
+  const previousHref = page > 1 ? buildDiaryPageHref(page - 1) : null;
+  const nextHref = page < pages ? buildDiaryPageHref(page + 1) : null;
 
   return (
     <PageShell width="wide" padding="standard">
@@ -97,18 +136,18 @@ export default async function DiaryPage({ searchParams }: DiaryPageProps) {
           stats={[
             {
               label: "Entries",
-              value: String(entries.length),
+              value: String(totalEntries),
               meta: "Matching the current date and filters.",
+            },
+            {
+              label: "This page",
+              value: String(entries.length),
+              meta: "Entries loaded in the current slice.",
             },
             {
               label: "Published",
               value: String(entries.filter((entry) => entry.status === "published").length),
               meta: "Visible to students in scope.",
-            },
-            {
-              label: "Drafts",
-              value: String(entries.filter((entry) => entry.status === "draft").length),
-              meta: "Internal only.",
             },
             {
               label: "Assigned students",
@@ -171,7 +210,7 @@ export default async function DiaryPage({ searchParams }: DiaryPageProps) {
           </Card>
         ) : null}
 
-        {entries.length === 0 ? (
+        {totalEntries === 0 ? (
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>No diary entries found</CardTitle>
@@ -184,11 +223,21 @@ export default async function DiaryPage({ searchParams }: DiaryPageProps) {
             </CardContent>
           </Card>
         ) : (
-          <div className="app-diary-board-grid">
+          <div className="space-y-3">
+            <ListPaginationLinks
+              page={page}
+              totalPages={pages}
+              totalItems={totalEntries}
+              pageSize={DIARY_PAGE_SIZE}
+              itemLabel="entries"
+              previousHref={previousHref}
+              nextHref={nextHref}
+            />
+            <div className="app-diary-board-grid">
             {entries.map((entry) => {
               const viewHref = buildHrefWithReturnTo(
                 `/workspace/diary/${entry._id}`,
-                "/workspace/diary",
+                currentPath,
               );
               const editHref = buildHrefWithReturnTo(
                 `/workspace/diary/edit/${entry._id}`,
@@ -280,6 +329,7 @@ export default async function DiaryPage({ searchParams }: DiaryPageProps) {
                 </Card>
               );
             })}
+            </div>
           </div>
         )}
       </div>
