@@ -52,6 +52,7 @@ type UseStudentTestRuntimeArgs = {
   paperId: string;
   initialData: StudentTestDetailResponse | null;
   initialLoadError?: string | null;
+  returnToPath?: string;
 };
 
 function shouldRetainQuestionState(
@@ -97,6 +98,7 @@ export function useStudentTestRuntime({
   paperId,
   initialData,
   initialLoadError = null,
+  returnToPath = "/student/tests",
 }: UseStudentTestRuntimeArgs) {
   const router = useRouter();
   const initialPaper = initialData?.paper || null;
@@ -400,8 +402,12 @@ export function useStudentTestRuntime({
     setRecoveryNotice(null);
     setConnectionNotice(null);
     setActionError(null);
-    announceNavigationStart("/student/tests?submitted=1");
-    router.push("/student/tests?submitted=1");
+    const redirectHref =
+      returnToPath && returnToPath !== "/student/tests"
+        ? returnToPath
+        : "/student/tests?submitted=1";
+    announceNavigationStart(redirectHref);
+    router.push(redirectHref);
   }
 
   useEffect(() => {

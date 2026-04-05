@@ -169,6 +169,7 @@ type QuestionPaperFormProps = {
   initialAcademicSections?: AcademicSectionItem[];
   initialSupportDataLoaded?: boolean;
   initialSupportMessage?: string | null;
+  returnTo?: string | null;
 };
 
 function parseStoredDate(value: unknown) {
@@ -320,10 +321,12 @@ export default function QuestionPaperForm({
   initialAcademicSections,
   initialSupportDataLoaded = false,
   initialSupportMessage = null,
+  returnTo = null,
 }: QuestionPaperFormProps) {
   const { toast } = useToast();
   const router = useRouter();
   const { navigateBack } = useBackNavigation('/workspace/question-papers');
+  const returnToPath = String(returnTo || '').trim();
   const hasProvidedSupportData = initialSupportDataLoaded;
 
   // State initialization (use initialData if present)
@@ -1322,7 +1325,13 @@ export default function QuestionPaperForm({
           navigateBack();
           return;
         }
-        const nextHref = `/workspace/question-papers/view/${data.paper._id}`;
+        const nextHref = returnToPath
+          ? (() => {
+              const url = new URL(returnToPath, window.location.origin);
+              url.searchParams.set('paperId', String(data.paper._id || ''));
+              return `${url.pathname}${url.search}`;
+            })()
+          : `/workspace/question-papers/view/${data.paper._id}`;
         announceNavigationStart(nextHref);
         router.push(nextHref);
       } else {

@@ -16,6 +16,11 @@ import '@/models/User';
 import '@/models/AuditLog';
 import '@/models/ResponseUploadHistory';
 import '@/models/QuestionImportDraft';
+import '@/models/Course';
+import '@/models/CourseProgress';
+import '@/models/DiaryEntry';
+import '@/models/DiaryStudentState';
+import '@/models/StudentNotification';
 
 type TenantCoreModelMap = {
   TagType: typeof import('@/models/TagType').default;
@@ -30,6 +35,11 @@ type TenantCoreModelMap = {
   AuditLog: typeof import('@/models/AuditLog').default;
   ResponseUploadHistory: typeof import('@/models/ResponseUploadHistory').default;
   QuestionImportDraft: typeof import('@/models/QuestionImportDraft').default;
+  Course: typeof import('@/models/Course').default;
+  CourseProgress: typeof import('@/models/CourseProgress').default;
+  DiaryEntry: typeof import('@/models/DiaryEntry').default;
+  DiaryStudentState: typeof import('@/models/DiaryStudentState').default;
+  StudentNotification: typeof import('@/models/StudentNotification').default;
 };
 
 type TenantModelForName<Name extends string> =

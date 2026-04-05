@@ -24,6 +24,7 @@ import {
 import { isOnlineQuestionType } from "@/lib/question-paper/grading";
 import { resolveTeacherPaperScope } from "@/lib/question-paper/access";
 import { listWorkspaceQuestionPapers } from "@/lib/server/workspace-question-papers";
+import { createTestAssignedNotifications } from "@/lib/server/student-notifications";
 import "@/models/QuestionPaperResponse";
 import "@/models/Class";
 import "@/models/Subject";
@@ -456,6 +457,19 @@ export async function POST(req: NextRequest) {
     });
 
     const paperObject = paper?.toObject?.() ?? paper;
+
+    if (onlineEnabled) {
+      await createTestAssignedNotifications({
+        schoolKey,
+        paperId: String(paper._id),
+        title: String(paper.title || title),
+        classId: String(classId),
+        assignedAcademicSections: assignmentValidation.ids,
+        examDate: effectiveOnlineStart || normalizeDate(examDate) || null,
+      }).catch((error) => {
+        console.error("Failed to create test assigned notifications:", error);
+      });
+    }
 
     return NextResponse.json(
       {

@@ -37,6 +37,7 @@ type StudentTestPreStartViewProps = {
   isStarting: boolean;
   actionError: string | null;
   testsHref: string;
+  backLabel: string;
   onStartAttempt: () => Promise<void>;
 };
 
@@ -51,6 +52,7 @@ export default function StudentTestPreStartView({
   isStarting,
   actionError,
   testsHref,
+  backLabel,
   onStartAttempt,
 }: StudentTestPreStartViewProps) {
   const effectiveStart = formatDateTime(paper.onlineStartsAt || paper.examDate);
@@ -88,7 +90,7 @@ export default function StudentTestPreStartView({
               className="app-student-action-secondary"
             >
               <AppPrefetchLink href={testsHref}>
-                Back to Tests
+                {backLabel}
               </AppPrefetchLink>
             </Button>
             <Button

@@ -22,6 +22,7 @@ type StudentTestLockedViewProps = {
   hasManualReviewQuestions: boolean;
   questionCount: number;
   testsHref: string;
+  backLabel: string;
 };
 
 export default function StudentTestLockedView({
@@ -32,6 +33,7 @@ export default function StudentTestLockedView({
   hasManualReviewQuestions,
   questionCount,
   testsHref,
+  backLabel,
 }: StudentTestLockedViewProps) {
   const submittedAtLabel = attempt?.submittedAt
     ? new Date(attempt.submittedAt).toLocaleString()
@@ -159,7 +161,7 @@ export default function StudentTestLockedView({
             className="app-student-action-secondary"
           >
             <AppPrefetchLink href={testsHref}>
-              Back to Tests
+              {backLabel}
             </AppPrefetchLink>
           </Button>
         }

@@ -72,9 +72,11 @@ export async function storePublicImage({
   mimeType,
   relativeFolder,
 }: StorePublicImageInput) {
-  const normalizedMimeType = String(
-    mimeType || guessMimeTypeFromFileName(fileName) || "",
-  ).toLowerCase();
+  const providedMimeType = String(mimeType || "").toLowerCase();
+  const guessedMimeType = guessMimeTypeFromFileName(fileName) || "";
+  const normalizedMimeType = IMAGE_EXTENSION_BY_MIME_TYPE.has(providedMimeType)
+    ? providedMimeType
+    : guessedMimeType;
   const extension = IMAGE_EXTENSION_BY_MIME_TYPE.get(normalizedMimeType);
 
   if (!extension) {

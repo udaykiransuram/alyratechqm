@@ -31,6 +31,8 @@ type StudentSessionOverrides = {
   schoolKey?: string;
   schoolDisplayName?: string;
   studentSessionId?: string;
+  studentClassId?: string;
+  studentAcademicSectionId?: string;
 };
 
 async function applySchoolSession(
@@ -122,6 +124,13 @@ export async function setStudentSession(
       role: "student",
       schoolKey,
       studentSessionId,
+      studentClassId:
+        String(overrides.studentClassId || "111111111111111111111111").trim() ||
+        "111111111111111111111111",
+      studentAcademicSectionId:
+        String(
+          overrides.studentAcademicSectionId || "222222222222222222222222",
+        ).trim() || "222222222222222222222222",
     },
     schoolKey,
     schoolDisplayName,

@@ -69,6 +69,22 @@ const schoolSidebarGroups: SidebarGroup[] = [
           { href: "/workspace/questions/bulk-upload", label: "Bulk Upload" },
         ],
       },
+      {
+        label: "Courses",
+        icon: BookOpen,
+        children: [
+          { href: "/workspace/courses", label: "All Courses" },
+          { href: "/workspace/courses/create", label: "Create Course" },
+        ],
+      },
+      {
+        label: "Diary",
+        icon: BookOpen,
+        children: [
+          { href: "/workspace/diary", label: "All Diary Entries" },
+          { href: "/workspace/diary/create", label: "Create Diary Entry" },
+        ],
+      },
     ],
   },
   {

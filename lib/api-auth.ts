@@ -390,7 +390,23 @@ export async function requireTenantSession(
   | RequireTenantSessionFailure
 > {
   const resolvedOptions = options ?? {};
-  const session = await getServerSession(authOptions);
+  let session: Session | null = null;
+
+  try {
+    session = await getServerSession(authOptions);
+  } catch (error) {
+    console.error("Failed to resolve tenant session:", error);
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        {
+          success: false,
+          message: "Failed to validate the active session.",
+        },
+        { status: 500 },
+      ),
+    };
+  }
 
   if (
     !session?.user?.id ||

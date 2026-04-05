@@ -13,6 +13,7 @@ type CreateQuestionPaperPageClientProps = {
     class?: { _id: string; name?: string } | string;
   }>;
   initialMessage?: string | null;
+  returnTo?: string | null;
 };
 
 export default function CreateQuestionPaperPageClient({
@@ -21,6 +22,7 @@ export default function CreateQuestionPaperPageClient({
   initialTags,
   initialSections,
   initialMessage = null,
+  returnTo = null,
 }: CreateQuestionPaperPageClientProps) {
   const [initialData, setInitialData] = useState<any>(null);
 
@@ -48,6 +50,7 @@ export default function CreateQuestionPaperPageClient({
       initialAcademicSections={initialSections}
       initialSupportDataLoaded
       initialSupportMessage={initialMessage}
+      returnTo={returnTo}
     />
   );
 }

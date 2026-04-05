@@ -16,10 +16,10 @@ const TAG_TYPE_ALIAS_MAP: Record<string, string> = {
   "chapter-name": "topic",
   "chapter-title": "topic",
   chapter: "topic",
-  "subtopic-title": "topic",
-  "sub-topic-title": "topic",
-  subtopic: "topic",
-  "sub-topic": "topic",
+  "subtopic-title": "subtopic",
+  "sub-topic-title": "subtopic",
+  subtopic: "subtopic",
+  "sub-topic": "subtopic",
   "template-id": "templateid",
 };
 
