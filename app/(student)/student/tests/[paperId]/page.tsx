@@ -5,16 +5,19 @@ import StudentTestPageClient from "@/components/student/test-detail/StudentTestP
 import { getStudentTestDetailData } from "@/app/api/student/tests/[paperId]/data";
 import { authOptions } from "@/lib/auth";
 import type { StudentTestDetailResponse } from "@/components/student/test-detail/student-test-types";
+import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 export const dynamic = "force-dynamic";
 
 type StudentTestPageProps = {
   params: Promise<{ paperId: string }>;
+  searchParams: Promise<{ returnTo?: string | string[] }>;
 };
 
 export default async function StudentTestPage({
   params,
+  searchParams,
 }: StudentTestPageProps) {
   const session = await getServerSession(authOptions);
 
@@ -34,6 +37,11 @@ export default async function StudentTestPage({
   }
 
   const { paperId } = await params;
+  const resolvedSearchParams = await searchParams;
+  const rawReturnTo = Array.isArray(resolvedSearchParams?.returnTo)
+    ? resolvedSearchParams.returnTo[0]
+    : resolvedSearchParams?.returnTo;
+  const returnToPath = getSafeReturnToPath(rawReturnTo) || "/student/tests";
 
   let initialData: StudentTestDetailResponse | null = null;
   let initialLoadError: string | null = null;
@@ -63,6 +71,7 @@ export default async function StudentTestPage({
       paperId={paperId}
       initialData={initialData}
       initialLoadError={initialLoadError}
+      returnToPath={returnToPath}
     />
   );
 }

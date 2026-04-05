@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
-import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -194,7 +193,7 @@ export default function StudentAccountPageClient({
   }
 
   return (
-    <div className="app-page-shell max-w-6xl px-4 py-5 sm:px-0">
+    <div className="app-student-page-shell">
       <PageHero
         eyebrow="Student Portal"
         title="Student Account"
@@ -246,9 +245,6 @@ export default function StudentAccountPageClient({
           },
         ]}
       >
-        <div className="sm:hidden">
-          <StudentPortalNav />
-        </div>
       </PageHero>
 
       {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}

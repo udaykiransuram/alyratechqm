@@ -12,6 +12,9 @@ import '@/models/User';
 import '@/models/Question';
 import '@/models/QuestionPaper';
 import '@/models/QuestionPaperResponse';
+import '@/models/Course';
+import '@/models/CourseProgress';
+import '@/models/StudentNotification';
 
 export async function provisionTenant(schoolKey: string) {
   if (!schoolKey) throw new Error('schoolKey is required');
@@ -36,6 +39,9 @@ export async function provisionTenant(schoolKey: string) {
     'Question',
     'QuestionPaper',
     'QuestionPaperResponse',
+    'Course',
+    'CourseProgress',
+    'StudentNotification',
   ] as const;
   for (const name of modelNames) {
     try {

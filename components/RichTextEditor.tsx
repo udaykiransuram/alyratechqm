@@ -43,6 +43,7 @@ interface RichTextEditorProps {
   onChange: (html: string) => void;
   editorKey?: string | number;
   compact?: boolean;
+  imageUploadEndpoint?: string;
 }
 
 interface EditMathPayload {
@@ -148,7 +149,13 @@ function readFileAsDataUrl(file: File) {
 // --- Component Props and Payloads ---
 
 // --- The Component ---
-const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }: RichTextEditorProps) => {
+const RichTextEditor = ({
+  initialContent,
+  onChange,
+  editorKey,
+  compact = false,
+  imageUploadEndpoint = "/api/questions/images",
+}: RichTextEditorProps) => {
   const [isMathModalOpen, setIsMathModalOpen] = useState(false);
   // --- FIX: Add state to track the node being edited ---
   const [editingMath, setEditingMath] = useState<EditMathPayload | null>(null);
@@ -172,7 +179,7 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
     const formData = new FormData();
     formData.append('file', file, file.name || 'question-image');
 
-    const response = await fetch('/api/questions/images', {
+    const response = await fetch(imageUploadEndpoint, {
       method: 'POST',
       credentials: 'same-origin',
       body: formData,
@@ -185,7 +192,7 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
     }
 
     return String(payload.url);
-  }, []);
+  }, [imageUploadEndpoint]);
 
   const resolveImageSource = useCallback(async (file: File) => {
     validateImageFile(file);
@@ -448,11 +455,9 @@ const RichTextEditor = ({ initialContent, onChange, editorKey, compact = false }
         onUploadImage={handleUploadImage}
         onOpenMathModal={handleOpenMathModal}
       />
-      {!compact || uploadingImageCount > 0 ? (
+      {uploadingImageCount > 0 ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          {uploadingImageCount > 0
-            ? `Uploading ${uploadingImageCount} image${uploadingImageCount === 1 ? '' : 's'}...`
-            : 'Paste or drag screenshots directly, use the upload button for your device, or insert an image URL.'}
+          {`Uploading ${uploadingImageCount} image${uploadingImageCount === 1 ? '' : 's'}...`}
         </p>
       ) : null}
       <EditorContent editor={editor} />

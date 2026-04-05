@@ -67,6 +67,7 @@ export const requireWorkspaceStaffSession = cache(async () => {
   return {
     schoolKey,
     viewerRole: role,
+    viewerId: String(session.user.id || "").trim(),
   };
 });
 

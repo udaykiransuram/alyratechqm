@@ -210,7 +210,7 @@ function buildContentSecurityPolicy(path: string, nonce: string) {
     "media-src 'self' blob: https://videos.pexels.com",
     "worker-src 'self' blob:",
     `connect-src ${connectSources}`,
-    "frame-src 'self' https://sdk.cashfree.com https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com",
+    "frame-src 'self' https://sdk.cashfree.com https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com https://www.youtube.com https://www.youtube-nocookie.com",
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
@@ -227,7 +227,7 @@ function applyResponseHeaders(
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=()",
   );
-  res.headers.set("Referrer-Policy", "no-referrer");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
 
   if (cspHeader) {
     res.headers.set("Content-Security-Policy", cspHeader);

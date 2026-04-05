@@ -1,6 +1,11 @@
 import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import {
+  getMockWorkspaceClasses,
+  getMockWorkspaceSections,
+  getMockWorkspaceSubjects,
+} from "@/lib/test-fixtures/learning-content";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 import type {
   WorkspaceAcademicSectionItem,
@@ -201,7 +206,7 @@ export async function getWorkspaceClasses(
   schoolKey: string,
 ): Promise<WorkspaceClassItem[]> {
   if (isMockedE2ETestMode()) {
-    return [];
+    return getMockWorkspaceClasses();
   }
 
   const cacheKey = buildWorkspaceSupportDataCacheKey(schoolKey, "classes");
@@ -228,7 +233,7 @@ export async function getWorkspaceSections(
   },
 ): Promise<WorkspaceAcademicSectionItem[]> {
   if (isMockedE2ETestMode()) {
-    return [];
+    return getMockWorkspaceSections();
   }
 
   const includeInactive = options?.includeInactive === true;
@@ -266,7 +271,7 @@ export async function getWorkspaceSubjects(
   schoolKey: string,
 ): Promise<WorkspaceSubjectItem[]> {
   if (isMockedE2ETestMode()) {
-    return [];
+    return getMockWorkspaceSubjects();
   }
 
   const cacheKey = buildWorkspaceSupportDataCacheKey(schoolKey, "subjects");

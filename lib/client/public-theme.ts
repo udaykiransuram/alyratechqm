@@ -11,7 +11,7 @@ export const PUBLIC_THEME_STYLES = [
   {
     value: "editorial",
     label: "Editorial",
-    description: "Warmer, calmer, and more premium for trust-heavy storytelling.",
+    description: "Calmer, softer, and more premium with cleaner cool neutrals.",
   },
   {
     value: "minimal",
@@ -24,26 +24,26 @@ export const PUBLIC_THEME_PALETTES = [
   {
     value: "ocean",
     label: "Ocean",
-    description: "Teal and cyan with warm ivory neutrals.",
-    swatches: ["183 71% 42%", "196 86% 66%", "35 76% 66%"],
+    description: "Teal and cyan with clean slate neutrals.",
+    swatches: ["183 71% 42%", "196 86% 66%", "192 78% 68%"],
   },
   {
     value: "midnight",
     label: "Midnight",
     description: "Deep blue with cooler premium contrast.",
-    swatches: ["216 82% 58%", "198 92% 70%", "35 90% 70%"],
+    swatches: ["216 82% 58%", "198 92% 70%", "202 86% 72%"],
   },
   {
     value: "evergreen",
     label: "Evergreen",
-    description: "Forest-teal tones with confident academic calm.",
-    swatches: ["154 58% 40%", "176 64% 58%", "43 86% 68%"],
+    description: "Forest-teal tones on cooler academic surfaces.",
+    swatches: ["154 58% 40%", "176 64% 58%", "187 70% 66%"],
   },
   {
     value: "ember",
     label: "Ember",
-    description: "Copper and clay for a more distinctive premium tone.",
-    swatches: ["20 82% 56%", "31 90% 68%", "189 68% 62%"],
+    description: "Copper highlights with cleaner graphite contrast.",
+    swatches: ["20 82% 56%", "31 90% 68%", "9 88% 74%"],
   },
 ] as const;
 

@@ -7,8 +7,20 @@ import { cn } from "@/lib/utils";
 
 const STUDENT_PORTAL_LINKS = [
   {
+    href: "/student",
+    label: "Home",
+  },
+  {
     href: "/student/tests",
     label: "Tests",
+  },
+  {
+    href: "/student/courses",
+    label: "Courses",
+  },
+  {
+    href: "/student/diary",
+    label: "Diary",
   },
   {
     href: "/student/account",
@@ -17,9 +29,10 @@ const STUDENT_PORTAL_LINKS = [
 ];
 
 function isActiveLink(pathname: string, href: string) {
-  return href === "/student/tests"
-    ? pathname === href || pathname.startsWith("/student/tests/")
-    : pathname === href || pathname.startsWith(`${href}/`);
+  if (href === "/student") {
+    return pathname === "/student";
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export default function StudentPortalNav() {
@@ -34,8 +47,9 @@ export default function StudentPortalNav() {
           <AppPrefetchLink
             key={link.href}
             href={link.href}
+            aria-current={active ? "page" : undefined}
             className={cn(
-              "app-segmented-link min-w-[6.5rem] items-center text-center",
+              "app-segmented-link app-student-portal-link min-w-[6.5rem] items-center text-center",
               active && "app-segmented-link-active",
             )}
           >

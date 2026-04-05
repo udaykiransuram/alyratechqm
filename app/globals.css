@@ -31,20 +31,20 @@
         --app-label-letter-spacing: 0.01em;
         --app-kicker-letter-spacing: 0.05em;
 
-        --public-bg: 38 24% 96%;
-        --public-surface: 40 26% 98%;
-        --public-surface-2: 36 20% 92%;
-        --public-ink: 216 45% 10%;
-        --public-ink-soft: 216 28% 18%;
+        --public-bg: 212 34% 97%;
+        --public-surface: 212 36% 99%;
+        --public-surface-2: 209 22% 94%;
+        --public-ink: 218 44% 12%;
+        --public-ink-soft: 217 27% 21%;
         --public-muted: 214 13% 42%;
         --public-border: 210 18% 82%;
-        --public-accent: 182 67% 40%;
-        --public-accent-strong: 194 84% 68%;
+        --public-accent: 184 74% 42%;
+        --public-accent-strong: 195 92% 71%;
         --public-success: 155 48% 40%;
-        --public-warm: 36 78% 72%;
+        --public-warm: 192 78% 66%;
         --public-shadow: 220 40% 10%;
-        --public-brand-start: 181 71% 29%;
-        --public-brand-end: 204 60% 18%;
+        --public-brand-start: 184 72% 32%;
+        --public-brand-end: 211 58% 18%;
         --public-hero-start: 206 50% 6%;
         --public-hero-mid: 198 42% 10%;
         --public-hero-end: 194 31% 14%;
@@ -278,9 +278,9 @@
         --public-nav-surface-alpha-strong: 0.82;
         --public-hero-shell-alpha: 0.76;
         --public-hero-shell-alpha-soft: 0.48;
-        --public-bg: 36 31% 97%;
-        --public-surface: 34 39% 98%;
-        --public-surface-2: 33 27% 93%;
+        --public-bg: 214 34% 97%;
+        --public-surface: 214 38% 99%;
+        --public-surface-2: 210 24% 94%;
       }
 
       :root[data-public-style="minimal"],
@@ -297,9 +297,9 @@
 
       :root[data-public-palette="ocean"],
       [data-public-theme-root][data-public-palette="ocean"] {
-        --public-bg: 38 30% 97%;
-        --public-surface: 42 36% 98%;
-        --public-surface-2: 34 32% 93%;
+        --public-bg: 211 34% 97%;
+        --public-surface: 212 38% 99%;
+        --public-surface-2: 208 24% 94%;
         --public-ink: 214 41% 11%;
         --public-ink-soft: 214 31% 18%;
         --public-muted: 214 16% 46%;
@@ -307,7 +307,7 @@
         --public-accent: 183 71% 42%;
         --public-accent-strong: 196 86% 66%;
         --public-success: 155 54% 41%;
-        --public-warm: 35 76% 66%;
+        --public-warm: 192 78% 68%;
         --public-shadow: 220 37% 12%;
         --public-brand-start: 185 72% 31%;
         --public-brand-end: 204 57% 18%;
@@ -330,7 +330,7 @@
         --public-accent: 216 82% 58%;
         --public-accent-strong: 198 92% 70%;
         --public-success: 155 50% 42%;
-        --public-warm: 35 90% 70%;
+        --public-warm: 202 86% 72%;
         --public-shadow: 224 48% 10%;
         --public-brand-start: 217 79% 42%;
         --public-brand-end: 224 58% 19%;
@@ -343,17 +343,17 @@
 
       :root[data-public-palette="evergreen"],
       [data-public-theme-root][data-public-palette="evergreen"] {
-        --public-bg: 43 26% 97%;
-        --public-surface: 40 30% 98%;
-        --public-surface-2: 42 22% 93%;
+        --public-bg: 210 28% 97%;
+        --public-surface: 210 34% 99%;
+        --public-surface-2: 206 20% 94%;
         --public-ink: 165 31% 13%;
         --public-ink-soft: 164 25% 20%;
         --public-muted: 162 12% 43%;
-        --public-border: 157 18% 82%;
+        --public-border: 165 16% 82%;
         --public-accent: 154 58% 40%;
         --public-accent-strong: 176 64% 58%;
         --public-success: 148 50% 40%;
-        --public-warm: 42 86% 68%;
+        --public-warm: 187 70% 66%;
         --public-shadow: 164 34% 11%;
         --public-brand-start: 155 58% 33%;
         --public-brand-end: 177 43% 18%;
@@ -366,25 +366,25 @@
 
       :root[data-public-palette="ember"],
       [data-public-theme-root][data-public-palette="ember"] {
-        --public-bg: 34 34% 97%;
-        --public-surface: 31 40% 98%;
-        --public-surface-2: 28 32% 93%;
-        --public-ink: 18 42% 14%;
-        --public-ink-soft: 18 27% 21%;
-        --public-muted: 18 14% 44%;
-        --public-border: 24 26% 82%;
+        --public-bg: 216 28% 97%;
+        --public-surface: 216 32% 99%;
+        --public-surface-2: 214 18% 94%;
+        --public-ink: 220 30% 14%;
+        --public-ink-soft: 220 18% 22%;
+        --public-muted: 218 10% 44%;
+        --public-border: 215 16% 82%;
         --public-accent: 20 82% 56%;
         --public-accent-strong: 31 90% 68%;
         --public-success: 154 44% 40%;
-        --public-warm: 189 68% 62%;
-        --public-shadow: 18 34% 10%;
+        --public-warm: 9 88% 74%;
+        --public-shadow: 220 24% 10%;
         --public-brand-start: 22 84% 48%;
-        --public-brand-end: 16 48% 18%;
-        --public-hero-start: 18 48% 8%;
-        --public-hero-mid: 16 38% 11%;
-        --public-hero-end: 18 28% 13%;
-        --public-footer-start: 18 44% 8%;
-        --public-footer-end: 16 28% 11%;
+        --public-brand-end: 223 34% 18%;
+        --public-hero-start: 223 36% 8%;
+        --public-hero-mid: 220 28% 11%;
+        --public-hero-end: 218 22% 13%;
+        --public-footer-start: 223 34% 8%;
+        --public-footer-end: 219 22% 11%;
       }
 
       :root[data-app-nav-tone="midnight"] {
@@ -2352,7 +2352,280 @@
   }
 
   .app-student-page-shell {
-    @apply app-page-shell max-w-[88rem] px-4 py-5 sm:px-0;
+    @apply app-page-shell max-w-[84rem] px-4 py-4 sm:px-0 sm:py-5;
+  }
+
+  .app-student-page-shell .app-page-hero {
+    border-color: hsl(var(--border) / 0.78);
+    border-radius: calc(var(--app-radius-lg) + 0.125rem);
+    background:
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.07) 0%, transparent 16rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-1) / 0.985) 48%,
+        hsl(var(--app-surface-2) / 0.86) 100%
+      );
+    box-shadow:
+      0 20px 36px -34px hsl(var(--app-shadow-deep) / 0.1),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-student-page-shell .app-page-hero::before {
+    top: -3rem;
+    right: -2rem;
+    width: 8.75rem;
+    height: 8.75rem;
+    background: radial-gradient(circle, hsl(var(--primary) / 0.11) 0%, transparent 72%);
+  }
+
+  .app-student-page-shell .app-page-hero-header {
+    gap: 0.75rem;
+  }
+
+  .app-student-page-shell .app-page-hero-copy {
+    max-width: 46rem;
+    gap: 0.5rem;
+  }
+
+  .app-student-page-shell .app-page-title-lg {
+    letter-spacing: -0.034em;
+  }
+
+  .app-student-page-shell .app-page-description {
+    max-width: 40rem;
+    color: hsl(var(--foreground) / 0.7);
+  }
+
+  .app-student-page-shell .app-page-meta {
+    gap: 0.45rem;
+  }
+
+  .app-student-page-shell .app-meta-chip {
+    min-height: 1.85rem;
+    padding-inline: 0.7rem;
+    border-color: hsl(var(--border) / 0.68);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-surface-2) / 0.74) 100%
+      );
+    color: hsl(var(--foreground) / 0.76);
+    box-shadow: inset 0 1px 0 hsl(var(--app-surface-1) / 0.84);
+  }
+
+  .app-student-page-shell .app-metric-grid {
+    gap: 0.625rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.75rem), 1fr));
+  }
+
+  .app-student-page-shell .app-metric-card {
+    padding: 0.7rem 0.85rem;
+    border-color: hsl(var(--border) / 0.74);
+    border-radius: calc(var(--app-radius-md) + 0.2rem);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.78) 100%
+      );
+    box-shadow:
+      0 12px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-student-page-shell .app-metric-label {
+    letter-spacing: 0.08em;
+  }
+
+  .app-student-page-shell .app-metric-value {
+    margin-top: 0.35rem;
+    font-size: 1.14rem;
+  }
+
+  .app-student-page-shell .app-metric-meta {
+    margin-top: 0.25rem;
+    font-size: 0.72rem;
+    line-height: 1.15rem;
+  }
+
+  .app-student-page-shell .app-page-hero-toolbar {
+    padding: 0.75rem;
+    border-color: hsl(var(--border) / 0.68);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-surface-2) / 0.74) 100%
+      );
+    box-shadow:
+      0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-student-page-shell .app-surface {
+    box-shadow:
+      0 18px 34px -34px hsl(var(--app-shadow-deep) / 0.1),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-student-page-shell .app-section-header {
+    padding-inline: 0.9rem;
+    padding-top: 0.8rem;
+    padding-bottom: 0.7rem;
+    border-color: hsl(var(--border) / 0.66);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.988) 0%,
+        hsl(var(--app-surface-2) / 0.48) 100%
+      );
+  }
+
+  .app-student-page-shell .app-section-body {
+    padding-inline: 0.9rem;
+    padding-top: 0.8rem;
+    padding-bottom: 0.9rem;
+  }
+
+  .app-student-page-shell .app-page-hero .app-segmented-control {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .app-student-header-brand {
+    padding-inline: 0.35rem 0.6rem;
+  }
+
+  .app-student-header-links {
+    @apply hidden items-center gap-1 rounded-full border p-1 sm:flex;
+    border-color: hsl(var(--app-nav-border) / 0.58);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.18) 0%,
+        hsl(var(--background) / 0.1) 100%
+      );
+    box-shadow: inset 0 1px 0 hsl(var(--background) / 0.22);
+  }
+
+  .app-student-header-link {
+    @apply inline-flex items-center justify-center rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.01em] transition-[color,background-color,border-color,box-shadow] duration-200;
+    color: hsl(var(--app-nav-foreground) / 0.72);
+  }
+
+  .app-student-header-link:hover {
+    background-color: hsl(var(--background) / 0.16);
+    color: hsl(var(--app-nav-foreground));
+  }
+
+  .app-student-header-link-active {
+    border: 1px solid hsl(var(--app-nav-accent) / 0.34);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-nav-accent) / 0.28) 0%,
+        hsl(var(--background) / 0.16) 100%
+      );
+    color: hsl(var(--app-nav-foreground));
+    box-shadow:
+      0 12px 22px -24px hsl(var(--app-shadow-deep) / 0.32),
+      inset 0 1px 0 hsl(var(--background) / 0.22);
+  }
+
+  .app-student-header-signout {
+    border-color: hsl(var(--app-nav-border) / 0.62) !important;
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.18) 0%,
+        hsl(var(--background) / 0.1) 100%
+      ) !important;
+    color: hsl(var(--app-nav-foreground)) !important;
+    box-shadow:
+      0 10px 20px -22px hsl(var(--app-shadow-deep) / 0.26),
+      inset 0 1px 0 hsl(var(--background) / 0.18) !important;
+  }
+
+  .app-student-header-signout:hover {
+    border-color: hsl(var(--app-nav-accent) / 0.32) !important;
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.24) 0%,
+        hsl(var(--app-nav-accent) / 0.18) 100%
+      ) !important;
+  }
+
+  .app-student-portal-nav {
+    @apply hidden justify-center border-b px-3 py-2.5 backdrop-blur;
+    position: sticky;
+    top: var(--app-header-height);
+    z-index: 30;
+    border-color: hsl(var(--border) / 0.66);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.94) 0%,
+        hsl(var(--app-surface-2) / 0.9) 100%
+      );
+    box-shadow:
+      0 14px 24px -24px hsl(var(--app-shadow-deep) / 0.1),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.76);
+  }
+
+  @media (max-width: 639px) {
+    .app-student-portal-nav {
+      @apply flex;
+    }
+  }
+
+  .app-student-portal-nav .app-segmented-control {
+    width: min(100%, 42rem);
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding: 0.35rem;
+    border-color: hsl(var(--border) / 0.74);
+    border-radius: 1.05rem;
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-surface-2) / 0.82) 100%
+      );
+    box-shadow:
+      0 14px 22px -24px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+    scrollbar-width: none;
+  }
+
+  .app-student-portal-nav .app-segmented-control::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-student-portal-nav .app-segmented-link {
+    flex: 1 0 5.35rem;
+    min-width: 5.35rem;
+    align-items: center;
+    padding: 0.65rem 0.7rem;
+    border-radius: 0.9rem;
+  }
+
+  .app-student-portal-nav .app-segmented-link-label {
+    font-size: 0.8rem;
+  }
+
+  @media (min-width: 768px) {
+    .app-student-page-shell .app-page-hero .app-segmented-control {
+      width: auto;
+    }
+
+    .app-student-page-shell .app-section-header,
+    .app-student-page-shell .app-section-body {
+      padding-inline: 1rem;
+    }
   }
 
   .app-student-card-grid {
@@ -2873,6 +3146,429 @@
     @apply px-3.5 pb-3.5 pt-3 sm:px-4 sm:pb-3.5 sm:pt-3;
   }
 
+  .app-learning-hero {
+    border-radius: calc(var(--app-radius-lg) + 0.125rem);
+  }
+
+  .app-learning-hero .app-page-hero-body {
+    @apply space-y-3 p-3 sm:p-3.5 lg:p-4;
+  }
+
+  .app-learning-hero .app-page-hero-header {
+    @apply gap-2.5;
+  }
+
+  .app-learning-hero .app-page-title-lg {
+    @apply text-[1.62rem] sm:text-[2.14rem] xl:text-[2.38rem];
+  }
+
+  .app-learning-hero .app-page-description {
+    @apply max-w-[44rem] text-[14px] leading-6;
+  }
+
+  .app-learning-hero .app-page-meta {
+    @apply gap-1.5;
+  }
+
+  .app-learning-hero .app-metric-grid {
+    @apply gap-2 lg:grid-cols-2 xl:grid-cols-4;
+  }
+
+  .app-learning-hero .app-metric-card {
+    @apply px-3 py-2.5;
+    min-height: 0;
+  }
+
+  .app-learning-hero .app-metric-value {
+    @apply mt-1 text-[1.12rem] sm:text-[1.28rem];
+  }
+
+  .app-learning-hero .app-metric-meta {
+    @apply mt-0.5 text-[11px] leading-5;
+  }
+
+  .app-learning-hero .app-page-hero-toolbar {
+    @apply p-2.5 sm:p-3;
+  }
+
+  .app-course-page {
+    @apply space-y-4;
+  }
+
+  .app-course-list-grid {
+    @apply grid gap-3.5 md:grid-cols-2 2xl:grid-cols-3;
+    align-items: stretch;
+  }
+
+  .app-course-list-card {
+    @apply app-surface h-full overflow-hidden;
+  }
+
+  .app-course-list-cover-shell {
+    @apply overflow-hidden border-b;
+    border-color: hsl(var(--border) / 0.62);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-2) / 0.48) 0%,
+        hsl(var(--app-surface-1) / 0.96) 100%
+      );
+  }
+
+  .app-course-list-cover {
+    height: clamp(7.5rem, 16vw, 9.25rem);
+    width: 100%;
+    object-fit: cover;
+  }
+
+  .app-course-list-card .app-course-title,
+  .app-diary-entry-card .app-course-title {
+    line-height: 1.45rem;
+  }
+
+  .app-course-list-card .app-course-summary,
+  .app-diary-entry-card .app-course-summary {
+    min-height: 0;
+    line-height: 1.35rem;
+  }
+
+  .app-course-title {
+    @apply text-[1rem] font-semibold leading-6 text-foreground sm:text-[1.05rem];
+    letter-spacing: -0.02em;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .app-course-summary {
+    @apply text-[13px] leading-6 text-muted-foreground;
+    min-height: 3.25rem;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .app-course-metric-grid {
+    @apply grid gap-2 sm:grid-cols-2;
+  }
+
+  .app-course-metric-card {
+    @apply rounded-[1rem] border px-3 py-2.5;
+    min-height: 4.6rem;
+    border-color: hsl(var(--border) / 0.7);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.76) 100%
+      );
+    box-shadow:
+      0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-course-metric-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  .app-course-metric-value {
+    @apply mt-1.5 text-sm font-semibold leading-5 text-foreground;
+  }
+
+  .app-course-chip-cloud {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .app-course-action-row {
+    @apply mt-auto flex flex-wrap items-stretch gap-1.5 pt-0.5;
+  }
+
+  .app-course-action-row > * {
+    flex: 1 1 8.75rem;
+  }
+
+  .app-course-action-button {
+    @apply min-h-9 w-full rounded-lg px-3 py-1.5 text-[12px] font-semibold leading-5;
+    letter-spacing: 0;
+  }
+
+  .app-course-detail-layout {
+    @apply grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_19rem];
+    align-items: start;
+  }
+
+  .app-course-student-layout {
+    @apply grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)];
+    align-items: start;
+  }
+
+  .app-course-student-layout > :first-child {
+    order: 2;
+  }
+
+  .app-course-student-layout > :last-child {
+    order: 1;
+  }
+
+  @media (min-width: 1280px) {
+    .app-course-student-layout > :first-child,
+    .app-course-student-layout > :last-child {
+      order: 0;
+    }
+  }
+
+  .app-course-sidebar {
+    @apply space-y-3.5 lg:sticky lg:top-4 lg:self-start;
+  }
+
+  .app-course-student-sidebar {
+    @apply space-y-3.5 xl:sticky xl:top-4 xl:self-start;
+  }
+
+  .app-course-cover-card {
+    @apply app-surface overflow-hidden;
+  }
+
+  .app-course-cover-image {
+    height: clamp(10rem, 22vw, 13.75rem);
+    width: 100%;
+    object-fit: cover;
+  }
+
+  .app-course-panel {
+    @apply rounded-[1rem] border px-3.5 py-3;
+    border-color: hsl(var(--border) / 0.68);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-surface-2) / 0.72) 100%
+      );
+    box-shadow:
+      0 12px 22px -30px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.76);
+  }
+
+  .app-course-block-card {
+    @apply app-surface overflow-hidden scroll-mt-24;
+  }
+
+  .app-course-section {
+    @apply space-y-3;
+  }
+
+  .app-course-section-summary {
+    @apply app-surface flex cursor-pointer items-center justify-between gap-4 rounded-[1.1rem] border px-4 py-3.5;
+    border-color: hsl(var(--border) / 0.7);
+    list-style: none;
+  }
+
+  .app-course-section-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .app-course-section-icon {
+    transition: transform 0.2s ease;
+  }
+
+  .app-course-section[open] .app-course-section-icon {
+    transform: rotate(180deg);
+  }
+
+  .app-course-lesson-divider {
+    @apply h-px w-full bg-border/60;
+  }
+
+  .app-course-outline-section-title {
+    @apply flex items-start justify-between gap-3 px-1;
+  }
+
+  .app-course-media-frame {
+    @apply overflow-hidden rounded-[1.2rem] border;
+    border-color: hsl(var(--border) / 0.64);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-surface-2) / 0.68) 100%
+      );
+  }
+
+  .app-course-toc {
+    @apply border-dashed;
+    border-color: hsl(var(--border) / 0.6);
+  }
+
+  .app-course-toc-button {
+    @apply w-full rounded-lg px-2 py-1.5 text-left text-sm font-semibold text-foreground transition-colors;
+  }
+
+  .app-course-toc-button:hover {
+    @apply bg-muted/40;
+  }
+
+  .app-course-toc-button-sub {
+    @apply pl-4 text-[13px] font-medium text-muted-foreground;
+  }
+
+  .app-course-outline-button {
+    @apply flex w-full items-center justify-between gap-3 rounded-[1rem] border px-3.5 py-2.5 text-left transition-[border-color,background-color,box-shadow,transform,color] duration-200;
+    border-color: hsl(var(--border) / 0.7);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.985) 0%,
+        hsl(var(--app-surface-2) / 0.72) 100%
+      );
+    color: hsl(var(--foreground));
+    box-shadow:
+      0 12px 22px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.78);
+  }
+
+  .app-course-outline-button:hover {
+    transform: translateY(-1px);
+    border-color: hsl(var(--primary) / 0.2);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-tint) / 0.66) 100%
+      );
+    box-shadow:
+      0 18px 28px -28px hsl(var(--app-shadow-deep) / 0.12),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-course-outline-button-active {
+    border-color: hsl(var(--primary) / 0.3);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--primary) / 0.08) 0%,
+        hsl(var(--app-surface-1) / 0.98) 100%
+      );
+    box-shadow:
+      0 20px 30px -28px hsl(var(--primary) / 0.14),
+      inset 0 0 0 1px hsl(var(--primary) / 0.08);
+  }
+
+  .app-course-outline-button-locked,
+  .app-course-outline-button-locked:hover {
+    transform: none;
+    cursor: not-allowed;
+    border-color: hsl(var(--border) / 0.5);
+    background: hsl(var(--app-surface-2) / 0.36);
+    color: hsl(var(--muted-foreground));
+    box-shadow: none;
+  }
+
+  .app-course-editor-grid {
+    @apply grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_19rem];
+  }
+
+  .app-course-editor-main,
+  .app-course-editor-sidebar {
+    @apply space-y-3.5;
+  }
+
+  .app-course-editor-sidebar {
+    @apply lg:sticky lg:top-4 lg:self-start;
+  }
+
+  .app-course-editor-card {
+    @apply app-surface overflow-hidden;
+  }
+
+  .app-course-editor-block-card {
+    @apply overflow-hidden border shadow-none;
+    border-color: hsl(var(--border) / 0.72);
+    border-radius: calc(var(--app-radius-lg) + 0.05rem);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.985) 0%,
+        hsl(var(--app-surface-2) / 0.78) 100%
+      );
+  }
+
+  .app-course-editor-block-card-dragging {
+    opacity: 0.65;
+    transform: scale(0.995);
+  }
+
+  .app-course-editor-block-header {
+    @apply border-b px-3.5 py-3 sm:px-4 sm:py-3.5;
+    border-color: hsl(var(--border) / 0.64);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.56) 100%
+      );
+  }
+
+  .app-course-editor-block-body {
+    @apply space-y-3.5 p-3 sm:p-3.5;
+  }
+
+  .app-course-editor-item-card {
+    @apply rounded-[1rem] border border-border/60 bg-muted/5 p-3;
+  }
+
+  .app-course-save-actions {
+    @apply flex flex-col gap-2 pt-1;
+  }
+
+  .app-course-note-area {
+    @apply app-form-textarea min-h-[8rem] resize-y;
+  }
+
+  .app-diary-page {
+    @apply space-y-4;
+  }
+
+  .app-diary-board-grid {
+    @apply grid gap-3 md:grid-cols-2 2xl:grid-cols-3;
+    align-items: stretch;
+  }
+
+  .app-diary-entry-card {
+    @apply app-surface h-full overflow-hidden;
+  }
+
+  .app-diary-detail-layout {
+    @apply grid gap-4 lg:grid-cols-[minmax(0,1fr)_17.5rem] xl:grid-cols-[minmax(0,1fr)_18.75rem];
+    align-items: start;
+  }
+
+  .app-diary-resource-card {
+    @apply rounded-[1rem] border p-3;
+    border-color: hsl(var(--border) / 0.7);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.985) 0%,
+        hsl(var(--app-surface-2) / 0.78) 100%
+      );
+    box-shadow:
+      0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-diary-media-frame {
+    @apply overflow-hidden rounded-[1rem] border;
+    border-color: hsl(var(--border) / 0.64);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-surface-2) / 0.68) 100%
+      );
+  }
+
   .app-filter-panel {
     @apply app-surface overflow-hidden;
   }
@@ -3048,6 +3744,25 @@
     @apply gap-2.5 px-3.5 py-3;
   }
 
+  .app-filter-panel-embedded {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .app-filter-panel-embedded .app-filter-panel-body {
+    @apply space-y-3 px-0 py-0;
+  }
+
+  .app-filter-panel-embedded .app-filter-grid {
+    @apply gap-2;
+  }
+
+  .app-filter-embedded-actions {
+    @apply flex justify-end;
+  }
+
   .app-report-filter-hint {
     @apply text-[12px] leading-5 text-muted-foreground;
   }
@@ -3084,6 +3799,55 @@
 
   .app-editor-aside {
     @apply space-y-3.5;
+  }
+
+  .app-editor-summary-list {
+    @apply space-y-3 rounded-[1rem] border px-3.5 py-3;
+    border-color: hsl(var(--border) / 0.7);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.985) 0%,
+        hsl(var(--app-surface-2) / 0.76) 100%
+      );
+    box-shadow:
+      0 12px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-editor-summary-row {
+    @apply flex flex-wrap items-start justify-between gap-2;
+  }
+
+  .app-editor-summary-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  .app-editor-summary-value {
+    @apply text-sm font-medium leading-6 text-foreground;
+  }
+
+  .app-editor-chip-section {
+    @apply space-y-2;
+  }
+
+  .app-editor-chip-section-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .app-editor-action-cloud {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .app-editor-action-cloud > * {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .app-editor-action-cloud > * {
+      flex: 0 0 auto;
+    }
   }
 
   @media (min-width: 1024px) {
@@ -6669,7 +7433,7 @@
   --home-bg-2: 200 42% 15%;
   --home-glow-cyan: 194 100% 76%;
   --home-glow-teal: 186 82% 46%;
-  --home-accent-gold: 38 88% 70%;
+  --home-accent-gold: 202 88% 72%;
   --home-stage-top: var(--home-bg-0);
   --home-stage-mid: var(--home-bg-1);
   --home-stage-bottom: var(--home-bg-2);
@@ -6687,19 +7451,19 @@
   --home-grid-alpha: 0.14;
   --home-noise-alpha: 0.07;
   --home-fog-alpha: 0.28;
-  --home-proof-bg: 34 38% 95%;
-  --home-proof-surface: 34 46% 98%;
-  --home-proof-surface-strong: 32 26% 92%;
+  --home-proof-bg: 214 32% 96%;
+  --home-proof-surface: 214 36% 99%;
+  --home-proof-surface-strong: 210 22% 94%;
   --home-proof-text: 216 38% 14%;
-  --home-proof-muted: 214 16% 41%;
-  --home-proof-border: 34 22% 82%;
+  --home-proof-muted: 214 14% 43%;
+  --home-proof-border: 210 18% 82%;
   --home-proof-shadow: 214 36% 12%;
   --home-panel-radius: 2.2rem;
   --home-pill-radius: 999px;
 
   --public-accent: 186 79% 44%;
   --public-accent-strong: 194 100% 76%;
-  --public-warm: 38 88% 70%;
+  --public-warm: 202 88% 72%;
   --public-shadow: 224 42% 8%;
   --public-brand-start: 190 72% 36%;
   --public-brand-end: 214 60% 18%;
@@ -10563,5 +11327,197 @@ html[data-public-home-flagship="true"] ::selection {
   .app-auth-kicker,
   .public-flow-badge {
     text-transform: none;
+  }
+
+  .student-notification-trigger {
+    position: relative;
+    overflow: visible;
+    flex-shrink: 0;
+    border-color: hsl(var(--app-nav-border) / 0.62) !important;
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.18) 0%,
+        hsl(var(--background) / 0.1) 100%
+      ) !important;
+    color: hsl(var(--app-nav-foreground)) !important;
+    box-shadow:
+      0 10px 20px -22px hsl(var(--app-shadow-deep) / 0.26),
+      inset 0 1px 0 hsl(var(--background) / 0.18) !important;
+  }
+
+  .student-notification-trigger svg {
+    color: hsl(var(--app-nav-foreground) / 0.86);
+  }
+
+  .student-notification-trigger[data-has-unread="true"] svg {
+    color: hsl(var(--primary));
+  }
+
+  .student-notification-trigger:hover,
+  .student-notification-trigger[data-state="open"] {
+    border-color: hsl(var(--app-nav-accent) / 0.32) !important;
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.24) 0%,
+        hsl(var(--app-nav-accent) / 0.18) 100%
+      ) !important;
+    box-shadow:
+      0 12px 24px -22px hsl(var(--app-shadow-deep) / 0.28),
+      inset 0 1px 0 hsl(var(--background) / 0.2) !important;
+  }
+
+  .student-notification-trigger[data-has-unread="true"] {
+    border-color: hsl(var(--app-nav-accent) / 0.34) !important;
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--background) / 0.22) 0%,
+        hsl(var(--app-nav-accent) / 0.14) 100%
+      ) !important;
+    box-shadow:
+      0 14px 28px -24px hsl(var(--primary) / 0.16),
+      inset 0 1px 0 hsl(var(--background) / 0.2) !important;
+  }
+
+  .student-notification-badge {
+    position: absolute;
+    top: -0.3rem;
+    right: -0.3rem;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: hsl(var(--app-danger));
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1.1rem;
+    text-align: center;
+    box-shadow: 0 6px 14px -10px hsl(var(--app-shadow-deep) / 0.4);
+  }
+
+  .student-notification-popover {
+    width: min(19.5rem, calc(100vw - 1.25rem));
+    display: flex;
+    flex-direction: column;
+    max-height: min(24rem, var(--radix-popover-content-available-height, 24rem));
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .student-notification-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem;
+    padding: 0.75rem 0.8rem 0.65rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.6);
+  }
+
+  .student-notification-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  .student-notification-subtitle {
+    font-size: 0.78rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .student-notification-mark {
+    font-size: 0.78rem;
+  }
+
+  .student-notification-list {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0.4rem;
+    overflow: auto;
+    min-height: 0;
+    padding: 0.65rem 0.8rem 0.8rem;
+  }
+
+  .student-notification-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.6rem 0.7rem;
+    border-radius: calc(var(--app-radius-md) + 0.15rem);
+    border: 1px solid hsl(var(--border) / 0.6);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.76) 100%
+      );
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .student-notification-item:hover {
+    border-color: hsl(var(--app-nav-accent) / 0.4);
+    box-shadow: 0 12px 24px -22px hsl(var(--app-shadow-deep) / 0.2);
+    transform: translateY(-1px);
+  }
+
+  .student-notification-item:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  .student-notification-item:active {
+    transform: translateY(0);
+  }
+
+  .student-notification-item--unread {
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-tint) / 0.82) 0%,
+        hsl(var(--app-surface-1) / 0.98) 100%
+      );
+    border-color: hsl(var(--app-nav-accent) / 0.3);
+  }
+
+  .student-notification-item-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .student-notification-item-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .student-notification-item-message {
+    font-size: 0.73rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .student-notification-item-time {
+    font-size: 0.68rem;
+    color: hsl(var(--muted-foreground));
+    white-space: nowrap;
+  }
+
+  .student-notification-empty {
+    display: flex;
+    min-height: 4.75rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed hsl(var(--border) / 0.64);
+    border-radius: calc(var(--app-radius-md) + 0.1rem);
+    background: hsl(var(--app-surface-2) / 0.3);
+    padding: 0.9rem;
+    font-size: 0.78rem;
+    text-align: center;
+    color: hsl(var(--muted-foreground));
   }
 }

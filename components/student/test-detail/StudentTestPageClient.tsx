@@ -28,18 +28,26 @@ type StudentTestPageClientProps = {
   paperId: string;
   initialData: StudentTestDetailResponse | null;
   initialLoadError?: string | null;
+  returnToPath?: string;
 };
+
+function getBackLabel(href: string) {
+  return href.startsWith("/student/courses/") ? "Back to Course" : "Back to Tests";
+}
 
 export default function StudentTestPageClient({
   paperId,
   initialData,
   initialLoadError = null,
+  returnToPath = "/student/tests",
 }: StudentTestPageClientProps) {
-  const testsHref = "/student/tests";
+  const testsHref = returnToPath || "/student/tests";
+  const backLabel = getBackLabel(testsHref);
   const runtime = useStudentTestRuntime({
     paperId,
     initialData,
     initialLoadError,
+    returnToPath: testsHref,
   });
 
   if (runtime.loading) {
@@ -68,7 +76,7 @@ export default function StudentTestPageClient({
               className="app-student-action-secondary"
             >
               <AppPrefetchLink href={testsHref}>
-                Back to Tests
+                {backLabel}
               </AppPrefetchLink>
             </Button>
           }
@@ -92,6 +100,7 @@ export default function StudentTestPageClient({
         hasManualReviewQuestions={runtime.hasManualReviewQuestions}
         questionCount={runtime.questionList.length}
         testsHref={testsHref}
+        backLabel={backLabel}
       />
     );
   }
@@ -109,6 +118,7 @@ export default function StudentTestPageClient({
         isStarting={runtime.isStarting}
         actionError={runtime.actionError}
         testsHref={testsHref}
+        backLabel={backLabel}
         onStartAttempt={runtime.startAttempt}
       />
     );

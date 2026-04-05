@@ -3,6 +3,7 @@ import dynamicComponent from "next/dynamic";
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
 import ReturnBackButton from "@/components/navigation/ReturnBackButton";
+import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import QuestionPaperFormLoadingState from "@/components/QuestionPaperFormLoadingState";
 import {
   getWorkspaceClasses,
@@ -21,8 +22,19 @@ const CreateQuestionPaperPageClient = dynamicComponent(
   },
 );
 
-export default async function CreateQuestionPaperPage() {
+type CreateQuestionPaperPageProps = {
+  searchParams?: Promise<{ returnTo?: string | string[] }>;
+};
+
+export default async function CreateQuestionPaperPage({
+  searchParams,
+}: CreateQuestionPaperPageProps) {
   const { schoolKey } = await requireWorkspaceStaffSession();
+  const resolvedSearchParams = await searchParams;
+  const rawReturnTo = Array.isArray(resolvedSearchParams?.returnTo)
+    ? resolvedSearchParams.returnTo[0]
+    : resolvedSearchParams?.returnTo;
+  const returnToPath = getSafeReturnToPath(rawReturnTo);
 
   let classes: Awaited<ReturnType<typeof getWorkspaceClasses>> = [];
   let sections: Awaited<ReturnType<typeof getWorkspaceSections>> = [];
@@ -64,7 +76,7 @@ export default async function CreateQuestionPaperPage() {
           description="Set the paper structure, section defaults, and question mix in one cleaner builder."
           actions={
             <ReturnBackButton
-              fallbackPath="/workspace/question-papers"
+              fallbackPath={returnToPath || "/workspace/question-papers"}
               label="Cancel"
             />
           }
@@ -82,6 +94,7 @@ export default async function CreateQuestionPaperPage() {
           initialSubjects={subjects}
           initialTags={tags}
           initialMessage={initialMessage}
+          returnTo={returnToPath || null}
         />
       </div>
     </PageShell>

@@ -28,6 +28,7 @@ import {
 import { isOnlineQuestionType } from "@/lib/question-paper/grading";
 import { resolveTeacherPaperScope } from "@/lib/question-paper/access";
 import { sanitizeRichTextToPlainText } from "@/lib/security/html-sanitize";
+import { createTestAssignedNotifications } from "@/lib/server/student-notifications";
 
 function resolveSchoolKey(req: NextRequest) {
   const url = new URL(req.url);
@@ -45,6 +46,16 @@ function normalizeIds(value: unknown) {
   return Array.from(
     new Set(value.map((item) => String(item || "").trim()).filter(Boolean)),
   );
+}
+
+function areSameIds(left: unknown[], right: unknown[]) {
+  const leftIds = new Set(normalizeIds(left));
+  const rightIds = new Set(normalizeIds(right));
+  if (leftIds.size !== rightIds.size) return false;
+  for (const id of leftIds) {
+    if (!rightIds.has(id)) return false;
+  }
+  return true;
 }
 
 function normalizeDate(value: unknown) {
@@ -308,7 +319,7 @@ export async function PUT(
       _id: id,
       ...buildArchiveFilter(false),
     })
-      .select("class")
+      .select("class onlineEnabled assignedAcademicSections")
       .lean();
 
     const data = await req.json();
@@ -588,6 +599,29 @@ export async function PUT(
     }
 
     const updatedObject = updated?.toObject?.() ?? updated;
+
+    const wasOnlineEnabled = Boolean(existingPaper?.onlineEnabled);
+    const scopeChanged =
+      toIdString(existingPaper?.class) !== toIdString(updatedObject?.class) ||
+      !areSameIds(
+        Array.isArray(existingPaper?.assignedAcademicSections)
+          ? existingPaper.assignedAcademicSections
+          : [],
+        assignmentValidation.ids,
+      );
+
+    if (onlineEnabled && (!wasOnlineEnabled || scopeChanged)) {
+      await createTestAssignedNotifications({
+        schoolKey,
+        paperId: String(updatedObject?._id || id),
+        title: String(updatedObject?.title || title),
+        classId: String(updatedObject?.class || classId),
+        assignedAcademicSections: assignmentValidation.ids,
+        examDate: effectiveOnlineStart || normalizeDate(examDate) || null,
+      }).catch((error) => {
+        console.error("Failed to create test assigned notifications:", error);
+      });
+    }
 
     return NextResponse.json({
       success: true,

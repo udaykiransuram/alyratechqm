@@ -10,13 +10,15 @@ import { cn } from "@/lib/utils";
 
 type FilePickerFieldProps = {
   id: string;
-  label: string;
+  label?: string;
   accept?: string;
   disabled?: boolean;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
   selectedFileName?: string | null;
   className?: string;
+  hideLabel?: boolean;
+  buttonLabel?: string;
 };
 
 export default function FilePickerField({
@@ -28,6 +30,8 @@ export default function FilePickerField({
   placeholder = "No file selected",
   selectedFileName,
   className,
+  hideLabel = false,
+  buttonLabel = "Choose file",
 }: FilePickerFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [internalFileName, setInternalFileName] = useState("");
@@ -47,7 +51,7 @@ export default function FilePickerField({
 
   return (
     <div className={cn("space-y-2", className)}>
-      <Label htmlFor={id}>{label}</Label>
+      {!hideLabel && label ? <Label htmlFor={id}>{label}</Label> : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           ref={inputRef}
@@ -66,6 +70,7 @@ export default function FilePickerField({
           role="button"
           tabIndex={disabled ? -1 : 0}
           aria-disabled={disabled}
+          aria-label={label || buttonLabel}
           onKeyDown={handleKeyboardTrigger}
           className={cn(
             buttonVariants({ variant: "outline", size: "sm" }),
@@ -76,7 +81,7 @@ export default function FilePickerField({
           )}
         >
           <Upload className="h-4 w-4" />
-          <span>Choose file</span>
+          <span>{buttonLabel}</span>
         </label>
         <div
           className={cn(
