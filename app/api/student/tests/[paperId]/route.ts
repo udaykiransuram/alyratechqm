@@ -5,7 +5,7 @@ import {
   buildExamRuntimeErrorPayload,
   isExamRuntimeEnabled,
 } from "@/lib/exam-runtime";
-import { getStudentTestDetailData } from "@/app/api/student/tests/[paperId]/data";
+import { getStudentTestDetailData } from "@/lib/server/student-tests";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

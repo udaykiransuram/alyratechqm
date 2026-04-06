@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 
-import { listStudentTestsData } from "@/app/api/student/tests/data";
 import StudentTestsPageClient, {
   type StudentTest,
 } from "@/components/student/StudentTestsPageClient";
@@ -10,9 +9,9 @@ import {
   buildExamRuntimeErrorPayload,
   isExamRuntimeEnabled,
 } from "@/lib/exam-runtime";
+import { listStudentTestsData } from "@/lib/server/student-tests";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type StudentTestsPageProps = {

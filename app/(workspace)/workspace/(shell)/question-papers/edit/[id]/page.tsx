@@ -16,7 +16,6 @@ import {
 } from "@/lib/server/workspace-support-data";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 function buildQuestionPaperInitialData(rawData: any) {
   return {

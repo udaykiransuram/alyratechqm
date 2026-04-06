@@ -1,12 +1,15 @@
+import "server-only";
+
 import mongoose from "mongoose";
 
-import ReportDispatchJob from "@/models/ReportDispatchJob";
+import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import {
   hydrateAcademicSectionsWithClasses,
   hydrateUsersWithAcademicContext,
 } from "@/lib/analytics/hydrateResponses";
 import { getDispatchAttemptAckWaitUntil } from "@/lib/reports/dispatchAttempts";
+import ReportDispatchJob from "@/models/ReportDispatchJob";
 
 export const DEFAULT_REPORT_JOB_PAGE_SIZE = 40;
 export const MAX_REPORT_JOB_PAGE_SIZE = 100;
@@ -294,6 +297,8 @@ export async function getReportJobsPageData({
   schoolKey: string;
   query: ReportJobsQuery;
 }) {
+  await connectDB();
+
   const status = String(query.status || "").trim();
   const requestedType = String(query.type || "").trim();
   const requestedScope = String(query.scope || "").trim();

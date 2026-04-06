@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenantSession } from "@/lib/api-auth";
-import { getStudentsByClassPageData } from "./data";
+import { getStudentsByClassPageData } from "@/lib/server/workspace-students";
 
 export const dynamic = "force-dynamic";
 

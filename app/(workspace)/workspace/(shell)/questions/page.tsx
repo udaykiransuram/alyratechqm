@@ -72,7 +72,6 @@ function resolveQuestionsPageSize(value: string | string[] | undefined) {
   return Math.min(100, Math.max(1, Math.floor(numericValue)));
 }
 
-export const dynamic = "force-dynamic";
 
 export default async function ViewQuestionsPage({
   searchParams,

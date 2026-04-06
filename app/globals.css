@@ -879,6 +879,11 @@
       inset 0 -1px 0 hsl(var(--app-nav-border) / 0.52);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
+    isolation: isolate;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform;
   }
 
   .app-sidebar-shell {
@@ -897,6 +902,11 @@
       28px 0 52px -42px hsl(var(--app-shadow-deep) / 0.24);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+    isolation: isolate;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform;
   }
 
   .app-sidebar-resize-handle {
@@ -3196,12 +3206,23 @@
   }
 
   .app-course-list-grid {
-    @apply grid gap-3.5 md:grid-cols-2 2xl:grid-cols-3;
-    align-items: stretch;
+    @apply grid gap-3 sm:gap-3.5 md:grid-cols-2 xl:grid-cols-3;
+    align-items: start;
+  }
+
+  .app-course-card-wrap {
+    @apply relative isolate;
+    align-self: start;
   }
 
   .app-course-list-card {
-    @apply app-surface h-full overflow-hidden;
+    @apply app-surface h-full overflow-hidden border border-border/55 transition-[transform,box-shadow] duration-200;
+  }
+
+  .app-course-list-card:hover {
+    box-shadow:
+      0 30px 46px -42px hsl(var(--app-shadow-deep) / 0.24),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.88);
   }
 
   .app-course-list-cover-shell {
@@ -3216,9 +3237,22 @@
   }
 
   .app-course-list-cover {
-    height: clamp(7.5rem, 16vw, 9.25rem);
+    height: clamp(6rem, 10.5vw, 7.35rem);
     width: 100%;
     object-fit: cover;
+  }
+
+  .app-course-list-cover-placeholder {
+    background:
+      linear-gradient(
+        135deg,
+        hsl(var(--app-surface-2) / 0.92) 0%,
+        hsl(var(--app-surface-1) / 0.88) 48%,
+        hsl(var(--primary) / 0.12) 100%
+      );
+    box-shadow:
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82),
+      inset 0 -24px 40px -32px hsl(var(--app-shadow-deep) / 0.18);
   }
 
   .app-course-list-card .app-course-title,
@@ -3233,7 +3267,7 @@
   }
 
   .app-course-title {
-    @apply text-[1rem] font-semibold leading-6 text-foreground sm:text-[1.05rem];
+    @apply text-[0.98rem] font-semibold leading-6 text-foreground sm:text-[1.02rem];
     letter-spacing: -0.02em;
     display: -webkit-box;
     overflow: hidden;
@@ -3242,12 +3276,131 @@
   }
 
   .app-course-summary {
-    @apply text-[13px] leading-6 text-muted-foreground;
-    min-height: 3.25rem;
+    @apply text-[12.5px] leading-6 text-muted-foreground;
+    min-height: 2.6rem;
     display: -webkit-box;
     overflow: hidden;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+  }
+
+  .app-course-list-card-compact {
+    min-height: 0;
+  }
+
+  .app-course-list-header-compact {
+    @apply space-y-2 px-4 py-3;
+  }
+
+  .app-course-meta-row {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  .app-course-meta-text {
+    @apply text-muted-foreground;
+  }
+
+  .app-course-list-body-compact {
+    @apply flex flex-1 flex-col gap-3.5 px-4 pb-4 pt-0;
+  }
+
+  .app-course-summary-compact {
+    @apply text-[12.5px] leading-5;
+    min-height: 0;
+    -webkit-line-clamp: 2;
+  }
+
+  .app-course-stat-strip {
+    @apply grid gap-2.5 sm:grid-cols-2;
+  }
+
+  .app-course-stat-pill {
+    @apply rounded-[0.95rem] border px-3 py-2.5;
+    min-height: 3.85rem;
+    border-color: hsl(var(--border) / 0.7);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-surface-2) / 0.72) 100%
+      );
+    box-shadow:
+      0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.1),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.84);
+  }
+
+  .app-course-stat-pill-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  .app-course-stat-pill-value {
+    @apply mt-1 text-[12.5px] font-semibold leading-5 text-foreground;
+  }
+
+  .app-course-inline-meta {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground;
+  }
+
+  .app-course-inline-meta > span {
+    @apply inline-flex items-center gap-1;
+  }
+
+  .app-course-detail-grid {
+    @apply grid gap-2.5 sm:grid-cols-2;
+  }
+
+  .app-course-detail-card {
+    @apply rounded-[0.95rem] border px-3 py-2.5;
+    border-color: hsl(var(--border) / 0.7);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-surface-2) / 0.7) 100%
+      );
+    box-shadow:
+      0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.84);
+  }
+
+  .app-course-detail-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
+  }
+
+  .app-course-detail-value {
+    @apply mt-1.5 text-[12.5px] font-medium leading-5 text-foreground;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .app-course-detail-stack {
+    @apply space-y-1.5;
+  }
+
+  .app-course-detail-stack .app-course-chip-cloud {
+    @apply gap-1.5;
+  }
+
+  .app-course-detail-card .app-course-chip-cloud {
+    @apply mt-2 gap-1.5;
+  }
+
+  .app-course-hover-expand {
+    @apply grid gap-2.5;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition:
+      max-height 220ms ease,
+      opacity 160ms ease,
+      margin-top 220ms ease;
+  }
+
+  .app-course-hover-expand-grid {
+    @apply grid gap-2.5;
   }
 
   .app-course-metric-grid {
@@ -3256,7 +3409,7 @@
 
   .app-course-metric-card {
     @apply rounded-[1rem] border px-3 py-2.5;
-    min-height: 4.6rem;
+    min-height: 4.1rem;
     border-color: hsl(var(--border) / 0.7);
     background:
       linear-gradient(
@@ -3292,6 +3445,38 @@
   .app-course-action-button {
     @apply min-h-9 w-full rounded-lg px-3 py-1.5 text-[12px] font-semibold leading-5;
     letter-spacing: 0;
+  }
+
+  @media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+    .app-course-card-wrap:hover,
+    .app-course-card-wrap:focus-within {
+      z-index: 10;
+    }
+
+    .app-course-card-wrap:hover .app-course-list-card,
+    .app-course-card-wrap:focus-within .app-course-list-card {
+      transform: translateY(-4px) scale(1.015);
+      box-shadow:
+        0 34px 54px -42px hsl(var(--app-shadow-deep) / 0.3),
+        inset 0 1px 0 hsl(var(--app-surface-1) / 0.9);
+    }
+
+    .app-course-card-wrap:hover .app-course-summary-compact,
+    .app-course-card-wrap:focus-within .app-course-summary-compact {
+      -webkit-line-clamp: 4;
+    }
+
+    .app-course-card-wrap:hover .app-course-hover-expand,
+    .app-course-card-wrap:focus-within .app-course-hover-expand {
+      max-height: 22rem;
+      opacity: 1;
+      margin-top: 0.25rem;
+      pointer-events: auto;
+    }
+
+    .app-course-hover-expand-grid {
+      @apply sm:grid-cols-2;
+    }
   }
 
   .app-course-detail-layout {
@@ -3539,6 +3724,82 @@
     @apply app-surface h-full overflow-hidden;
   }
 
+  .app-diary-entry-list {
+    @apply space-y-2.5;
+  }
+
+  .app-diary-list-row {
+    @apply grid gap-3 p-4 sm:p-4 lg:grid-cols-[minmax(0,1fr)_minmax(13.5rem,0.72fr)] xl:grid-cols-[minmax(0,1.55fr)_minmax(14.5rem,0.7fr)_auto];
+    align-items: start;
+  }
+
+  .app-diary-list-row-student {
+    @apply lg:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_auto];
+  }
+
+  .app-diary-list-main {
+    @apply min-w-0 space-y-2;
+  }
+
+  .app-diary-list-badges {
+    @apply flex flex-wrap items-center gap-1.5;
+  }
+
+  .app-diary-list-subline {
+    @apply text-[12px] leading-5 text-muted-foreground;
+  }
+
+  .app-diary-list-content {
+    @apply flex flex-wrap items-center gap-1.5;
+  }
+
+  .app-diary-list-stats {
+    @apply grid gap-1.5 sm:grid-cols-3 xl:grid-cols-1;
+    align-content: start;
+  }
+
+  .app-diary-list-stat {
+    @apply flex items-center justify-between gap-2 rounded-[0.95rem] border px-3 py-2.5;
+    border-color: hsl(var(--border) / 0.68);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.985) 0%,
+        hsl(var(--app-surface-2) / 0.72) 100%
+      );
+    box-shadow:
+      0 12px 20px -26px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.78);
+  }
+
+  .app-diary-list-stat-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  .app-diary-list-stat-value {
+    @apply text-sm font-semibold leading-5 text-foreground;
+  }
+
+  .app-diary-list-actions {
+    @apply flex flex-col gap-2 sm:flex-row xl:flex-col xl:items-stretch;
+  }
+
+  .app-diary-list-actions-student {
+    @apply sm:flex-row lg:flex-col;
+  }
+
+  .app-diary-list-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .app-diary-list-button {
+    @apply min-h-9 rounded-lg px-3 py-2 text-[12px] font-semibold;
+  }
+
+  .app-diary-inline-row {
+    @apply flex flex-col gap-3 rounded-[1rem] border border-border/60 bg-background/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between;
+  }
+
   .app-diary-detail-layout {
     @apply grid gap-4 lg:grid-cols-[minmax(0,1fr)_17.5rem] xl:grid-cols-[minmax(0,1fr)_18.75rem];
     align-items: start;
@@ -3567,6 +3828,40 @@
         hsl(var(--app-surface-1) / 0.98) 0%,
         hsl(var(--app-surface-2) / 0.68) 100%
       );
+  }
+
+  .app-diary-roster-list {
+    @apply overflow-hidden rounded-[1rem] border;
+    border-color: hsl(var(--border) / 0.72);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.74) 100%
+      );
+    box-shadow:
+      0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-diary-roster-row {
+    @apply grid gap-2 px-3.5 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center;
+  }
+
+  .app-diary-roster-row + .app-diary-roster-row {
+    border-top: 1px solid hsl(var(--border) / 0.6);
+  }
+
+  .app-diary-roster-main {
+    @apply min-w-0 space-y-1;
+  }
+
+  .app-diary-roster-name {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .app-diary-roster-meta {
+    @apply text-[12px] leading-5 text-muted-foreground;
   }
 
   .app-filter-panel {
@@ -7673,6 +7968,11 @@ html[data-public-home-cinematic="true"] ::selection {
     inset 0 1px 0 hsl(0 0% 100% / 0.72);
   backdrop-filter: blur(var(--public-nav-blur));
   -webkit-backdrop-filter: blur(var(--public-nav-blur));
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
 }
 
 .public-nav-shell-hero {
@@ -7850,6 +8150,11 @@ html[data-public-home-cinematic="true"] ::selection {
       hsl(var(--public-bg)) 100%
     );
   box-shadow: 0 34px 68px -44px hsl(var(--public-shadow) / 0.28);
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
 }
 
 .public-nav-shell-home .public-nav-brand {
@@ -9305,6 +9610,11 @@ html[data-public-home-flagship="true"] ::selection {
   --home-glass-white-top-alpha: 0.075;
   --home-glass-white-bottom-alpha: 0.012;
   --home-glass-inner-highlight-alpha: 0.1;
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
 }
 
 .home-nav-shell-scrolled {

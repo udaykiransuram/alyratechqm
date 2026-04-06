@@ -26,7 +26,6 @@ import {
 import { getWorkspaceCourseById } from "@/lib/server/workspace-courses";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 type WorkspaceCoursePageProps = {
   params: Promise<{ id: string }>;
@@ -137,6 +136,14 @@ export default async function WorkspaceCoursePage({
   const currentPath = `/workspace/courses/${id}`;
   const editHref = buildHrefWithReturnTo(`/workspace/courses/edit/${id}`, currentPath);
   const duplicateHref = `/workspace/courses/create?duplicateFrom=${encodeURIComponent(id)}`;
+  const templateFromHref = `/workspace/courses/create?templateFrom=${encodeURIComponent(id)}`;
+  const newVersionHref = `/workspace/courses/create?versionFrom=${encodeURIComponent(id)}`;
+  const previousVersionHref = course.template.parentCourseId
+    ? `/workspace/courses/${encodeURIComponent(course.template.parentCourseId)}`
+    : null;
+  const sourceTemplateHref = course.template.derivedFromTemplateCourseId
+    ? `/workspace/courses/${encodeURIComponent(course.template.derivedFromTemplateCourseId)}`
+    : null;
   const startsAtLabel = formatCourseDate(course.metadata.startsAt);
   const dueAtLabel = formatCourseDate(course.metadata.dueAt);
   const learningStepCount = course.blocks.filter(
@@ -172,16 +179,42 @@ export default async function WorkspaceCoursePage({
                   Back
                 </AppPrefetchLink>
               </Button>
-              <Button asChild variant="outline">
-                <AppPrefetchLink href={duplicateHref}>
-                  <Copy className="h-4 w-4" />
-                  Duplicate
-                </AppPrefetchLink>
-              </Button>
-              <Button asChild>
+              {course.metadata.isTemplate ? (
+                <>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="app-button-page whitespace-nowrap"
+                  >
+                    <AppPrefetchLink href={newVersionHref}>
+                      <Copy className="h-4 w-4" />
+                      New Version
+                    </AppPrefetchLink>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="app-button-page whitespace-nowrap"
+                  >
+                    <AppPrefetchLink href={templateFromHref}>Use Template</AppPrefetchLink>
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="app-button-page whitespace-nowrap"
+                >
+                  <AppPrefetchLink href={duplicateHref}>
+                    <Copy className="h-4 w-4" />
+                    Duplicate
+                  </AppPrefetchLink>
+                </Button>
+              )}
+              <Button asChild className="app-button-page whitespace-nowrap">
                 <AppPrefetchLink href={editHref}>
                   <Pencil className="h-4 w-4" />
-                  Edit Course
+                  {course.metadata.isTemplate ? "Edit Template" : "Edit Course"}
                 </AppPrefetchLink>
               </Button>
             </div>
@@ -198,7 +231,16 @@ export default async function WorkspaceCoursePage({
                 </span>
               ))}
               {course.metadata.isTemplate ? (
-                <span className="app-meta-chip">Template</span>
+                <span className="app-meta-chip">
+                  Template v{course.template.versionNumber || 1}
+                </span>
+              ) : course.template.derivedFromTemplateCourseId ? (
+                <span className="app-meta-chip">
+                  From template
+                  {course.template.derivedFromTemplateVersionNumber
+                    ? ` v${course.template.derivedFromTemplateVersionNumber}`
+                    : ""}
+                </span>
               ) : null}
               <span className="app-meta-chip">
                 {course.blockCount} block{course.blockCount === 1 ? "" : "s"}
@@ -257,6 +299,54 @@ export default async function WorkspaceCoursePage({
                       </span>
                     ))}
                   </div>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {course.metadata.isTemplate || course.template.derivedFromTemplateCourseId ? (
+              <Card className="app-surface overflow-hidden">
+                <CardHeader className="app-section-header">
+                  <CardTitle>
+                    {course.metadata.isTemplate ? "Template Versioning" : "Template Source"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="app-section-body space-y-3">
+                  {course.metadata.isTemplate ? (
+                    <>
+                      <p className="text-sm leading-6 text-muted-foreground">
+                        This reusable template is stored as version{" "}
+                        {course.template.versionNumber || 1}.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="app-meta-chip">
+                          Family {course.template.familyId || "Not assigned"}
+                        </span>
+                        {previousVersionHref ? (
+                          <Button asChild size="sm" variant="outline">
+                            <AppPrefetchLink href={previousVersionHref}>
+                              Previous version
+                            </AppPrefetchLink>
+                          </Button>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm leading-6 text-muted-foreground">
+                        This course was created from a reusable template
+                        {course.template.derivedFromTemplateVersionNumber
+                          ? ` (version ${course.template.derivedFromTemplateVersionNumber})`
+                          : ""}.
+                      </p>
+                      {sourceTemplateHref ? (
+                        <Button asChild size="sm" variant="outline">
+                          <AppPrefetchLink href={sourceTemplateHref}>
+                            Open source template
+                          </AppPrefetchLink>
+                        </Button>
+                      ) : null}
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ) : null}

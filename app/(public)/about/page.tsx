@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { MapPinIcon, EnvelopeIcon, PhoneIcon } from "@heroicons/react/24/outline";
-import { unstable_cache } from "next/cache";
 
 import { InnerHero } from "@/components/InnerHero";
 import { LottieAnimation } from "@/components/LottieAnimation";
@@ -9,56 +8,13 @@ import { PublicFinalCta } from "@/components/public/PublicFinalCta";
 import { PublicInfoCardGrid } from "@/components/public/PublicInfoCardGrid";
 import { PublicSectionIntro } from "@/components/public/PublicSectionIntro";
 import { PublicStatsGrid } from "@/components/public/PublicStatsGrid";
-import { connectDB } from "@/lib/db";
-import { resolvePublicPageData } from "@/lib/server/public-page-data";
-import ContactInfo from "@/models/ContactInfo";
-import FAQ from "@/models/FAQ";
-import SiteStats from "@/models/SiteStats";
+import { getAboutPageData } from "@/lib/server/public-marketing";
 
 export const revalidate = 60;
 
 export const metadata = {
   title: "About Us | Alyra Tech",
   description: "Built by IITians & NITians to transform K-12 education.",
-};
-
-type AboutStat = {
-  key: string;
-  label: string;
-  value: string;
-  icon?: string;
-};
-
-interface FAQItem {
-  question: string;
-  answer: string;
-}
-
-type ContactDoc = {
-  email?: string;
-  phone?: string;
-  whatsappNumber?: string;
-  city?: string;
-  address?: string;
-};
-
-const ABOUT_DEFAULTS: AboutStat[] = [
-  { key: "founded", label: "Founded", value: "2020" },
-  { key: "students", label: "Students Analyzed", value: "50K+" },
-  { key: "states", label: "States Impacted", value: "15+" },
-  { key: "schools", label: "Partner Schools", value: "500+" },
-];
-
-const ABOUT_FALLBACK = {
-  stats: ABOUT_DEFAULTS,
-  faqs: [] as FAQItem[],
-  contact: {
-    email: "hello@beyondmarks.edu",
-    phone: "+91 98765 43210",
-    whatsappNumber: "",
-    city: "Hitech City, Hyderabad, India",
-    address: "Innovation Hub",
-  },
 };
 
 const coreValues = [
@@ -112,55 +68,8 @@ function getStatsColumns(length: number): 2 | 3 | 4 {
   return 4;
 }
 
-const getAboutStats = unstable_cache(
-  async () => {
-    return resolvePublicPageData(
-      async () => {
-        await connectDB();
-
-        const [doc, faqDocs, contactDoc] = (await Promise.all([
-          SiteStats.findOne({ section: "about" }).lean(),
-          FAQ.find({ page: "about", isActive: true })
-            .sort({ displayOrder: 1 })
-            .lean(),
-          ContactInfo.findOne().lean() as Promise<ContactDoc | null>,
-        ])) as [any, any[], ContactDoc | null];
-
-        const stats: AboutStat[] = doc?.stats?.length
-          ? doc.stats.map((stat: any) => ({
-              key: stat.key,
-              label: stat.label,
-              value: String(stat.value),
-              icon: stat.icon,
-            }))
-          : ABOUT_DEFAULTS;
-
-        return {
-          stats,
-          faqs: faqDocs.map((faq: any) => ({
-            question: faq.question,
-            answer: faq.answer,
-          })) as FAQItem[],
-          contact: {
-            email: contactDoc?.email || ABOUT_FALLBACK.contact.email,
-            phone: contactDoc?.phone || ABOUT_FALLBACK.contact.phone,
-            whatsappNumber:
-              contactDoc?.whatsappNumber || ABOUT_FALLBACK.contact.whatsappNumber,
-            city: contactDoc?.city || ABOUT_FALLBACK.contact.city,
-            address: contactDoc?.address || ABOUT_FALLBACK.contact.address,
-          },
-        };
-      },
-      ABOUT_FALLBACK,
-      2000,
-    );
-  },
-  ["public-about-page-data"],
-  { revalidate: 60 },
-);
-
 export default async function AboutPage() {
-  const { stats, faqs, contact } = await getAboutStats();
+  const { stats, faqs, contact } = await getAboutPageData();
   const waDigits = (contact.whatsappNumber || contact.phone).replace(/\D+/g, "");
   const waHref = waDigits
     ? `https://wa.me/${waDigits}?text=${encodeURIComponent(

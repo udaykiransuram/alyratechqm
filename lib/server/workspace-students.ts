@@ -1,3 +1,5 @@
+import "server-only";
+
 import mongoose from "mongoose";
 
 import { buildArchiveFilter } from "@/lib/archive";
@@ -134,7 +136,9 @@ export async function getStudentsByClassPageData({
   }
 
   const students = await UserModel.find(studentQuery)
-    .select("name gender fatherName email mobileNumber rollNumber enrolledAt class academicSection")
+    .select(
+      "name gender fatherName email mobileNumber rollNumber enrolledAt class academicSection",
+    )
     .sort({ name: 1 })
     .lean();
 

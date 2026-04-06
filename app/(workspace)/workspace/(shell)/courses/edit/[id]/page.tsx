@@ -9,7 +9,6 @@ import {
 } from "@/lib/server/workspace-courses";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 type EditCoursePageProps = {
   params: Promise<{ id: string }>;

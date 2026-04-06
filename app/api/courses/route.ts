@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 
 import { requireTenantSession } from "@/lib/api-auth";
+import { buildArchiveFilter } from "@/lib/archive";
+import { resolveTeacherCourseScope } from "@/lib/courses/access";
 import {
   normalizeCoursePayload,
   validateNormalizedCourseBlocks,
@@ -11,6 +13,11 @@ import {
   buildCourseDocumentFromPayload,
 } from "@/lib/courses/payload";
 import { getCourseAssessmentPaperIds } from "@/lib/courses/shared";
+import {
+  createCourseTemplateFamilyId,
+  getCourseTemplateInfo,
+  resolveNextCourseTemplateVersionNumber,
+} from "@/lib/courses/template-lineage";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import {
@@ -20,6 +27,18 @@ import {
   validateTeacherCourseScope,
 } from "@/lib/server/workspace-courses";
 import { createCourseAssignedNotifications } from "@/lib/server/student-notifications";
+
+function toId(value: unknown) {
+  if (!value) return "";
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "_id" in (value as Record<string, unknown>)
+  ) {
+    return String((value as Record<string, unknown>)._id || "").trim();
+  }
+  return String(value || "").trim();
+}
 
 function normalizeIds(value: unknown) {
   if (!Array.isArray(value)) return [] as string[];
@@ -101,6 +120,21 @@ async function validateSelectedSubjects(SubjectModel: any, subjectIds: string[])
   };
 }
 
+function buildTemplateScopeCheck(course: any, scopedUser: any) {
+  return resolveTeacherCourseScope(
+    scopedUser,
+    toId(course?.class),
+    (Array.isArray(course?.subjectIds) ? course.subjectIds : []).map((subject: any) =>
+      toId(subject),
+    ),
+    (
+      Array.isArray(course?.assignedAcademicSections)
+        ? course.assignedAcademicSections
+        : []
+    ).map((section: any) => toId(section)),
+  );
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["admin", "teacher"],
@@ -112,12 +146,16 @@ export async function GET(req: NextRequest) {
   try {
     const pageParam = req.nextUrl.searchParams.get("page");
     const limitParam = req.nextUrl.searchParams.get("limit");
+    const viewParam = req.nextUrl.searchParams.get("view");
     const courseDirectory = await listWorkspaceCourses({
       schoolKey: auth.schoolKey,
       viewerId: auth.session.user.id,
       viewerRole: auth.session.user.role as "admin" | "teacher",
       page: pageParam ? Number(pageParam) : undefined,
       limit: limitParam ? Number(limitParam) : undefined,
+      filters: {
+        view: viewParam || undefined,
+      },
     });
 
     return NextResponse.json({
@@ -230,8 +268,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let scopedUser: any = null;
+
     if (auth.session.user.role === "teacher") {
-      const scopedUser = await UserModel.findById(auth.session.user.id)
+      scopedUser = await UserModel.findById(auth.session.user.id)
         .select(
           "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
         )
@@ -253,6 +293,102 @@ export async function POST(req: NextRequest) {
           { status: teacherScopeValidation.status },
         );
       }
+    }
+
+    const sourceCourseId =
+      payload.templateContext.versionFromCourseId ||
+      payload.templateContext.templateFromCourseId;
+    const sourceCourse = sourceCourseId
+      ? await CourseModel.findOne({
+          _id: sourceCourseId,
+          ...buildArchiveFilter(false),
+        })
+          .select(
+            "_id title class subjectIds assignedAcademicSections isTemplate templateFamilyId templateVersionNumber",
+          )
+          .lean()
+      : null;
+
+    if (sourceCourseId && !sourceCourse) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Template source could not be found.",
+        },
+        { status: 404 },
+      );
+    }
+
+    if (sourceCourse && auth.session.user.role === "teacher") {
+      const sourceScope = buildTemplateScopeCheck(sourceCourse, scopedUser);
+      if (
+        !sourceScope.hasClassAccess ||
+        !sourceScope.hasSectionAccess ||
+        !sourceScope.hasFullSubjectAccess
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Template source could not be found.",
+          },
+          { status: 404 },
+        );
+      }
+    }
+
+    if (
+      (payload.templateContext.versionFromCourseId ||
+        payload.templateContext.templateFromCourseId) &&
+      !sourceCourse?.isTemplate
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Only reusable templates can be used for this action.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const normalizedMetadata = payload.templateContext.versionFromCourseId
+      ? {
+          ...payload.metadata,
+          isTemplate: true,
+        }
+      : payload.metadata;
+
+    let templateDocument: Parameters<typeof buildCourseDocumentFromPayload>[0]["template"];
+
+    if (payload.templateContext.versionFromCourseId && sourceCourse) {
+      const sourceTemplate = getCourseTemplateInfo(sourceCourse, {
+        fallbackCourseId: toId(sourceCourse?._id),
+      });
+      const familyId = sourceTemplate.familyId || createCourseTemplateFamilyId();
+      const versionNumber = await resolveNextCourseTemplateVersionNumber({
+        CourseModel,
+        familyId,
+        baseVersion: sourceTemplate.versionNumber || 1,
+      });
+
+      templateDocument = {
+        familyId,
+        versionNumber,
+        parentCourseId: toId(sourceCourse?._id),
+      };
+    } else if (normalizedMetadata.isTemplate) {
+      templateDocument = {
+        familyId: createCourseTemplateFamilyId(),
+        versionNumber: 1,
+      };
+    } else if (payload.templateContext.templateFromCourseId && sourceCourse) {
+      const sourceTemplate = getCourseTemplateInfo(sourceCourse, {
+        fallbackCourseId: toId(sourceCourse?._id),
+      });
+
+      templateDocument = {
+        derivedFromTemplateCourseId: toId(sourceCourse?._id),
+        derivedFromTemplateVersionNumber: sourceTemplate.versionNumber,
+      };
     }
 
     if (isPublishing) {
@@ -286,8 +422,9 @@ export async function POST(req: NextRequest) {
         assignedAcademicSectionIds: assignmentValidation.ids,
         status: payload.status,
         blocks: payload.blocks,
-        metadata: payload.metadata,
+        metadata: normalizedMetadata,
         createdBy: auth.session.user.id,
+        template: templateDocument,
       }),
     );
 

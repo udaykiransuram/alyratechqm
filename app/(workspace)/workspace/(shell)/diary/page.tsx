@@ -16,13 +16,56 @@ import {
   resolveWorkspaceListPage,
 } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 const DIARY_BASE_PATH = "/workspace/diary";
 const DIARY_PAGE_SIZE = 10;
 
 type DiaryPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
+
+function formatDiaryEntryStatusLabel(status: string) {
+  return status === "published" ? "Published" : "Draft";
+}
+
+function getDiaryEntryStatusVariant(status: string) {
+  return status === "published" ? "success" : "warning";
+}
+
+function formatDiarySectionScope(
+  sections: Array<{
+    name: string;
+  }>,
+) {
+  return sections.length > 0
+    ? sections.map((section) => section.name).join(", ")
+    : "All sections in the selected class";
+}
+
+function getDiaryContentLabels(content: {
+  hasLessonSummary: boolean;
+  hasHomework: boolean;
+  hasTeacherNote: boolean;
+  resourceCount: number;
+}) {
+  const labels: string[] = [];
+
+  if (content.hasLessonSummary) {
+    labels.push("Lesson");
+  }
+  if (content.hasHomework) {
+    labels.push("Homework");
+  }
+  if (content.hasTeacherNote) {
+    labels.push("Teacher Note");
+  }
+  if (content.resourceCount > 0) {
+    labels.push(
+      `${content.resourceCount} Resource${content.resourceCount === 1 ? "" : "s"}`,
+    );
+  }
+
+  return labels;
+}
 
 function getSearchParam(
   searchParams: Record<string, string | string[] | undefined> | undefined,
@@ -233,102 +276,102 @@ export default async function DiaryPage({ searchParams }: DiaryPageProps) {
               previousHref={previousHref}
               nextHref={nextHref}
             />
-            <div className="app-diary-board-grid">
-            {entries.map((entry) => {
-              const viewHref = buildHrefWithReturnTo(
-                `/workspace/diary/${entry._id}`,
-                currentPath,
-              );
-              const editHref = buildHrefWithReturnTo(
-                `/workspace/diary/edit/${entry._id}`,
-                `/workspace/diary/${entry._id}`,
-              );
+            <div className="app-diary-entry-list">
+              {entries.map((entry) => {
+                const viewHref = buildHrefWithReturnTo(
+                  `/workspace/diary/${entry._id}`,
+                  currentPath,
+                );
+                const editHref = buildHrefWithReturnTo(
+                  `/workspace/diary/edit/${entry._id}`,
+                  `/workspace/diary/${entry._id}`,
+                );
+                const sectionSummary = formatDiarySectionScope(
+                  entry.assignedAcademicSections,
+                );
+                const authorLabel =
+                  entry.updatedBy?.name || entry.author?.name || "";
+                const contentLabels = getDiaryContentLabels(entry.content);
+                const subline = [
+                  sectionSummary,
+                  authorLabel ? `Updated by ${authorLabel}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" • ");
 
-              return (
-                <Card key={entry._id} className="app-diary-entry-card flex flex-col">
-                  <CardHeader className="app-section-header space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Badge className="capitalize">{entry.status}</Badge>
-                      {entry.subject?.name ? (
-                        <Badge variant="outline">{entry.subject.name}</Badge>
-                      ) : null}
-                      {entry.class?.name ? (
-                        <Badge variant="outline">{entry.class.name}</Badge>
-                      ) : null}
-                    </div>
-                    <div className="space-y-2">
-                      <CardTitle className="app-course-title">{entry.title}</CardTitle>
-                      <p className="app-course-summary">
-                        {entry.assignedAcademicSections.length > 0
-                          ? entry.assignedAcademicSections
-                              .map((section) => section.name)
-                              .join(", ")
-                          : "All sections in the selected class"}
-                      </p>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="app-section-body flex flex-1 flex-col gap-4">
-                    <div className="app-course-metric-grid">
-                      <div className="app-course-metric-card">
-                        <p className="app-course-metric-label">Students</p>
-                        <p className="app-course-metric-value">
-                          {entry.progressSummary.assignedStudents}
-                        </p>
-                      </div>
-                      <div className="app-course-metric-card">
-                        <p className="app-course-metric-label">Seen</p>
-                        <p className="app-course-metric-value">
-                          {entry.progressSummary.seenStudents}
-                        </p>
-                      </div>
-                      <div className="app-course-metric-card">
-                        <p className="app-course-metric-label">Completed</p>
-                        <p className="app-course-metric-value">
-                          {entry.progressSummary.completedStudents}
-                        </p>
-                      </div>
-                      <div className="app-course-metric-card">
-                        <p className="app-course-metric-label">Content</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {entry.content.hasLessonSummary ? (
-                            <Badge variant="outline">Lesson</Badge>
+                return (
+                  <Card key={entry._id} className="app-diary-entry-card">
+                    <CardContent className="app-diary-list-row">
+                      <div className="app-diary-list-main">
+                        <div className="app-diary-list-badges">
+                          <Badge variant={getDiaryEntryStatusVariant(entry.status)}>
+                            {formatDiaryEntryStatusLabel(entry.status)}
+                          </Badge>
+                          {entry.subject?.name ? (
+                            <Badge variant="outline">{entry.subject.name}</Badge>
                           ) : null}
-                          {entry.content.hasHomework ? (
-                            <Badge variant="outline">Homework</Badge>
-                          ) : null}
-                          {entry.content.hasTeacherNote ? (
-                            <Badge variant="outline">Teacher Note</Badge>
-                          ) : null}
-                          {entry.content.resourceCount > 0 ? (
-                            <Badge variant="outline">
-                              {entry.content.resourceCount} Resource
-                              {entry.content.resourceCount === 1 ? "" : "s"}
-                            </Badge>
+                          {entry.class?.name ? (
+                            <Badge variant="outline">{entry.class.name}</Badge>
                           ) : null}
                         </div>
-                      </div>
-                    </div>
 
-                    <div className="app-course-action-row">
-                      <Button
-                        asChild
-                        variant="outline"
-                        className="app-button-compact-secondary app-course-action-button"
-                      >
-                        <AppPrefetchLink href={editHref}>Edit</AppPrefetchLink>
-                      </Button>
-                      <Button asChild className="app-button-compact-primary app-course-action-button">
-                        <AppPrefetchLink href={viewHref}>
-                          Open Entry
-                          <ArrowRight className="h-4 w-4" />
-                        </AppPrefetchLink>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                        <div className="space-y-1.5">
+                          <CardTitle className="app-course-title">{entry.title}</CardTitle>
+                          <p className="app-diary-list-subline">{subline}</p>
+                        </div>
+
+                        {contentLabels.length > 0 ? (
+                          <div className="app-diary-list-content">
+                            {contentLabels.map((label) => (
+                              <Badge key={`${entry._id}-${label}`} variant="outline">
+                                {label}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="app-diary-list-stats">
+                        <div className="app-diary-list-stat">
+                          <span className="app-diary-list-stat-label">Students</span>
+                          <span className="app-diary-list-stat-value">
+                            {entry.progressSummary.assignedStudents}
+                          </span>
+                        </div>
+                        <div className="app-diary-list-stat">
+                          <span className="app-diary-list-stat-label">Seen</span>
+                          <span className="app-diary-list-stat-value">
+                            {entry.progressSummary.seenStudents}
+                          </span>
+                        </div>
+                        <div className="app-diary-list-stat">
+                          <span className="app-diary-list-stat-label">Completed</span>
+                          <span className="app-diary-list-stat-value">
+                            {entry.progressSummary.completedStudents}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="app-diary-list-actions">
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          className="app-diary-list-button"
+                        >
+                          <AppPrefetchLink href={editHref}>Edit</AppPrefetchLink>
+                        </Button>
+                        <Button asChild size="sm" className="app-diary-list-button">
+                          <AppPrefetchLink href={viewHref}>
+                            Open Entry
+                            <ArrowRight className="h-4 w-4" />
+                          </AppPrefetchLink>
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </div>
         )}

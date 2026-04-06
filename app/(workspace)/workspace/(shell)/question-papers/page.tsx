@@ -34,7 +34,6 @@ function resolveSearchParam(value: string | string[] | undefined) {
   return String(Array.isArray(value) ? value[0] : value || "").trim();
 }
 
-export const dynamic = "force-dynamic";
 
 export default async function QuestionPapersPage({
   searchParams,

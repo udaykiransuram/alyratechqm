@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, ArrowRight, Menu, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,18 +16,46 @@ const HOME_SECTION_LINKS = HOME_NAV_LINKS.filter((item) =>
 export default function HomeNavbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const scrolledRef = useRef(false);
   const [activeHref, setActiveHref] = useState<string>(
     () => HOME_SECTION_LINKS[0]?.href ?? "",
   );
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 24);
+    let frameId = 0;
+
+    const syncScrolledState = () => {
+      frameId = 0;
+
+      const scrollY = window.scrollY;
+      const nextScrolled = scrolledRef.current ? scrollY > 12 : scrollY > 28;
+
+      if (nextScrolled === scrolledRef.current) {
+        return;
+      }
+
+      scrolledRef.current = nextScrolled;
+      setScrolled(nextScrolled);
     };
 
-    handleScroll();
+    const handleScroll = () => {
+      if (frameId) {
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(syncScrolledState);
+    };
+
+    syncScrolledState();
     window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   useEffect(() => {

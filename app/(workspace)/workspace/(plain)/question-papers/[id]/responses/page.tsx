@@ -36,7 +36,6 @@ const EMPTY_INITIAL_DATA: WorkspacePaperResponsesSummaryData = {
   limit: PAPER_RESPONSES_PAGE_SIZE,
 };
 
-export const dynamic = "force-dynamic";
 
 export default async function QuestionPaperResponsesPage({
   params,

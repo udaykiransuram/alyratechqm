@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { unstable_cache } from "next/cache";
 
 import { InnerHero } from "@/components/InnerHero";
 import { LottieAnimation } from "@/components/LottieAnimation";
@@ -7,83 +6,9 @@ import { PublicFinalCta } from "@/components/public/PublicFinalCta";
 import { PublicSectionIntro } from "@/components/public/PublicSectionIntro";
 import { PublicStatsGrid } from "@/components/public/PublicStatsGrid";
 import { PublicTestimonialsGrid } from "@/components/public/PublicTestimonialsGrid";
-import { connectDB } from "@/lib/db";
-import { resolvePublicPageData } from "@/lib/server/public-page-data";
-import CaseStudy from "@/models/CaseStudy";
-import SiteStats from "@/models/SiteStats";
-import Testimonial from "@/models/Testimonial";
+import { getCaseStudyPageData } from "@/lib/server/public-marketing";
 
 export const revalidate = 60;
-
-interface CSData {
-  schoolName: string;
-  location: string;
-  studentCount: number;
-  challenge: string;
-  solution: string;
-  resultsText: string;
-  quote: string;
-  quoteAuthor: string;
-  metrics: { metric: string; label: string; sub: string }[];
-}
-
-interface HeaderStat {
-  value: string;
-  label: string;
-  icon: string;
-}
-
-interface TestimonialData {
-  quote: string;
-  author: string;
-  role: string;
-  school: string;
-  rating: number;
-}
-
-const DEFAULT_HEADER_STATS: HeaderStat[] = [
-  { value: "500+", label: "Schools Served", icon: "🏫" },
-  { value: "85%", label: "Avg. Improvement", icon: "📈" },
-  { value: "2M+", label: "Students Impacted", icon: "👨‍🎓" },
-  { value: "95%", label: "Satisfaction Rate", icon: "⭐" },
-];
-
-const CASE_STUDY_FALLBACK = {
-  featured: null as CSData | null,
-  otherCaseStudies: [] as CSData[],
-  headerStats: DEFAULT_HEADER_STATS,
-  testimonials: [] as TestimonialData[],
-};
-
-function docToCS(doc: any): CSData {
-  return {
-    schoolName: doc.schoolName || "School Name",
-    location: doc.location || "",
-    studentCount: doc.studentCount || 0,
-    challenge: doc.challenge || "",
-    solution: doc.solution || "",
-    resultsText: doc.results?.length ? doc.results.join(" ") : "",
-    quote: doc.testimonial?.quote || "",
-    quoteAuthor:
-      [doc.testimonial?.role, doc.testimonial?.author]
-        .filter(Boolean)
-        .join(", ") || "",
-    metrics: doc.metrics?.length
-      ? doc.metrics.map(
-          (metric: {
-            improvement: string;
-            label: string;
-            before: string | number;
-            after: string | number;
-          }) => ({
-            metric: metric.improvement,
-            label: metric.label,
-            sub: `${metric.before} -> ${metric.after}`,
-          }),
-        )
-      : [],
-  };
-}
 
 function getStatsColumns(length: number): 2 | 3 | 4 {
   if (length === 3) return 3;
@@ -91,66 +16,8 @@ function getStatsColumns(length: number): 2 | 3 | 4 {
   return 4;
 }
 
-const getCaseStudyData = unstable_cache(
-  async () => {
-    return resolvePublicPageData(
-      async () => {
-        await connectDB();
-        const [docs, statsDoc, testimonials]: [any[], any, any[]] =
-          await Promise.all([
-            CaseStudy.find({ isActive: true })
-              .sort({ isFeatured: -1, displayOrder: 1 })
-              .lean(),
-            SiteStats.findOne({ section: "casestudy" }).lean(),
-            Testimonial.find({ section: "casestudy", isActive: true })
-              .sort({ displayOrder: 1 })
-              .lean(),
-          ]);
-
-        const featuredDoc = docs.find((doc: any) => doc.isFeatured) || docs[0] || null;
-        const featured = featuredDoc ? docToCS(featuredDoc) : null;
-        const otherCaseStudies = (featuredDoc
-          ? docs.filter((doc: any) => doc !== featuredDoc)
-          : []
-        ).map(docToCS);
-
-        const headerStats: HeaderStat[] = statsDoc?.stats?.length
-          ? statsDoc.stats.map((stat: any) => ({
-              value: String(stat.value),
-              label: stat.label || stat.key,
-              icon: stat.icon || "📊",
-            }))
-          : DEFAULT_HEADER_STATS;
-
-        const caseStudyTestimonials: TestimonialData[] = testimonials.length
-          ? testimonials.map((testimonial: any) => ({
-              quote: testimonial.quote,
-              author: testimonial.author,
-              role: testimonial.role,
-              school: [testimonial.school, testimonial.location]
-                .filter(Boolean)
-                .join(", "),
-              rating: testimonial.rating ?? 5,
-            }))
-          : [];
-
-        return {
-          featured,
-          otherCaseStudies,
-          headerStats,
-          testimonials: caseStudyTestimonials,
-        };
-      },
-      CASE_STUDY_FALLBACK,
-      2000,
-    );
-  },
-  ["public-case-study-page-data"],
-  { revalidate: 60 },
-);
-
 export async function generateMetadata() {
-  const { featured } = await getCaseStudyData();
+  const { featured } = await getCaseStudyPageData();
 
   return {
     title: "Case Studies | Alyra Tech",
@@ -162,7 +29,7 @@ export async function generateMetadata() {
 
 export default async function CaseStudyPage() {
   const { featured, otherCaseStudies, headerStats, testimonials } =
-    await getCaseStudyData();
+    await getCaseStudyPageData();
 
   return (
     <main className="public-page">

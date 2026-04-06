@@ -17,7 +17,6 @@ import {
   trimTrailingBlankRichTextBlocks,
 } from "@/lib/security/html-sanitize";
 
-export const dynamic = "force-dynamic";
 
 type ViewQuestionPageProps = {
   params: Promise<{ id: string }>;

@@ -148,6 +148,13 @@ type CourseEditorClientProps = {
   subjects: WorkspaceSubjectItem[];
   papers: WorkspaceCoursePaperOption[];
   initialCourse?: WorkspaceCourseDetail | null;
+  creationContext?: {
+    mode: "standard" | "duplicate" | "template" | "template-version";
+    startAsTemplate?: boolean;
+    sourceCourseId?: string | null;
+    sourceCourseTitle?: string | null;
+    sourceTemplateVersionNumber?: number | null;
+  };
 };
 
 function createClientBlockId() {
@@ -570,16 +577,28 @@ function ToggleRow({
   checked,
   onCheckedChange,
   label,
+  disabled = false,
 }: {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex min-h-[3.75rem] cursor-pointer items-center justify-between gap-4 rounded-[1.05rem] border border-border/70 bg-muted/10 px-4 py-3 transition-colors hover:border-primary/25 hover:bg-muted/20">
+    <label
+      className={[
+        "flex min-h-[3.75rem] items-center justify-between gap-4 rounded-[1.05rem] border border-border/70 bg-muted/10 px-4 py-3 transition-colors",
+        disabled
+          ? "cursor-not-allowed opacity-70"
+          : "cursor-pointer hover:border-primary/25 hover:bg-muted/20",
+      ]
+        .join(" ")
+        .trim()}
+    >
       <span className="pr-2 text-sm font-semibold leading-5 text-foreground">{label}</span>
       <Checkbox
         checked={checked}
+        disabled={disabled}
         onCheckedChange={(value) => onCheckedChange(value === true)}
       />
     </label>
@@ -742,6 +761,10 @@ export default function CourseEditorClient({
   subjects,
   papers,
   initialCourse = null,
+  creationContext = {
+    mode: "standard",
+    startAsTemplate: false,
+  },
 }: CourseEditorClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -749,12 +772,17 @@ export default function CourseEditorClient({
   const { navigateBack } = useBackNavigation(returnToPath);
   const { toast } = useToast();
 
-  const isDuplicatePrefill = mode === "create" && Boolean(initialCourse);
+  const isTemplateVersionCreate =
+    mode === "create" && creationContext.mode === "template-version";
+  const isTemplateCreate =
+    mode === "create" && creationContext.mode === "template";
   const initialMetadata = initialCourse?.metadata;
 
   const [title, setTitle] = useState(
-    isDuplicatePrefill
-      ? `${initialCourse?.title || "Course"} Copy`
+    mode === "create"
+      ? creationContext.mode === "duplicate"
+        ? `${initialCourse?.title || "Course"} Copy`
+        : initialCourse?.title || ""
       : initialCourse?.title || "",
   );
   const [summary, setSummary] = useState(initialCourse?.summary || "");
@@ -776,7 +804,11 @@ export default function CourseEditorClient({
   const [allowBookmarks, setAllowBookmarks] = useState(
     initialMetadata?.allowBookmarks !== false,
   );
-  const [isTemplate, setIsTemplate] = useState(initialMetadata?.isTemplate === true);
+  const [isTemplate, setIsTemplate] = useState(
+    mode === "edit"
+      ? initialMetadata?.isTemplate === true
+      : isTemplateVersionCreate || creationContext.startAsTemplate === true,
+  );
   const [classId, setClassId] = useState(initialCourse?.class?._id || "");
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>(
     deriveInitialSubjectIds(initialCourse),
@@ -803,6 +835,32 @@ export default function CourseEditorClient({
   const autosaveSignatureRef = useRef<string>("");
   const autosaveInFlightRef = useRef(false);
   const saving = savingTarget !== null;
+  const templateToggleLocked =
+    isTemplateVersionCreate || (mode === "edit" && initialMetadata?.isTemplate === true);
+  const creationModeNotice =
+    mode !== "create"
+      ? null
+      : isTemplateVersionCreate
+        ? {
+            title: "Creating a new template version",
+            message: `This draft stays linked to ${
+              creationContext.sourceCourseTitle || "the selected template"
+            } and will be saved as the next reusable version.`,
+          }
+        : isTemplateCreate
+          ? {
+              title: "Using a template as a course",
+              message: `This starts from ${
+                creationContext.sourceCourseTitle || "the selected template"
+              } and saves as a regular course for student delivery.`,
+            }
+          : creationContext.startAsTemplate === true
+            ? {
+                title: "Creating a reusable template",
+                message:
+                  "This draft will be stored as a reusable template that teachers can use again later.",
+              }
+            : null;
 
   const currentEditorPath = useMemo(() => {
     const query = searchParams.toString();
@@ -1563,7 +1621,15 @@ export default function CourseEditorClient({
     enforceSequentialProgress,
     allowNotes,
     allowBookmarks,
-    isTemplate,
+    isTemplate: templateToggleLocked ? true : isTemplate,
+    templateFromCourseId:
+      mode === "create" && creationContext.mode === "template"
+        ? creationContext.sourceCourseId || undefined
+        : undefined,
+    versionFromCourseId:
+      mode === "create" && creationContext.mode === "template-version"
+        ? creationContext.sourceCourseId || undefined
+        : undefined,
     blocks: serializeBlocksForApi(),
   });
 
@@ -1840,6 +1906,12 @@ export default function CourseEditorClient({
     <div className="app-course-editor-grid">
       <div className="app-course-editor-main">
         {formError ? <FeedbackNotice variant="error">{formError}</FeedbackNotice> : null}
+        {creationModeNotice ? (
+          <FeedbackNotice variant="info">
+            <span className="font-semibold">{creationModeNotice.title}.</span>{" "}
+            {creationModeNotice.message}
+          </FeedbackNotice>
+        ) : null}
 
         <Card className="app-course-editor-card">
           <CardHeader className="app-section-header">
@@ -1951,9 +2023,10 @@ export default function CourseEditorClient({
                 label="Sequential progression"
               />
               <ToggleRow
-                checked={isTemplate}
+                checked={templateToggleLocked ? true : isTemplate}
                 onCheckedChange={setIsTemplate}
                 label="Save as reusable template"
+                disabled={templateToggleLocked}
               />
               <ToggleRow
                 checked={allowNotes}
@@ -3107,7 +3180,17 @@ export default function CourseEditorClient({
                 ) : null}
                 {allowNotes ? <Badge variant="outline">Notes enabled</Badge> : null}
                 {allowBookmarks ? <Badge variant="outline">Bookmarks enabled</Badge> : null}
-                {isTemplate ? <Badge variant="outline">Template</Badge> : null}
+                {templateToggleLocked ? (
+                  <Badge variant="outline">
+                    Template
+                    {isTemplateVersionCreate &&
+                    typeof creationContext.sourceTemplateVersionNumber === "number"
+                      ? ` v${creationContext.sourceTemplateVersionNumber + 1}`
+                      : ""}
+                  </Badge>
+                ) : isTemplate ? (
+                  <Badge variant="outline">Template</Badge>
+                ) : null}
                 {completionBadgeLabel ? (
                   <Badge variant="outline">{completionBadgeLabel}</Badge>
                 ) : null}

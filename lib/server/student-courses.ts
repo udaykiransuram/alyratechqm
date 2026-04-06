@@ -18,6 +18,7 @@ import type {
   CourseMetadata,
   CourseProgressSnapshot,
   CourseScopeSection,
+  CourseSubjectSummary,
   StudentCourseDetail,
   StudentCourseDetailBlock,
   StudentCourseSummary,
@@ -26,7 +27,7 @@ import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 import { invalidateStudentDashboardCacheForStudent } from "@/lib/server/student-dashboard-cache";
-import { listStudentTestsData } from "@/app/api/student/tests/data";
+import { listStudentTestsData } from "@/lib/server/student-tests";
 import {
   getMockStudentCourseDetail,
   getMockStudentCourseSummaries,
@@ -92,6 +93,28 @@ function mapSectionSummary(value: any): CourseScopeSection | null {
         ? mapClassSummary(value.class)
         : null,
   };
+}
+
+function mapSubjectSummary(value: any): CourseSubjectSummary | null {
+  if (!value) return null;
+  const id = toId(value);
+  if (!id) return null;
+
+  return {
+    _id: id,
+    name: String(value?.name || "").trim() || id,
+  };
+}
+
+function mapCourseSubjects(value: any[]): CourseSubjectSummary[] {
+  return (Array.isArray(value) ? value : [])
+    .map(mapSubjectSummary)
+    .filter(
+      (
+        subject: ReturnType<typeof mapSubjectSummary>,
+      ): subject is NonNullable<ReturnType<typeof mapSubjectSummary>> =>
+        Boolean(subject),
+    );
 }
 
 function mapScopeSections(value: any[] | undefined | null) {
@@ -641,6 +664,7 @@ async function getStudentCourseModels(schoolKey: string) {
     "CourseProgress",
     "Class",
     "AcademicSection",
+    "Subject",
     "QuestionPaper",
   ]);
 }
@@ -663,6 +687,7 @@ async function getStudentCoursesBase(params: {
     Course: CourseModel,
     Class: ClassModel,
     AcademicSection: AcademicSectionModel,
+    Subject: SubjectModel,
   } = await getStudentCourseModels(params.schoolKey);
 
   const sectionFilter =
@@ -688,9 +713,10 @@ async function getStudentCoursesBase(params: {
     ...sectionFilter,
   })
     .select(
-      "_id title summary coverImageUrl coverImageAltText startsAt dueAt completionBadgeLabel enforceSequentialProgress allowNotes allowBookmarks isTemplate class assignedAcademicSections status blocks publishedAt createdAt updatedAt",
+      "_id title summary coverImageUrl coverImageAltText startsAt dueAt completionBadgeLabel enforceSequentialProgress allowNotes allowBookmarks isTemplate class subjectIds assignedAcademicSections status blocks publishedAt createdAt updatedAt",
     )
     .populate({ path: "class", model: ClassModel, select: "name" })
+    .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
     .populate({
       path: "assignedAcademicSections",
       model: AcademicSectionModel,
@@ -758,6 +784,7 @@ function serializeStudentCourseSummary(params: {
     title: String(params.course?.title || "").trim(),
     summary: String(params.course?.summary || ""),
     class: mapClassSummary(params.course?.class),
+    subjects: mapCourseSubjects(params.course?.subjectIds),
     assignedAcademicSections: mapScopeSections(params.course?.assignedAcademicSections),
     status: computedProgress.status,
     availabilityStatus,
@@ -782,11 +809,18 @@ export async function listStudentCourses(params: {
     classId?: string | null;
     academicSectionId?: string | null;
   };
+  filters?: {
+    classId?: string;
+    sectionId?: string;
+    subjectId?: string;
+    query?: string;
+  };
 }) {
   if (isMockedE2ETestMode()) {
     return getMockStudentCourseSummaries(
       params.studentId,
       params.studentPlacement,
+      params.filters,
     );
   }
 
@@ -815,7 +849,7 @@ export async function listStudentCourses(params: {
     paperIds: collectAssessmentPaperIdsFromCourses(courses),
   });
 
-  return courses.map((course) =>
+  const summaries = courses.map((course) =>
     serializeStudentCourseSummary({
       course,
       progress: progressByCourseId.get(toId(course?._id)) || null,
@@ -823,6 +857,43 @@ export async function listStudentCourses(params: {
       now,
     }),
   );
+
+  const normalizedQuery = String(params.filters?.query || "").trim().toLowerCase();
+
+  return summaries.filter((course) => {
+    if (params.filters?.classId && course.class?._id !== params.filters.classId) {
+      return false;
+    }
+
+    if (params.filters?.subjectId) {
+      const subjectMatch = course.subjects.some(
+        (subject) => subject._id === params.filters?.subjectId,
+      );
+      if (!subjectMatch) {
+        return false;
+      }
+    }
+
+    if (params.filters?.sectionId) {
+      const hasSection =
+        course.assignedAcademicSections.length === 0 ||
+        course.assignedAcademicSections.some(
+          (section) => section._id === params.filters?.sectionId,
+        );
+      if (!hasSection) {
+        return false;
+      }
+    }
+
+    if (normalizedQuery) {
+      const haystack = `${course.title} ${course.summary}`.toLowerCase();
+      if (!haystack.includes(normalizedQuery)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 }
 
 export async function getStudentCourseDetail(params: {

@@ -6,12 +6,11 @@ import ReportJobsHeroActions from "@/components/reports/ReportJobsHeroActions";
 import {
   DEFAULT_REPORT_JOB_PAGE_SIZE,
   getReportJobsPageData,
-} from "@/app/api/reports/jobs/data";
+} from "@/lib/server/report-jobs";
 import {
   requireWorkspaceStaffSession,
   resolveWorkspaceListPage,
 } from "@/lib/server/workspace-user-directory";
-import { connectDB } from "@/lib/db";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 const ReportJobsPageClient = dynamicComponent(
@@ -42,7 +41,6 @@ function summarizeReportJobs(jobs: Awaited<ReturnType<typeof getReportJobsPageDa
   );
 }
 
-export const dynamic = "force-dynamic";
 
 type ReportJobsPageProps = {
   searchParams: Promise<{
@@ -75,10 +73,6 @@ export default async function ManageReportJobsPage({
   const limitFilter = Number(
     readSearchValue(resolvedSearchParams.limit) || DEFAULT_REPORT_JOB_PAGE_SIZE,
   );
-
-  if (!isMockedE2ETestMode()) {
-    await connectDB();
-  }
 
   let jobsResult: Awaited<ReturnType<typeof getReportJobsPageData>> = {
     jobs: [],

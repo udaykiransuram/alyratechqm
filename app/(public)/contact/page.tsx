@@ -1,5 +1,4 @@
 import { ClockIcon, EnvelopeIcon, MapPinIcon, PhoneIcon } from "@heroicons/react/24/outline";
-import { unstable_cache } from "next/cache";
 import Script from "next/script";
 
 import ContactForm from "@/components/ContactForm";
@@ -9,11 +8,8 @@ import { PublicFaqStack } from "@/components/public/PublicFaqStack";
 import { PublicFinalCta } from "@/components/public/PublicFinalCta";
 import { PublicInfoCardGrid } from "@/components/public/PublicInfoCardGrid";
 import { PublicSectionIntro } from "@/components/public/PublicSectionIntro";
-import { connectDB } from "@/lib/db";
+import { getContactPageData } from "@/lib/server/public-marketing";
 import { getSiteUrlOrFallback } from "@/lib/site-url";
-import { resolvePublicPageData } from "@/lib/server/public-page-data";
-import ContactInfo from "@/models/ContactInfo";
-import FAQ from "@/models/FAQ";
 
 export const revalidate = 60;
 
@@ -22,80 +18,6 @@ export const metadata = {
   description:
     "Get in touch with our team to start your transformation journey.",
 };
-
-interface FAQItem {
-  question: string;
-  answer: string;
-}
-
-type ContactDoc = {
-  email?: string;
-  phone?: string;
-  whatsappNumber?: string;
-  address?: string;
-  city?: string;
-  tagline?: string;
-  responseTime?: string;
-  responseDescription?: string;
-};
-
-type MinimalFaq = { question: string; answer: string };
-
-const CONTACT_DEFAULTS = {
-  email: "hello@beyondmarks.edu",
-  phone: "+91 98765 43210",
-  whatsappNumber: "",
-  address: "Innovation Hub",
-  city: "Hitech City, Hyderabad, India",
-  tagline:
-    "We'd love to hear from you. Let's transform education together.",
-  responseTime: "< 24h",
-  responseDescription:
-    "Our team responds to every inquiry within 24 hours. For school partnerships, we typically schedule a demo within 48 hours.",
-};
-
-const getContactPageData = unstable_cache(
-  async () => {
-    return resolvePublicPageData(
-      async () => {
-        await connectDB();
-        const contactQuery = ContactInfo.findOne().lean().exec() as Promise<
-          ContactDoc | null
-        >;
-        const faqQuery = FAQ.find({ page: "contact", isActive: true })
-          .sort({ displayOrder: 1 })
-          .lean<MinimalFaq[]>()
-          .exec() as Promise<MinimalFaq[]>;
-        const [infoDoc, faqDocs] = await Promise.all([contactQuery, faqQuery]);
-
-        return {
-          info: {
-            email: infoDoc?.email || CONTACT_DEFAULTS.email,
-            phone: infoDoc?.phone || CONTACT_DEFAULTS.phone,
-            whatsappNumber:
-              infoDoc?.whatsappNumber || CONTACT_DEFAULTS.whatsappNumber,
-            address: infoDoc?.address || CONTACT_DEFAULTS.address,
-            city: infoDoc?.city || CONTACT_DEFAULTS.city,
-            tagline: infoDoc?.tagline || CONTACT_DEFAULTS.tagline,
-            responseTime:
-              infoDoc?.responseTime || CONTACT_DEFAULTS.responseTime,
-            responseDescription:
-              infoDoc?.responseDescription ||
-              CONTACT_DEFAULTS.responseDescription,
-          },
-          faqs: faqDocs.map((faq) => ({
-            question: faq.question,
-            answer: faq.answer,
-          })) as FAQItem[],
-        };
-      },
-      { info: CONTACT_DEFAULTS, faqs: [] as FAQItem[] },
-      2000,
-    );
-  },
-  ["public-contact-page-data"],
-  { revalidate: 60 },
-);
 
 export default async function ContactPage() {
   const { info, faqs } = await getContactPageData();

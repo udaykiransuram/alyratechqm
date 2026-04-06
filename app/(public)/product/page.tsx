@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { unstable_cache } from "next/cache";
 import { CheckIcon } from "@heroicons/react/20/solid";
 
 import { InnerHero } from "@/components/InnerHero";
@@ -10,12 +9,7 @@ import { PublicFinalCta } from "@/components/public/PublicFinalCta";
 import { PublicSectionIntro } from "@/components/public/PublicSectionIntro";
 import { PublicStatsGrid } from "@/components/public/PublicStatsGrid";
 import { PublicTestimonialsGrid } from "@/components/public/PublicTestimonialsGrid";
-import { connectDB } from "@/lib/db";
-import { resolvePublicPageData } from "@/lib/server/public-page-data";
-import FAQ from "@/models/FAQ";
-import PricingPlan from "@/models/PricingPlan";
-import SiteStats from "@/models/SiteStats";
-import Testimonial from "@/models/Testimonial";
+import { getProductPageData } from "@/lib/server/public-marketing";
 
 export const metadata = {
   title: "Solutions | Alyra Tech",
@@ -25,138 +19,11 @@ export const metadata = {
 
 export const revalidate = 60;
 
-interface Tier {
-  name: string;
-  id: string;
-  href: string;
-  priceDisplay: string;
-  periodLabel: string;
-  description: string;
-  features: string[];
-  mostPopular: boolean;
-  studentLimit: number;
-}
-
-type TrustStat = {
-  key: string;
-  label: string;
-  value: string;
-  icon?: string;
-};
-
-interface ProductTestimonial {
-  quote: string;
-  author: string;
-  role: string;
-  rating: number;
-}
-
-interface FAQItem {
-  question: string;
-  answer: string;
-}
-
-const DEFAULT_TRUST: TrustStat[] = [
-  { key: "schools", label: "Schools Onboarded", value: "500+", icon: "🏫" },
-  { key: "students", label: "Students Diagnosed", value: "50K+", icon: "👨‍🎓" },
-  { key: "renewalRate", label: "Renewal Rate", value: "98%", icon: "🔄" },
-];
-
-const PRODUCT_PAGE_FALLBACK = {
-  tiers: [] as Tier[],
-  trustStats: DEFAULT_TRUST,
-  testimonials: [] as ProductTestimonial[],
-  faqs: [] as FAQItem[],
-};
-
-function fmtPrice(price: number, currency = "INR") {
-  if (price === 0) return "Custom";
-  return `${currency === "INR" ? "₹" : `${currency} `}${price.toLocaleString("en-IN")}`;
-}
-
-function fmtPeriod(billingPeriod: string) {
-  return billingPeriod === "monthly"
-    ? "/month"
-    : billingPeriod === "yearly"
-      ? "/year"
-      : "";
-}
-
 function getStatsColumns(length: number): 2 | 3 | 4 {
   if (length === 3) return 3;
   if (length <= 2) return 2;
   return 4;
 }
-
-const getProductPageData = unstable_cache(
-  async () => {
-    return resolvePublicPageData(
-      async () => {
-        await connectDB();
-
-        const [plans, statsDoc, testimonials, faqDocs]: [any[], any, any[], any[]] =
-          await Promise.all([
-            PricingPlan.find({ isActive: true }).sort({ displayOrder: 1 }).lean(),
-            SiteStats.findOne({ section: "homepage" }).lean(),
-            Testimonial.find({ section: "product", isActive: true })
-              .sort({ displayOrder: 1 })
-              .lean(),
-            FAQ.find({ page: "product", isActive: true })
-              .sort({ displayOrder: 1 })
-              .lean(),
-          ]);
-
-        const tiers: Tier[] = plans.length
-          ? plans.map((plan: any) => ({
-              name: plan.name,
-              id: `tier-${plan._id}`,
-              href: "/contact",
-              priceDisplay: fmtPrice(plan.price, plan.currency),
-              periodLabel: fmtPeriod(plan.billingPeriod),
-              description: plan.description,
-              features: plan.features ?? [],
-              mostPopular: Boolean(plan.isPopular),
-              studentLimit: plan.studentLimit || 0,
-            }))
-          : [];
-
-        const trustStats: TrustStat[] = (statsDoc?.stats ?? []).length
-          ? (statsDoc.stats as any[]).map((stat: any) => ({
-              key: stat.key,
-              label: stat.label,
-              value: String(stat.value),
-              icon: stat.icon,
-            }))
-          : DEFAULT_TRUST;
-
-        const productTestimonials: ProductTestimonial[] = testimonials.length
-          ? testimonials.map((testimonial: any) => ({
-              quote: testimonial.quote,
-              author: testimonial.author,
-              role: [testimonial.role, testimonial.school, testimonial.location]
-                .filter(Boolean)
-                .join(", "),
-              rating: testimonial.rating ?? 5,
-            }))
-          : [];
-
-        return {
-          tiers,
-          trustStats,
-          testimonials: productTestimonials,
-          faqs: faqDocs.map((faq: any) => ({
-            question: faq.question,
-            answer: faq.answer,
-          })) as FAQItem[],
-        };
-      },
-      PRODUCT_PAGE_FALLBACK,
-      2000,
-    );
-  },
-  ["public-product-page-data"],
-  { revalidate: 60 },
-);
 
 export default async function ProductPage() {
   const {

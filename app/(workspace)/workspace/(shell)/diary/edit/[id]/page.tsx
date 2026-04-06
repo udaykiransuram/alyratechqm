@@ -6,7 +6,6 @@ import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { getWorkspaceDiaryById, getWorkspaceDiarySupportData } from "@/lib/server/diary";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 type EditDiaryPageProps = {
   params: Promise<{ id: string }>;

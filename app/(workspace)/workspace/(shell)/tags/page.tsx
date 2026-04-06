@@ -4,7 +4,6 @@ import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-direct
 
 const INITIAL_TAG_BATCH_SIZE = 24;
 
-export const dynamic = "force-dynamic";
 
 export default async function TagsListPage() {
   const { schoolKey } = await requireWorkspaceStaffSession();

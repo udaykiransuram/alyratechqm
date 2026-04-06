@@ -2,7 +2,6 @@ import TeacherDetailPageClient from "@/components/workspace/people-detail/Teache
 import { getWorkspacePeopleUserData } from "@/lib/server/workspace-people";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 type TeacherDetailPageProps = {
   params: Promise<{ id: string }>;

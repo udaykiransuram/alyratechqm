@@ -65,6 +65,7 @@ export default function Navbar() {
   );
   const [mounted, setMounted] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
+  const scrolledRef = useRef(false);
   const [headerHeight, setHeaderHeight] = useState(72);
 
   useEffect(() => {
@@ -72,7 +73,30 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 16);
+    let frame = 0;
+
+    const syncScrolledState = () => {
+      frame = 0;
+
+      const scrollY = window.scrollY;
+      const nextScrolled = scrolledRef.current ? scrollY > 8 : scrollY > 20;
+
+      if (nextScrolled === scrolledRef.current) {
+        return;
+      }
+
+      scrolledRef.current = nextScrolled;
+      setScrolled(nextScrolled);
+    };
+
+    const handleScroll = () => {
+      if (frame) {
+        return;
+      }
+
+      frame = window.requestAnimationFrame(syncScrolledState);
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setDesktopDropdown(null);
@@ -80,11 +104,14 @@ export default function Navbar() {
       }
     };
 
-    handleScroll();
+    syncScrolledState();
     window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("keydown", handleKeyDown);
     };

@@ -9,7 +9,6 @@ import FeedbackNotice from "@/components/ui/feedback-notice";
 import { authOptions } from "@/lib/auth";
 import { getStudentCourseDetail } from "@/lib/server/student-courses";
 
-export const dynamic = "force-dynamic";
 
 type StudentCoursePageProps = {
   params: Promise<{ courseId: string }>;

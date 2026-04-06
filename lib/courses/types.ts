@@ -152,6 +152,14 @@ export type CourseMetadata = {
   isTemplate: boolean;
 };
 
+export type CourseTemplateInfo = {
+  familyId: string | null;
+  versionNumber: number | null;
+  parentCourseId: string | null;
+  derivedFromTemplateCourseId: string | null;
+  derivedFromTemplateVersionNumber: number | null;
+};
+
 export type CourseScopeSection = {
   _id: string;
   name: string;
@@ -238,6 +246,7 @@ export type WorkspaceCourseSummary = {
   requiredAssessmentCount: number;
   blockCounts: CourseBlockCounts;
   metadata: CourseMetadata;
+  template: CourseTemplateInfo;
 };
 
 export type WorkspaceCourseProgressSummary = {
@@ -278,6 +287,7 @@ export type StudentCourseSummary = {
   title: string;
   summary: string;
   class: CourseClassSummary | null;
+  subjects: CourseSubjectSummary[];
   assignedAcademicSections: CourseScopeSection[];
   status: CourseProgressStatus;
   availabilityStatus: CourseAvailabilityStatus;

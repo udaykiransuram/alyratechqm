@@ -12,6 +12,10 @@ import {
   validateNormalizedCourseMetadata,
 } from "@/lib/courses/payload";
 import { getCourseAssessmentPaperIds } from "@/lib/courses/shared";
+import {
+  createCourseTemplateFamilyId,
+  getCourseTemplateInfo,
+} from "@/lib/courses/template-lineage";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { resolveTeacherCourseScope } from "@/lib/courses/access";
@@ -251,7 +255,9 @@ export async function PATCH(
       _id: id,
       ...buildArchiveFilter(false),
     })
-      .select("title class subjectIds assignedAcademicSections status publishedAt")
+      .select(
+        "title class subjectIds assignedAcademicSections status publishedAt isTemplate templateFamilyId templateVersionNumber templateParentCourse derivedFromTemplateCourse derivedFromTemplateVersionNumber",
+      )
       .lean();
 
     if (!existingCourse) {
@@ -354,6 +360,37 @@ export async function PATCH(
       }
     }
 
+    const existingTemplate = getCourseTemplateInfo(existingCourse, {
+      fallbackCourseId: id,
+    });
+    const normalizedMetadata = existingCourse?.isTemplate
+      ? {
+          ...payload.metadata,
+          isTemplate: true,
+        }
+      : payload.metadata;
+
+    let templateDocument: Parameters<typeof buildCourseDocumentFromPayload>[0]["template"];
+
+    if (existingCourse?.isTemplate) {
+      templateDocument = {
+        familyId: existingTemplate.familyId || createCourseTemplateFamilyId(),
+        versionNumber: existingTemplate.versionNumber || 1,
+        parentCourseId: existingTemplate.parentCourseId,
+      };
+    } else if (normalizedMetadata.isTemplate) {
+      templateDocument = {
+        familyId: createCourseTemplateFamilyId(),
+        versionNumber: 1,
+      };
+    } else if (existingTemplate.derivedFromTemplateCourseId) {
+      templateDocument = {
+        derivedFromTemplateCourseId: existingTemplate.derivedFromTemplateCourseId,
+        derivedFromTemplateVersionNumber:
+          existingTemplate.derivedFromTemplateVersionNumber,
+      };
+    }
+
     await CourseModel.updateOne(
       { _id: id },
       {
@@ -365,8 +402,9 @@ export async function PATCH(
           assignedAcademicSectionIds: assignmentValidation.ids,
           status: payload.status,
           blocks: payload.blocks,
-          metadata: payload.metadata,
+          metadata: normalizedMetadata,
           previousPublishedAt: existingCourse?.publishedAt || null,
+          template: templateDocument,
         }),
       },
     );
