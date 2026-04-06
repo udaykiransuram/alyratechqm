@@ -2,7 +2,6 @@ import EditAdminPageClient from "@/components/workspace/people-edit/EditAdminPag
 import { getWorkspacePeopleUserData } from "@/lib/server/workspace-people";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 type EditAdminPageProps = {
   params: Promise<{ id: string }>;

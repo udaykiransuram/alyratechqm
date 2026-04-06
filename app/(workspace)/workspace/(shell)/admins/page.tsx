@@ -24,7 +24,6 @@ import {
 const ADMINS_PAGE_SIZE = 25;
 const ADMINS_BASE_PATH = "/workspace/admins";
 
-export const dynamic = "force-dynamic";
 
 type AdminsPageProps = {
   searchParams: Promise<{

@@ -2,7 +2,6 @@ import EditTeacherPageClient from "@/components/workspace/people-edit/EditTeache
 import { getWorkspacePeopleUserData } from "@/lib/server/workspace-people";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 type EditTeacherPageProps = {
   params: Promise<{ id: string }>;

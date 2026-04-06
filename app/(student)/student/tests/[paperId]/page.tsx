@@ -2,13 +2,12 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 
 import StudentTestPageClient from "@/components/student/test-detail/StudentTestPageClient";
-import { getStudentTestDetailData } from "@/app/api/student/tests/[paperId]/data";
 import { authOptions } from "@/lib/auth";
 import type { StudentTestDetailResponse } from "@/components/student/test-detail/student-test-types";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
+import { getStudentTestDetailData } from "@/lib/server/student-tests";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
-export const dynamic = "force-dynamic";
 
 type StudentTestPageProps = {
   params: Promise<{ paperId: string }>;

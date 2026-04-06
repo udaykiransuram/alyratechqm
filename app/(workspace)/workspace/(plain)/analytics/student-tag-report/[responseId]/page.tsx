@@ -2,7 +2,6 @@ import { StudentTagReportPageView } from "@/components/analytics/StudentTagRepor
 import { getStudentTagReportPageBootstrap } from "@/lib/analytics/student-tag-report-page";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 export default async function WorkspaceStudentTagReportPage({
   params,

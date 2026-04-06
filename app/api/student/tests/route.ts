@@ -5,7 +5,7 @@ import {
   buildExamRuntimeErrorPayload,
   isExamRuntimeEnabled,
 } from "@/lib/exam-runtime";
-import { listStudentTestsData } from "@/app/api/student/tests/data";
+import { listStudentTestsData } from "@/lib/server/student-tests";
 import {
   isStudentResultReleasedForPaper,
   sanitizeSerializedAttemptForStudentDelivery,

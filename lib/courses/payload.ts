@@ -5,6 +5,11 @@ import {
 } from "@/lib/courses/shared";
 import type { CourseBlock, CourseMetadata, CourseStatus } from "@/lib/courses/types";
 
+export type CourseTemplateContextPayload = {
+  templateFromCourseId: string;
+  versionFromCourseId: string;
+};
+
 function toId(value: unknown) {
   if (!value) return "";
   if (typeof value === "object" && value !== null && "_id" in (value as Record<string, unknown>)) {
@@ -25,6 +30,17 @@ function normalizeIds(value: unknown) {
   );
 }
 
+function normalizeCourseTemplateContext(body: any): CourseTemplateContextPayload {
+  return {
+    templateFromCourseId: toId(
+      body?.templateFromCourseId || body?.templateFrom || body?.sourceTemplateCourseId,
+    ),
+    versionFromCourseId: toId(
+      body?.versionFromCourseId || body?.versionFrom || body?.templateVersionSourceCourseId,
+    ),
+  };
+}
+
 export function normalizeCoursePayload(body: any) {
   return {
     title: String(body?.title || "").trim(),
@@ -39,6 +55,7 @@ export function normalizeCoursePayload(body: any) {
     status: resolveCourseStatus(body?.status),
     blocks: normalizeCourseBlocks(body?.blocks),
     metadata: normalizeCourseMetadata(body),
+    templateContext: normalizeCourseTemplateContext(body),
   };
 }
 
@@ -268,6 +285,13 @@ export function buildCourseDocumentFromPayload(params: {
   metadata: CourseMetadata;
   createdBy?: string;
   previousPublishedAt?: Date | string | null;
+  template?: {
+    familyId?: string | null;
+    versionNumber?: number | null;
+    parentCourseId?: string | null;
+    derivedFromTemplateCourseId?: string | null;
+    derivedFromTemplateVersionNumber?: number | null;
+  };
 }) {
   const publishedAt =
     params.status === "published"
@@ -379,6 +403,31 @@ export function buildCourseDocumentFromPayload(params: {
     allowNotes: params.metadata.allowNotes !== false,
     allowBookmarks: params.metadata.allowBookmarks !== false,
     isTemplate: params.metadata.isTemplate === true,
+    templateFamilyId:
+      params.template?.familyId && params.metadata.isTemplate === true
+        ? params.template.familyId
+        : null,
+    templateVersionNumber:
+      typeof params.template?.versionNumber === "number" &&
+      Number.isFinite(params.template.versionNumber) &&
+      params.metadata.isTemplate === true
+        ? Math.max(1, Math.floor(params.template.versionNumber))
+        : null,
+    templateParentCourse:
+      params.template?.parentCourseId && params.metadata.isTemplate === true
+        ? params.template.parentCourseId
+        : null,
+    derivedFromTemplateCourse:
+      params.template?.derivedFromTemplateCourseId &&
+      params.metadata.isTemplate !== true
+        ? params.template.derivedFromTemplateCourseId
+        : null,
+    derivedFromTemplateVersionNumber:
+      typeof params.template?.derivedFromTemplateVersionNumber === "number" &&
+      Number.isFinite(params.template.derivedFromTemplateVersionNumber) &&
+      params.metadata.isTemplate !== true
+        ? Math.max(1, Math.floor(params.template.derivedFromTemplateVersionNumber))
+        : null,
     ...(params.createdBy ? { createdBy: params.createdBy } : {}),
     publishedAt,
     ...(params.status === "archived"

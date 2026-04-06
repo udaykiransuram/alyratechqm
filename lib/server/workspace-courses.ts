@@ -8,6 +8,7 @@ import {
   normalizeCourseBlocks,
   resolveCourseAvailabilityStatus,
 } from "@/lib/courses/shared";
+import { getCourseTemplateInfo } from "@/lib/courses/template-lineage";
 import type {
   CourseBlock,
   CourseClassSummary,
@@ -43,6 +44,8 @@ type WorkspaceCourseListResult = {
   limit: number;
 };
 
+type WorkspaceCourseLibraryView = "all" | "templates" | "courses";
+
 function toId(value: unknown) {
   if (!value) return "";
   if (typeof value === "object" && value !== null && "_id" in (value as Record<string, unknown>)) {
@@ -72,6 +75,19 @@ function resolveListLimit(value: unknown, defaultLimit: number) {
   }
 
   return Math.min(Math.floor(normalized), 100);
+}
+
+function resolveWorkspaceCourseLibraryView(
+  value: unknown,
+): WorkspaceCourseLibraryView {
+  switch (String(value || "").trim().toLowerCase()) {
+    case "templates":
+      return "templates";
+    case "courses":
+      return "courses";
+    default:
+      return "all";
+  }
 }
 
 function getScopedIds(value: unknown) {
@@ -278,6 +294,9 @@ function serializeWorkspaceCourseBlock(
 function serializeWorkspaceCourseSummary(course: any): WorkspaceCourseSummary {
   const blocks = normalizeCourseBlocks(course?.blocks);
   const metadata = normalizeCourseMetadata(course);
+  const template = getCourseTemplateInfo(course, {
+    fallbackCourseId: toId(course?._id),
+  });
   const assessmentPaperIds = getCourseAssessmentPaperIds(blocks);
   const requiredAssessmentPaperIds = getRequiredCourseAssessmentPaperIds(blocks);
   const blockCounts = blocks.reduce<WorkspaceCourseSummary["blockCounts"]>(
@@ -315,6 +334,7 @@ function serializeWorkspaceCourseSummary(course: any): WorkspaceCourseSummary {
     requiredAssessmentCount: requiredAssessmentPaperIds.length,
     blockCounts,
     metadata,
+    template,
   };
 }
 
@@ -547,8 +567,16 @@ export async function listWorkspaceCourses(params: {
   viewerRole: "admin" | "teacher";
   page?: number;
   limit?: number;
+  filters?: {
+    classId?: string;
+    sectionId?: string;
+    subjectId?: string;
+    query?: string;
+    view?: WorkspaceCourseLibraryView | string;
+  };
 }) {
   const requestedPage = resolveListPage(params.page);
+  const requestedView = resolveWorkspaceCourseLibraryView(params.filters?.view);
   const requestedLimit =
     typeof params.limit === "number" || typeof params.limit === "string"
       ? resolveListLimit(params.limit, 12)
@@ -556,24 +584,70 @@ export async function listWorkspaceCourses(params: {
 
   if (isMockedE2ETestMode()) {
     const allCourses = getMockWorkspaceCourseSummaries();
+    const normalizedQuery = String(params.filters?.query || "").trim().toLowerCase();
+    const filteredCourses = allCourses.filter((course) => {
+      if (requestedView === "templates" && !course.metadata.isTemplate) {
+        return false;
+      }
+
+      if (requestedView === "courses" && course.metadata.isTemplate) {
+        return false;
+      }
+
+      if (params.filters?.classId && course.class?._id !== params.filters.classId) {
+        return false;
+      }
+
+      if (params.filters?.subjectId) {
+        const hasSubject = course.subjects.some(
+          (subject) => subject._id === params.filters?.subjectId,
+        );
+        if (!hasSubject) {
+          return false;
+        }
+      }
+
+      if (params.filters?.sectionId) {
+        const hasSection =
+          course.assignedAcademicSections.length === 0 ||
+          course.assignedAcademicSections.some(
+            (section) => section._id === params.filters?.sectionId,
+          );
+        if (!hasSection) {
+          return false;
+        }
+      }
+
+      if (normalizedQuery) {
+        const haystack = `${course.title} ${course.summary}`.toLowerCase();
+        if (!haystack.includes(normalizedQuery)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
     const total = allCourses.length;
 
     if (!requestedLimit) {
       return {
-        courses: allCourses,
-        total,
+        courses: filteredCourses,
+        total: filteredCourses.length,
         page: 1,
         pages: 1,
-        limit: Math.max(total, 1),
+        limit: Math.max(filteredCourses.length, 1),
       } satisfies WorkspaceCourseListResult;
     }
 
-    const pages = Math.max(1, Math.ceil(total / requestedLimit));
+    const pages = Math.max(1, Math.ceil(filteredCourses.length / requestedLimit));
     const page = Math.min(requestedPage, pages);
 
     return {
-      courses: allCourses.slice((page - 1) * requestedLimit, page * requestedLimit),
-      total,
+      courses: filteredCourses.slice(
+        (page - 1) * requestedLimit,
+        page * requestedLimit,
+      ),
+      total: filteredCourses.length,
       page,
       pages,
       limit: requestedLimit,
@@ -613,6 +687,41 @@ export async function listWorkspaceCourses(params: {
     query = mergeMongoQueries(query, scopedQuery);
   }
 
+  if (params.filters?.classId) {
+    query = mergeMongoQueries(query, { class: params.filters.classId });
+  }
+
+  if (requestedView === "templates") {
+    query = mergeMongoQueries(query, { isTemplate: true });
+  } else if (requestedView === "courses") {
+    query = mergeMongoQueries(query, { isTemplate: false });
+  }
+
+  if (params.filters?.subjectId) {
+    query = mergeMongoQueries(query, {
+      subjectIds: params.filters.subjectId,
+    });
+  }
+
+  if (params.filters?.sectionId) {
+    query = mergeMongoQueries(
+      query,
+      buildArrayIntersectionOrEmptyQuery("assignedAcademicSections", [
+        params.filters.sectionId,
+      ]),
+    );
+  }
+
+  const normalizedQuery = String(params.filters?.query || "").trim();
+  if (normalizedQuery) {
+    query = mergeMongoQueries(query, {
+      $or: [
+        { title: { $regex: normalizedQuery, $options: "i" } },
+        { summary: { $regex: normalizedQuery, $options: "i" } },
+      ],
+    });
+  }
+
   const total = await CourseModel.countDocuments(query);
   const limit = requestedLimit || Math.max(total, 1);
   const pages = requestedLimit ? Math.max(1, Math.ceil(total / limit)) : 1;
@@ -620,7 +729,7 @@ export async function listWorkspaceCourses(params: {
 
   let courseQuery = CourseModel.find(query)
     .select(
-      "_id title summary coverImageUrl coverImageAltText startsAt dueAt completionBadgeLabel enforceSequentialProgress allowNotes allowBookmarks isTemplate class subjectIds assignedAcademicSections status blocks publishedAt createdAt updatedAt",
+      "_id title summary coverImageUrl coverImageAltText startsAt dueAt completionBadgeLabel enforceSequentialProgress allowNotes allowBookmarks isTemplate templateFamilyId templateVersionNumber templateParentCourse derivedFromTemplateCourse derivedFromTemplateVersionNumber class subjectIds assignedAcademicSections status blocks publishedAt createdAt updatedAt",
     )
     .populate({ path: "class", model: ClassModel, select: "name" })
     .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
@@ -696,7 +805,7 @@ export async function getWorkspaceCourseById(params: {
     ...buildArchiveFilter(false),
   })
     .select(
-      "_id title summary coverImageUrl coverImageAltText startsAt dueAt completionBadgeLabel enforceSequentialProgress allowNotes allowBookmarks isTemplate class subjectIds assignedAcademicSections status blocks publishedAt createdBy createdAt updatedAt",
+      "_id title summary coverImageUrl coverImageAltText startsAt dueAt completionBadgeLabel enforceSequentialProgress allowNotes allowBookmarks isTemplate templateFamilyId templateVersionNumber templateParentCourse derivedFromTemplateCourse derivedFromTemplateVersionNumber class subjectIds assignedAcademicSections status blocks publishedAt createdBy createdAt updatedAt",
     )
     .populate({ path: "class", model: ClassModel, select: "name" })
     .populate({ path: "subjectIds", model: SubjectModel, select: "name" })

@@ -7,7 +7,6 @@ import {
 } from "@/lib/student-account/data";
 import { authOptions } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
 
 export default async function StudentAccountPage() {
   const session = await getServerSession(authOptions);

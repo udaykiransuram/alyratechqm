@@ -2,7 +2,6 @@ import AdminDetailPageClient from "@/components/workspace/people-detail/AdminDet
 import { getWorkspacePeopleUserData } from "@/lib/server/workspace-people";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 type AdminDetailPageProps = {
   params: Promise<{ id: string }>;

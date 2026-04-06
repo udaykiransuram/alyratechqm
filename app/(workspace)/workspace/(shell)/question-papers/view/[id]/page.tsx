@@ -18,7 +18,6 @@ import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { getWorkspaceQuestionPaperById } from "@/lib/server/workspace-assessment-data";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 const PrintEditToolbar = dynamicComponent(
   () =>

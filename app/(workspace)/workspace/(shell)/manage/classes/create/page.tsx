@@ -2,7 +2,6 @@ import CreateClassPageClient from "./CreateClassPageClient";
 import { getWorkspaceClasses } from "@/lib/server/workspace-support-data";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 export default async function ManageClassesCreatePage() {
   const { schoolKey } = await requireWorkspaceStaffSession();

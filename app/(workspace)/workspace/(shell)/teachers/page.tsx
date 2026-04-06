@@ -24,7 +24,6 @@ import {
 const TEACHERS_PAGE_SIZE = 25;
 const TEACHERS_BASE_PATH = "/workspace/teachers";
 
-export const dynamic = "force-dynamic";
 
 type TeachersPageProps = {
   searchParams: Promise<{

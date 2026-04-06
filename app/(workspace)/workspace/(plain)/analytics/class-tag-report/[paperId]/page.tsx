@@ -2,7 +2,6 @@ import ClassTagReportPageClient from "@/components/analytics/class-report/ClassT
 import { getClassTagReportPageBootstrap } from "@/lib/analytics/class-tag-report-page";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 type ClassTagReportPageProps = {
   params: Promise<{ paperId: string }>;

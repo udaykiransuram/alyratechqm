@@ -1,10 +1,10 @@
-import { listStudentTestsData } from "@/app/api/student/tests/data";
 import { getTodayDiaryEntryDate } from "@/lib/diary/shared";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { listStudentDiaryEntries } from "@/lib/server/diary";
 import { listStudentCourses } from "@/lib/server/student-courses";
 import { getCachedStudentDashboardData } from "@/lib/server/student-dashboard-cache";
+import { listStudentTestsData } from "@/lib/server/student-tests";
 
 export type StudentDashboardData = {
   generatedAt: string;

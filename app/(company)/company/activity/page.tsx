@@ -5,7 +5,6 @@ import { authOptions } from "@/lib/auth";
 import { getCompanyActivityData } from "@/lib/company/activity";
 import ActivityClient from "./ActivityClient";
 
-export const dynamic = "force-dynamic";
 
 export default async function CompanyActivityPage() {
   const session = await getServerSession(authOptions);

@@ -66,6 +66,11 @@ export interface ICourse extends Document {
   allowNotes: boolean;
   allowBookmarks: boolean;
   isTemplate: boolean;
+  templateFamilyId?: string | null;
+  templateVersionNumber?: number | null;
+  templateParentCourse?: Types.ObjectId | null;
+  derivedFromTemplateCourse?: Types.ObjectId | null;
+  derivedFromTemplateVersionNumber?: number | null;
   class: Types.ObjectId;
   subjectIds?: Types.ObjectId[];
   assignedAcademicSections?: Types.ObjectId[];
@@ -427,6 +432,32 @@ const CourseSchema = new Schema<ICourse>(
       default: false,
       index: true,
     },
+    templateFamilyId: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
+    },
+    templateVersionNumber: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
+    templateParentCourse: {
+      type: Schema.Types.ObjectId,
+      ref: "Course",
+      default: null,
+    },
+    derivedFromTemplateCourse: {
+      type: Schema.Types.ObjectId,
+      ref: "Course",
+      default: null,
+    },
+    derivedFromTemplateVersionNumber: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
     class: {
       type: Schema.Types.ObjectId,
       ref: "Class",
@@ -487,6 +518,14 @@ CourseSchema.index(
   { name: "course_workspace_feed_lookup_1" },
 );
 CourseSchema.index(
+  { isTemplate: 1, templateFamilyId: 1, templateVersionNumber: -1, isArchived: 1 },
+  { name: "course_template_family_lookup_1" },
+);
+CourseSchema.index(
+  { derivedFromTemplateCourse: 1, isArchived: 1, updatedAt: -1 },
+  { name: "course_template_source_lookup_1" },
+);
+CourseSchema.index(
   { class: 1, status: 1, isArchived: 1, publishedAt: -1, updatedAt: -1, title: 1 },
   { name: "course_student_feed_lookup_1" },
 );
@@ -511,6 +550,11 @@ if (
     !existingCourseModel.schema.path("allowNotes") ||
     !existingCourseModel.schema.path("allowBookmarks") ||
     !existingCourseModel.schema.path("isTemplate") ||
+    !existingCourseModel.schema.path("templateFamilyId") ||
+    !existingCourseModel.schema.path("templateVersionNumber") ||
+    !existingCourseModel.schema.path("templateParentCourse") ||
+    !existingCourseModel.schema.path("derivedFromTemplateCourse") ||
+    !existingCourseModel.schema.path("derivedFromTemplateVersionNumber") ||
     !existingCourseModel.schema.path("blocks.title") ||
     !existingCourseModel.schema.path("blocks.fileUrl") ||
     !existingCourseModel.schema.path("blocks.fileName") ||

@@ -28,7 +28,6 @@ import { getSystemHealthSnapshot } from "@/lib/server/system-health";
 
 import RefreshHealthButton from "./RefreshHealthButton";
 
-export const dynamic = "force-dynamic";
 
 function getStatusVariant(status: DependencyStatus | "healthy" | "degraded") {
   if (status === "up" || status === "healthy") return "success" as const;

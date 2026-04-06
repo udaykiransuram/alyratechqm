@@ -12,12 +12,61 @@ import { formatDiaryDateLabel, getTodayDiaryEntryDate } from "@/lib/diary/shared
 import { listStudentDiaryEntries } from "@/lib/server/diary";
 import { getWorkspaceSubjects } from "@/lib/server/workspace-support-data";
 
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type StudentDiaryPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
+
+function formatStudentDiaryStatusLabel(status: string) {
+  if (status === "completed") {
+    return "Completed";
+  }
+
+  if (status === "seen") {
+    return "Seen";
+  }
+
+  return "Not seen";
+}
+
+function getStudentDiaryStatusVariant(status: string) {
+  if (status === "completed") {
+    return "success";
+  }
+
+  if (status === "seen") {
+    return "warning";
+  }
+
+  return "neutral";
+}
+
+function getDiaryContentLabels(content: {
+  hasLessonSummary: boolean;
+  hasHomework: boolean;
+  hasTeacherNote: boolean;
+  resourceCount: number;
+}) {
+  const labels: string[] = [];
+
+  if (content.hasLessonSummary) {
+    labels.push("Lesson");
+  }
+  if (content.hasHomework) {
+    labels.push("Homework");
+  }
+  if (content.hasTeacherNote) {
+    labels.push("Teacher Note");
+  }
+  if (content.resourceCount > 0) {
+    labels.push(
+      `${content.resourceCount} Resource${content.resourceCount === 1 ? "" : "s"}`,
+    );
+  }
+
+  return labels;
+}
 
 function getSearchParam(
   searchParams: Record<string, string | string[] | undefined> | undefined,
@@ -134,86 +183,57 @@ export default async function StudentDiaryPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="app-diary-board-grid">
-          {entries.map((entry) => (
-            <Card key={entry._id} className="app-diary-entry-card flex flex-col">
-              <CardHeader className="app-section-header gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge>
-                    {entry.state.status === "completed"
-                      ? "Completed"
-                      : entry.state.status === "seen"
-                        ? "Seen"
-                        : "Not seen"}
-                  </Badge>
-                  {entry.subject?.name ? (
-                    <Badge variant="outline">{entry.subject.name}</Badge>
-                  ) : null}
-                  {entry.class?.name ? (
-                    <Badge variant="outline">{entry.class.name}</Badge>
-                  ) : null}
-                </div>
-                <div className="space-y-1">
-                  <CardTitle className="app-course-title">{entry.title}</CardTitle>
-                  <p className="text-[13px] text-muted-foreground">
-                    {entry.author?.name ? `Shared by ${entry.author.name}` : "Teacher update"}
-                  </p>
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    {formatDiaryDateLabel(entry.entryDate) || entry.entryDate}
-                  </p>
-                </div>
-              </CardHeader>
+        <div className="app-diary-entry-list">
+          {entries.map((entry) => {
+            const contentLabels = getDiaryContentLabels(entry.content);
+            const subline = [
+              entry.author?.name ? `Shared by ${entry.author.name}` : "Teacher update",
+              formatDiaryDateLabel(entry.entryDate) || entry.entryDate,
+            ].join(" • ");
 
-              <CardContent className="app-section-body flex flex-col gap-3">
-                <div className="app-course-metric-grid">
-                  <div className="app-course-metric-card">
-                    <p className="app-course-metric-label">Status</p>
-                    <p className="app-course-metric-value">
-                      {entry.state.status === "completed"
-                        ? "Completed"
-                        : entry.state.status === "seen"
-                          ? "Seen"
-                          : "Not seen"}
-                    </p>
-                  </div>
-                  <div className="app-course-metric-card">
-                    <p className="app-course-metric-label">Shared by</p>
-                    <p className="app-course-metric-value">
-                      {entry.author?.name || "Teacher update"}
-                    </p>
-                  </div>
-                  <div className="app-course-metric-card sm:col-span-2">
-                    <p className="app-course-metric-label">Content</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {entry.content.hasLessonSummary ? (
-                        <Badge variant="outline">Lesson</Badge>
+            return (
+              <Card key={entry._id} className="app-diary-entry-card">
+                <CardContent className="app-diary-list-row app-diary-list-row-student">
+                  <div className="app-diary-list-main">
+                    <div className="app-diary-list-badges">
+                      <Badge variant={getStudentDiaryStatusVariant(entry.state.status)}>
+                        {formatStudentDiaryStatusLabel(entry.state.status)}
+                      </Badge>
+                      {entry.subject?.name ? (
+                        <Badge variant="outline">{entry.subject.name}</Badge>
                       ) : null}
-                      {entry.content.hasHomework ? (
-                        <Badge variant="outline">Homework</Badge>
-                      ) : null}
-                      {entry.content.hasTeacherNote ? (
-                        <Badge variant="outline">Teacher Note</Badge>
-                      ) : null}
-                      {entry.content.resourceCount > 0 ? (
-                        <Badge variant="outline">
-                          {entry.content.resourceCount} Resource
-                          {entry.content.resourceCount === 1 ? "" : "s"}
-                        </Badge>
+                      {entry.class?.name ? (
+                        <Badge variant="outline">{entry.class.name}</Badge>
                       ) : null}
                     </div>
-                  </div>
-                </div>
 
-                <div className="app-course-action-row">
-                  <Button asChild className="app-button-compact-primary app-course-action-button">
-                    <AppPrefetchLink href={`/student/diary/${entry._id}`}>
-                      View entry
-                    </AppPrefetchLink>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                    <div className="space-y-1.5">
+                      <CardTitle className="app-course-title">{entry.title}</CardTitle>
+                      <p className="app-diary-list-subline">{subline}</p>
+                    </div>
+
+                    {contentLabels.length > 0 ? (
+                      <div className="app-diary-list-content">
+                        {contentLabels.map((label) => (
+                          <Badge key={`${entry._id}-${label}`} variant="outline">
+                            {label}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="app-diary-list-actions app-diary-list-actions-student">
+                    <Button asChild size="sm" className="app-diary-list-button">
+                      <AppPrefetchLink href={`/student/diary/${entry._id}`}>
+                        View entry
+                      </AppPrefetchLink>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

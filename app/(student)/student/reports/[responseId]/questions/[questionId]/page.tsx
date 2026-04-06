@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import mongoose from "mongoose";
 import { ArrowLeft, CheckCircle, Grid3X3, Info } from "lucide-react";
 
 import { ContentRenderer } from "@/components/ContentRenderer";
@@ -11,14 +10,11 @@ import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
-import { connectDB } from "@/lib/db";
-import { getTenantModels } from "@/lib/db-tenant";
-import { resolveExamRuntimeMongoResponseIdWithCooldown } from "@/lib/exam-runtime-sync-cache";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
+import { getStudentReportQuestionDetail } from "@/lib/server/student-report-questions";
 import { isStudentResultReleasedForPaper } from "@/lib/student-tests";
 import { sanitizeRichTextHtml } from "@/lib/security/html-sanitize";
 
-export const dynamic = "force-dynamic";
 
 type StudentReportQuestionPageProps = {
   params: Promise<{ responseId: string; questionId: string }>;
@@ -57,76 +53,15 @@ export default async function StudentReportQuestionPage({
     : resolvedSearchParams?.returnTo;
   const reportPath = `/student/reports/${encodeURIComponent(responseId)}`;
   const backHref = getSafeReturnToPath(rawReturnTo) || reportPath;
-  let resolvedResponseId = normalizeId(responseId);
+  const reportQuestion = await getStudentReportQuestionDetail({
+    schoolKey,
+    studentId,
+    responseId,
+    questionId,
+  });
+  const paper = reportQuestion.paper;
 
-  if (
-    resolvedResponseId &&
-    !mongoose.Types.ObjectId.isValid(resolvedResponseId)
-  ) {
-    resolvedResponseId =
-      (await resolveExamRuntimeMongoResponseIdWithCooldown(
-        schoolKey,
-        resolvedResponseId,
-      )) || resolvedResponseId;
-  }
-
-  await connectDB();
-  const {
-    QuestionPaperResponse: QuestionPaperResponseModel,
-    QuestionPaper: QuestionPaperModel,
-    Question: QuestionModel,
-    Tag: TagModel,
-    TagType: TagTypeModel,
-    Subject: SubjectModel,
-    Class: ClassModel,
-  } = await getTenantModels(schoolKey, [
-    "QuestionPaperResponse",
-    "QuestionPaper",
-    "Question",
-    "Tag",
-    "TagType",
-    "Subject",
-    "Class",
-  ]);
-
-  const response =
-    resolvedResponseId && mongoose.Types.ObjectId.isValid(resolvedResponseId)
-      ? await QuestionPaperResponseModel.findOne({
-          _id: resolvedResponseId,
-          student: studentId,
-        })
-    .select("paper")
-    .populate({
-      path: "paper",
-      model: QuestionPaperModel,
-      select: "title class subject subjectIds sections onlineEnabled onlineEndsAt examDate",
-      populate: [
-        { path: "class", model: ClassModel, select: "name" },
-        { path: "subject", model: SubjectModel, select: "name" },
-        { path: "subjectIds", model: SubjectModel, select: "name" },
-        {
-          path: "sections.questions.question",
-          model: QuestionModel,
-          select:
-            "content options answerIndexes matrixOptions matrixAnswers explanation marks type subject class tags",
-          populate: [
-            {
-              path: "tags",
-              model: TagModel,
-              populate: { path: "type", model: TagTypeModel, select: "name" },
-            },
-            { path: "subject", model: SubjectModel, select: "name" },
-            { path: "class", model: ClassModel, select: "name" },
-          ],
-        },
-      ],
-    })
-          .lean()
-      : null;
-
-  const paper = response?.paper as any;
-
-  if (!paper) {
+  if (reportQuestion.status === "paper_not_available") {
     return (
       <PageShell width="wide" padding="standard">
         <PageHero
@@ -152,34 +87,19 @@ export default async function StudentReportQuestionPage({
     redirect(backHref);
   }
 
-  let questionNumber = 0;
-  let matchedQuestion: any = null;
-  let matchedSectionName = "";
-  let matchedSectionDescription = "";
-  let matchedMarks = 0;
-  let matchedNegativeMarks = 0;
+  const {
+    questionNumber,
+    matchedQuestion,
+    matchedSectionName,
+    matchedSectionDescription,
+    matchedMarks,
+    matchedNegativeMarks,
+    paperSubjectNames,
+    metaSubjectName,
+    metaClassName,
+  } = reportQuestion;
 
-  for (const section of Array.isArray(paper.sections) ? paper.sections : []) {
-    for (const entry of Array.isArray(section?.questions) ? section.questions : []) {
-      questionNumber += 1;
-      if (normalizeId(entry?.question?._id) !== normalizeId(questionId)) {
-        continue;
-      }
-
-      matchedQuestion = entry.question;
-      matchedSectionName = String(section?.name || "").trim();
-      matchedSectionDescription = String(section?.description || "").trim();
-      matchedMarks = Number(entry?.marks || matchedQuestion?.marks || 0);
-      matchedNegativeMarks = Number(entry?.negativeMarks || 0);
-      break;
-    }
-
-    if (matchedQuestion) {
-      break;
-    }
-  }
-
-  if (!matchedQuestion) {
+  if (reportQuestion.status === "question_not_found") {
     return (
       <PageShell width="wide" padding="standard">
         <PageHero
@@ -200,18 +120,6 @@ export default async function StudentReportQuestionPage({
       </PageShell>
     );
   }
-
-  const paperSubjectNames = [
-    paper?.subject?.name,
-    ...(Array.isArray(paper?.subjectIds)
-      ? paper.subjectIds.map((subject: any) => subject?.name)
-      : []),
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-  const metaSubjectName = String(matchedQuestion?.subject?.name || "").trim();
-  const metaClassName =
-    String(matchedQuestion?.class?.name || paper?.class?.name || "").trim();
 
   return (
     <PageShell width="wide" padding="standard">

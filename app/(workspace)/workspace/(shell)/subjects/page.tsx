@@ -2,7 +2,6 @@ import SubjectsPageClient from "@/components/workspace/SubjectsPageClient";
 import { getWorkspaceSubjects } from "@/lib/server/workspace-support-data";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 export default async function ViewSubjectsPage() {
   const { schoolKey } = await requireWorkspaceStaffSession();

@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
-import { connectDB } from "@/lib/db";
 import {
   DEFAULT_REPORT_JOB_PAGE_SIZE,
   getReportJobsPageData,
-} from "./data";
+} from "@/lib/server/report-jobs";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  await connectDB();
   const auth = await requireTenantSession(req, {
     allowRoles: ["admin"],
   });

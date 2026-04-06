@@ -4,9 +4,10 @@ import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/button";
-import { buildArchiveFilter } from "@/lib/archive";
-import { connectDB } from "@/lib/db";
-import { getTenantModels } from "@/lib/db-tenant";
+import {
+  getWorkspaceClasses,
+  getWorkspaceSections,
+} from "@/lib/server/workspace-support-data";
 import {
   requireWorkspaceStaffSession,
   resolveWorkspaceListPage,
@@ -14,13 +15,12 @@ import {
 import {
   getStudentsByClassPageData,
   type StudentsByClassPageData,
-} from "@/app/api/users/students-by-class/data";
+} from "@/lib/server/workspace-students";
 
 const StudentsPageClient = dynamicComponent(
   () => import("@/components/workspace/StudentsPageClient"),
 );
 
-export const dynamic = "force-dynamic";
 
 type StudentsPageProps = {
   searchParams: Promise<{
@@ -47,19 +47,9 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
     String(readSearchValue(resolvedSearchParams.includeEmpty) || "").trim() === "true";
   const requestedPage = resolveWorkspaceListPage(readSearchValue(resolvedSearchParams.page));
 
-  await connectDB();
-  const { Class: ClassModel, AcademicSection: AcademicSectionModel } =
-    await getTenantModels(schoolKey, ["Class", "AcademicSection"]);
-
   const [classes, sections] = await Promise.all([
-    ClassModel.find({ ...buildArchiveFilter(false) })
-      .select("name")
-      .sort({ name: 1 })
-      .lean(),
-    AcademicSectionModel.find({ ...buildArchiveFilter(false) })
-      .select("name class")
-      .sort({ name: 1 })
-      .lean(),
+    getWorkspaceClasses(schoolKey),
+    getWorkspaceSections(schoolKey),
   ]);
 
   let result: StudentsByClassPageData = {
@@ -88,19 +78,22 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
     loadError = error?.message || "Failed to load students.";
   }
 
-  const clientClasses = (classes || []).map((classDoc: any) => ({
+  const clientClasses = (classes || []).map((classDoc) => ({
     _id: String(classDoc._id),
     name: String(classDoc.name || ""),
   }));
-  const clientSections = (sections || []).map((sectionDoc: any) => ({
+  const clientSections = (sections || []).map((sectionDoc) => ({
     _id: String(sectionDoc._id),
     name: String(sectionDoc.name || ""),
-    class: sectionDoc.class
-      ? {
-          _id: String((sectionDoc.class as any)?._id || sectionDoc.class),
-          name: String((sectionDoc.class as any)?.name || ""),
-        }
-      : undefined,
+    class:
+      sectionDoc.class && typeof sectionDoc.class === "object"
+        ? {
+            _id: String(sectionDoc.class._id || ""),
+            name: String(sectionDoc.class.name || ""),
+          }
+        : sectionDoc.class
+          ? String(sectionDoc.class)
+          : undefined,
   }));
   const selectedClassLabel =
     selectedClassId && selectedClassId !== "all"

@@ -138,6 +138,13 @@ function buildMockWorkspaceCourseSummary(): WorkspaceCourseSummary {
       assessment: 1,
     },
     metadata: buildMockCourseMetadata(),
+    template: {
+      familyId: null,
+      versionNumber: null,
+      parentCourseId: null,
+      derivedFromTemplateCourseId: null,
+      derivedFromTemplateVersionNumber: null,
+    },
   };
 }
 
@@ -355,6 +362,12 @@ export function getMockStudentCourseSummaries(
     classId?: string | null;
     academicSectionId?: string | null;
   },
+  filters?: {
+    classId?: string;
+    sectionId?: string;
+    subjectId?: string;
+    query?: string;
+  },
 ): StudentCourseSummary[] {
   if (String(studentPlacement?.classId || "").trim() !== MOCK_CLASS_ID) {
     return [];
@@ -365,12 +378,14 @@ export function getMockStudentCourseSummaries(
     cloneForTransport(getStoredCourseProgress(studentId, MOCK_COURSE_ID)),
   );
 
-  return cloneForTransport<StudentCourseSummary[]>([
+  const normalizedQuery = String(filters?.query || "").trim().toLowerCase();
+  const summaries: StudentCourseSummary[] = [
     {
       _id: summary._id,
       title: summary.title,
       summary: summary.summary,
       class: summary.class,
+      subjects: summary.subjects,
       assignedAcademicSections: summary.assignedAcademicSections,
       status: progress.status,
       availabilityStatus: "active",
@@ -384,7 +399,44 @@ export function getMockStudentCourseSummaries(
       lastViewedBlockId: progress.lastViewedBlockId,
       metadata: summary.metadata,
     } satisfies StudentCourseSummary,
-  ]);
+  ];
+
+  const filtered = summaries.filter((course) => {
+    if (filters?.classId && course.class?._id !== filters.classId) {
+      return false;
+    }
+
+    if (filters?.subjectId) {
+      const hasSubject = course.subjects.some(
+        (subject) => subject._id === filters?.subjectId,
+      );
+      if (!hasSubject) {
+        return false;
+      }
+    }
+
+    if (filters?.sectionId) {
+      const hasSection =
+        course.assignedAcademicSections.length === 0 ||
+        course.assignedAcademicSections.some(
+          (section) => section._id === filters?.sectionId,
+        );
+      if (!hasSection) {
+        return false;
+      }
+    }
+
+    if (normalizedQuery) {
+      const haystack = `${course.title} ${course.summary}`.toLowerCase();
+      if (!haystack.includes(normalizedQuery)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  return cloneForTransport<StudentCourseSummary[]>(filtered);
 }
 
 export function getMockStudentCourseDetail(

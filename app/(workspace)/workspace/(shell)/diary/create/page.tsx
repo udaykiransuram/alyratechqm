@@ -5,7 +5,6 @@ import DiaryEditorClient from "@/components/workspace/diary/DiaryEditorClient";
 import { getWorkspaceDiarySupportData } from "@/lib/server/diary";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 export default async function CreateDiaryPage() {
   const { schoolKey, viewerId } = await requireWorkspaceStaffSession();

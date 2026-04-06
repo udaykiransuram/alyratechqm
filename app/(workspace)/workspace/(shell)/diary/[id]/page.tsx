@@ -14,7 +14,6 @@ import { buildHrefWithReturnTo, getSafeReturnToPath } from "@/lib/navigation/ret
 import { getWorkspaceDiaryById } from "@/lib/server/diary";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 
-export const dynamic = "force-dynamic";
 
 type WorkspaceDiaryPageProps = {
   params: Promise<{ id: string }>;
@@ -31,6 +30,36 @@ function formatStateLabel(status: string) {
   }
 
   return "Not seen";
+}
+
+function getStateBadgeVariant(status: string) {
+  if (status === "completed") {
+    return "success";
+  }
+
+  if (status === "seen") {
+    return "warning";
+  }
+
+  return "neutral";
+}
+
+function formatStateActivityLabel(state: {
+  completedAt: string | null;
+  firstSeenAt: string | null;
+}) {
+  const timestamp = state.completedAt || state.firstSeenAt;
+  if (!timestamp) {
+    return "Not opened yet";
+  }
+
+  const activityLabel = state.completedAt ? "Completed" : "Seen";
+  return `${activityLabel} ${new Date(timestamp).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
 }
 
 export default async function WorkspaceDiaryPage({
@@ -298,33 +327,42 @@ export default async function WorkspaceDiaryPage({
               <CardHeader className="app-section-header">
                 <CardTitle>Roster Status</CardTitle>
               </CardHeader>
-              <CardContent className="app-section-body space-y-3">
+              <CardContent className="app-section-body">
                 {entry.roster.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No students match this diary scope yet.
                   </p>
                 ) : (
-                  entry.roster.map((item) => (
-                    <div
-                      key={item.student._id}
-                      className="rounded-[1rem] border border-border/70 bg-muted/10 px-4 py-3"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-foreground">
-                            {item.student.name}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {item.student.rollNumber || "No roll number"}
-                            {item.student.academicSection?.name
-                              ? ` • ${item.student.academicSection.name}`
-                              : ""}
-                          </p>
+                  <div className="app-diary-roster-list">
+                    {entry.roster.map((item) => {
+                      const metaLine = [
+                        item.student.rollNumber
+                          ? `Roll ${item.student.rollNumber}`
+                          : "No roll number",
+                        item.student.academicSection?.name || null,
+                        formatStateActivityLabel(item.state),
+                      ]
+                        .filter(Boolean)
+                        .join(" • ");
+
+                      return (
+                        <div
+                          key={item.student._id}
+                          className="app-diary-roster-row"
+                        >
+                          <div className="app-diary-roster-main">
+                            <p className="app-diary-roster-name">
+                              {item.student.name}
+                            </p>
+                            <p className="app-diary-roster-meta">{metaLine}</p>
+                          </div>
+                          <Badge variant={getStateBadgeVariant(item.state.status)}>
+                            {formatStateLabel(item.state.status)}
+                          </Badge>
                         </div>
-                        <Badge variant="outline">{formatStateLabel(item.state.status)}</Badge>
-                      </div>
-                    </div>
-                  ))
+                      );
+                    })}
+                  </div>
                 )}
               </CardContent>
             </Card>

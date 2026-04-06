@@ -3,7 +3,6 @@ import dynamicComponent from "next/dynamic";
 import { requireWorkspaceStaffSession } from "@/lib/server/workspace-user-directory";
 import { getWorkspaceUserDirectoryPageData } from "@/lib/server/workspace-people";
 
-export const dynamic = "force-dynamic";
 
 const ManageUsersDirectoryClient = dynamicComponent(
   () => import("@/components/workspace/ManageUsersDirectoryClient"),

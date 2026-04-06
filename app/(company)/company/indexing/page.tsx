@@ -9,7 +9,6 @@ import { isProductionAdminMaintenanceEnabled } from '@/lib/ops-runtime';
 import { connectDB } from '@/lib/db';
 import School from '@/models/School';
 
-export const dynamic = 'force-dynamic';
 
 export default async function IndexingPage() {
   if (!isProductionAdminMaintenanceEnabled()) {

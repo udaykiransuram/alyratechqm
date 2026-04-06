@@ -5,7 +5,6 @@ import StudentDiaryDetailClient from "@/components/student/diary/StudentDiaryDet
 import { authOptions } from "@/lib/auth";
 import { getStudentDiaryDetail } from "@/lib/server/diary";
 
-export const dynamic = "force-dynamic";
 
 type StudentDiaryDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -48,4 +47,3 @@ export default async function StudentDiaryDetailPage({
 
   return <StudentDiaryDetailClient initialEntry={entry} />;
 }
-

@@ -10,7 +10,6 @@ import { authOptions } from "@/lib/auth";
 import { formatDiaryDateLabel } from "@/lib/diary/shared";
 import { getStudentDashboardData } from "@/lib/server/student-dashboard";
 
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function formatDateLabel(value?: string | null) {
@@ -320,25 +319,28 @@ export default async function StudentHomePage() {
               </p>
             ) : (
               dashboard.diary.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/70 p-4"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-foreground">
-                        {item.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.subjectName || "Teacher update"}
-                      </p>
-                    </div>
-                    <Badge className="capitalize">
+                <div key={item.id} className="app-diary-inline-row">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      {item.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.subjectName || "Teacher update"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    <Badge
+                      variant={
+                        item.status === "completed"
+                          ? "success"
+                          : item.status === "seen"
+                            ? "warning"
+                            : "neutral"
+                      }
+                    >
                       {formatDiaryStatusLabel(item.status)}
                     </Badge>
-                  </div>
-                  <div className="flex justify-end">
-                    <Button asChild className="app-button-compact-primary">
+                    <Button asChild size="sm" className="app-diary-list-button">
                       <AppPrefetchLink href={item.href}>View entry</AppPrefetchLink>
                     </Button>
                   </div>

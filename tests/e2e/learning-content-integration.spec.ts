@@ -1,7 +1,7 @@
 /// <reference types="@playwright/test" />
 import { expect, test } from "@playwright/test";
 
-import { listStudentTestsData } from "../../app/api/student/tests/data";
+import { listStudentTestsData } from "../../lib/server/student-tests";
 import { getStudentDashboardData } from "../../lib/server/student-dashboard";
 import { runStudentNotificationWorker } from "../../lib/server/student-notification-worker";
 import {
