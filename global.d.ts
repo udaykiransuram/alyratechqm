@@ -6,6 +6,9 @@ declare namespace JSX {
   }
 }
 
+declare module "mammoth";
+declare module "pdfjs-dist/build/pdf";
+
 // Tiptap type augmentations
 // declare module '@tiptap/core' {
 //   interface Commands<ReturnType> {

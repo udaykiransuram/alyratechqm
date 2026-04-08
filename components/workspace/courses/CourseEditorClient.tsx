@@ -17,6 +17,7 @@ import {
 
 import RichTextEditor from "@/components/RichTextEditor";
 import { ContentRenderer } from "@/components/ContentRenderer";
+import CourseResourcePreview from "@/components/courses/CourseResourcePreview";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import FilePickerField from "@/components/ui/file-picker-field";
 import {
@@ -704,26 +705,12 @@ function CoursePreview({
                       </div>
                     ) : null}
                     {item.type === "resource" ? (
-                      <div className="app-course-panel">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="space-y-1">
-                            <p className="text-sm font-semibold text-foreground">
-                              {item.title || "Resource"}
-                            </p>
-                            {item.fileName ? (
-                              <p className="text-sm text-muted-foreground">
-                                {item.fileName}
-                              </p>
-                            ) : null}
-                            {item.caption ? (
-                              <p className="text-sm text-muted-foreground">{item.caption}</p>
-                            ) : null}
-                          </div>
-                          <Button variant="outline" size="sm">
-                            Download
-                          </Button>
-                        </div>
-                      </div>
+                      <CourseResourcePreview
+                        title={item.title}
+                        fileUrl={item.fileUrl}
+                        fileName={item.fileName}
+                        caption={item.caption}
+                      />
                     ) : null}
                   </div>
                 ))}
@@ -1040,7 +1027,11 @@ export default function CourseEditorClient({
     );
   };
 
-  const addLessonItem = (blockId: string, type: EditableLessonItem["type"]) => {
+  const addLessonItem = (
+    blockId: string,
+    type: EditableLessonItem["type"],
+    overrides?: Partial<EditableLessonItem>,
+  ) => {
     const nextItemId = createClientItemId();
 
     const newItem: EditableLessonItem =
@@ -1068,7 +1059,10 @@ export default function CourseEditorClient({
             : {
                 id: nextItemId,
                 type: "resource",
-                title: "",
+                title:
+                  overrides && "title" in overrides && typeof overrides.title === "string"
+                    ? overrides.title
+                    : "",
                 fileUrl: "",
                 fileName: "",
                 caption: "",
@@ -2381,7 +2375,19 @@ export default function CourseEditorClient({
                                 onClick={() => addLessonItem(block.id, "youtube")}
                               >
                                 <Plus className="h-4 w-4" />
-                                Video
+                                YouTube
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  addLessonItem(block.id, "resource", {
+                                    title: "Video",
+                                  })
+                                }
+                              >
+                                <Plus className="h-4 w-4" />
+                                Video file
                               </Button>
                               <Button
                                 variant="outline"
@@ -2415,8 +2421,8 @@ export default function CourseEditorClient({
                                       : item.type === "image"
                                         ? "Image"
                                         : item.type === "youtube"
-                                          ? "Video"
-                                          : "Resource"}
+                                          ? "YouTube"
+                                          : "File"}
                                   </Badge>
                                   <span className="text-xs text-muted-foreground">
                                     Item {itemIndex + 1}
@@ -2771,12 +2777,12 @@ export default function CourseEditorClient({
                                     </FormField>
                                   </div>
                                   <FormField
-                                    label="Resource file"
+                                    label="Resource or video file"
                                     hint={
                                       inlineErrors.blocks[block.id]?.itemErrors?.[item.id] &&
                                       inlineErrors.blocks[block.id]?.itemErrors?.[item.id]?.includes("Upload")
                                         ? inlineErrors.blocks[block.id]?.itemErrors?.[item.id]
-                                        : undefined
+                                        : "PDF, DOCX, or video files are supported."
                                     }
                                     hintTone={
                                       inlineErrors.blocks[block.id]?.itemErrors?.[item.id] &&
@@ -2790,7 +2796,7 @@ export default function CourseEditorClient({
                                       label="Upload resource file"
                                       hideLabel
                                       buttonLabel="Upload file"
-                                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip"
+                                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.mp4,.mov,.webm,.m4v,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip,video/mp4,video/webm,video/quicktime,video/x-m4v"
                                       placeholder="No file selected"
                                       selectedFileName={
                                         uploadingFileBlockId === item.id
@@ -2815,14 +2821,13 @@ export default function CourseEditorClient({
                                     </div>
                                   ) : null}
                                   {item.fileUrl ? (
-                                    <div className="app-course-panel">
-                                      <p className="text-sm font-semibold text-foreground">
-                                        {item.fileName}
-                                      </p>
-                                      <p className="mt-2 break-all text-sm text-muted-foreground">
-                                        {item.fileUrl}
-                                      </p>
-                                    </div>
+                                    <CourseResourcePreview
+                                      title={item.title}
+                                      fileUrl={item.fileUrl}
+                                      fileName={item.fileName}
+                                      caption={item.caption}
+                                      showPreviewButton
+                                    />
                                   ) : null}
                                 </>
                               ) : null}

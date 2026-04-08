@@ -3,7 +3,6 @@ import {
   Bell,
   BookOpen,
   Copy,
-  Download,
   ExternalLink,
   FileQuestion,
   FileText,
@@ -14,6 +13,7 @@ import StaticContentRenderer from "@/components/StaticContentRenderer";
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import CourseResourcePreview from "@/components/courses/CourseResourcePreview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -485,27 +485,12 @@ export default async function WorkspaceCoursePage({
                             ) : null}
 
                             {item.type === "resource" ? (
-                              <div className="app-course-panel">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                  <div className="space-y-2">
-                                    <p className="text-sm font-semibold text-foreground">
-                                      {item.title}
-                                    </p>
-                                    <p className="text-sm text-muted-foreground">{item.fileName}</p>
-                                    {item.caption ? (
-                                      <p className="text-sm text-muted-foreground">
-                                        {item.caption}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                  <Button asChild variant="outline">
-                                    <a href={item.fileUrl} target="_blank" rel="noreferrer">
-                                      Download
-                                      <Download className="h-4 w-4" />
-                                    </a>
-                                  </Button>
-                                </div>
-                              </div>
+                              <CourseResourcePreview
+                                title={item.title}
+                                fileUrl={item.fileUrl}
+                                fileName={item.fileName}
+                                caption={item.caption}
+                              />
                             ) : null}
                           </div>
                         ))}
@@ -558,25 +543,12 @@ export default async function WorkspaceCoursePage({
                     ) : null}
 
                     {block.type === "resource" ? (
-                      <div className="app-course-panel">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="space-y-2">
-                            <p className="text-sm font-semibold text-foreground">
-                              {block.title}
-                            </p>
-                            <p className="text-sm text-muted-foreground">{block.fileName}</p>
-                            {block.caption ? (
-                              <p className="text-sm text-muted-foreground">{block.caption}</p>
-                            ) : null}
-                          </div>
-                          <Button asChild variant="outline">
-                            <a href={block.fileUrl} target="_blank" rel="noreferrer">
-                              Download
-                              <Download className="h-4 w-4" />
-                            </a>
-                          </Button>
-                        </div>
-                      </div>
+                      <CourseResourcePreview
+                        title={block.title}
+                        fileUrl={block.fileUrl}
+                        fileName={block.fileName}
+                        caption={block.caption}
+                      />
                     ) : null}
 
                     {block.type === "announcement" ? (
