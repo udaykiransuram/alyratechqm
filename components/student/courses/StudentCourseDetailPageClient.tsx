@@ -14,7 +14,6 @@ import {
   Bookmark,
   CheckCircle2,
   ChevronDown,
-  Download,
   FileQuestion,
   Lock,
   PlayCircle,
@@ -28,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FeedbackNotice from "@/components/ui/feedback-notice";
+import CourseResourcePreview from "@/components/courses/CourseResourcePreview";
 import { fetchApiJson } from "@/lib/client/api";
 import { getCourseImageDisplayClasses } from "@/lib/courses/image-display";
 import type {
@@ -189,54 +189,13 @@ function CourseVideoPanel({
   );
 }
 
-function CourseResourcePanel({
-  title,
-  fileUrl,
-  fileName,
-  caption,
-}: {
+function CourseResourcePanel(props: {
   title?: string | null;
   fileUrl?: string | null;
   fileName?: string | null;
   caption?: string | null;
 }) {
-  if (!fileUrl) {
-    return (
-      <div className="app-course-panel">
-        <p className="text-sm text-muted-foreground">
-          Resource file is unavailable.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="app-course-panel">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-foreground">
-            {title || "Resource"}
-          </p>
-          {fileName ? (
-            <p className="text-sm text-muted-foreground">{fileName}</p>
-          ) : null}
-          {caption ? (
-            <p className="text-sm text-muted-foreground">{caption}</p>
-          ) : null}
-        </div>
-        <Button
-          asChild
-          variant="outline"
-          className="app-button-compact-secondary app-course-action-button"
-        >
-          <a href={fileUrl} target="_blank" rel="noreferrer">
-            Download
-            <Download className="h-4 w-4" />
-          </a>
-        </Button>
-      </div>
-    </div>
-  );
+  return <CourseResourcePreview {...props} />;
 }
 
 type LessonTocEntry = {

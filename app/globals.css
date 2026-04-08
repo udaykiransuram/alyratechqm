@@ -3387,6 +3387,104 @@
     @apply mt-2 gap-1.5;
   }
 
+  .app-course-resource-preview {
+    @apply rounded-[0.9rem] border border-border/60 bg-background/70 p-2.5;
+  }
+
+  .app-course-resource-summary {
+    @apply cursor-pointer text-[12px] font-semibold uppercase tracking-[0.16em] text-muted-foreground;
+  }
+
+  .app-course-resource-iframe-shell {
+    @apply mt-2 overflow-hidden rounded-[0.9rem] border border-border/60 bg-background;
+  }
+
+  .app-course-resource-iframe {
+    height: clamp(16rem, 38vw, 28rem);
+    width: 100%;
+    border: 0;
+  }
+
+  .app-course-resource-pagination {
+    @apply mt-2 flex flex-wrap items-center justify-between gap-2;
+  }
+
+  .app-course-resource-page-indicator {
+    @apply text-[12px] font-semibold text-muted-foreground;
+  }
+
+  .app-course-resource-jump {
+    @apply flex items-center gap-2;
+  }
+
+  .app-course-resource-jump-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground;
+  }
+
+  .app-course-resource-jump-input {
+    @apply h-9 w-[84px] rounded-lg border border-border/70 bg-background px-2 text-sm font-semibold text-foreground shadow-sm;
+  }
+
+  .app-resource-modal {
+    @apply sm:max-w-[min(1100px,92vw)] sm:max-h-[min(92vh,900px)];
+  }
+
+  .app-resource-modal-frame {
+    @apply overflow-hidden rounded-[1rem] border border-border/70 bg-background;
+    height: min(70vh, 720px);
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+  }
+
+  .app-resource-modal-layout {
+    @apply grid h-full;
+    grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+  }
+
+  .app-resource-modal-sidebar {
+    @apply hidden border-r border-border/60 bg-muted/10 p-3 md:flex md:flex-col md:gap-3;
+  }
+
+  .app-resource-modal-sidebar-header {
+    @apply flex items-center justify-between;
+  }
+
+  .app-resource-modal-thumbs {
+    @apply flex-1 space-y-2 overflow-y-auto pr-1;
+  }
+
+  .app-resource-thumb {
+    @apply flex w-full flex-col items-center gap-2 rounded-lg border border-border/60 bg-background/70 p-2 text-xs text-muted-foreground transition;
+  }
+
+  .app-resource-thumb img {
+    @apply w-full rounded-md border border-border/60 bg-background;
+  }
+
+  .app-resource-thumb span {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em];
+  }
+
+  .app-resource-thumb.is-active {
+    @apply border-primary/50 bg-primary/5 text-foreground;
+    box-shadow: 0 12px 24px -20px hsl(var(--app-shadow-deep) / 0.2);
+  }
+
+  .app-resource-modal-main {
+    @apply flex flex-col;
+  }
+
+  .app-resource-modal-toolbar {
+    @apply flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-background/90 px-3 py-2;
+  }
+
+  .app-resource-modal-iframe {
+    height: 100%;
+    width: 100%;
+    border: 0;
+  }
+
   .app-course-hover-expand {
     @apply grid gap-2.5;
     max-height: 0;
