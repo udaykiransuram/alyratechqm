@@ -219,7 +219,11 @@ export default async function StudentHomePage() {
                   </div>
                   <div className="flex justify-end">
                     <Button asChild className="app-button-compact-primary">
-                      <AppPrefetchLink href={item.href}>
+                      <AppPrefetchLink
+                        href={item.href}
+                        prefetchOnViewport={false}
+                        requestFullscreenOnClick
+                      >
                         {item.status === "in_progress" ? "Resume test" : "Open test"}
                       </AppPrefetchLink>
                     </Button>
@@ -287,7 +291,7 @@ export default async function StudentHomePage() {
                     </div>
                     <div className="flex justify-end">
                       <Button asChild className="app-button-compact-primary">
-                        <AppPrefetchLink href={item.href}>
+                        <AppPrefetchLink href={item.href} prefetchOnViewport={false}>
                           {item.status === "not_started"
                             ? "Start course"
                             : "Open course"}
@@ -344,7 +348,9 @@ export default async function StudentHomePage() {
                       {formatDiaryStatusLabel(item.status)}
                     </Badge>
                     <Button asChild size="sm" className="app-diary-list-button">
-                      <AppPrefetchLink href={item.href}>View entry</AppPrefetchLink>
+                      <AppPrefetchLink href={item.href} prefetchOnViewport={false}>
+                        View entry
+                      </AppPrefetchLink>
                     </Button>
                   </div>
                 </div>
@@ -400,7 +406,10 @@ export default async function StudentHomePage() {
                   {item.linkUrl ? (
                     <div className="flex justify-end">
                       <Button asChild className="app-button-compact-primary">
-                        <AppPrefetchLink href={item.linkUrl}>
+                        <AppPrefetchLink
+                          href={item.linkUrl}
+                          prefetchOnViewport={false}
+                        >
                           Open
                         </AppPrefetchLink>
                       </Button>

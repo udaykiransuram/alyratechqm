@@ -8,7 +8,7 @@ import { readStudentNotificationSignalVersion } from "@/lib/redis";
 import { subscribeStudentNotifications } from "@/lib/server/student-notifications-stream";
 
 const STUDENT_NOTIFICATION_STREAM_HEARTBEAT_MS = 15_000;
-const STUDENT_NOTIFICATION_STREAM_POLL_MS = 4_000;
+const STUDENT_NOTIFICATION_STREAM_POLL_MS = 30_000;
 
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, { allowRoles: ["student"] });

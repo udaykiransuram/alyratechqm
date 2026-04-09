@@ -3062,43 +3062,77 @@ export async function syncExamRuntimeMongoProjectionsForPaper(
   return projectionIdsByKey;
 }
 
+export async function syncExamRuntimeMongoProjectionForAttemptId(
+  schoolKey: string,
+  attemptId: string,
+) {
+  if (!(await isExamRuntimeEnabled())) {
+    return undefined;
+  }
+
+  const normalizedAttemptId = String(attemptId || "").trim();
+  if (!UUID_PATTERN.test(normalizedAttemptId)) {
+    return undefined;
+  }
+
+  const attempt = await getExamAttemptById(normalizedAttemptId);
+  if (!attempt || attempt.schoolKey !== schoolKey) {
+    return undefined;
+  }
+
+  const snapshot =
+    (await getExamSnapshotById(attempt.snapshotId)) ||
+    (await ensureActiveExamSnapshotForPaperId(
+      schoolKey,
+      attempt.mongoPaperId,
+    ));
+  if (!snapshot) {
+    return undefined;
+  }
+
+  const answerRows = await listExamAnswerRowsByAttemptIds([attempt.id]);
+
+  return upsertMongoAttemptProjection({
+    schoolKey,
+    attempt,
+    snapshot,
+    answerRows,
+  });
+}
+
+function scheduleExamRuntimeMongoProjectionSync(params: {
+  schoolKey: string;
+  attemptId: string;
+}) {
+  const schoolKey = String(params.schoolKey || "").trim();
+  const attemptId = String(params.attemptId || "").trim();
+  if (!schoolKey || !attemptId) {
+    return;
+  }
+
+  queueMicrotask(() => {
+    void import("@/lib/server/exam-runtime-projection-queue")
+      .then(({ scheduleExamRuntimeProjectionWorker }) => {
+        scheduleExamRuntimeProjectionWorker({
+          schoolKey,
+          attemptIds: [attemptId],
+        });
+      })
+      .catch((error) => {
+        console.error(
+          "Failed to schedule async exam runtime Mongo projection sync:",
+          error,
+        );
+      });
+  });
+}
+
 export async function resolveExamRuntimeMongoResponseId(
   schoolKey: string,
   referenceId: string,
 ) {
   try {
-    if (!(await isExamRuntimeEnabled())) {
-      return undefined;
-    }
-
-    const normalizedReferenceId = String(referenceId || "").trim();
-    if (!UUID_PATTERN.test(normalizedReferenceId)) {
-      return undefined;
-    }
-
-    const attempt = await getExamAttemptById(normalizedReferenceId);
-    if (!attempt || attempt.schoolKey !== schoolKey) {
-      return undefined;
-    }
-
-    const snapshot =
-      (await getExamSnapshotById(attempt.snapshotId)) ||
-      (await ensureActiveExamSnapshotForPaperId(
-        schoolKey,
-        attempt.mongoPaperId,
-      ));
-    if (!snapshot) {
-      return undefined;
-    }
-
-    const answerRows = await listExamAnswerRowsByAttemptIds([attempt.id]);
-
-    return upsertMongoAttemptProjection({
-      schoolKey,
-      attempt,
-      snapshot,
-      answerRows,
-    });
+    return syncExamRuntimeMongoProjectionForAttemptId(schoolKey, referenceId);
   } catch (error) {
     console.error(
       "Failed to resolve an exam runtime attempt into a Mongo response projection:",
@@ -3183,27 +3217,15 @@ async function finalizeAttemptFromRows(params: {
   const resolvedRows = nextAttempt
     ? persistedRows
     : await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]);
-  let projectionId: string | undefined;
-
-  try {
-    projectionId = await upsertMongoAttemptProjection({
-      schoolKey: params.schoolKey,
-      attempt: resolvedAttempt,
-      snapshot: params.snapshot,
-      answerRows: resolvedRows,
-      sectionAnswers: graded.sectionAnswers,
-    });
-  } catch (error) {
-    console.error(
-      "Failed to project auto-submitted runtime attempt into Mongo:",
-      error,
-    );
-  }
+  scheduleExamRuntimeMongoProjectionSync({
+    schoolKey: params.schoolKey,
+    attemptId: resolvedAttempt.id,
+  });
 
   return {
     attempt: resolvedAttempt,
     answerRows: resolvedRows,
-    mongoResponseId: projectionId,
+    mongoResponseId: undefined,
   };
 }
 
@@ -5186,22 +5208,10 @@ export async function submitStudentExamRuntimeAttempt(params: {
       const resolvedAnswerRows = nextAttempt
         ? persistedRows
         : await listExamAnswerRowsByAttemptIds([resolvedAttempt.id]);
-      let projectionId: string | undefined;
-
-      try {
-        projectionId = await upsertMongoAttemptProjection({
-          schoolKey: params.schoolKey,
-          attempt: resolvedAttempt,
-          snapshot,
-          answerRows: resolvedAnswerRows,
-          sectionAnswers: graded.sectionAnswers,
-        });
-      } catch (error) {
-        console.error(
-          "Failed to project submitted runtime attempt into Mongo:",
-          error,
-        );
-      }
+      scheduleExamRuntimeMongoProjectionSync({
+        schoolKey: params.schoolKey,
+        attemptId: resolvedAttempt.id,
+      });
 
       return {
         success: true,
@@ -5219,7 +5229,7 @@ export async function submitStudentExamRuntimeAttempt(params: {
         ),
         resultReleased: isStudentResultReleasedForPaper(paperSummary, now),
         status: resolvedAttempt.status,
-        mongoResponseId: projectionId,
+        mongoResponseId: undefined,
       };
     },
   );

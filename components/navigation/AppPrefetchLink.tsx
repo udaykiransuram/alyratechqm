@@ -18,6 +18,7 @@ import {
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 import { prefetchApiJson, type FetchApiJsonOptions } from "@/lib/client/api";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
+import { requestGlobalFullscreen } from "@/lib/client/fullscreen";
 
 type AppPrefetchLinkProps = Omit<ComponentProps<typeof Link>, "href"> & {
   href: string;
@@ -32,6 +33,7 @@ type AppPrefetchLinkProps = Omit<ComponentProps<typeof Link>, "href"> & {
   prefetchOnIntent?: boolean;
   prefetchOnMount?: boolean;
   prefetchOnViewport?: boolean;
+  requestFullscreenOnClick?: boolean;
 };
 
 function isPrefetchableHref(href: string) {
@@ -117,6 +119,7 @@ const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
       onTouchStart,
       onClick,
       prefetch = true,
+      requestFullscreenOnClick = false,
       ...props
     },
     ref,
@@ -278,6 +281,10 @@ const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
           prefetchRelatedApis();
         }, 0);
       }
+
+      if (!event.defaultPrevented && requestFullscreenOnClick) {
+        void requestGlobalFullscreen();
+      }
     };
 
     const handlePointerDown: PointerEventHandler<HTMLAnchorElement> = (event) => {
@@ -286,10 +293,21 @@ const AppPrefetchLink = forwardRef<HTMLAnchorElement, AppPrefetchLinkProps>(
         prefetchRoutes();
         prefetchRelatedApis();
       }
+
+      if (!event.defaultPrevented && requestFullscreenOnClick) {
+        void requestGlobalFullscreen();
+      }
     };
 
     const handleClick: MouseEventHandler<HTMLAnchorElement> = (event) => {
       onClick?.(event);
+      if (
+        requestFullscreenOnClick &&
+        !event.defaultPrevented &&
+        event.button === 0
+      ) {
+        void requestGlobalFullscreen();
+      }
       if (!shouldAnnounceNavigation(event)) {
         return;
       }

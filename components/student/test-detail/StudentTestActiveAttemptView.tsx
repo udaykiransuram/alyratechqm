@@ -4,6 +4,8 @@ import {
   forwardRef,
   memo,
   startTransition,
+  type CSSProperties,
+  type RefObject,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -11,7 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronUp, Expand, Minimize2 } from "lucide-react";
+import { ChevronUp, Expand } from "lucide-react";
 
 import { ContentRenderer } from "@/components/ContentRenderer";
 import {
@@ -146,6 +148,14 @@ function formatScoreLabel(positive: number, negative: number) {
   }
 
   return `+${safePositive}`;
+}
+
+function getQuestionJumpPaletteStyle(questionCount: number): CSSProperties {
+  const columns = Math.max(1, Math.min(5, Number(questionCount) || 0));
+
+  return {
+    gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+  };
 }
 
 function isEditableKeyboardTarget(target: EventTarget | null) {
@@ -331,7 +341,7 @@ const CountdownStatusCard = memo(function CountdownStatusCard({
           <p className="app-exam-timer-card-kicker">Time left</p>
           <span
             className={cn(
-              "app-status-badge w-fit",
+              "app-status-badge app-exam-timer-card-badge",
               countdownTone === "warning"
                 ? "app-status-badge-warning"
                 : countdownTone === "danger"
@@ -414,7 +424,12 @@ const ExamTopbar = memo(function ExamTopbar({
   const showPaperSubjectChips = paperSubjects.length > 1;
 
   return (
-    <div className="app-exam-focus-topbar">
+    <div
+      className={cn(
+        "app-exam-focus-topbar",
+        isFullscreen && "app-exam-focus-topbar-fullscreen",
+      )}
+    >
       <div className="app-exam-focus-topbar-main">
         <div className="app-exam-focus-topbar-copy">
           <h1 className="app-exam-focus-topbar-title text-[1rem] font-semibold leading-tight tracking-[-0.022em] text-foreground sm:text-[1.08rem] xl:text-[1.16rem]">
@@ -437,10 +452,18 @@ const ExamTopbar = memo(function ExamTopbar({
             ) : null}
           </div>
         </div>
-        <div className="app-exam-focus-topbar-side">
+        <div
+          className={cn(
+            "app-exam-focus-topbar-side",
+            isFullscreen && "app-exam-focus-topbar-side-fullscreen",
+          )}
+        >
           <CountdownStatusCard deadlineAt={deadlineAt} />
           <div
-            className="app-exam-focus-topbar-actions"
+            className={cn(
+              "app-exam-focus-topbar-actions",
+              isFullscreen && "app-exam-focus-topbar-actions-fullscreen",
+            )}
             role="group"
             aria-label="Test actions"
           >
@@ -455,30 +478,19 @@ const ExamTopbar = memo(function ExamTopbar({
               {isSaving ? <Spinner /> : "Save"}
             </Button>
 
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="app-button-compact app-exam-topbar-action"
-              onClick={() => void onToggleFullscreen()}
-            >
-              {isFullscreen ? (
-                <Minimize2 className="mr-1.5 h-4 w-4 sm:mr-2" />
-              ) : (
+            {!isFullscreen ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="app-button-compact app-exam-topbar-action"
+                onClick={() => void onToggleFullscreen()}
+              >
                 <Expand className="mr-1.5 h-4 w-4 sm:mr-2" />
-              )}
-              {isFullscreen ? (
-                <>
-                  <span className="sm:hidden">Exit</span>
-                  <span className="hidden sm:inline">Exit fullscreen</span>
-                </>
-              ) : (
-                <>
-                  <span className="sm:hidden">Screen</span>
-                  <span className="hidden sm:inline">Fullscreen</span>
-                </>
-              )}
-            </Button>
+                <span className="sm:hidden">Screen</span>
+                <span className="hidden sm:inline">Fullscreen</span>
+              </Button>
+            ) : null}
 
             {hasMounted ? (
               <AlertDialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
@@ -530,7 +542,13 @@ const ExamTopbar = memo(function ExamTopbar({
           </div>
         </div>
       </div>
-      <div className="app-exam-focus-topbar-status" aria-label="Test status">
+      <div
+        className={cn(
+          "app-exam-focus-topbar-status",
+          isFullscreen && "app-exam-focus-topbar-status-fullscreen",
+        )}
+        aria-label="Test status"
+      >
         <div className="app-exam-focus-topbar-stat">
           <span className="app-exam-focus-topbar-stat-label">Answered</span>
           <span className="app-exam-focus-topbar-stat-value">
@@ -699,6 +717,7 @@ const ExamSidebar = memo(function ExamSidebar({
               <div
                 className="app-exam-palette app-exam-sidebar-compact-palette"
                 aria-label="Question navigation"
+                style={getQuestionJumpPaletteStyle(activeSection.items.length)}
               >
                 {activeSection.items.map((item) => (
                   <button
@@ -812,6 +831,7 @@ const ExamSidebar = memo(function ExamSidebar({
                         <div
                           className="app-exam-palette"
                           aria-label={`Question navigation for section ${section.sectionIndex + 1}`}
+                          style={getQuestionJumpPaletteStyle(section.items.length)}
                         >
                           {section.items.map((item) => (
                             <button
@@ -871,6 +891,484 @@ const ExamSidebar = memo(function ExamSidebar({
         </CardContent>
       </Card>
     </aside>
+  );
+});
+
+type ExamQuestionPanelProps = {
+  dialogContainer?: HTMLElement | null;
+  descriptiveEditorRef: RefObject<DescriptiveAnswerEditorHandle>;
+  currentQuestion: StudentQuestionListItem | null;
+  currentAnswer: StudentAnswerState | null;
+  currentIndex: number;
+  totalQuestions: number;
+  currentQuestionAnswered: boolean;
+  currentSection: SectionNavigationGroup | null;
+  hasMultipleSections: boolean;
+  paperSubjectLabel: string;
+  onJumpToQuestion: (index: number) => Promise<void>;
+  onUpdateMultipleChoice: (questionId: string, optionIndex: number) => void;
+  onUpdateSingleChoice: (questionId: string, optionIndex: number) => void;
+  onUpdateDescriptiveAnswer: (question: StudentQuestion, value: string) => void;
+  onUpdateMatrixSelection: (
+    question: StudentQuestion,
+    rowIndex: number,
+    columnIndex: number,
+  ) => void;
+  onClearCurrentAnswer: () => void;
+};
+
+const ExamQuestionPanel = memo(function ExamQuestionPanel({
+  dialogContainer,
+  descriptiveEditorRef,
+  currentQuestion,
+  currentAnswer,
+  currentIndex,
+  totalQuestions,
+  currentQuestionAnswered,
+  currentSection,
+  hasMultipleSections,
+  paperSubjectLabel,
+  onJumpToQuestion,
+  onUpdateMultipleChoice,
+  onUpdateSingleChoice,
+  onUpdateDescriptiveAnswer,
+  onUpdateMatrixSelection,
+  onClearCurrentAnswer,
+}: ExamQuestionPanelProps) {
+  const currentQuestionHtml = useMemo(
+    () => (currentQuestion ? currentQuestion.question.content : ""),
+    [currentQuestion],
+  );
+  const currentOptionHtml = useMemo(
+    () =>
+      Array.isArray(currentQuestion?.question.options)
+        ? currentQuestion.question.options.map((option) => option.content)
+        : [],
+    [currentQuestion],
+  );
+  const currentQuestionNumber = totalQuestions
+    ? Math.min(currentIndex + 1, totalQuestions)
+    : 0;
+  const currentQuestionScoreLabel = formatScoreLabel(
+    currentQuestion?.marks || 0,
+    currentQuestion?.negativeMarks || 0,
+  );
+  const currentSectionRuleLabel = formatScoreLabel(
+    currentSection?.defaultMarks || currentQuestion?.marks || 0,
+    currentSection?.defaultNegativeMarks || currentQuestion?.negativeMarks || 0,
+  );
+  const currentSectionQuestionCount = currentSection?.items.length || 0;
+  const showSectionRuleChip = Boolean(
+    currentSection &&
+      currentSectionQuestionCount > 1 &&
+      (currentSection.defaultMarks > 0 || currentSection.defaultNegativeMarks > 0),
+  );
+  const showSectionTotalChip = Boolean(
+    currentSection && currentSectionQuestionCount > 1 && currentSection.totalMarks > 0,
+  );
+  const sectionRuleMatchesQuestion = Boolean(
+    currentSection &&
+      (currentSection.defaultMarks || 0) === (currentQuestion?.marks || 0) &&
+      (currentSection.defaultNegativeMarks || 0) ===
+        (currentQuestion?.negativeMarks || 0),
+  );
+  const showQuestionScoreChip = Boolean(
+    currentQuestion && (!showSectionRuleChip || !sectionRuleMatchesQuestion),
+  );
+  const currentQuestionTitle = currentQuestion
+    ? `Question ${currentIndex + 1}`
+    : "Question";
+  const currentQuestionPositionLabel = formatQuestionPositionLabel(
+    currentQuestionNumber,
+    totalQuestions,
+  );
+  const showQuestionEyebrow = Boolean(
+    currentQuestion?.sectionName && hasMultipleSections,
+  );
+  const currentQuestionSubjectName = String(
+    currentQuestion?.question.subject?.name || "",
+  ).trim();
+  const showQuestionSubjectChip = Boolean(
+    currentQuestionSubjectName &&
+      !labelsMatch(currentQuestionSubjectName, paperSubjectLabel) &&
+      !labelsMatch(currentQuestionSubjectName, currentQuestion?.sectionName),
+  );
+  const visibleCurrentSectionSubjects = currentSection
+    ? currentSection.subjects.filter((subject) => {
+        const subjectLabel = String(subject?.name || subject?._id || "").trim();
+        if (!subjectLabel) {
+          return false;
+        }
+
+        if (currentSection.subjects.length > 1) {
+          return true;
+        }
+
+        return (
+          !labelsMatch(subjectLabel, currentQuestion?.sectionName) &&
+          !labelsMatch(subjectLabel, paperSubjectLabel)
+        );
+      })
+    : [];
+  const showClearAnswerAction = currentQuestionAnswered;
+  const isSingleQuestionActionRow = totalQuestions <= 1;
+  const showQuestionNavigationRow =
+    totalQuestions > 1 || showClearAnswerAction;
+
+  if (!currentQuestion || !currentAnswer) {
+    return (
+      <Card className="app-surface">
+        <CardContent className="app-empty-state py-10">
+          No questions are available in this paper.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="app-surface app-exam-question-card overflow-hidden">
+      <CardHeader className="app-section-header">
+        <div className="app-exam-question-header">
+          <div className="app-exam-question-header-copy">
+            {showQuestionEyebrow ? (
+              <p className="app-spotlight-label">
+                {currentQuestion.sectionName}
+              </p>
+            ) : null}
+            <CardTitle className="app-exam-question-title">
+              {currentQuestionTitle}
+            </CardTitle>
+            {currentQuestion.sectionDescription ? (
+              <p className="app-copy-muted app-exam-question-section-description max-w-3xl whitespace-pre-line">
+                {currentQuestion.sectionDescription}
+              </p>
+            ) : null}
+            {currentSection ? (
+              <div className="app-exam-question-section-meta">
+                {visibleCurrentSectionSubjects.map((subject) => (
+                  <span
+                    key={`${currentSection.id}-${subject._id}`}
+                    className="app-meta-chip"
+                  >
+                    {subject.name || subject._id}
+                  </span>
+                ))}
+                {showSectionRuleChip ? (
+                  <span className="app-meta-chip">
+                    {currentSectionRuleLabel} each
+                  </span>
+                ) : null}
+                {showSectionTotalChip ? (
+                  <span className="app-meta-chip">
+                    {currentSection.totalMarks} total
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+            {currentQuestion.sectionInstructions ? (
+              <div className="app-exam-question-context-note whitespace-pre-line">
+                {currentQuestion.sectionInstructions}
+              </div>
+            ) : null}
+          </div>
+          <div className="app-exam-question-meta">
+            {showQuestionSubjectChip ? (
+              <div className="app-meta-chip">{currentQuestionSubjectName}</div>
+            ) : null}
+            {showQuestionScoreChip ? (
+              <div className="app-meta-chip">{currentQuestionScoreLabel}</div>
+            ) : null}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="app-section-body app-exam-question-body app-exam-question-shell">
+        <div className="app-exam-question-content">
+          <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
+            <ContentRenderer
+              htmlContent={currentQuestionHtml}
+              enableImageZoom
+              dialogContainer={dialogContainer}
+            />
+          </div>
+        </div>
+
+        {currentQuestion.question.type === "single" ||
+        currentQuestion.question.type === "multiple" ? (
+          <div className="app-exam-question-option-list">
+            {currentQuestion.question.options.map((option, optionIndex) => {
+              const selected =
+                currentAnswer.selectedOptions.includes(optionIndex);
+
+              return (
+                <label
+                  key={optionIndex}
+                  className={cn(
+                    "app-exam-option",
+                    selected && "app-exam-option-selected",
+                  )}
+                >
+                  <input
+                    type={
+                      currentQuestion.question.type === "multiple"
+                        ? "checkbox"
+                        : "radio"
+                    }
+                    name={currentQuestion.question._id}
+                    checked={selected}
+                    aria-label={`Option ${getOptionLabel(optionIndex)}`}
+                    readOnly
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (currentQuestion.question.type === "multiple") {
+                        onUpdateMultipleChoice(
+                          currentQuestion.question._id,
+                          optionIndex,
+                        );
+                        return;
+                      }
+                      onUpdateSingleChoice(
+                        currentQuestion.question._id,
+                        optionIndex,
+                      );
+                    }}
+                    className="sr-only"
+                  />
+                  <span
+                    className={cn(
+                      "app-exam-option-indicator",
+                      selected && "app-exam-option-indicator-selected",
+                    )}
+                  >
+                    {getOptionLabel(optionIndex)}
+                  </span>
+                  <div className="app-exam-option-content">
+                    <div className="prose prose-sm app-exam-option-richtext max-w-none text-foreground dark:prose-invert">
+                      <ContentRenderer
+                        htmlContent={currentOptionHtml[optionIndex] || ""}
+                        enableImageZoom
+                        dialogContainer={dialogContainer}
+                      />
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {currentQuestion.question.type === "descriptive" ? (
+          <div className="space-y-3">
+            <DescriptiveAnswerEditor
+              ref={descriptiveEditorRef}
+              question={currentQuestion.question}
+              value={currentAnswer.answerText}
+              onCommit={onUpdateDescriptiveAnswer}
+            />
+          </div>
+        ) : null}
+
+        {currentQuestion.question.type === "matrix-match" ? (
+          currentQuestion.question.matrixRows?.length &&
+          currentQuestion.question.matrixColumns?.length ? (
+            <div className="space-y-3">
+              <div className="app-exam-matrix-stack sm:hidden">
+                {currentQuestion.question.matrixRows.map((row, rowIndex) => (
+                  <div key={rowIndex} className="app-exam-matrix-card">
+                    <div className="app-exam-matrix-card-head">
+                      <span className="app-exam-matrix-card-kicker">
+                        {`Row ${rowIndex + 1}`}
+                      </span>
+                      <p className="app-exam-matrix-card-title">
+                        {row || `Row ${rowIndex + 1}`}
+                      </p>
+                    </div>
+                    <div className="app-exam-matrix-choice-grid">
+                      {currentQuestion.question.matrixColumns?.map(
+                        (column, columnIndex) => {
+                          const checked =
+                            currentAnswer.matrixSelections[rowIndex]?.includes(
+                              columnIndex,
+                            ) || false;
+
+                          return (
+                            <label
+                              key={columnIndex}
+                              className={cn(
+                                "app-exam-matrix-choice",
+                                checked && "app-exam-matrix-choice-selected",
+                              )}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  onUpdateMatrixSelection(
+                                    currentQuestion.question,
+                                    rowIndex,
+                                    columnIndex,
+                                  )
+                                }
+                                className="sr-only"
+                              />
+                              <span
+                                className={cn(
+                                  "app-exam-matrix-choice-indicator",
+                                  checked &&
+                                    "app-exam-matrix-choice-indicator-selected",
+                                )}
+                              >
+                                {checked ? "✓" : getOptionLabel(columnIndex)}
+                              </span>
+                              <span className="app-exam-matrix-choice-label">
+                                {column || `Column ${columnIndex + 1}`}
+                              </span>
+                            </label>
+                          );
+                        },
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="app-table-wrap hidden overflow-x-auto sm:block">
+                <table className="min-w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-muted/30">
+                      <th className="border border-border/60 px-3 py-2.5 text-left text-[12px] font-medium tracking-[0.03em] text-muted-foreground">
+                        Match
+                      </th>
+                      {currentQuestion.question.matrixColumns.map(
+                        (column, columnIndex) => (
+                          <th
+                            key={columnIndex}
+                            className="border border-border/60 px-3 py-2.5 text-center text-[12px] font-medium tracking-[0.03em] text-muted-foreground"
+                          >
+                            {column || `Column ${columnIndex + 1}`}
+                          </th>
+                        ),
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentQuestion.question.matrixRows.map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        <td className="border border-border/60 px-3 py-3 font-medium text-foreground">
+                          {row || `Row ${rowIndex + 1}`}
+                        </td>
+                        {currentQuestion.question.matrixColumns?.map(
+                          (_column, columnIndex) => {
+                            const checked =
+                              currentAnswer.matrixSelections[rowIndex]?.includes(
+                                columnIndex,
+                              ) || false;
+
+                            return (
+                              <td
+                                key={columnIndex}
+                                className="border border-border/60 px-3 py-3 text-center"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() =>
+                                    onUpdateMatrixSelection(
+                                      currentQuestion.question,
+                                      rowIndex,
+                                      columnIndex,
+                                    )
+                                  }
+                                  className="h-4 w-4"
+                                />
+                              </td>
+                            );
+                          },
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <FeedbackNotice variant="error">
+              This matrix question is missing row or column labels and cannot be answered online.
+            </FeedbackNotice>
+          )
+        ) : null}
+
+        {showQuestionNavigationRow ? (
+          <div
+            className={cn(
+              "app-exam-nav-row",
+              isSingleQuestionActionRow && "app-exam-nav-row-single",
+            )}
+          >
+            {!isSingleQuestionActionRow ? (
+              <div className="app-exam-nav-row-copy">
+                <span className="app-meta-chip">
+                  {currentQuestionPositionLabel}
+                </span>
+              </div>
+            ) : null}
+            <div
+              className={cn(
+                "app-exam-nav-row-actions",
+                isSingleQuestionActionRow &&
+                  "app-exam-nav-row-actions-end",
+              )}
+            >
+              {!isSingleQuestionActionRow ? (
+                <Button
+                  variant="outline"
+                  size="md"
+                  className="app-student-action-compact app-exam-nav-button"
+                  onClick={() =>
+                    void onJumpToQuestion(Math.max(0, currentIndex - 1))
+                  }
+                  disabled={currentIndex === 0}
+                >
+                  Previous
+                </Button>
+              ) : null}
+              <div
+                className={cn(
+                  "app-exam-nav-actions",
+                  (!showClearAnswerAction || isSingleQuestionActionRow) &&
+                    "app-exam-nav-actions-single",
+                )}
+              >
+                {showClearAnswerAction ? (
+                  <Button
+                    variant="ghost"
+                    size="md"
+                    className="app-student-action-compact app-exam-nav-button"
+                    onClick={onClearCurrentAnswer}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+                {!isSingleQuestionActionRow ? (
+                  <Button
+                    variant="primary"
+                    size="md"
+                    className="app-student-action-compact app-exam-nav-button"
+                    onClick={() =>
+                      void onJumpToQuestion(
+                        Math.min(totalQuestions - 1, currentIndex + 1),
+                      )
+                    }
+                    disabled={currentIndex >= totalQuestions - 1}
+                  >
+                    Next
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 });
 
@@ -1135,6 +1633,7 @@ const ExamMobileNavigation = memo(function ExamMobileNavigation({
                 <div
                   className="app-exam-mobile-palette-grid"
                   aria-label={`Question navigation for section ${selectedSection.sectionIndex + 1}`}
+                  style={getQuestionJumpPaletteStyle(selectedSection.items.length)}
                 >
                   {selectedSection.items.map((item) => (
                     <button
@@ -1194,7 +1693,7 @@ const ExamMobileNavigation = memo(function ExamMobileNavigation({
 });
 
 type StudentTestActiveAttemptViewProps = {
-  examContainerRef: { current: HTMLDivElement | null };
+  dialogContainer: HTMLDivElement | null;
   paper: StudentPaper;
   paperSubjects: Array<{ _id: string; name: string }>;
   paperSubjectLabel: string;
@@ -1207,6 +1706,7 @@ type StudentTestActiveAttemptViewProps = {
   isSaving: boolean;
   isSubmitting: boolean;
   isFullscreen: boolean;
+  isExamLocked: boolean;
   submitDialogOpen: boolean;
   setSubmitDialogOpen: (open: boolean) => void;
   unansweredCount: number;
@@ -1235,7 +1735,7 @@ type StudentTestActiveAttemptViewProps = {
 };
 
 export default function StudentTestActiveAttemptView({
-  examContainerRef,
+  dialogContainer,
   paper,
   paperSubjects,
   paperSubjectLabel,
@@ -1248,6 +1748,7 @@ export default function StudentTestActiveAttemptView({
   isSaving,
   isSubmitting,
   isFullscreen,
+  isExamLocked,
   submitDialogOpen,
   setSubmitDialogOpen,
   unansweredCount,
@@ -1270,7 +1771,7 @@ export default function StudentTestActiveAttemptView({
   onUpdateMatrixSelection,
   onClearCurrentAnswer,
 }: StudentTestActiveAttemptViewProps) {
-  const descriptiveEditorRef = useRef<DescriptiveAnswerEditorHandle | null>(null);
+  const descriptiveEditorRef = useRef<DescriptiveAnswerEditorHandle>(null);
   const subjectProgress = useMemo<SubjectProgressItem[]>(() => {
     const progressMap = new Map<string, SubjectProgressItem>();
 
@@ -1346,17 +1847,6 @@ export default function StudentTestActiveAttemptView({
   const currentQuestionAnswered = currentQuestion
     ? answeredQuestionIds.has(currentQuestion.question._id)
     : false;
-  const currentQuestionHtml = useMemo(
-    () => (currentQuestion ? currentQuestion.question.content : ""),
-    [currentQuestion],
-  );
-  const currentOptionHtml = useMemo(
-    () =>
-      Array.isArray(currentQuestion?.question.options)
-        ? currentQuestion.question.options.map((option) => option.content)
-        : [],
-    [currentQuestion],
-  );
   const totalQuestions = questionList.length;
   const currentQuestionNumber = totalQuestions
     ? Math.min(currentIndex + 1, totalQuestions)
@@ -1434,43 +1924,10 @@ export default function StudentTestActiveAttemptView({
     recoveryNotice,
     saveRetryPending,
   ]);
-  const currentQuestionScoreLabel = formatScoreLabel(
-    currentQuestion?.marks || 0,
-    currentQuestion?.negativeMarks || 0,
-  );
-  const currentSectionRuleLabel = formatScoreLabel(
-    currentSection?.defaultMarks || currentQuestion?.marks || 0,
-    currentSection?.defaultNegativeMarks || currentQuestion?.negativeMarks || 0,
-  );
   const answeredCompactLabel = totalQuestions
     ? `${answeredCount}/${totalQuestions}`
     : "—";
   const hasMultipleSections = sectionNavigation.length > 1;
-  const currentSectionQuestionCount = currentSection?.items.length || 0;
-  const showSectionRuleChip = Boolean(
-    currentSection &&
-      currentSectionQuestionCount > 1 &&
-      (currentSection.defaultMarks > 0 || currentSection.defaultNegativeMarks > 0),
-  );
-  const showSectionTotalChip = Boolean(
-    currentSection && currentSectionQuestionCount > 1 && currentSection.totalMarks > 0,
-  );
-  const sectionRuleMatchesQuestion = Boolean(
-    currentSection &&
-      (currentSection.defaultMarks || 0) === (currentQuestion?.marks || 0) &&
-      (currentSection.defaultNegativeMarks || 0) ===
-        (currentQuestion?.negativeMarks || 0),
-  );
-  const showQuestionScoreChip = Boolean(
-    currentQuestion && (!showSectionRuleChip || !sectionRuleMatchesQuestion),
-  );
-  const currentQuestionTitle = currentQuestion
-    ? `Question ${currentIndex + 1}`
-    : "Question";
-  const currentQuestionPositionLabel = formatQuestionPositionLabel(
-    currentQuestionNumber,
-    totalQuestions,
-  );
   const showDesktopSidebar = Boolean(
     totalQuestions > 1 || subjectProgress.length > 1 || paper.instructions,
   );
@@ -1483,34 +1940,7 @@ export default function StudentTestActiveAttemptView({
   const showCurrentSectionChip = Boolean(
     currentSection && hasMultipleSections,
   );
-  const showQuestionEyebrow = Boolean(
-    currentQuestion?.sectionName && hasMultipleSections,
-  );
-  const currentQuestionSubjectName = String(
-    currentQuestion?.question.subject?.name || "",
-  ).trim();
-  const showQuestionSubjectChip = Boolean(
-    currentQuestionSubjectName &&
-      !labelsMatch(currentQuestionSubjectName, paperSubjectLabel) &&
-      !labelsMatch(currentQuestionSubjectName, currentQuestion?.sectionName),
-  );
-  const visibleCurrentSectionSubjects = currentSection
-    ? currentSection.subjects.filter((subject) => {
-        const subjectLabel = String(subject?.name || subject?._id || "").trim();
-        if (!subjectLabel) {
-          return false;
-        }
-
-        if (currentSection.subjects.length > 1) {
-          return true;
-        }
-
-        return (
-          !labelsMatch(subjectLabel, currentQuestion?.sectionName) &&
-          !labelsMatch(subjectLabel, paperSubjectLabel)
-        );
-      })
-    : [];
+  const isExamInteractionLocked = isExamLocked || !isFullscreen;
   const flushDescriptiveAnswer = useCallback(() => {
     descriptiveEditorRef.current?.flush();
   }, []);
@@ -1539,9 +1969,6 @@ export default function StudentTestActiveAttemptView({
     flushDescriptiveAnswer();
     onClearCurrentAnswer();
   }, [flushDescriptiveAnswer, onClearCurrentAnswer]);
-  const showClearAnswerAction = currentQuestionAnswered;
-  const isSingleQuestionActionRow = totalQuestions <= 1;
-  const showQuestionNavigationRow = totalQuestions > 1 || showClearAnswerAction;
   const handleKeyboardSave = useCallback(() => {
     if (isSaving || isSubmitting) {
       return;
@@ -1643,40 +2070,40 @@ export default function StudentTestActiveAttemptView({
 
   return (
     <div
-      ref={examContainerRef}
       className={cn(
         "app-page-shell app-exam-focus-shell max-w-[96rem] px-3 pt-3 sm:px-4 sm:pt-4 xl:py-4",
         showMobileExamDrawer ? "pb-28 sm:pb-32" : "pb-16 sm:pb-20",
         isFullscreen && "app-exam-focus-shell-fullscreen",
       )}
     >
-      <ExamTopbar
-        dialogContainer={examContainerRef.current}
-        paper={paper}
-        paperSubjects={paperSubjects}
-        paperSubjectLabel={paperSubjectLabel}
-        paperClassLabel={paperClassLabel}
-        deadlineAt={deadlineAt}
-        answeredCompactLabel={answeredCompactLabel}
-        currentSectionName={currentSection?.name || null}
-        showCurrentSectionChip={showCurrentSectionChip}
-        showSaveStateBadge={showSaveStateBadge}
-        saveStateToneClass={saveStateToneClass}
-        saveStateBadgeLabel={saveStateBadgeLabel}
-        saveStatusLabel={saveStatusLabel}
-        submitDialogOpen={submitDialogOpen}
-        setSubmitDialogOpen={setSubmitDialogOpen}
-        answeredCount={answeredCount}
-        questionCount={totalQuestions}
-        unansweredCount={unansweredCount}
-        hasManualReviewQuestions={hasManualReviewQuestions}
-        isSaving={isSaving}
-        isSubmitting={isSubmitting}
-        isFullscreen={isFullscreen}
-        onSaveAttempt={handleSaveAttempt}
-        onToggleFullscreen={onToggleFullscreen}
-        onSubmitAttempt={handleSubmitAttempt}
-      />
+      <div className={cn(isExamInteractionLocked && "app-exam-content-locked")}>
+        <ExamTopbar
+          dialogContainer={dialogContainer}
+          paper={paper}
+          paperSubjects={paperSubjects}
+          paperSubjectLabel={paperSubjectLabel}
+          paperClassLabel={paperClassLabel}
+          deadlineAt={deadlineAt}
+          answeredCompactLabel={answeredCompactLabel}
+          currentSectionName={currentSection?.name || null}
+          showCurrentSectionChip={showCurrentSectionChip}
+          showSaveStateBadge={showSaveStateBadge}
+          saveStateToneClass={saveStateToneClass}
+          saveStateBadgeLabel={saveStateBadgeLabel}
+          saveStatusLabel={saveStatusLabel}
+          submitDialogOpen={submitDialogOpen}
+          setSubmitDialogOpen={setSubmitDialogOpen}
+          answeredCount={answeredCount}
+          questionCount={totalQuestions}
+          unansweredCount={unansweredCount}
+          hasManualReviewQuestions={hasManualReviewQuestions}
+          isSaving={isSaving}
+          isSubmitting={isSubmitting}
+          isFullscreen={isFullscreen}
+          onSaveAttempt={handleSaveAttempt}
+          onToggleFullscreen={onToggleFullscreen}
+          onSubmitAttempt={handleSubmitAttempt}
+        />
 
       {runtimeNotice ? (
         <FeedbackNotice
@@ -1688,7 +2115,7 @@ export default function StudentTestActiveAttemptView({
       ) : null}
 
       <ExamMobileNavigation
-        dialogContainer={examContainerRef.current}
+        dialogContainer={dialogContainer}
         answeredCount={answeredCount}
         questionCount={totalQuestions}
         unansweredCount={unansweredCount}
@@ -1726,368 +2153,26 @@ export default function StudentTestActiveAttemptView({
         ) : null}
 
         <main className="app-exam-main-focus">
-          {currentQuestion && currentAnswer ? (
-            <Card className="app-surface app-exam-question-card overflow-hidden">
-              <CardHeader className="app-section-header">
-                <div className="app-exam-question-header">
-                  <div className="app-exam-question-header-copy">
-                    {showQuestionEyebrow ? (
-                      <p className="app-spotlight-label">
-                        {currentQuestion.sectionName}
-                      </p>
-                    ) : null}
-                    <CardTitle className="app-exam-question-title">
-                      {currentQuestionTitle}
-                    </CardTitle>
-                    {currentQuestion.sectionDescription ? (
-                      <p className="app-copy-muted app-exam-question-section-description max-w-3xl whitespace-pre-line">
-                        {currentQuestion.sectionDescription}
-                      </p>
-                    ) : null}
-                    {currentSection ? (
-                      <div className="app-exam-question-section-meta">
-                        {visibleCurrentSectionSubjects.map((subject) => (
-                          <span
-                            key={`${currentSection.id}-${subject._id}`}
-                            className="app-meta-chip"
-                          >
-                            {subject.name || subject._id}
-                          </span>
-                        ))}
-                        {showSectionRuleChip ? (
-                          <span className="app-meta-chip">
-                            {currentSectionRuleLabel} each
-                          </span>
-                        ) : null}
-                        {showSectionTotalChip ? (
-                          <span className="app-meta-chip">
-                            {currentSection.totalMarks} total
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {currentQuestion.sectionInstructions ? (
-                      <div className="app-exam-question-context-note whitespace-pre-line">
-                        {currentQuestion.sectionInstructions}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="app-exam-question-meta">
-                    {showQuestionSubjectChip ? (
-                      <div className="app-meta-chip">
-                        {currentQuestionSubjectName}
-                      </div>
-                    ) : null}
-                    {showQuestionScoreChip ? (
-                      <div className="app-meta-chip">
-                        {currentQuestionScoreLabel}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="app-section-body app-exam-question-body app-exam-question-shell">
-                <div className="app-exam-question-content">
-                  <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
-                    <ContentRenderer
-                      htmlContent={currentQuestionHtml}
-                      enableImageZoom
-                      dialogContainer={examContainerRef.current}
-                    />
-                  </div>
-                </div>
-
-                {currentQuestion.question.type === "single" ||
-                currentQuestion.question.type === "multiple" ? (
-                  <div className="app-exam-question-option-list">
-                    {currentQuestion.question.options.map((option, optionIndex) => {
-                      const selected =
-                        currentAnswer.selectedOptions.includes(optionIndex);
-
-                      return (
-                        <label
-                          key={optionIndex}
-                          className={cn(
-                            "app-exam-option",
-                            selected && "app-exam-option-selected",
-                          )}
-                        >
-                          <input
-                            type={
-                              currentQuestion.question.type === "multiple"
-                                ? "checkbox"
-                                : "radio"
-                            }
-                            name={currentQuestion.question._id}
-                            checked={selected}
-                            aria-label={`Option ${getOptionLabel(optionIndex)}`}
-                            readOnly
-                            onClick={(event) => {
-                              event.preventDefault();
-                              if (currentQuestion.question.type === "multiple") {
-                                onUpdateMultipleChoice(
-                                  currentQuestion.question._id,
-                                  optionIndex,
-                                );
-                                return;
-                              }
-                              onUpdateSingleChoice(
-                                currentQuestion.question._id,
-                                optionIndex,
-                              );
-                            }}
-                            className="sr-only"
-                          />
-                          <span
-                            className={cn(
-                              "app-exam-option-indicator",
-                              selected &&
-                                "app-exam-option-indicator-selected",
-                            )}
-                          >
-                            {getOptionLabel(optionIndex)}
-                          </span>
-                          <div className="app-exam-option-content">
-                            <div className="prose prose-sm app-exam-option-richtext max-w-none text-foreground dark:prose-invert">
-                              <ContentRenderer
-                                htmlContent={currentOptionHtml[optionIndex] || ""}
-                                enableImageZoom
-                                dialogContainer={examContainerRef.current}
-                              />
-                            </div>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : null}
-
-                {currentQuestion.question.type === "descriptive" ? (
-                  <div className="space-y-3">
-                    <DescriptiveAnswerEditor
-                      ref={descriptiveEditorRef}
-                      question={currentQuestion.question}
-                      value={currentAnswer.answerText}
-                      onCommit={onUpdateDescriptiveAnswer}
-                    />
-                  </div>
-                ) : null}
-
-                {currentQuestion.question.type === "matrix-match" ? (
-                  currentQuestion.question.matrixRows?.length &&
-                  currentQuestion.question.matrixColumns?.length ? (
-                    <div className="space-y-3">
-                      <div className="app-exam-matrix-stack sm:hidden">
-                        {currentQuestion.question.matrixRows.map((row, rowIndex) => (
-                          <div key={rowIndex} className="app-exam-matrix-card">
-                            <div className="app-exam-matrix-card-head">
-                              <span className="app-exam-matrix-card-kicker">
-                                {`Row ${rowIndex + 1}`}
-                              </span>
-                              <p className="app-exam-matrix-card-title">
-                                {row || `Row ${rowIndex + 1}`}
-                              </p>
-                            </div>
-                            <div className="app-exam-matrix-choice-grid">
-                              {currentQuestion.question.matrixColumns?.map(
-                                (column, columnIndex) => {
-                                  const checked =
-                                    currentAnswer.matrixSelections[rowIndex]?.includes(
-                                      columnIndex,
-                                    ) || false;
-
-                                  return (
-                                    <label
-                                      key={columnIndex}
-                                      className={cn(
-                                        "app-exam-matrix-choice",
-                                        checked &&
-                                          "app-exam-matrix-choice-selected",
-                                      )}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={() =>
-                                          onUpdateMatrixSelection(
-                                            currentQuestion.question,
-                                            rowIndex,
-                                            columnIndex,
-                                          )
-                                        }
-                                        className="sr-only"
-                                      />
-                                      <span
-                                        className={cn(
-                                          "app-exam-matrix-choice-indicator",
-                                          checked &&
-                                            "app-exam-matrix-choice-indicator-selected",
-                                        )}
-                                      >
-                                        {checked
-                                          ? "✓"
-                                          : getOptionLabel(columnIndex)}
-                                      </span>
-                                      <span className="app-exam-matrix-choice-label">
-                                        {column || `Column ${columnIndex + 1}`}
-                                      </span>
-                                    </label>
-                                  );
-                                },
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="app-table-wrap hidden overflow-x-auto sm:block">
-                        <table className="min-w-full border-collapse text-sm">
-                          <thead>
-                            <tr className="bg-muted/30">
-                              <th className="border border-border/60 px-3 py-2.5 text-left text-[12px] font-medium tracking-[0.03em] text-muted-foreground">
-                                Match
-                              </th>
-                              {currentQuestion.question.matrixColumns.map(
-                                (column, columnIndex) => (
-                                  <th
-                                    key={columnIndex}
-                                    className="border border-border/60 px-3 py-2.5 text-center text-[12px] font-medium tracking-[0.03em] text-muted-foreground"
-                                  >
-                                    {column || `Column ${columnIndex + 1}`}
-                                  </th>
-                                ),
-                              )}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {currentQuestion.question.matrixRows.map((row, rowIndex) => (
-                              <tr key={rowIndex}>
-                                <td className="border border-border/60 px-3 py-3 font-medium text-foreground">
-                                  {row || `Row ${rowIndex + 1}`}
-                                </td>
-                                {currentQuestion.question.matrixColumns?.map(
-                                  (_column, columnIndex) => {
-                                    const checked =
-                                      currentAnswer.matrixSelections[rowIndex]?.includes(
-                                        columnIndex,
-                                      ) || false;
-
-                                    return (
-                                      <td
-                                        key={columnIndex}
-                                        className="border border-border/60 px-3 py-3 text-center"
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={checked}
-                                          onChange={() =>
-                                            onUpdateMatrixSelection(
-                                              currentQuestion.question,
-                                              rowIndex,
-                                              columnIndex,
-                                            )
-                                          }
-                                          className="h-4 w-4"
-                                        />
-                                      </td>
-                                    );
-                                  },
-                                )}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ) : (
-                    <FeedbackNotice variant="error">
-                      This matrix question is missing row or column labels and cannot be answered online.
-                    </FeedbackNotice>
-                  )
-                ) : null}
-
-                {showQuestionNavigationRow ? (
-                  <div
-                    className={cn(
-                      "app-exam-nav-row",
-                      isSingleQuestionActionRow && "app-exam-nav-row-single",
-                    )}
-                  >
-                    {!isSingleQuestionActionRow ? (
-                      <div className="app-exam-nav-row-copy">
-                        <span className="app-meta-chip">
-                          {currentQuestionPositionLabel}
-                        </span>
-                        <span className="app-exam-nav-row-shortcuts">
-                          1-9 answer, arrows move, S saves
-                        </span>
-                      </div>
-                    ) : null}
-                    <div
-                      className={cn(
-                        "app-exam-nav-row-actions",
-                        isSingleQuestionActionRow && "app-exam-nav-row-actions-end",
-                      )}
-                    >
-                      {!isSingleQuestionActionRow ? (
-                        <Button
-                          variant="outline"
-                          size="md"
-                          className="app-student-action-compact app-exam-nav-button"
-                          onClick={() =>
-                            void handleJumpToQuestion(Math.max(0, currentIndex - 1))
-                          }
-                          disabled={currentIndex === 0}
-                        >
-                          Previous
-                        </Button>
-                      ) : null}
-                      <div
-                        className={cn(
-                          "app-exam-nav-actions",
-                          (!showClearAnswerAction || isSingleQuestionActionRow) &&
-                            "app-exam-nav-actions-single",
-                        )}
-                      >
-                        {showClearAnswerAction ? (
-                          <Button
-                            variant="ghost"
-                            size="md"
-                            className="app-student-action-compact app-exam-nav-button"
-                            onClick={handleClearCurrentAnswer}
-                          >
-                            Clear
-                          </Button>
-                        ) : null}
-                        {!isSingleQuestionActionRow ? (
-                          <Button
-                            variant="primary"
-                            size="md"
-                            className="app-student-action-compact app-exam-nav-button"
-                            onClick={() =>
-                              void handleJumpToQuestion(
-                                Math.min(questionList.length - 1, currentIndex + 1),
-                              )
-                            }
-                            disabled={currentIndex >= questionList.length - 1}
-                          >
-                            Next
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="app-surface">
-              <CardContent className="app-empty-state py-10">
-                No questions are available in this paper.
-              </CardContent>
-            </Card>
-          )}
+          <ExamQuestionPanel
+            dialogContainer={dialogContainer}
+            descriptiveEditorRef={descriptiveEditorRef}
+            currentQuestion={currentQuestion}
+            currentAnswer={currentAnswer}
+            currentIndex={currentIndex}
+            totalQuestions={totalQuestions}
+            currentQuestionAnswered={currentQuestionAnswered}
+            currentSection={currentSection}
+            hasMultipleSections={hasMultipleSections}
+            paperSubjectLabel={paperSubjectLabel}
+            onJumpToQuestion={handleJumpToQuestion}
+            onUpdateMultipleChoice={onUpdateMultipleChoice}
+            onUpdateSingleChoice={onUpdateSingleChoice}
+            onUpdateDescriptiveAnswer={onUpdateDescriptiveAnswer}
+            onUpdateMatrixSelection={onUpdateMatrixSelection}
+            onClearCurrentAnswer={handleClearCurrentAnswer}
+          />
         </main>
+      </div>
       </div>
     </div>
   );

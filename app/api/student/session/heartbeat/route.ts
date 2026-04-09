@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
 
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
+    studentSessionValidationMode: "redis_strict",
   });
   if (!auth.ok) return auth.response;
 

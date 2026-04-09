@@ -28,6 +28,7 @@ type RequireTenantSessionOptions = {
   allowRoles?: SchoolUserRole[];
   allowSchoolQueryFallback?: boolean;
   requireSchoolKey?: boolean;
+  studentSessionValidationMode?: "default" | "redis_strict";
 };
 
 type RequireTenantSessionFailure = {
@@ -83,6 +84,19 @@ function buildStudentSessionInvalidResponse() {
   );
 }
 
+function buildStudentSessionValidationUnavailableResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      code: "StudentSessionValidationUnavailable",
+      retryable: true,
+      message:
+        "Online test session validation is temporarily unavailable. Please retry in a moment.",
+    },
+    { status: 503 },
+  );
+}
+
 function buildPrivilegedSessionInvalidResponse() {
   return NextResponse.json(
     {
@@ -135,7 +149,13 @@ async function validatePrivilegedSchoolUserSession(
   }
 }
 
-async function validateStudentSession(session: Session, schoolKey: string) {
+async function validateStudentSession(
+  session: Session,
+  schoolKey: string,
+  options?: {
+    mode?: RequireTenantSessionOptions["studentSessionValidationMode"];
+  },
+) {
   const studentSessionId = String(session.user.studentSessionId || "").trim();
   if (!studentSessionId) {
     return buildStudentSessionInvalidResponse();
@@ -146,6 +166,7 @@ async function validateStudentSession(session: Session, schoolKey: string) {
   }
 
   const now = new Date();
+  const redisStrict = options?.mode === "redis_strict";
 
   if (isRedisConfigured()) {
     try {
@@ -158,6 +179,7 @@ async function validateStudentSession(session: Session, schoolKey: string) {
         )
       ) {
         if (
+          !redisStrict &&
           shouldSyncRedisValidatedStudentSessionToDb(
             schoolKey,
             session.user.id,
@@ -223,6 +245,9 @@ async function validateStudentSession(session: Session, schoolKey: string) {
           session.user.id,
           studentSessionId,
         );
+        if (redisStrict) {
+          return buildStudentSessionInvalidResponse();
+        }
         throw new Error("Redis student session missing or unavailable.");
       }
 
@@ -237,6 +262,9 @@ async function validateStudentSession(session: Session, schoolKey: string) {
           session.user.id,
           studentSessionId,
         );
+        if (redisStrict) {
+          return buildStudentSessionValidationUnavailableResponse();
+        }
         throw new Error("Redis student session validation unavailable.");
       }
 
@@ -248,6 +276,7 @@ async function validateStudentSession(session: Session, schoolKey: string) {
       );
 
       if (
+        !redisStrict &&
         shouldSyncRedisValidatedStudentSessionToDb(
           schoolKey,
           session.user.id,
@@ -282,10 +311,19 @@ async function validateStudentSession(session: Session, schoolKey: string) {
       return null;
     } catch (error) {
       console.error(
-        "Failed to validate Redis student session. Falling back to DB session validation:",
+        redisStrict
+          ? "Failed to validate Redis student session for a Redis-strict hot path:"
+          : "Failed to validate Redis student session. Falling back to DB session validation:",
         error,
       );
+      if (redisStrict) {
+        return buildStudentSessionValidationUnavailableResponse();
+      }
     }
+  }
+
+  if (redisStrict) {
+    return buildStudentSessionValidationUnavailableResponse();
   }
 
   try {
@@ -537,6 +575,9 @@ export async function requireTenantSession(
     const invalidStudentSessionResponse = await validateStudentSession(
       session,
       resolvedSchoolKey,
+      {
+        mode: resolvedOptions.studentSessionValidationMode,
+      },
     );
 
     if (invalidStudentSessionResponse) {

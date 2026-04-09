@@ -17,6 +17,7 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
+    studentSessionValidationMode: "redis_strict",
   });
   if (!auth.ok) return auth.response;
 

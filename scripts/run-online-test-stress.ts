@@ -7,15 +7,25 @@ import {
   resolveOnlineTestServerMode,
   withOnlineTestServer,
 } from "./online-test-server.ts";
+import {
+  listOnlineTestLoadProfiles,
+  loadOnlineTestLoadConfigFile,
+  resolveOnlineTestLoadProfile,
+  resolveProfileLocalConcurrency,
+} from "./online-test-load-config.ts";
 
 type ParsedArgs = {
   baseUrl: string;
   schoolKey: string;
   paperId: string;
   studentsFile: string;
+  configFile?: string;
+  profileName?: string;
   autoSeed: boolean;
   cleanupSeeded: boolean;
   seedStudents: number;
+  runnerCount: number;
+  runnerIndex: number;
   concurrency: number;
   rounds: number;
   roundDelayMs: number;
@@ -53,18 +63,29 @@ type StressInputs = {
 };
 
 function printHelp() {
+  const availableProfiles = listOnlineTestLoadProfiles()
+    .map(
+      (profile) =>
+        `  - ${profile.name}: ${profile.description} (runners=${profile.recommendedRunnerCount}, total-concurrency=${profile.targetTotalConcurrency}, students=${profile.totalStudents})`,
+    )
+    .join("\n");
+
   console.log(
     [
       "Usage: npm run stress:online-test -- [options]",
       "",
       "Options:",
       "  --base=<url>                  App base URL (default: http://127.0.0.1:3000)",
+      "  --config=<jsonFile>           Optional JSON config file with load defaults",
+      "  --profile=<name>              Named load profile preset",
       "  --school=<schoolKey>          Existing school key to reuse instead of auto-seeding",
       "  --paper=<paperId>             Existing paper id to reuse instead of auto-seeding",
       "  --students=<jsonFile>         Existing student credential file to reuse",
       "  --auto-seed=<true|false>      Seed disposable data when inputs are missing (default: true)",
       "  --cleanup-seeded=<true|false> Delete auto-generated seed data after the run (default: false)",
       "  --seed-students=<n>           Number of disposable students to seed (default: 100)",
+      "  --runner-count=<n>            Number of distributed runners sharing the same students file (default: 1)",
+      "  --runner-index=<n>            Zero-based runner shard index (default: 0)",
       "  --concurrency=<n>             Concurrent student flows (default: 100)",
       "  --rounds=<n>                  Save rounds per student before submit (default: 3)",
       "  --round-delay-ms=<ms>         Delay between save rounds (default: 400)",
@@ -91,6 +112,10 @@ function printHelp() {
       "  - Loopback base URLs use a managed local Next production server by default; use --server-mode=dev for quicker smoke checks.",
       "  - If the requested loopback port is already in use, managed runs automatically move to the next free local port.",
       "  - This wrapper runs the load gate and exits non-zero when gate checks fail.",
+      "  - For multi-runner distributed tests, seed once and reuse the same --school, --paper, and --students inputs across all runners.",
+      "",
+      "Profiles:",
+      availableProfiles,
     ].join("\n"),
   );
 }
@@ -99,8 +124,8 @@ function resolveCommand(name: string) {
   return process.platform === "win32" ? `${name}.cmd` : name;
 }
 
-function parseBoolean(value: string | undefined, defaultValue: boolean) {
-  const normalized = String(value || "")
+function parseBoolean(value: unknown, defaultValue: boolean) {
+  const normalized = String(value ?? "")
     .trim()
     .toLowerCase();
   if (!normalized) return defaultValue;
@@ -109,8 +134,8 @@ function parseBoolean(value: string | undefined, defaultValue: boolean) {
   throw new Error(`Invalid boolean value: ${value}`);
 }
 
-function parseNumber(value: string | undefined, defaultValue: number) {
-  const normalized = String(value || "").trim();
+function parseNumber(value: unknown, defaultValue: number) {
+  const normalized = String(value ?? "").trim();
   if (!normalized) return defaultValue;
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) {
@@ -119,7 +144,7 @@ function parseNumber(value: string | undefined, defaultValue: number) {
   return parsed;
 }
 
-function parsePositiveInt(value: string | undefined, defaultValue: number) {
+function parsePositiveInt(value: unknown, defaultValue: number) {
   const parsed = parseNumber(value, defaultValue);
   if (parsed <= 0) {
     throw new Error(`Expected a positive integer, received: ${value}`);
@@ -138,108 +163,207 @@ function parseArgMap(argv: string[]) {
   return argMap;
 }
 
-function parseArgs(argv: string[]): ParsedArgs {
+function parseNonNegativeInt(value: unknown, defaultValue: number) {
+  const parsed = parseNumber(value, defaultValue);
+  if (parsed < 0) {
+    throw new Error(`Expected a non-negative integer, received: ${value}`);
+  }
+  return Math.floor(parsed);
+}
+
+async function parseArgs(argv: string[]): Promise<ParsedArgs> {
   const argMap = parseArgMap(argv);
+  const configFile =
+    String(argMap.get("config") || process.env.ONLINE_TEST_GATE_CONFIG || "").trim() ||
+    undefined;
+  const config = await loadOnlineTestLoadConfigFile(configFile);
+  const profileName = String(
+    argMap.get("profile") ||
+      process.env.ONLINE_TEST_GATE_PROFILE ||
+      config?.profile ||
+      "",
+  ).trim();
+  const profile = resolveOnlineTestLoadProfile(profileName);
+  if (profileName && !profile) {
+    throw new Error(
+      `Unknown load profile "${profileName}". Available profiles: ${listOnlineTestLoadProfiles()
+        .map((entry) => entry.name)
+        .join(", ")}.`,
+    );
+  }
+
+  const runnerCount = parsePositiveInt(
+    argMap.get("runner-count") ||
+      process.env.ONLINE_TEST_GATE_RUNNER_COUNT ||
+      config?.runnerCount,
+    profile?.recommendedRunnerCount || 1,
+  );
+  const runnerIndex = parseNonNegativeInt(
+    argMap.get("runner-index") ||
+      process.env.ONLINE_TEST_GATE_RUNNER_INDEX ||
+      config?.runnerIndex,
+    0,
+  );
+  if (runnerIndex >= runnerCount) {
+    throw new Error(
+      `--runner-index must be between 0 and ${runnerCount - 1} for runner-count=${runnerCount}.`,
+    );
+  }
   const outFile =
-    String(argMap.get("out") || "").trim() ||
+    String(argMap.get("out") || config?.outFile || "").trim() ||
     path.resolve(`/tmp/online-test-stress-${Date.now()}.json`);
   const gateOutFile =
-    String(argMap.get("gate-out") || "").trim() || `${outFile}.gate.json`;
+    String(argMap.get("gate-out") || config?.gateOutFile || "").trim() ||
+    `${outFile}.gate.json`;
 
   return {
     baseUrl:
-      String(argMap.get("base") || process.env.ONLINE_TEST_GATE_BASE || "").trim() ||
+      String(
+        argMap.get("base") ||
+          process.env.ONLINE_TEST_GATE_BASE ||
+          config?.baseUrl ||
+          "",
+      ).trim() ||
       "http://127.0.0.1:3000",
+    configFile: config?._resolvedFrom,
+    profileName: profile?.name,
     schoolKey: String(
-      argMap.get("school") || process.env.ONLINE_TEST_GATE_SCHOOL || "",
+      argMap.get("school") ||
+        process.env.ONLINE_TEST_GATE_SCHOOL ||
+        config?.schoolKey ||
+        "",
     )
       .trim()
       .toLowerCase(),
-    paperId: String(argMap.get("paper") || process.env.ONLINE_TEST_GATE_PAPER || "").trim(),
+    paperId: String(
+      argMap.get("paper") ||
+        process.env.ONLINE_TEST_GATE_PAPER ||
+        config?.paperId ||
+        "",
+    ).trim(),
     studentsFile: String(
-      argMap.get("students") || process.env.ONLINE_TEST_GATE_STUDENTS || "",
+      argMap.get("students") ||
+        process.env.ONLINE_TEST_GATE_STUDENTS ||
+        config?.studentsFile ||
+        "",
     ).trim(),
     autoSeed: parseBoolean(
-      argMap.get("auto-seed") || process.env.ONLINE_TEST_GATE_AUTO_SEED,
+      argMap.get("auto-seed") ||
+        process.env.ONLINE_TEST_GATE_AUTO_SEED ||
+        config?.autoSeed,
       true,
     ),
     cleanupSeeded: parseBoolean(
-      argMap.get("cleanup-seeded") || process.env.ONLINE_TEST_GATE_CLEANUP_SEEDED,
+      argMap.get("cleanup-seeded") ||
+        process.env.ONLINE_TEST_GATE_CLEANUP_SEEDED ||
+        config?.cleanupSeeded,
       false,
     ),
     seedStudents: parsePositiveInt(
-      argMap.get("seed-students") || process.env.ONLINE_TEST_GATE_SEED_STUDENTS,
-      100,
+      argMap.get("seed-students") ||
+        process.env.ONLINE_TEST_GATE_SEED_STUDENTS ||
+        config?.seedStudents,
+      profile?.totalStudents || 100,
     ),
+    runnerCount,
+    runnerIndex,
     concurrency: parsePositiveInt(
-      argMap.get("concurrency") || process.env.ONLINE_TEST_GATE_CONCURRENCY,
-      100,
+      argMap.get("concurrency") ||
+        process.env.ONLINE_TEST_GATE_CONCURRENCY ||
+        config?.concurrency,
+      profile ? resolveProfileLocalConcurrency(profile, runnerCount) : 100,
     ),
     rounds: parsePositiveInt(
-      argMap.get("rounds") || process.env.ONLINE_TEST_GATE_ROUNDS,
-      3,
+      argMap.get("rounds") || process.env.ONLINE_TEST_GATE_ROUNDS || config?.rounds,
+      profile?.rounds || 3,
     ),
     roundDelayMs: parsePositiveInt(
-      argMap.get("round-delay-ms") || process.env.ONLINE_TEST_GATE_ROUND_DELAY_MS,
-      400,
+      argMap.get("round-delay-ms") ||
+        process.env.ONLINE_TEST_GATE_ROUND_DELAY_MS ||
+        config?.roundDelayMs,
+      profile?.roundDelayMs || 400,
     ),
     jitterMs: Math.max(
       0,
       Math.floor(
         parseNumber(
-          argMap.get("jitter-ms") || process.env.ONLINE_TEST_GATE_JITTER_MS,
-          150,
+          argMap.get("jitter-ms") ||
+            process.env.ONLINE_TEST_GATE_JITTER_MS ||
+            config?.jitterMs,
+          profile?.jitterMs || 150,
         ),
       ),
     ),
     timeoutMs: parsePositiveInt(
-      argMap.get("timeout-ms") || process.env.ONLINE_TEST_GATE_TIMEOUT_MS,
-      15_000,
+      argMap.get("timeout-ms") ||
+        process.env.ONLINE_TEST_GATE_TIMEOUT_MS ||
+        config?.timeoutMs,
+      profile?.timeoutMs || 15_000,
     ),
     sampleSize: parsePositiveInt(
-      argMap.get("sample-size") || process.env.ONLINE_TEST_GATE_SAMPLE_SIZE,
-      10,
+      argMap.get("sample-size") ||
+        process.env.ONLINE_TEST_GATE_SAMPLE_SIZE ||
+        config?.sampleSize,
+      profile?.sampleSize || 10,
     ),
     submitEnabled: parseBoolean(
-      argMap.get("submit") || process.env.ONLINE_TEST_GATE_SUBMIT,
-      true,
+      argMap.get("submit") || process.env.ONLINE_TEST_GATE_SUBMIT || config?.submitEnabled,
+      profile?.submitEnabled ?? true,
     ),
     heartbeatEnabled: parseBoolean(
-      argMap.get("heartbeat") || process.env.ONLINE_TEST_GATE_HEARTBEAT,
-      true,
+      argMap.get("heartbeat") ||
+        process.env.ONLINE_TEST_GATE_HEARTBEAT ||
+        config?.heartbeatEnabled,
+      profile?.heartbeatEnabled ?? true,
     ),
     listFirstEnabled: parseBoolean(
-      argMap.get("list-first") || process.env.ONLINE_TEST_GATE_LIST_FIRST,
-      true,
+      argMap.get("list-first") ||
+        process.env.ONLINE_TEST_GATE_LIST_FIRST ||
+        config?.listFirstEnabled,
+      profile?.listFirstEnabled ?? true,
     ),
     warmupEnabled: parseBoolean(
-      argMap.get("warmup") || process.env.ONLINE_TEST_GATE_WARMUP,
-      true,
+      argMap.get("warmup") ||
+        process.env.ONLINE_TEST_GATE_WARMUP ||
+        config?.warmupEnabled,
+      profile?.warmupEnabled ?? true,
     ),
     maxFailureRatePct: parseNumber(
       argMap.get("max-failure-rate-pct") ||
-        process.env.ONLINE_TEST_GATE_MAX_FAILURE_RATE_PCT,
-      0.5,
+        process.env.ONLINE_TEST_GATE_MAX_FAILURE_RATE_PCT ||
+        config?.maxFailureRatePct,
+      profile?.maxFailureRatePct || 0.5,
     ),
     maxP95ListMs: parsePositiveInt(
-      argMap.get("max-p95-list-ms") || process.env.ONLINE_TEST_GATE_MAX_P95_LIST_MS,
-      1200,
+      argMap.get("max-p95-list-ms") ||
+        process.env.ONLINE_TEST_GATE_MAX_P95_LIST_MS ||
+        config?.maxP95ListMs,
+      profile?.maxP95ListMs || 1200,
     ),
     maxP95StartMs: parsePositiveInt(
-      argMap.get("max-p95-start-ms") || process.env.ONLINE_TEST_GATE_MAX_P95_START_MS,
-      1200,
+      argMap.get("max-p95-start-ms") ||
+        process.env.ONLINE_TEST_GATE_MAX_P95_START_MS ||
+        config?.maxP95StartMs,
+      profile?.maxP95StartMs || 1200,
     ),
     maxP95SaveMs: parsePositiveInt(
-      argMap.get("max-p95-save-ms") || process.env.ONLINE_TEST_GATE_MAX_P95_SAVE_MS,
-      800,
+      argMap.get("max-p95-save-ms") ||
+        process.env.ONLINE_TEST_GATE_MAX_P95_SAVE_MS ||
+        config?.maxP95SaveMs,
+      profile?.maxP95SaveMs || 800,
     ),
     maxP95SubmitMs: parsePositiveInt(
-      argMap.get("max-p95-submit-ms") || process.env.ONLINE_TEST_GATE_MAX_P95_SUBMIT_MS,
-      1500,
+      argMap.get("max-p95-submit-ms") ||
+        process.env.ONLINE_TEST_GATE_MAX_P95_SUBMIT_MS ||
+        config?.maxP95SubmitMs,
+      profile?.maxP95SubmitMs || 1500,
     ),
     serverMode:
       String(
-        argMap.get("server-mode") || process.env.ONLINE_TEST_GATE_SERVER_MODE || "",
+        argMap.get("server-mode") ||
+          process.env.ONLINE_TEST_GATE_SERVER_MODE ||
+          config?.serverMode ||
+          "",
       ).trim() || undefined,
     outFile,
     gateOutFile,
@@ -373,7 +497,7 @@ async function main() {
     return;
   }
 
-  const args = parseArgs(argv);
+  const args = await parseArgs(argv);
   await fs.mkdir(path.dirname(args.outFile), { recursive: true });
   await fs.mkdir(path.dirname(args.gateOutFile), { recursive: true });
 
@@ -390,9 +514,28 @@ async function main() {
     );
     ensureManagedSchoolUserAuthRateLimit(args, serverMode);
     ensureManagedExamRuntimePoolMax(args, serverMode);
+    const effectiveTotalConcurrency = args.concurrency * args.runnerCount;
     console.log(
-      `\n== Stress inputs ready ==\nSchool: ${stressInputs.schoolKey}\nPaper: ${stressInputs.paperId}\nStudents file: ${stressInputs.studentsFile}\nBase URL: ${managedBaseUrl}\nServer mode: ${serverMode}`,
+      [
+        "",
+        "== Stress inputs ready ==",
+        `Profile: ${args.profileName || "custom"}`,
+        `Config: ${args.configFile || "none"}`,
+        `School: ${stressInputs.schoolKey}`,
+        `Paper: ${stressInputs.paperId}`,
+        `Students file: ${stressInputs.studentsFile}`,
+        `Runner: ${args.runnerIndex + 1}/${args.runnerCount}`,
+        `Local concurrency: ${args.concurrency}`,
+        `Effective total concurrency: ${effectiveTotalConcurrency}`,
+        `Base URL: ${managedBaseUrl}`,
+        `Server mode: ${serverMode}`,
+      ].join("\n"),
     );
+    if (args.runnerCount > 1 && args.autoSeed) {
+      console.log(
+        "Distributed run note: auto-seeding only helps when all runners can access the same seeded students file. For multi-machine runs, seed once and reuse the resulting inputs.",
+      );
+    }
     const commandEnv = {
       BASE_URL: managedBaseUrl,
       NEXTAUTH_URL: process.env.NEXTAUTH_URL || managedBaseUrl,
@@ -415,6 +558,10 @@ async function main() {
             `--school=${stressInputs.schoolKey}`,
             `--paper=${stressInputs.paperId}`,
             `--students=${stressInputs.studentsFile}`,
+            ...(args.profileName ? [`--profile=${args.profileName}`] : []),
+            ...(args.configFile ? [`--config=${args.configFile}`] : []),
+            `--runner-count=${args.runnerCount}`,
+            `--runner-index=${args.runnerIndex}`,
             `--concurrency=${args.concurrency}`,
             `--rounds=${args.rounds}`,
             `--round-delay-ms=${args.roundDelayMs}`,

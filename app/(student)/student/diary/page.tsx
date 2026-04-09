@@ -8,12 +8,13 @@ import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ListPaginationLinks from "@/components/ui/list-pagination-links";
 import { authOptions } from "@/lib/auth";
 import { formatDiaryDateLabel, getTodayDiaryEntryDate } from "@/lib/diary/shared";
-import { listStudentDiaryEntries } from "@/lib/server/diary";
-import { getWorkspaceSubjects } from "@/lib/server/workspace-support-data";
+import { listStudentDiaryEntriesPage } from "@/lib/server/diary";
 
 export const runtime = "nodejs";
+const STUDENT_DIARY_PAGE_SIZE = 10;
 
 type StudentDiaryPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -77,6 +78,39 @@ function getSearchParam(
   return Array.isArray(value) ? value[0] : value;
 }
 
+function resolvePageParam(value: string | undefined) {
+  const parsedValue = Number(value || "");
+  if (!Number.isFinite(parsedValue) || parsedValue < 1) {
+    return 1;
+  }
+
+  return Math.floor(parsedValue);
+}
+
+function buildStudentDiaryPageHref(params: {
+  entryDate: string;
+  defaultDate: string;
+  subjectId: string;
+  page: number;
+}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.entryDate && params.entryDate !== params.defaultDate) {
+    searchParams.set("entryDate", params.entryDate);
+  }
+
+  if (params.subjectId && params.subjectId !== "all") {
+    searchParams.set("subjectId", params.subjectId);
+  }
+
+  if (params.page > 1) {
+    searchParams.set("page", String(params.page));
+  }
+
+  const query = searchParams.toString();
+  return query ? `/student/diary?${query}` : "/student/diary";
+}
+
 export default async function StudentDiaryPage({
   searchParams,
 }: StudentDiaryPageProps) {
@@ -98,25 +132,45 @@ export default async function StudentDiaryPage({
   }
 
   const resolvedSearchParams = await searchParams;
+  const defaultDate = getTodayDiaryEntryDate();
   const selectedDate =
-    getSearchParam(resolvedSearchParams, "entryDate") || getTodayDiaryEntryDate();
+    getSearchParam(resolvedSearchParams, "entryDate") || defaultDate;
   const selectedSubjectId = getSearchParam(resolvedSearchParams, "subjectId") || "all";
+  const requestedPage = resolvePageParam(getSearchParam(resolvedSearchParams, "page"));
 
-  const [entries, subjects] = await Promise.all([
-    listStudentDiaryEntries({
-      schoolKey,
-      studentId,
-      studentPlacement: {
-        classId: session.user.studentClassId,
-        academicSectionId: session.user.studentAcademicSectionId,
-      },
-      filters: {
-        entryDate: selectedDate,
-        subjectId: selectedSubjectId !== "all" ? selectedSubjectId : undefined,
-      },
-    }),
-    getWorkspaceSubjects(schoolKey),
-  ]);
+  const diaryList = await listStudentDiaryEntriesPage({
+    schoolKey,
+    studentId,
+    studentPlacement: {
+      classId: session.user.studentClassId,
+      academicSectionId: session.user.studentAcademicSectionId,
+    },
+    filters: {
+      entryDate: selectedDate,
+      subjectId: selectedSubjectId !== "all" ? selectedSubjectId : undefined,
+    },
+    page: requestedPage,
+    limit: STUDENT_DIARY_PAGE_SIZE,
+  });
+  const entries = diaryList.entries;
+  const previousPageHref =
+    diaryList.page > 1
+      ? buildStudentDiaryPageHref({
+          entryDate: selectedDate,
+          defaultDate,
+          subjectId: selectedSubjectId,
+          page: diaryList.page - 1,
+        })
+      : null;
+  const nextPageHref =
+    diaryList.page < diaryList.pages
+      ? buildStudentDiaryPageHref({
+          entryDate: selectedDate,
+          defaultDate,
+          subjectId: selectedSubjectId,
+          page: diaryList.page + 1,
+        })
+      : null;
 
   return (
     <div className="app-student-page-shell app-diary-page">
@@ -138,35 +192,34 @@ export default async function StudentDiaryPage({
         stats={[
           {
             label: "Entries",
-            value: String(entries.length),
-            meta: "Visible today",
+            value: String(diaryList.total),
+            meta: "Matching your current filters",
           },
           {
             label: "Remaining",
             value: String(entries.filter((entry) => entry.state.status !== "completed").length),
-            meta: "Not marked complete",
+            meta: "On this page",
           },
           {
             label: "Completed",
             value: String(entries.filter((entry) => entry.state.status === "completed").length),
-            meta: "Done",
+            meta: "On this page",
           },
           {
             label: "Resources",
             value: String(entries.reduce((sum, entry) => sum + entry.content.resourceCount, 0)),
-            meta: "Linked to today's work",
+            meta: "On this page",
           },
         ]}
         toolbar={
           <DiaryBoardFiltersClient
             variant="embedded"
             date={selectedDate}
-            defaultDate={getTodayDiaryEntryDate()}
+            defaultDate={defaultDate}
             subjectId={selectedSubjectId}
-            subjectOptions={subjects.map((subject) => ({
+            subjectOptions={diaryList.subjectOptions.map((subject) => ({
               value: subject._id,
               label: subject.name,
-              description: subject.code || subject.description,
             }))}
           />
         }
@@ -228,7 +281,10 @@ export default async function StudentDiaryPage({
 
                   <div className="app-diary-list-actions app-diary-list-actions-student">
                     <Button asChild size="sm" className="app-diary-list-button">
-                      <AppPrefetchLink href={`/student/diary/${entry._id}`}>
+                      <AppPrefetchLink
+                        href={`/student/diary/${entry._id}`}
+                        prefetchOnViewport={false}
+                      >
                         View entry
                       </AppPrefetchLink>
                     </Button>
@@ -239,6 +295,16 @@ export default async function StudentDiaryPage({
           })}
         </div>
       )}
+
+      <ListPaginationLinks
+        page={diaryList.page}
+        totalPages={diaryList.pages}
+        totalItems={diaryList.total}
+        pageSize={diaryList.limit}
+        itemLabel="entries"
+        previousHref={previousPageHref}
+        nextHref={nextPageHref}
+      />
     </div>
   );
 }

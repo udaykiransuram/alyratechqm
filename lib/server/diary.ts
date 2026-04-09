@@ -57,6 +57,18 @@ type StudentDiaryFilters = {
   subjectId?: string;
 };
 
+type StudentDiaryListResult = {
+  entries: StudentDiarySummary[];
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+  subjectOptions: Array<{
+    _id: string;
+    name: string;
+  }>;
+};
+
 type WorkspaceDiaryListResult = {
   entries: WorkspaceDiarySummary[];
   total: number;
@@ -121,6 +133,49 @@ function buildDiarySectionIntersectionQuery(sectionIds: string[]) {
   return {
     assignedAcademicSections: { $in: sectionIds },
   };
+}
+
+function buildStudentDiarySectionScopeQuery(academicSectionId: string) {
+  if (academicSectionId && mongoose.Types.ObjectId.isValid(academicSectionId)) {
+    return buildArrayIntersectionOrEmptyQuery("assignedAcademicSections", [academicSectionId]);
+  }
+
+  return {
+    $or: [
+      { assignedAcademicSections: { $exists: false } },
+      { assignedAcademicSections: { $size: 0 } },
+    ],
+  };
+}
+
+function buildStudentDiaryListQuery(params: {
+  classId: string;
+  academicSectionId: string;
+  filters: StudentDiaryFilters;
+  includeSubjectFilter: boolean;
+}) {
+  let query: Record<string, any> = {
+    class: params.classId,
+    status: "published",
+    ...buildArchiveFilter(false),
+  };
+
+  if (params.filters.entryDate) {
+    query.entryDate = String(params.filters.entryDate).trim();
+  }
+
+  if (
+    params.includeSubjectFilter &&
+    params.filters.subjectId &&
+    mongoose.Types.ObjectId.isValid(params.filters.subjectId)
+  ) {
+    query.subject = params.filters.subjectId;
+  }
+
+  return mergeMongoQueries(
+    query,
+    buildStudentDiarySectionScopeQuery(params.academicSectionId),
+  );
 }
 
 function buildDiaryStudentQuery(entries: any[]) {
@@ -824,12 +879,75 @@ export async function listStudentDiaryEntries(params: {
   } | null;
   filters?: StudentDiaryFilters;
 }) {
+  const result = await listStudentDiaryEntriesPage({
+    ...params,
+    page: 1,
+  });
+
+  return result.entries;
+}
+
+export async function listStudentDiaryEntriesPage(params: {
+  schoolKey: string;
+  studentId: string;
+  studentPlacement?: {
+    classId?: string | null;
+    academicSectionId?: string | null;
+  } | null;
+  filters?: StudentDiaryFilters;
+  page?: number | string;
+  limit?: number | string;
+}) {
+  const requestedPage = resolveListPage(params.page);
+  const requestedLimit =
+    typeof params.limit === "number" || typeof params.limit === "string"
+      ? resolveListLimit(params.limit, 12)
+      : null;
+
   if (isMockedE2ETestMode()) {
-    return getMockStudentDiarySummaries(
+    const allEntries = getMockStudentDiarySummaries(
       params.studentId,
       params.studentPlacement ?? undefined,
       params.filters,
     );
+
+    const subjectOptions = Array.from(
+      new Map(
+        allEntries
+          .filter((entry) => entry.subject?._id)
+          .map((entry) => [
+            String(entry.subject!._id),
+            {
+              _id: String(entry.subject!._id),
+              name: String(entry.subject?.name || "").trim() || String(entry.subject!._id),
+            },
+          ]),
+      ).values(),
+    ).sort((left, right) => left.name.localeCompare(right.name));
+    const total = allEntries.length;
+
+    if (!requestedLimit) {
+      return {
+        entries: allEntries,
+        total,
+        page: 1,
+        pages: 1,
+        limit: Math.max(total, 1),
+        subjectOptions,
+      } satisfies StudentDiaryListResult;
+    }
+
+    const pages = Math.max(1, Math.ceil(total / requestedLimit));
+    const page = Math.min(requestedPage, pages);
+
+    return {
+      entries: allEntries.slice((page - 1) * requestedLimit, page * requestedLimit),
+      total,
+      page,
+      pages,
+      limit: requestedLimit,
+      subjectOptions,
+    } satisfies StudentDiaryListResult;
   }
 
   await connectDB();
@@ -840,7 +958,14 @@ export async function listStudentDiaryEntries(params: {
   ).trim();
 
   if (!classId) {
-    return [] as StudentDiarySummary[];
+    return {
+      entries: [],
+      total: 0,
+      page: 1,
+      pages: 1,
+      limit: requestedLimit || 1,
+      subjectOptions: [],
+    } satisfies StudentDiaryListResult;
   }
 
   const {
@@ -860,28 +985,29 @@ export async function listStudentDiaryEntries(params: {
   ]);
 
   const filters = params.filters || {};
-  const query: Record<string, any> = {
-    class: classId,
-    status: "published",
-    ...buildArchiveFilter(false),
-  };
+  const subjectOptionsQuery = buildStudentDiaryListQuery({
+    classId,
+    academicSectionId,
+    filters,
+    includeSubjectFilter: false,
+  });
+  const listQuery = buildStudentDiaryListQuery({
+    classId,
+    academicSectionId,
+    filters,
+    includeSubjectFilter: true,
+  });
 
-  if (filters.entryDate) {
-    query.entryDate = String(filters.entryDate).trim();
-  }
+  const [total, matchingSubjectIds] = await Promise.all([
+    DiaryEntryModel.countDocuments(listQuery),
+    DiaryEntryModel.distinct("subject", subjectOptionsQuery),
+  ]);
 
-  if (filters.subjectId && mongoose.Types.ObjectId.isValid(filters.subjectId)) {
-    query.subject = filters.subjectId;
-  }
+  const limit = requestedLimit || Math.max(total, 1);
+  const pages = requestedLimit ? Math.max(1, Math.ceil(total / limit)) : 1;
+  const page = requestedLimit ? Math.min(requestedPage, pages) : 1;
 
-  if (academicSectionId && mongoose.Types.ObjectId.isValid(academicSectionId)) {
-    query.$or = [
-      { assignedAcademicSections: { $size: 0 } },
-      { assignedAcademicSections: academicSectionId },
-    ];
-  }
-
-  const entries = await DiaryEntryModel.find(query)
+  let entriesQuery = DiaryEntryModel.find(listQuery)
     .select(
       "_id title entryDate class assignedAcademicSections subject lessonSummaryHtml homeworkHtml teacherNoteHtml resources publishedAt createdBy updatedAt",
     )
@@ -901,18 +1027,28 @@ export async function listStudentDiaryEntries(params: {
     .sort({ entryDate: -1, updatedAt: -1, title: 1 })
     .lean();
 
-  const filteredEntries = (Array.isArray(entries) ? entries : []).filter((entry) =>
-    isStudentInDiaryScope(entry, {
-      classId,
-      academicSectionId,
-    }),
-  );
+  if (requestedLimit) {
+    entriesQuery = entriesQuery.skip((page - 1) * limit).limit(limit);
+  }
+
+  const [entries, subjects] = await Promise.all([
+    entriesQuery,
+    Array.isArray(matchingSubjectIds) && matchingSubjectIds.length > 0
+      ? SubjectModel.find({
+          _id: { $in: matchingSubjectIds },
+          ...buildArchiveFilter(false),
+        })
+          .select("_id name")
+          .sort({ name: 1, _id: 1 })
+          .lean()
+      : [],
+  ]);
 
   const stateDocs =
-    filteredEntries.length > 0
+    entries.length > 0
       ? await DiaryStudentStateModel.find({
           entry: {
-            $in: filteredEntries.map((entry) => toDiaryId(entry?._id)),
+            $in: entries.map((entry) => toDiaryId(entry?._id)),
           },
           student: params.studentId,
         })
@@ -924,12 +1060,28 @@ export async function listStudentDiaryEntries(params: {
     stateDocs.map((stateDoc: any) => [toDiaryId(stateDoc?.entry), stateDoc]),
   );
 
-  return filteredEntries.map((entry) =>
+  const serializedEntries = entries.map((entry) =>
     serializeStudentDiarySummary(
       entry,
       mapDiaryStateSnapshot(stateByEntryId.get(toDiaryId(entry?._id))),
     ),
   );
+
+  const subjectOptions = (Array.isArray(subjects) ? subjects : [])
+    .map((subject: any) => ({
+      _id: toDiaryId(subject?._id),
+      name: String(subject?.name || "").trim(),
+    }))
+    .filter((subject) => Boolean(subject._id) && Boolean(subject.name));
+
+  return {
+    entries: serializedEntries,
+    total,
+    page,
+    pages,
+    limit,
+    subjectOptions,
+  } satisfies StudentDiaryListResult;
 }
 
 export async function getStudentDiaryDetail(params: {

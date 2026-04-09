@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import StudentPortalNav from "@/components/student/StudentPortalNav";
+import StudentPortalChrome from "@/components/student/StudentPortalChrome";
 import StudentSessionMonitor from "@/components/student/StudentSessionMonitor";
 
 type StudentLayoutProps = {
@@ -11,9 +11,7 @@ export default function StudentLayout({ children }: StudentLayoutProps) {
   return (
     <>
       <StudentSessionMonitor />
-      <div className="app-student-portal-nav">
-        <StudentPortalNav />
-      </div>
+      <StudentPortalChrome />
       {children}
     </>
   );

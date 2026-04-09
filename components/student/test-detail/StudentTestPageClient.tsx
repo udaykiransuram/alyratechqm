@@ -18,6 +18,9 @@ const StudentTestLockedView = dynamic(
 const StudentTestPreStartView = dynamic(
   () => import("./StudentTestPreStartView"),
 );
+const StudentTestFullscreenGateView = dynamic(
+  () => import("./StudentTestFullscreenGateView"),
+);
 const StudentTestActiveAttemptView = dynamic(
   () => import("./StudentTestActiveAttemptView"),
 );
@@ -126,41 +129,56 @@ export default function StudentTestPageClient({
   }
 
   return (
-    <StudentTestActiveAttemptView
-      examContainerRef={runtime.examContainerRef}
-      paper={runtime.paper}
-      paperSubjects={runtime.paperSubjects}
-      paperSubjectLabel={runtime.paperSubjectLabel}
-      paperClassLabel={runtime.paperClassLabel}
-      deadlineAt={runtime.deadlineAt}
-      answeredCount={runtime.answeredCount}
-      questionList={runtime.questionList}
-      currentIndex={runtime.currentIndex}
-      saveStatusLabel={runtime.saveStatusLabel}
-      isSaving={runtime.isSaving}
-      isSubmitting={runtime.isSubmitting}
-      isFullscreen={runtime.isFullscreen}
-      submitDialogOpen={runtime.submitDialogOpen}
-      setSubmitDialogOpen={runtime.setSubmitDialogOpen}
-      unansweredCount={runtime.unansweredCount}
-      hasManualReviewQuestions={runtime.hasManualReviewQuestions}
-      connectionNotice={runtime.connectionNotice}
-      recoveryNotice={runtime.recoveryNotice}
-      pendingSubmitRetry={runtime.pendingSubmitRetry}
-      saveRetryPending={runtime.saveRetryPending}
-      actionError={runtime.actionError}
-      answeredQuestionIds={runtime.answeredQuestionIds}
-      currentQuestion={runtime.currentQuestion}
-      currentAnswer={runtime.currentAnswer}
-      onSaveAttempt={runtime.saveAttempt}
-      onToggleFullscreen={runtime.toggleFullscreen}
-      onSubmitAttempt={runtime.submitAttempt}
-      onJumpToQuestion={runtime.jumpToQuestion}
-      onUpdateMultipleChoice={runtime.updateMultipleChoice}
-      onUpdateSingleChoice={runtime.updateSingleChoice}
-      onUpdateDescriptiveAnswer={runtime.updateDescriptiveAnswer}
-      onUpdateMatrixSelection={runtime.updateMatrixSelection}
-      onClearCurrentAnswer={runtime.clearCurrentAnswer}
-    />
+    <div ref={runtime.examContainerRef} className="min-h-[100dvh]">
+      {runtime.isExamLocked ? (
+        <StudentTestFullscreenGateView
+          paperTitle={runtime.paper.title}
+          testsHref={testsHref}
+          backLabel={backLabel}
+          actionError={runtime.actionError}
+          connectionNotice={runtime.connectionNotice}
+          recoveryNotice={runtime.recoveryNotice}
+          onResumeFullscreen={runtime.resumeFullscreenLock}
+        />
+      ) : (
+        <StudentTestActiveAttemptView
+          dialogContainer={runtime.examContainerRef.current}
+          paper={runtime.paper}
+          paperSubjects={runtime.paperSubjects}
+          paperSubjectLabel={runtime.paperSubjectLabel}
+          paperClassLabel={runtime.paperClassLabel}
+          deadlineAt={runtime.deadlineAt}
+          answeredCount={runtime.answeredCount}
+          questionList={runtime.questionList}
+          currentIndex={runtime.currentIndex}
+          saveStatusLabel={runtime.saveStatusLabel}
+          isSaving={runtime.isSaving}
+          isSubmitting={runtime.isSubmitting}
+          isFullscreen={runtime.isFullscreen}
+          isExamLocked={runtime.isExamLocked}
+          submitDialogOpen={runtime.submitDialogOpen}
+          setSubmitDialogOpen={runtime.setSubmitDialogOpen}
+          unansweredCount={runtime.unansweredCount}
+          hasManualReviewQuestions={runtime.hasManualReviewQuestions}
+          connectionNotice={runtime.connectionNotice}
+          recoveryNotice={runtime.recoveryNotice}
+          pendingSubmitRetry={runtime.pendingSubmitRetry}
+          saveRetryPending={runtime.saveRetryPending}
+          actionError={runtime.actionError}
+          answeredQuestionIds={runtime.answeredQuestionIds}
+          currentQuestion={runtime.currentQuestion}
+          currentAnswer={runtime.currentAnswer}
+          onSaveAttempt={runtime.saveAttempt}
+          onToggleFullscreen={runtime.toggleFullscreen}
+          onSubmitAttempt={runtime.submitAttempt}
+          onJumpToQuestion={runtime.jumpToQuestion}
+          onUpdateMultipleChoice={runtime.updateMultipleChoice}
+          onUpdateSingleChoice={runtime.updateSingleChoice}
+          onUpdateDescriptiveAnswer={runtime.updateDescriptiveAnswer}
+          onUpdateMatrixSelection={runtime.updateMatrixSelection}
+          onClearCurrentAnswer={runtime.clearCurrentAnswer}
+        />
+      )}
+    </div>
   );
 }

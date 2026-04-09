@@ -302,6 +302,37 @@ export type StudentCourseSummary = {
   metadata: CourseMetadata;
 };
 
+export type StudentCourseListFilters = {
+  classId?: string;
+  sectionId?: string;
+  subjectId?: string;
+  query?: string;
+};
+
+export type StudentCourseListOptions = {
+  classes: CourseClassSummary[];
+  sections: CourseScopeSection[];
+  subjects: CourseSubjectSummary[];
+};
+
+export type StudentCourseListStats = {
+  total: number;
+  inProgress: number;
+  completed: number;
+  requiredAssessments: number;
+};
+
+export type StudentCourseListResult = {
+  items: StudentCourseSummary[];
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+  filters: StudentCourseListFilters;
+  options: StudentCourseListOptions;
+  stats: StudentCourseListStats;
+};
+
 export type StudentCourseBlockState = {
   isLocked: boolean;
   isCompleted: boolean;

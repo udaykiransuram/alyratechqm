@@ -1,9 +1,9 @@
 import { getTodayDiaryEntryDate } from "@/lib/diary/shared";
 import { connectDB } from "@/lib/db";
-import { getTenantModels } from "@/lib/db-tenant";
 import { listStudentDiaryEntries } from "@/lib/server/diary";
 import { listStudentCourses } from "@/lib/server/student-courses";
 import { getCachedStudentDashboardData } from "@/lib/server/student-dashboard-cache";
+import { getStudentNotificationSnapshot } from "@/lib/server/student-notifications";
 import { listStudentTestsData } from "@/lib/server/student-tests";
 
 export type StudentDashboardData = {
@@ -132,10 +132,7 @@ export async function getStudentDashboardData(params: {
       const now = new Date();
       const diaryDate = getTodayDiaryEntryDate();
       const studentPlacement = params.studentPlacement || {};
-      const { StudentNotification: StudentNotificationModel } =
-        await getTenantModels(params.schoolKey, ["StudentNotification"]);
-
-      const [tests, courses, diaryEntries, notifications, unreadCount] =
+      const [tests, courses, diaryEntries, notificationSnapshot] =
         await Promise.all([
           listStudentTestsData({
             schoolKey: params.schoolKey,
@@ -157,14 +154,10 @@ export async function getStudentDashboardData(params: {
               entryDate: diaryDate,
             },
           }),
-          StudentNotificationModel.find({ studentId: params.studentId })
-            .sort({ createdAt: -1 })
-            .limit(6)
-            .select("type title message linkUrl createdAt readAt")
-            .lean(),
-          StudentNotificationModel.countDocuments({
+          getStudentNotificationSnapshot({
+            schoolKey: params.schoolKey,
             studentId: params.studentId,
-            readAt: null,
+            limit: 6,
           }),
         ]);
 
@@ -241,18 +234,18 @@ export async function getStudentDashboardData(params: {
           })),
         },
         notifications: {
-          unreadCount: Number(unreadCount || 0),
-          items: (Array.isArray(notifications) ? notifications : []).map(
-            (item: any) => ({
-              id: String(item?._id || ""),
-              type: String(item?.type || ""),
-              title: String(item?.title || ""),
-              message: String(item?.message || ""),
-              linkUrl: String(item?.linkUrl || ""),
-              createdAt: toIsoOrNull(item?.createdAt),
-              readAt: toIsoOrNull(item?.readAt),
-            }),
-          ),
+          unreadCount: Number(notificationSnapshot?.unreadCount || 0),
+          items: Array.isArray(notificationSnapshot?.notifications)
+            ? notificationSnapshot.notifications.map((item) => ({
+                id: String(item?.id || ""),
+                type: String(item?.type || ""),
+                title: String(item?.title || ""),
+                message: String(item?.message || ""),
+                linkUrl: String(item?.linkUrl || ""),
+                createdAt: toIsoOrNull(item?.createdAt),
+                readAt: toIsoOrNull(item?.readAt),
+              }))
+            : [],
         },
       } satisfies StudentDashboardData;
     },

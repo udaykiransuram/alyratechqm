@@ -7,6 +7,7 @@ import { STUDENT_SESSION_HEARTBEAT_INTERVAL_MS } from "@/lib/student-session";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 const studentHeartbeatDisabled = isMockedE2ETestMode();
+const STUDENT_SESSION_VISIBILITY_RECHECK_MS = 15_000;
 
 function buildStudentSessionExpiredCallbackUrl() {
   if (typeof window === "undefined") {
@@ -23,6 +24,7 @@ function buildStudentSessionExpiredCallbackUrl() {
 export default function StudentSessionMonitor() {
   const isSigningOutRef = useRef(false);
   const heartbeatInFlightRef = useRef(false);
+  const lastHeartbeatAtRef = useRef(0);
 
   useEffect(() => {
     if (studentHeartbeatDisabled) {
@@ -31,11 +33,22 @@ export default function StudentSessionMonitor() {
 
     let disposed = false;
 
-    async function pingStudentSession() {
+    async function pingStudentSession(options?: { force?: boolean }) {
       if (disposed || isSigningOutRef.current || heartbeatInFlightRef.current) {
         return;
       }
 
+      const force = Boolean(options?.force);
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+
+      const now = Date.now();
+      if (!force && now - lastHeartbeatAtRef.current < STUDENT_SESSION_VISIBILITY_RECHECK_MS) {
+        return;
+      }
+
+      lastHeartbeatAtRef.current = now;
       heartbeatInFlightRef.current = true;
       try {
         const response = await fetch("/api/student/session/heartbeat", {
@@ -61,29 +74,25 @@ export default function StudentSessionMonitor() {
       }
     }
 
-    void pingStudentSession();
+    if (typeof document === "undefined" || document.visibilityState === "visible") {
+      void pingStudentSession({ force: true });
+    }
 
     const interval = window.setInterval(() => {
       void pingStudentSession();
     }, STUDENT_SESSION_HEARTBEAT_INTERVAL_MS);
 
-    const handleFocus = () => {
-      void pingStudentSession();
-    };
-
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        void pingStudentSession();
+        void pingStudentSession({ force: true });
       }
     };
 
-    window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       disposed = true;
       window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);

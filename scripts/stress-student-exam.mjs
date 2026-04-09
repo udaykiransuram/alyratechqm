@@ -26,6 +26,8 @@ function printHelp() {
       '',
       'Options:',
       '  --base=<url>                  App base URL (default: http://127.0.0.1:3000)',
+      '  --runner-count=<n>            Number of distributed runners sharing the same students file (default: 1)',
+      '  --runner-index=<n>            Zero-based runner shard index (default: 0)',
       '  --concurrency=<n>             Concurrent student flows (default: 5)',
       '  --rounds=<n>                  Save rounds before final submit (default: 3)',
       '  --round-delay-ms=<ms>         Delay between save rounds per student (default: 400)',
@@ -85,6 +87,16 @@ function parseNonNegativeInteger(value, fallback) {
     throw new Error(`Invalid non-negative integer value: ${value}`);
   }
   return Math.floor(parsed);
+}
+
+function assignStudentsToRunner(students, runnerCount, runnerIndex) {
+  if (runnerCount <= 1) {
+    return students;
+  }
+
+  const shardSize = Math.ceil(students.length / runnerCount);
+  const start = shardSize * runnerIndex;
+  return students.slice(start, start + shardSize);
 }
 
 function sleep(ms) {
@@ -221,6 +233,7 @@ async function loadStudents(filePath) {
       identifier,
       password,
       label,
+      sourceIndex: index,
     };
   });
 }
@@ -963,6 +976,8 @@ async function main() {
   const schoolKey = String(args.school || '').trim().toLowerCase();
   const paperId = String(args.paper || '').trim();
   const studentsFile = String(args.students || '').trim();
+  const runnerCount = parsePositiveInteger(args['runner-count'], 1);
+  const runnerIndex = parseNonNegativeInteger(args['runner-index'], 0);
   const concurrency = parsePositiveInteger(args.concurrency, 5);
   const rounds = parsePositiveInteger(args.rounds, 3);
   const roundDelayMs = parseNonNegativeInteger(args['round-delay-ms'], 400);
@@ -979,8 +994,24 @@ async function main() {
     throw new Error('Missing required --school, --paper, or --students argument.');
   }
 
-  const students = await loadStudents(studentsFile);
+  if (runnerIndex >= runnerCount) {
+    throw new Error(
+      `--runner-index must be between 0 and ${runnerCount - 1} for runner-count=${runnerCount}.`,
+    );
+  }
+
+  const allStudents = await loadStudents(studentsFile);
+  const students = assignStudentsToRunner(allStudents, runnerCount, runnerIndex);
   if (students.length === 0) {
+    if (allStudents.length === 0) {
+      throw new Error('Student list is empty.');
+    }
+    throw new Error(
+      `Runner shard ${runnerIndex + 1}/${runnerCount} has no assigned students. Increase the student pool or reduce runner-count.`,
+    );
+  }
+
+  if (allStudents.length === 0) {
     throw new Error('Student list is empty.');
   }
 
@@ -990,8 +1021,10 @@ async function main() {
       `  base: ${baseUrl}`,
       `  school: ${schoolKey}`,
       `  paper: ${paperId}`,
-      `  students: ${students.length}`,
+      `  runner: ${runnerIndex + 1}/${runnerCount}`,
+      `  assigned students: ${students.length}/${allStudents.length}`,
       `  concurrency: ${Math.min(concurrency, students.length)}`,
+      `  effective total concurrency: ${Math.min(concurrency, students.length) * runnerCount}`,
       `  rounds: ${rounds}`,
       `  submit: ${submitEnabled ? 'yes' : 'no'}`,
       `  heartbeat: ${heartbeatEnabled ? 'yes' : 'no'}`,
@@ -1024,7 +1057,8 @@ async function main() {
         schoolKey,
         paperId,
         student,
-        studentIndex,
+        studentIndex:
+          typeof student?.sourceIndex === 'number' ? student.sourceIndex : studentIndex,
         rounds,
         roundDelayMs,
         jitterMs,
@@ -1045,6 +1079,7 @@ async function main() {
   const requestSummary = summarizeRequestEvents(metrics);
   const summary = {
     students: students.length,
+    totalStudentsInFile: allStudents.length,
     succeeded: succeeded.length,
     failed: failed.length,
     cleanupWarnings: cleanupWarnings.length,
@@ -1091,6 +1126,9 @@ async function main() {
             schoolKey,
             paperId,
             students: students.length,
+            totalStudentsInFile: allStudents.length,
+            runnerCount,
+            runnerIndex,
             concurrency: Math.min(concurrency, students.length),
             rounds,
             roundDelayMs,

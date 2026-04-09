@@ -2,9 +2,10 @@
 
 import { Bell, Layers } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import { shouldHideStudentChrome } from "@/components/student/student-route-chrome";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { fetchApiJson } from "@/lib/client/api";
@@ -21,27 +22,26 @@ type StudentNotificationItem = {
   readAt: string | null;
 };
 
-function isTestsRoute(pathname: string) {
-  return pathname === "/student/tests" || pathname.startsWith("/student/tests/");
-}
+type StudentHeaderProps = {
+  initialUnreadCount?: number;
+};
 
-function isCoursesRoute(pathname: string) {
-  return pathname === "/student/courses" || pathname.startsWith("/student/courses/");
-}
-
-function isDiaryRoute(pathname: string) {
-  return pathname === "/student/diary" || pathname.startsWith("/student/diary/");
-}
-
-function isAccountRoute(pathname: string) {
-  return pathname === "/student/account" || pathname.startsWith("/student/account/");
-}
-
-export default function StudentHeader() {
-  const pathname = usePathname() || "/student/tests";
+export default function StudentHeader({
+  initialUnreadCount = 0,
+}: StudentHeaderProps) {
+  const pathname = usePathname();
   const [notifications, setNotifications] = useState<StudentNotificationItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(
+    Number.isFinite(initialUnreadCount) ? Math.max(0, Number(initialUnreadCount)) : 0,
+  );
   const [isLoading, setIsLoading] = useState(false);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [hasLoadedNotifications, setHasLoadedNotifications] = useState(false);
+  const isPopoverOpenRef = useRef(false);
+  const hasLoadedNotificationsRef = useRef(false);
+  const unreadRefreshTimeoutRef = useRef<number | null>(null);
+  const unreadCountRequestInFlightRef = useRef(false);
+  const notificationsRequestInFlightRef = useRef(false);
 
   async function handleSignOut() {
     const targetUrl = new URL("/auth/signin", window.location.origin);
@@ -56,33 +56,51 @@ export default function StudentHeader() {
     return unreadCount > 9 ? "9+" : String(unreadCount);
   }, [unreadCount]);
 
-  const headerLinks = [
-    { href: "/student", label: "Home", active: pathname === "/student" },
-    { href: "/student/tests", label: "Tests", active: isTestsRoute(pathname) },
-    { href: "/student/courses", label: "Courses", active: isCoursesRoute(pathname) },
-    { href: "/student/diary", label: "Diary", active: isDiaryRoute(pathname) },
-    { href: "/student/account", label: "Account", active: isAccountRoute(pathname) },
-  ];
+  async function loadUnreadCount() {
+    if (unreadCountRequestInFlightRef.current) {
+      return;
+    }
 
-  const navLinkClass = (active: boolean) =>
-    cn("app-student-header-link", active && "app-student-header-link-active");
+    unreadCountRequestInFlightRef.current = true;
+    try {
+      const response = await fetchApiJson<{
+        success?: boolean;
+        unreadCount?: number;
+      }>("/api/student/notifications?mode=unread", { method: "GET" });
+
+      if (response?.success) {
+        setUnreadCount(Number(response.unreadCount || 0));
+      }
+    } catch (error) {
+      console.error("Failed to load unread notifications count:", error);
+    } finally {
+      unreadCountRequestInFlightRef.current = false;
+    }
+  }
 
   async function loadNotifications() {
+    if (notificationsRequestInFlightRef.current) {
+      return;
+    }
+
+    notificationsRequestInFlightRef.current = true;
     setIsLoading(true);
     try {
       const response = await fetchApiJson<{
         success?: boolean;
         notifications?: StudentNotificationItem[];
         unreadCount?: number;
-      }>("/api/student/notifications", { method: "GET" });
+      }>("/api/student/notifications?limit=20", { method: "GET" });
 
       if (response?.success) {
         setNotifications(Array.isArray(response.notifications) ? response.notifications : []);
         setUnreadCount(Number(response.unreadCount || 0));
+        setHasLoadedNotifications(true);
       }
     } catch (error) {
       console.error("Failed to load notifications:", error);
     } finally {
+      notificationsRequestInFlightRef.current = false;
       setIsLoading(false);
     }
   }
@@ -122,35 +140,61 @@ export default function StudentHeader() {
   }
 
   useEffect(() => {
-    void loadNotifications();
+    isPopoverOpenRef.current = isPopoverOpen;
+  }, [isPopoverOpen]);
+
+  useEffect(() => {
+    hasLoadedNotificationsRef.current = hasLoadedNotifications;
+  }, [hasLoadedNotifications]);
+
+  useEffect(() => {
+    const clearScheduledUnreadRefresh = () => {
+      if (unreadRefreshTimeoutRef.current !== null) {
+        window.clearTimeout(unreadRefreshTimeoutRef.current);
+        unreadRefreshTimeoutRef.current = null;
+      }
+    };
+
+    const scheduleUnreadRefresh = () => {
+      clearScheduledUnreadRefresh();
+      unreadRefreshTimeoutRef.current = window.setTimeout(() => {
+        unreadRefreshTimeoutRef.current = null;
+        void loadUnreadCount();
+      }, 500);
+    };
 
     const source = new EventSource("/api/student/notifications/stream");
 
     const handleCreated = () => {
-      void loadNotifications();
-    };
-    const handleConnected = () => {
-      void loadNotifications();
+      if (isPopoverOpenRef.current && hasLoadedNotificationsRef.current) {
+        void loadNotifications();
+        return;
+      }
+
+      scheduleUnreadRefresh();
     };
 
     source.addEventListener("notification.created", handleCreated);
-    source.addEventListener("connected", handleConnected);
     source.onerror = () => {
       console.warn("Student notification stream disconnected; waiting for reconnect.");
     };
 
     return () => {
+      clearScheduledUnreadRefresh();
       source.removeEventListener("notification.created", handleCreated);
-      source.removeEventListener("connected", handleConnected);
       source.close();
     };
   }, []);
+
+  if (shouldHideStudentChrome(pathname)) {
+    return null;
+  }
 
   return (
     <header className="app-nav-shell fixed inset-x-0 top-0 z-50 h-[var(--app-header-height)] border-b">
       <div className="flex h-full items-center justify-between gap-3 px-3 lg:px-5">
         <AppPrefetchLink
-          href="/student/tests"
+          href="/student"
           className="app-nav-brand app-student-header-brand flex min-w-0 items-center gap-3 px-2 py-1.5"
         >
           <div className="app-nav-logo flex h-10 w-10 items-center justify-center rounded-[var(--app-radius-md)]">
@@ -164,24 +208,14 @@ export default function StudentHeader() {
         </AppPrefetchLink>
 
         <div className="flex items-center gap-2">
-          <div className="app-student-header-links">
-            {headerLinks.map((link) => (
-              <AppPrefetchLink
-                key={link.href}
-                href={link.href}
-                className={navLinkClass(link.active)}
-                aria-current={link.active ? "page" : undefined}
-              >
-                {link.label}
-              </AppPrefetchLink>
-            ))}
-          </div>
-
-          <Popover onOpenChange={(open) => {
-            if (open) {
-              void loadNotifications();
-            }
-          }}>
+          <Popover
+            onOpenChange={(open) => {
+              setIsPopoverOpen(open);
+              if (open) {
+                void loadNotifications();
+              }
+            }}
+          >
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
@@ -218,6 +252,10 @@ export default function StudentHeader() {
               <div className="student-notification-list">
                 {isLoading ? (
                   <p className="student-notification-empty">Loading notifications…</p>
+                ) : !hasLoadedNotifications ? (
+                  <p className="student-notification-empty">
+                    Open notifications to load latest updates.
+                  </p>
                 ) : notifications.length === 0 ? (
                   <p className="student-notification-empty">
                     No notifications yet.

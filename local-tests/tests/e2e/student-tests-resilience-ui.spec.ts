@@ -220,7 +220,219 @@ async function routeRunnerApis(
   });
 }
 
+async function installFullscreenMock(
+  page: Page,
+  options: { autoGrant?: boolean } = {},
+) {
+  const { autoGrant = true } = options;
+
+  await page.addInitScript((config: { autoGrant: boolean }) => {
+    let fullscreenElement: Element | null = null;
+    let requestsAllowed = config.autoGrant;
+
+    const dispatchFullscreenChange = () => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    };
+
+    Object.defineProperty(document, "fullscreenEnabled", {
+      configurable: true,
+      get: () => true,
+    });
+
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+
+    Object.defineProperty(Element.prototype, "requestFullscreen", {
+      configurable: true,
+      value: async function requestFullscreenMock() {
+        if (!requestsAllowed) {
+          return;
+        }
+        fullscreenElement = this;
+        dispatchFullscreenChange();
+      },
+    });
+
+    Object.defineProperty(Document.prototype, "exitFullscreen", {
+      configurable: true,
+      value: async function exitFullscreenMock() {
+        fullscreenElement = null;
+        dispatchFullscreenChange();
+      },
+    });
+
+    (window as Window & {
+      __examFullscreenMock?: {
+        exit: () => void;
+        lock: () => void;
+        unlock: () => void;
+        active: () => boolean;
+        allow: () => void;
+      };
+    }).__examFullscreenMock = {
+      exit() {
+        fullscreenElement = null;
+        dispatchFullscreenChange();
+      },
+      lock() {
+        window.dispatchEvent(new Event("blur"));
+      },
+      unlock() {
+        window.dispatchEvent(new Event("focus"));
+      },
+      active() {
+        return Boolean(fullscreenElement);
+      },
+      allow() {
+        requestsAllowed = true;
+      },
+    };
+  }, { autoGrant });
+}
+
 test.describe("Student test UI resilience (network mocked) @desktop", () => {
+  test("keeps a resumed attempt locked until fullscreen is restored", async ({ page }) => {
+    await installFullscreenMock(page, { autoGrant: false });
+    await setStudentSession(page);
+
+    const paper = buildPaper();
+    const attempt = buildAttempt();
+
+    await routeRunnerApis(page, {
+      paper,
+      getAttempt: () => attempt,
+    });
+
+    await navigateToAppRoute(page, "/student/tests/paper-1");
+
+    await expect(page.getByLabel("Notifications")).toHaveCount(0);
+    await expect(
+      page.getByLabel("Student portal navigation"),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Fullscreen required" }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Save" })).toHaveCount(0);
+
+    await page.evaluate(() => {
+      (window as Window & {
+        __examFullscreenMock?: { allow: () => void };
+      }).__examFullscreenMock?.allow();
+    });
+
+    await page.getByRole("button", { name: "Resume in fullscreen" }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "Fullscreen required" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+  });
+
+  test("resumes the test after re-entering fullscreen", async ({ page }) => {
+    await installFullscreenMock(page);
+    await setStudentSession(page);
+
+    const paper = buildPaper();
+    const attempt = buildAttempt();
+
+    await routeRunnerApis(page, {
+      paper,
+      getAttempt: () => attempt,
+    });
+
+    await navigateToAppRoute(page, "/student/tests/paper-1");
+
+    await expect(page.getByRole("button", { name: "Save" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.evaluate(() => {
+      (window as Window & {
+        __examFullscreenMock?: { exit: () => void };
+      }).__examFullscreenMock?.exit();
+    });
+
+    await expect(
+      page.getByRole("heading", { name: "Fullscreen required" }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save" })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Resume in fullscreen" }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "Fullscreen required" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          return (
+            (
+              window as Window & {
+                __examFullscreenMock?: { active: () => boolean };
+              }
+            ).__examFullscreenMock?.active() ?? false
+          );
+        }),
+      )
+      .toBe(true);
+  });
+
+  test("unlocks the test again when focus returns in fullscreen", async ({ page }) => {
+    await installFullscreenMock(page);
+    await setStudentSession(page);
+
+    const paper = buildPaper();
+    const attempt = buildAttempt();
+
+    await routeRunnerApis(page, {
+      paper,
+      getAttempt: () => attempt,
+    });
+
+    await navigateToAppRoute(page, "/student/tests/paper-1");
+
+    await expect(page.getByRole("button", { name: "Save" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.evaluate(async () => {
+      const examShell = document.querySelector(".app-exam-focus-shell");
+      if (!(examShell instanceof HTMLElement)) {
+        throw new Error("Exam shell not found");
+      }
+
+      await examShell.requestFullscreen();
+    });
+
+    await expect(
+      page.getByRole("heading", { name: "Fullscreen required" }),
+    ).toHaveCount(0);
+
+    await page.evaluate(() => {
+      (window as Window & {
+        __examFullscreenMock?: { lock: () => void };
+      }).__examFullscreenMock?.lock();
+    });
+
+    await expect(
+      page.getByRole("heading", { name: "Fullscreen required" }),
+    ).toBeVisible();
+
+    await page.evaluate(() => {
+      (window as Window & {
+        __examFullscreenMock?: { unlock: () => void };
+      }).__examFullscreenMock?.unlock();
+    });
+
+    await expect(
+      page.getByRole("heading", { name: "Fullscreen required" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+  });
+
   test("shows clear saving feedback while a slow save is in flight", async ({ page }) => {
     await setStudentSession(page);
 

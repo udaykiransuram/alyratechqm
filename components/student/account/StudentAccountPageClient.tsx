@@ -554,6 +554,7 @@ export default function StudentAccountPageClient({
                               relatedApiPrefetches={[
                                 `/api/analytics/student-tag-report/${responseId}?groupFields=1`,
                               ]}
+                              prefetchOnViewport={false}
                             >
                               Open Report
                             </AppPrefetchLink>

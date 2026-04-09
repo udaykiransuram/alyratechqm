@@ -16,6 +16,7 @@ import type {
   StudentNotificationType,
 } from "@/models/StudentNotification";
 import StudentNotificationJob from "@/models/StudentNotificationJob";
+import mongoose from "mongoose";
 
 type QueueStudentNotificationJobInput = {
   schoolKey: string;
@@ -29,6 +30,129 @@ type QueueStudentNotificationJobInput = {
   assignedAcademicSections?: unknown[];
   studentIds?: string[];
 };
+
+export type StudentNotificationSummaryItem = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  linkUrl: string;
+  createdAt: string | null;
+  readAt: string | null;
+};
+
+export type StudentNotificationSnapshot = {
+  unreadCount: number;
+  notifications: StudentNotificationSummaryItem[];
+};
+
+const DEFAULT_STUDENT_NOTIFICATION_LIMIT = 20;
+const MAX_STUDENT_NOTIFICATION_LIMIT = 50;
+
+function normalizeStudentNotificationLimit(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_STUDENT_NOTIFICATION_LIMIT;
+  }
+
+  return Math.max(1, Math.min(MAX_STUDENT_NOTIFICATION_LIMIT, Math.trunc(parsed)));
+}
+
+function mapStudentNotificationSummaryItem(item: any): StudentNotificationSummaryItem {
+  return {
+    id: String(item?._id || item?.id || ""),
+    type: String(item?.type || ""),
+    title: String(item?.title || ""),
+    message: String(item?.message || ""),
+    linkUrl: String(item?.linkUrl || ""),
+    createdAt: item?.createdAt ? new Date(item.createdAt).toISOString() : null,
+    readAt: item?.readAt ? new Date(item.readAt).toISOString() : null,
+  };
+}
+
+export async function getStudentNotificationUnreadCount(params: {
+  schoolKey: string;
+  studentId: string;
+}) {
+  const schoolKey = String(params.schoolKey || "").trim();
+  const studentId = String(params.studentId || "").trim();
+  if (!schoolKey || !mongoose.Types.ObjectId.isValid(studentId)) {
+    return 0;
+  }
+
+  await connectDB();
+  const { StudentNotification: StudentNotificationModel } = await getTenantModels(
+    schoolKey,
+    ["StudentNotification"],
+  );
+
+  const unreadCount = await StudentNotificationModel.countDocuments({
+    studentId,
+    readAt: null,
+  });
+
+  return Number(unreadCount || 0);
+}
+
+export async function getStudentNotificationSnapshot(params: {
+  schoolKey: string;
+  studentId: string;
+  limit?: number;
+}): Promise<StudentNotificationSnapshot> {
+  const schoolKey = String(params.schoolKey || "").trim();
+  const studentId = String(params.studentId || "").trim();
+  if (!schoolKey || !mongoose.Types.ObjectId.isValid(studentId)) {
+    return {
+      unreadCount: 0,
+      notifications: [],
+    };
+  }
+
+  const limit = normalizeStudentNotificationLimit(params.limit);
+  await connectDB();
+  const { StudentNotification: StudentNotificationModel } = await getTenantModels(
+    schoolKey,
+    ["StudentNotification"],
+  );
+
+  const [result] = await StudentNotificationModel.aggregate([
+    {
+      $match: {
+        studentId: new mongoose.Types.ObjectId(studentId),
+      },
+    },
+    {
+      $facet: {
+        notifications: [
+          { $sort: { createdAt: -1 } },
+          { $limit: limit },
+          {
+            $project: {
+              _id: 1,
+              type: 1,
+              title: 1,
+              message: 1,
+              linkUrl: 1,
+              createdAt: 1,
+              readAt: 1,
+            },
+          },
+        ],
+        unread: [{ $match: { readAt: null } }, { $count: "count" }],
+      },
+    },
+  ]);
+
+  const unreadCount = Number(result?.unread?.[0]?.count || 0);
+  const notifications = (Array.isArray(result?.notifications) ? result.notifications : []).map(
+    mapStudentNotificationSummaryItem,
+  );
+
+  return {
+    unreadCount,
+    notifications,
+  };
+}
 
 function getStudentNotificationWorkerSecret() {
   return String(process.env.STUDENT_NOTIFICATION_WORKER_SECRET || "").trim();

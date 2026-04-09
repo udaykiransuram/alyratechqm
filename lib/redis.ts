@@ -45,10 +45,13 @@ export type RedisHealthProbeResult = {
 
 export const STUDENT_NOTIFICATION_REDIS_QUEUE = "student-notification-jobs";
 export const REPORT_DISPATCH_REDIS_QUEUE = "report-dispatch-jobs";
+export const EXAM_RUNTIME_PROJECTION_REDIS_QUEUE =
+  "exam-runtime-projection-jobs";
 
 export type RedisPartitionQueueName =
   | typeof STUDENT_NOTIFICATION_REDIS_QUEUE
-  | typeof REPORT_DISPATCH_REDIS_QUEUE;
+  | typeof REPORT_DISPATCH_REDIS_QUEUE
+  | typeof EXAM_RUNTIME_PROJECTION_REDIS_QUEUE;
 
 export type RedisPartitionQueueStats = {
   configured: boolean;
@@ -58,7 +61,13 @@ export type RedisPartitionQueueStats = {
   delayed: number;
 };
 
+export type RedisPartitionQueuePartitionCounts = {
+  ready: number;
+  delayed: number;
+};
+
 const REDIS_FAILURE_BACKOFF_MS = 30_000;
+const REDIS_FETCH_TIMEOUT_MS = 2_500;
 const STUDENT_NOTIFICATION_SIGNAL_TTL_SECONDS = 24 * 60 * 60;
 const REDIS_QUEUE_ENQUEUE_CHUNK_SIZE = 250;
 
@@ -152,6 +161,8 @@ async function runRedisCommand<T = unknown>(
   }
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REDIS_FETCH_TIMEOUT_MS);
     const response = await fetch(getRedisUrl(), {
       method: "POST",
       headers: {
@@ -159,8 +170,10 @@ async function runRedisCommand<T = unknown>(
         "Content-Type": "application/json",
       },
       cache: "no-store",
+      signal: controller.signal,
       body: JSON.stringify(command),
     });
+    clearTimeout(timeoutId);
 
     const payload = (await response.json().catch(() => ({}))) as UpstashResponse<T>;
     if (!response.ok || payload.error) {
@@ -873,6 +886,42 @@ export async function setRedisPartitionQueuePartitionActive(params: {
   }
 
   return Number(result || 0);
+}
+
+export async function getRedisPartitionQueuePartitionCounts(params: {
+  queueName: RedisPartitionQueueName;
+  partitionKey: string;
+}): Promise<RedisPartitionQueuePartitionCounts | null> {
+  const queueName = normalizePartitionQueueName(params.queueName);
+  const partitionKey = normalizePartitionQueuePartitionKey(params.partitionKey);
+
+  if (!partitionKey || !isRedisConfigured()) {
+    return null;
+  }
+
+  const counts = await runRedisEval<[number, number]>(
+    [
+      "local ready = tonumber(redis.call('LLEN', KEYS[1]) or 0)",
+      "local delayed = tonumber(redis.call('ZCARD', KEYS[2]) or 0)",
+      "return {ready, delayed}",
+    ].join("\n"),
+    [
+      buildPartitionQueueReadyKey(queueName, partitionKey),
+      buildPartitionQueueDelayedKey(queueName, partitionKey),
+    ],
+    [],
+  );
+
+  return {
+    ready:
+      Array.isArray(counts) && counts.length > 0
+        ? Number(counts[0] || 0)
+        : 0,
+    delayed:
+      Array.isArray(counts) && counts.length > 1
+        ? Number(counts[1] || 0)
+        : 0,
+  };
 }
 
 export async function getRedisPartitionQueueStats(

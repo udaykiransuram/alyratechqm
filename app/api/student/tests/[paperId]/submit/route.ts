@@ -6,7 +6,7 @@ import {
   submitStudentExamAttempt,
 } from "@/lib/exam-runtime";
 import { recordOpsFailure } from "@/lib/ops-runtime";
-import { invalidateStudentDashboardCacheForStudent } from "@/lib/server/student-dashboard-cache";
+import { scheduleStudentDashboardCacheInvalidation } from "@/lib/server/student-dashboard-cache";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,6 +17,7 @@ export async function POST(
 ) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
+    studentSessionValidationMode: "redis_strict",
   });
   if (!auth.ok) return auth.response;
 
@@ -34,10 +35,10 @@ export async function POST(
         typeof body?.baseLastSavedAt === "string" ? body.baseLastSavedAt : null,
     });
 
-    await invalidateStudentDashboardCacheForStudent(
-      auth.schoolKey,
-      auth.session.user.id,
-    );
+    scheduleStudentDashboardCacheInvalidation({
+      schoolKey: auth.schoolKey,
+      studentIds: [auth.session.user.id],
+    });
 
     return NextResponse.json(result);
   } catch (error) {

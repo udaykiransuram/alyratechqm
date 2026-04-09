@@ -94,6 +94,25 @@ function applyQuestionAnswerUpdate(
   };
 }
 
+function shouldLockExamUntilFullscreen(nextAttempt: StudentAttempt | null) {
+  const nextAttemptStarted = Boolean(nextAttempt?._id && nextAttempt?.startedAt);
+  const nextAttemptLocked =
+    nextAttempt?.status === "submitted" || nextAttempt?.status === "auto_submitted";
+
+  if (!nextAttemptStarted || nextAttemptLocked) {
+    return false;
+  }
+
+  if (typeof document === "undefined") {
+    return true;
+  }
+
+  const isVisible = document.visibilityState === "visible";
+  const hasFocus = typeof document.hasFocus === "function" ? document.hasFocus() : true;
+
+  return !isVisible || !hasFocus || !Boolean(document.fullscreenElement);
+}
+
 export function useStudentTestRuntime({
   paperId,
   initialData,
@@ -103,6 +122,8 @@ export function useStudentTestRuntime({
   const router = useRouter();
   const initialPaper = initialData?.paper || null;
   const initialAttempt = initialData?.attempt || null;
+  const initialFullscreen = false;
+  const initialExamLocked = shouldLockExamUntilFullscreen(initialAttempt);
   const initialHydration = useMemo(() => {
     const answers = buildAnswerMap(initialAttempt, initialPaper);
     const payload = buildSectionAnswersPayloadFromState(initialPaper, answers);
@@ -164,8 +185,173 @@ export function useStudentTestRuntime({
   const currentIndexRef = useRef(0);
   const isOfflineRef = useRef(false);
   const answeredQuestionIdsRef = useRef<Set<string>>(new Set());
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
+  const [isExamLocked, setIsExamLocked] = useState(initialExamLocked);
+  const isFullscreenRef = useRef(initialFullscreen);
+  const isExamLockedRef = useRef(initialExamLocked);
+  const requiresResumeRef = useRef(false);
+  const wasFullscreenRef = useRef(false);
+  const attemptLocked =
+    attempt?.status === "submitted" || attempt?.status === "auto_submitted";
+  const attemptStarted = Boolean(attempt?._id && attempt?.startedAt);
   const deferredAnswers = useDeferredValue(answers);
+
+  const setIsFullscreenIfChanged = useCallback((nextIsFullscreen: boolean) => {
+    if (isFullscreenRef.current === nextIsFullscreen) {
+      return;
+    }
+
+    isFullscreenRef.current = nextIsFullscreen;
+    setIsFullscreen(nextIsFullscreen);
+  }, []);
+
+  const setIsExamLockedIfChanged = useCallback((nextIsExamLocked: boolean) => {
+    if (isExamLockedRef.current === nextIsExamLocked) {
+      return;
+    }
+
+    isExamLockedRef.current = nextIsExamLocked;
+    setIsExamLocked(nextIsExamLocked);
+  }, []);
+
+  const computeExamLockState = useCallback(
+    (nextAttempt: StudentAttempt | null) => {
+      const nextAttemptStarted = Boolean(nextAttempt?._id && nextAttempt?.startedAt);
+      const nextAttemptLocked =
+        nextAttempt?.status === "submitted" || nextAttempt?.status === "auto_submitted";
+
+      if (!nextAttemptStarted || nextAttemptLocked) {
+        return false;
+      }
+
+      if (typeof document === "undefined") {
+        return true;
+      }
+
+      const isVisible = document.visibilityState === "visible";
+      const hasFocus =
+        typeof document.hasFocus === "function" ? document.hasFocus() : true;
+      const isNowFullscreen =
+        Boolean(document.fullscreenElement) &&
+        document.fullscreenElement === examContainerRef.current;
+
+      return !isVisible || !hasFocus || !isNowFullscreen || requiresResumeRef.current;
+    },
+    [],
+  );
+
+  const syncFullscreenLockState = useCallback(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const isNowFullscreen =
+      Boolean(document.fullscreenElement) &&
+      document.fullscreenElement === examContainerRef.current;
+    if (wasFullscreenRef.current && !isNowFullscreen) {
+      requiresResumeRef.current = true;
+    }
+    wasFullscreenRef.current = isNowFullscreen;
+    setIsFullscreenIfChanged(isNowFullscreen);
+
+    const root = document.documentElement;
+    if (attemptStarted && !attemptLocked && isNowFullscreen) {
+      root.setAttribute("data-exam-fullscreen", "true");
+    } else if (root.getAttribute("data-exam-fullscreen") === "true") {
+      root.removeAttribute("data-exam-fullscreen");
+    }
+
+    if (!attemptStarted || attemptLocked) {
+      setIsExamLockedIfChanged(false);
+      return;
+    }
+
+    const isVisible = document.visibilityState === "visible";
+    const hasFocus =
+      typeof document.hasFocus === "function" ? document.hasFocus() : true;
+    setIsExamLockedIfChanged(
+      computeExamLockState(
+        attemptStarted && !attemptLocked ? attempt : null,
+      ),
+    );
+  }, [
+    attemptLocked,
+    attemptStarted,
+    attempt,
+    computeExamLockState,
+    setIsExamLockedIfChanged,
+    setIsFullscreenIfChanged,
+  ]);
+
+  const requestFullscreenForExamInternal = useCallback(async () => {
+    if (typeof document === "undefined") {
+      return false;
+    }
+
+    if (!document.fullscreenEnabled) {
+      return false;
+    }
+
+    if (examContainerRef.current) {
+      try {
+        if (document.fullscreenElement === examContainerRef.current) {
+          syncFullscreenLockState();
+          return true;
+        }
+
+        if (
+          document.fullscreenElement &&
+          document.fullscreenElement !== examContainerRef.current
+        ) {
+          try {
+            await document.exitFullscreen();
+          } catch {}
+        }
+
+        await examContainerRef.current.requestFullscreen();
+        syncFullscreenLockState();
+        return document.fullscreenElement === examContainerRef.current;
+      } catch {
+        return false;
+      }
+    }
+
+    return false;
+  }, [syncFullscreenLockState]);
+
+  const resumeFullscreenLock = useCallback(async () => {
+    const didEnter = await requestFullscreenForExamInternal();
+    if (!didEnter || typeof document === "undefined") {
+      syncFullscreenLockState();
+      return;
+    }
+
+    const start = Date.now();
+    const waitForFullscreen = () => {
+      const isNowFullscreen =
+        Boolean(document.fullscreenElement) &&
+        document.fullscreenElement === examContainerRef.current;
+
+      if (isNowFullscreen) {
+        requiresResumeRef.current = false;
+        wasFullscreenRef.current = true;
+        syncFullscreenLockState();
+        return;
+      }
+
+      if (Date.now() - start >= 2000) {
+        syncFullscreenLockState();
+        return;
+      }
+
+      window.setTimeout(waitForFullscreen, 80);
+    };
+
+    waitForFullscreen();
+  }, [
+    requestFullscreenForExamInternal,
+    syncFullscreenLockState,
+  ]);
 
   const questionList = useMemo<StudentQuestionListItem[]>(() => {
     return (paper?.sections || []).flatMap((section) =>
@@ -237,9 +423,6 @@ export function useStudentTestRuntime({
   }, [deferredAnswers, questionList]);
   const answeredCount = answeredQuestionIds.size;
   const unansweredCount = Math.max(0, questionList.length - answeredCount);
-  const attemptLocked =
-    attempt?.status === "submitted" || attempt?.status === "auto_submitted";
-  const attemptStarted = Boolean(attempt?._id && attempt?.startedAt);
   const paperSubjects = useMemo(() => getPaperSubjects(paper), [paper]);
   const paperSubjectLabel = paperSubjects
     .map((subject) => String(subject?.name || "").trim())
@@ -361,6 +544,7 @@ export function useStudentTestRuntime({
     const nextAttemptLocked =
       nextAttempt?.status === "submitted" || nextAttempt?.status === "auto_submitted";
 
+    setIsExamLockedIfChanged(computeExamLockState(nextAttempt));
     setAttempt(nextAttempt);
     setAnswers(nextAnswers);
     answersRef.current = nextAnswers;
@@ -387,6 +571,7 @@ export function useStudentTestRuntime({
 
   function completeSubmittedFlow(nextAttempt?: StudentAttempt | null) {
     if (nextAttempt) {
+      setIsExamLockedIfChanged(computeExamLockState(nextAttempt));
       setAttempt(nextAttempt);
       setTestStatus(String(nextAttempt.status || "submitted"));
       attemptLastSavedAtRef.current = nextAttempt.lastSavedAt || null;
@@ -518,6 +703,7 @@ export function useStudentTestRuntime({
           }
         }
 
+        setIsExamLockedIfChanged(computeExamLockState(nextAttempt));
         setPaper(nextPaper);
         setAttempt(nextAttempt);
         attemptLastSavedAtRef.current = nextAttempt?.lastSavedAt || null;
@@ -574,7 +760,7 @@ export function useStudentTestRuntime({
       mounted = false;
       clearDraftPersistTimeout(draftPersistTimerRef);
     };
-  }, [paperId]);
+  }, [paperId, setIsExamLockedIfChanged]);
 
   async function runSaveAttempt(force = false) {
     if (!paper || !attemptStarted || attemptLocked || isSubmitting) {
@@ -621,6 +807,7 @@ export function useStudentTestRuntime({
             15000,
           );
           const nextAttempt = data.attempt || null;
+          setIsExamLockedIfChanged(computeExamLockState(nextAttempt));
           setAttempt(nextAttempt);
           attemptLastSavedAtRef.current = nextAttempt?.lastSavedAt || null;
           requestBaseLastSavedAt = attemptLastSavedAtRef.current;
@@ -707,6 +894,21 @@ export function useStudentTestRuntime({
   async function runSubmitAttempt(auto = false) {
     if (!paper || !attemptStarted || submitTriggeredRef.current || isSubmitting) {
       return;
+    }
+
+    if (!auto && !isFullscreenActive()) {
+      await requestFullscreenForExamInternal();
+    if (
+      typeof document === "undefined" ||
+      !document.fullscreenElement ||
+      (examContainerRef.current &&
+        document.fullscreenElement !== examContainerRef.current)
+    ) {
+      setActionError(
+        "Please enter fullscreen to submit the test. Fullscreen is required for the entire test.",
+      );
+      return;
+    }
     }
 
     submitTriggeredRef.current = true;
@@ -810,6 +1012,26 @@ export function useStudentTestRuntime({
     setRecoveryNotice(null);
 
     try {
+      if (!isFullscreenActive()) {
+        await requestFullscreenForExamInternal();
+      }
+
+      if (
+        typeof document === "undefined" ||
+        !document.fullscreenElement ||
+        (examContainerRef.current &&
+          document.fullscreenElement !== examContainerRef.current)
+      ) {
+        setActionError(
+          "Please enter fullscreen to start the test. Fullscreen is required for the entire test.",
+        );
+        return;
+      }
+
+      requiresResumeRef.current = false;
+      setIsExamLockedIfChanged(false);
+      syncFullscreenLockState();
+
       const data = await fetchApiJsonWithTimeout<any>(
         `/api/student/tests/${paperId}/attempt`,
         {
@@ -820,6 +1042,7 @@ export function useStudentTestRuntime({
       );
 
       const nextAttempt = data.attempt || null;
+      setIsExamLockedIfChanged(computeExamLockState(nextAttempt));
       setAttempt(nextAttempt);
       attemptLastSavedAtRef.current = nextAttempt?.lastSavedAt || null;
       setTestStatus(String(data.status || "in_progress"));
@@ -1056,14 +1279,83 @@ export function useStudentTestRuntime({
     }
 
     const handleFullscreenChange = () => {
-      setIsFullscreen(document.fullscreenElement === examContainerRef.current);
+      if (
+        !document.fullscreenElement ||
+        document.fullscreenElement !== examContainerRef.current
+      ) {
+        requiresResumeRef.current = true;
+        setIsExamLockedIfChanged(true);
+      }
+      syncFullscreenLockState();
     };
 
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        requiresResumeRef.current = true;
+        setIsExamLockedIfChanged(true);
+      }
+      syncFullscreenLockState();
     };
-  }, []);
+
+    const handleBlur = () => {
+      requiresResumeRef.current = true;
+      setIsExamLockedIfChanged(true);
+      syncFullscreenLockState();
+    };
+
+    const handleFocus = () => {
+      syncFullscreenLockState();
+    };
+
+    const handlePageHide = () => {
+      requiresResumeRef.current = true;
+      setIsExamLockedIfChanged(true);
+      syncFullscreenLockState();
+    };
+
+    const handlePageShow = () => {
+      syncFullscreenLockState();
+    };
+
+    const handleWindowResize = () => {
+      syncFullscreenLockState();
+    };
+
+    syncFullscreenLockState();
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("resize", handleWindowResize);
+
+    const intervalId = window.setInterval(() => {
+      const isVisible = document.visibilityState === "visible";
+      const hasFocus =
+        typeof document.hasFocus === "function" ? document.hasFocus() : true;
+      if (!isVisible || !hasFocus) {
+        requiresResumeRef.current = true;
+        setIsExamLockedIfChanged(true);
+      }
+      syncFullscreenLockState();
+    }, 120);
+
+    return () => {
+      const root = document.documentElement;
+      if (root.getAttribute("data-exam-fullscreen") === "true") {
+        root.removeAttribute("data-exam-fullscreen");
+      }
+      window.clearInterval(intervalId);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("resize", handleWindowResize);
+    };
+  }, [syncFullscreenLockState]);
 
   const updateSingleChoice = useCallback(
     (questionId: string, optionIndex: number) => {
@@ -1206,23 +1498,18 @@ export function useStudentTestRuntime({
   );
 
   const toggleFullscreen = useCallback(async () => {
-    if (typeof document === "undefined" || !examContainerRef.current) {
-      return;
-    }
-
     try {
-      if (document.fullscreenElement === examContainerRef.current) {
-        await document.exitFullscreen();
-        return;
-      }
-
-      await examContainerRef.current.requestFullscreen();
+      await requestFullscreenForExamInternal();
     } catch {
       setActionError(
-        "Fullscreen mode is not available right now. You can still continue the test normally.",
+        "Fullscreen mode is not available right now. Fullscreen is required to continue.",
       );
     }
-  }, []);
+  }, [requestFullscreenForExamInternal]);
+
+  const requestFullscreenForExam = useCallback(async () => {
+    await requestFullscreenForExamInternal();
+  }, [requestFullscreenForExamInternal]);
 
   const saveAttempt = useCallback(async (force = false) => {
     await saveAttemptRef.current(force);
@@ -1253,6 +1540,7 @@ export function useStudentTestRuntime({
     saveRetryPending,
     autosaveIntervalMs,
     isFullscreen,
+    isExamLocked,
     examContainerRef,
     questionList,
     hasManualReviewQuestions,
@@ -1272,6 +1560,8 @@ export function useStudentTestRuntime({
     submitAttempt,
     jumpToQuestion,
     toggleFullscreen,
+    requestFullscreenForExam,
+    resumeFullscreenLock,
     updateSingleChoice,
     updateMultipleChoice,
     updateDescriptiveAnswer,

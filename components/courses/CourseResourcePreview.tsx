@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Download, Maximize2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -47,11 +48,16 @@ export default function CourseResourcePreview({
   const [pdfThumbsLoading, setPdfThumbsLoading] = useState(false);
   const [pdfDoc, setPdfDoc] = useState<any | null>(null);
   const [pdfRenderError, setPdfRenderError] = useState<string | null>(null);
+  const [inlineOpen, setInlineOpen] = useState(false);
+  const [inlinePageImages, setInlinePageImages] = useState<string[]>([]);
+  const [inlinePagesLoading, setInlinePagesLoading] = useState(false);
   const inlineCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const inlineContainerRef = useRef<HTMLDivElement | null>(null);
-  const modalCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const modalContainerRef = useRef<HTMLDivElement | null>(null);
+  const modalPageRefs = useRef<Array<HTMLDivElement | null>>([]);
   const pdfRenderTokenRef = useRef(0);
+  const [modalPageImages, setModalPageImages] = useState<string[]>([]);
+  const [modalPagesLoading, setModalPagesLoading] = useState(false);
 
   const preview = useMemo(() => {
     const normalizedFileUrl = String(fileUrl || "").trim();
@@ -88,6 +94,8 @@ export default function CourseResourcePreview({
     setPdfPageInput("1");
     setPdfDoc(null);
     setPdfRenderError(null);
+    setModalPageImages([]);
+    setInlinePageImages([]);
 
     const loadPdf = async () => {
       try {
@@ -163,17 +171,14 @@ export default function CourseResourcePreview({
     const renderPage = async (
       canvas: HTMLCanvasElement | null,
       container: HTMLDivElement | null,
-      scaleBoost: number,
     ) => {
       if (!canvas || !container) return;
       const page = await pdfDoc.getPage(safePdfPage);
       if (cancelled || token !== pdfRenderTokenRef.current) return;
       const baseViewport = page.getViewport({ scale: 1 });
       const containerWidth = Math.max(container.clientWidth, 320);
-      const targetScale = Math.min(
-        2.25,
-        Math.max(0.85, (containerWidth / baseViewport.width) * scaleBoost),
-      );
+      const widthScale = containerWidth / baseViewport.width;
+      const targetScale = Math.min(2.4, Math.max(0.9, widthScale));
       const viewport = page.getViewport({ scale: targetScale });
       const outputScale = window.devicePixelRatio || 1;
       const context = canvas.getContext("2d");
@@ -189,10 +194,7 @@ export default function CourseResourcePreview({
     };
 
     setPdfRenderError(null);
-    Promise.all([
-      renderPage(inlineCanvasRef.current, inlineContainerRef.current, 1),
-      renderPage(modalCanvasRef.current, modalContainerRef.current, 1.1),
-    ]).catch((error) => {
+    void renderPage(inlineCanvasRef.current, inlineContainerRef.current).catch((error) => {
       if (!cancelled) {
         setPdfRenderError(
           (error as Error | null)?.message || "Unable to preview this PDF.",
@@ -203,7 +205,122 @@ export default function CourseResourcePreview({
     return () => {
       cancelled = true;
     };
-  }, [preview.isPdf, pdfDoc, safePdfPage, open]);
+  }, [preview.isPdf, pdfDoc, safePdfPage]);
+
+  useEffect(() => {
+    if (!preview.isPdf || !pdfDoc || !inlineOpen) {
+      return;
+    }
+
+    let cancelled = false;
+    setInlinePagesLoading(true);
+    setInlinePageImages([]);
+
+    const renderInlinePages = async () => {
+      try {
+        const container = inlineContainerRef.current;
+        const containerWidth = Math.max(container?.clientWidth || 0, 480);
+        const maxPages = Math.min(pdfNumPages || 0, 6);
+        const images: string[] = [];
+        for (let pageIndex = 1; pageIndex <= maxPages; pageIndex += 1) {
+          const page = await pdfDoc.getPage(pageIndex);
+          if (cancelled) return;
+          const baseViewport = page.getViewport({ scale: 1 });
+          const targetScale = Math.min(
+            1.8,
+            Math.max(0.9, (containerWidth / baseViewport.width) * 0.98),
+          );
+          const viewport = page.getViewport({ scale: targetScale });
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
+          if (!context) {
+            images.push("");
+            continue;
+          }
+          canvas.width = Math.floor(viewport.width);
+          canvas.height = Math.floor(viewport.height);
+          await page.render({ canvasContext: context, viewport }).promise;
+          images.push(canvas.toDataURL("image/png"));
+        }
+        if (!cancelled) {
+          setInlinePageImages(images);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPdfRenderError(
+            (error as Error | null)?.message || "Unable to preview this PDF.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setInlinePagesLoading(false);
+        }
+      }
+    };
+
+    void renderInlinePages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inlineOpen, pdfDoc, pdfNumPages, preview.isPdf]);
+
+  useEffect(() => {
+    if (!preview.isPdf || !pdfDoc || !open) {
+      return;
+    }
+
+    let cancelled = false;
+    setModalPagesLoading(true);
+    setModalPageImages([]);
+
+    const renderAllPages = async () => {
+      try {
+        const container = modalContainerRef.current;
+        const containerWidth = Math.max(container?.clientWidth || 0, 600);
+        const images: string[] = [];
+        for (let pageIndex = 1; pageIndex <= (pdfNumPages || 0); pageIndex += 1) {
+          const page = await pdfDoc.getPage(pageIndex);
+          if (cancelled) return;
+          const baseViewport = page.getViewport({ scale: 1 });
+          const targetScale = Math.min(
+            2.2,
+            Math.max(0.95, (containerWidth / baseViewport.width) * 1.02),
+          );
+          const viewport = page.getViewport({ scale: targetScale });
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
+          if (!context) {
+            images.push("");
+            continue;
+          }
+          canvas.width = Math.floor(viewport.width);
+          canvas.height = Math.floor(viewport.height);
+          await page.render({ canvasContext: context, viewport }).promise;
+          images.push(canvas.toDataURL("image/png"));
+        }
+        if (!cancelled) {
+          setModalPageImages(images);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPdfRenderError(
+            (error as Error | null)?.message || "Unable to preview this PDF.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setModalPagesLoading(false);
+        }
+      }
+    };
+
+    void renderAllPages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, pdfDoc, pdfNumPages, preview.isPdf]);
 
   if (!preview.normalizedFileUrl) {
     return (
@@ -238,7 +355,13 @@ export default function CourseResourcePreview({
       </div>
 
       {previewLabel ? (
-        <details className="app-course-resource-preview">
+        <details
+          className="app-course-resource-preview"
+          onToggle={(event) => {
+            const target = event.currentTarget as HTMLDetailsElement;
+            setInlineOpen(Boolean(target.open));
+          }}
+        >
           <summary className="app-course-resource-summary">{previewLabel}</summary>
           <div className="app-course-resource-iframe-shell" ref={inlineContainerRef}>
             {preview.isVideo ? (
@@ -249,14 +372,19 @@ export default function CourseResourcePreview({
                 src={preview.normalizedFileUrl}
               />
             ) : preview.isPdf ? (
-              <div className="app-course-resource-canvas-shell">
-                <canvas
-                  ref={inlineCanvasRef}
-                  className="app-course-resource-canvas"
-                />
+              <div className="app-course-resource-scroll">
+                {inlinePagesLoading ? (
+                  <p className="app-course-resource-error">Loading preview…</p>
+                ) : null}
                 {pdfRenderError ? (
                   <p className="app-course-resource-error">{pdfRenderError}</p>
                 ) : null}
+                {inlinePageImages.map((src, index) => (
+                  <div key={`inline-page-${index + 1}`} className="app-course-resource-page">
+                    <img src={src} alt={`Page ${index + 1}`} />
+                    <span>Page {index + 1}</span>
+                  </div>
+                ))}
               </div>
             ) : (
               <iframe
@@ -348,7 +476,7 @@ export default function CourseResourcePreview({
         </details>
       ) : null}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={!preview.isPdf && open} onOpenChange={setOpen}>
         <DialogContent className="app-resource-modal">
           <DialogHeader>
             <DialogTitle>{title || "Resource preview"}</DialogTitle>
@@ -409,40 +537,10 @@ export default function CourseResourcePreview({
                 <div className="app-resource-modal-main">
                   {preview.isPdf ? (
                     <div className="app-resource-modal-toolbar">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="app-button-compact-secondary app-course-action-button"
-                        onClick={() => {
-                          setPdfPage((current) => Math.max(1, current - 1));
-                          setPdfPageInput(String(Math.max(1, safePdfPage - 1)));
-                        }}
-                        disabled={safePdfPage <= 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Prev
-                      </Button>
                       <span className="app-course-resource-page-indicator">
                         Page {safePdfPage}
                         {pdfNumPages ? ` of ${pdfNumPages}` : ""}
                       </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="app-button-compact-secondary app-course-action-button"
-                        onClick={() => {
-                          setPdfPage((current) =>
-                            pdfNumPages ? Math.min(pdfNumPages, current + 1) : current + 1,
-                          );
-                          setPdfPageInput(String(safePdfPage + 1));
-                        }}
-                        disabled={pdfNumPages ? safePdfPage >= pdfNumPages : false}
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
                       <div className="app-course-resource-jump">
                         <label
                           className="app-course-resource-jump-label"
@@ -461,6 +559,10 @@ export default function CourseResourcePreview({
                             const next = Math.max(1, Number(pdfPageInput || 1));
                             setPdfPage(pdfNumPages ? Math.min(pdfNumPages, next) : next);
                             setPdfPageInput(String(pdfNumPages ? Math.min(pdfNumPages, next) : next));
+                            const target = modalPageRefs.current[next - 1];
+                            if (target) {
+                              target.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
                           }}
                           className="app-course-resource-jump-input"
                         />
@@ -469,16 +571,29 @@ export default function CourseResourcePreview({
                   ) : null}
                   {preview.isPdf ? (
                     <div
-                      className="app-resource-modal-canvas-shell"
+                      className="app-resource-modal-scroll"
                       ref={modalContainerRef}
                     >
-                      <canvas
-                        ref={modalCanvasRef}
-                        className="app-resource-modal-canvas"
-                      />
+                      {modalPagesLoading ? (
+                        <p className="app-course-resource-error">
+                          Loading full document…
+                        </p>
+                      ) : null}
                       {pdfRenderError ? (
                         <p className="app-course-resource-error">{pdfRenderError}</p>
                       ) : null}
+                      {modalPageImages.map((src, index) => (
+                        <div
+                          key={`pdf-page-${index + 1}`}
+                          ref={(node) => {
+                            modalPageRefs.current[index] = node;
+                          }}
+                          className="app-resource-modal-page"
+                        >
+                          <img src={src} alt={`Page ${index + 1}`} />
+                          <span>Page {index + 1}</span>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <iframe
@@ -493,6 +608,77 @@ export default function CourseResourcePreview({
           </div>
         </DialogContent>
       </Dialog>
+
+      {preview.isPdf && open && typeof document !== "undefined"
+        ? createPortal(
+            <div className="app-resource-fullscreen">
+              <div className="app-resource-fullscreen-bar">
+                <div className="app-resource-fullscreen-title">
+                  {title || "Resource preview"}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="app-course-resource-jump">
+                    <label
+                      className="app-course-resource-jump-label"
+                      htmlFor="course-pdf-jump-fullscreen"
+                    >
+                      Jump to
+                    </label>
+                    <input
+                      id="course-pdf-jump-fullscreen"
+                      type="number"
+                      min={1}
+                      max={pdfNumPages || undefined}
+                      value={pdfPageInput}
+                      onChange={(event) => setPdfPageInput(event.target.value)}
+                      onBlur={() => {
+                        const next = Math.max(1, Number(pdfPageInput || 1));
+                        setPdfPage(pdfNumPages ? Math.min(pdfNumPages, next) : next);
+                        setPdfPageInput(
+                          String(pdfNumPages ? Math.min(pdfNumPages, next) : next),
+                        );
+                        const target = modalPageRefs.current[next - 1];
+                        if (target) {
+                          target.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                      }}
+                      className="app-course-resource-jump-input"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="app-button-compact-secondary app-course-action-button"
+                    onClick={() => setOpen(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+              <div className="app-resource-fullscreen-scroll" ref={modalContainerRef}>
+                {modalPagesLoading ? (
+                  <p className="app-course-resource-error">Loading full document…</p>
+                ) : null}
+                {pdfRenderError ? (
+                  <p className="app-course-resource-error">{pdfRenderError}</p>
+                ) : null}
+                {modalPageImages.map((src, index) => (
+                  <div
+                    key={`pdf-fullscreen-page-${index + 1}`}
+                    ref={(node) => {
+                      modalPageRefs.current[index] = node;
+                    }}
+                    className="app-resource-modal-page"
+                  >
+                    <img src={src} alt={`Page ${index + 1}`} />
+                    <span>Page {index + 1}</span>
+                  </div>
+                ))}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

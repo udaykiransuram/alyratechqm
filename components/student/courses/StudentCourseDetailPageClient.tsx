@@ -576,6 +576,7 @@ function AssessmentActionButtons({
       <Button asChild className="app-button-compact-primary app-course-action-button">
         <AppPrefetchLink
           href={block.assessmentState.reportHref || block.assessmentState.launchHref}
+          requestFullscreenOnClick={!block.assessmentState.reportHref}
         >
           {block.assessmentState.reportHref ? (
             <CheckCircle2 className="h-4 w-4" />
@@ -591,7 +592,10 @@ function AssessmentActionButtons({
           variant="outline"
           className="app-button-compact-secondary app-course-action-button"
         >
-          <AppPrefetchLink href={block.assessmentState.launchHref}>
+          <AppPrefetchLink
+            href={block.assessmentState.launchHref}
+            requestFullscreenOnClick
+          >
             <FileQuestion className="h-4 w-4" />
             Open Test Page
           </AppPrefetchLink>

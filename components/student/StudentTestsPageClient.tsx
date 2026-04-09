@@ -220,6 +220,7 @@ function getTestActionDetails(test: StudentTest) {
     relatedApiPrefetches: opensReport
       ? reportApiPrefetch
       : [`/api/student/tests/${test._id}`],
+    requestFullscreenOnClick: !opensReport,
   };
 }
 
@@ -556,6 +557,9 @@ export default function StudentTestsPageClient({
                   <AppPrefetchLink
                     href={recentAssignedTestAction.actionHref}
                     relatedApiPrefetches={recentAssignedTestAction.relatedApiPrefetches}
+                    requestFullscreenOnClick={
+                      recentAssignedTestAction.requestFullscreenOnClick
+                    }
                   >
                     {recentAssignedTestAction.actionLabel}
                   </AppPrefetchLink>
@@ -757,6 +761,10 @@ export default function StudentTestsPageClient({
                             <AppPrefetchLink
                               href={actionDetails.actionHref}
                               relatedApiPrefetches={actionDetails.relatedApiPrefetches}
+                              prefetchOnViewport={false}
+                              requestFullscreenOnClick={
+                                actionDetails.requestFullscreenOnClick
+                              }
                             >
                               {actionDetails.actionLabel}
                             </AppPrefetchLink>

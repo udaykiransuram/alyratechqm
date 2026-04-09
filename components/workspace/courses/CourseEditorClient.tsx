@@ -177,6 +177,17 @@ function createClientItemId() {
     .slice(2, 10)}`;
 }
 
+function createStableId(prefix: string, parts: Array<string | number | null | undefined>) {
+  const input = parts
+    .map((value) => String(value ?? ""))
+    .join("|");
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) >>> 0;
+  }
+  return `${prefix}-${hash.toString(36)}`;
+}
+
 function formatDateTimeLocalInput(value?: string | null) {
   if (!value) {
     return "";
@@ -246,6 +257,7 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
   const mappedBlocks: EditableCourseBlock[] = [];
   let lessonIndex = 0;
   let pendingItems: EditableLessonItem[] = [];
+  let legacyItemIndex = 0;
 
   const flushLesson = () => {
     if (pendingItems.length === 0) {
@@ -254,7 +266,7 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
 
     lessonIndex += 1;
     mappedBlocks.push({
-      id: createClientBlockId(),
+      id: createStableId("course-block", ["lesson", lessonIndex]),
       type: "lesson",
       title: `Lesson ${lessonIndex}`,
       summary: "",
@@ -265,9 +277,10 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
   };
 
   const mapLegacyItem = (block: any): EditableLessonItem | null => {
+    legacyItemIndex += 1;
     if (block.type === "text") {
       return {
-        id: createClientItemId(),
+        id: createStableId("course-item", ["legacy-text", legacyItemIndex, block.contentHtml]),
         type: "text",
         contentHtml: block.contentHtml || "",
       };
@@ -275,7 +288,10 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
 
     if (block.type === "image") {
       return {
-        id: createClientItemId(),
+        id: createStableId(
+          "course-item",
+          ["legacy-image", legacyItemIndex, block.imageUrl, block.caption],
+        ),
         type: "image",
         imageUrl: block.imageUrl || "",
         altText: block.altText || "",
@@ -288,7 +304,10 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
 
     if (block.type === "youtube") {
       return {
-        id: createClientItemId(),
+        id: createStableId(
+          "course-item",
+          ["legacy-youtube", legacyItemIndex, block.videoId, block.caption],
+        ),
         type: "youtube",
         videoId: block.videoId || "",
         caption: block.caption || "",
@@ -298,7 +317,10 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
 
     if (block.type === "resource") {
       return {
-        id: createClientItemId(),
+        id: createStableId(
+          "course-item",
+          ["legacy-resource", legacyItemIndex, block.fileUrl, block.title],
+        ),
         type: "resource",
         title: block.title || "",
         fileUrl: block.fileUrl || "",
@@ -311,7 +333,7 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
   };
 
   const mapLessonBlock = (block: any): EditableLessonBlock => ({
-    id: block.id,
+    id: block.id || createStableId("course-block", ["lesson", block.title || "", block.summary || ""]),
     type: "lesson",
     title: block.title || "",
     summary: block.summary || "",
@@ -321,17 +343,31 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
         : "",
     items: Array.isArray(block.items)
       ? block.items
-          .map((item: any) => {
+          .map((item: any, index: number) => {
             if (item?.type === "text") {
               return {
-                id: createClientItemId(),
+                id:
+                  item.id ||
+                  createStableId("course-item", [
+                    block.id || block.title || "lesson",
+                    "text",
+                    index,
+                    item.contentHtml,
+                  ]),
                 type: "text",
                 contentHtml: item.contentHtml || "",
               };
             }
             if (item?.type === "image") {
               return {
-                id: createClientItemId(),
+                id:
+                  item.id ||
+                  createStableId("course-item", [
+                    block.id || block.title || "lesson",
+                    "image",
+                    index,
+                    item.imageUrl,
+                  ]),
                 type: "image",
                 imageUrl: item.imageUrl || "",
                 altText: item.altText || "",
@@ -343,7 +379,14 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
             }
             if (item?.type === "youtube") {
               return {
-                id: createClientItemId(),
+                id:
+                  item.id ||
+                  createStableId("course-item", [
+                    block.id || block.title || "lesson",
+                    "youtube",
+                    index,
+                    item.videoId,
+                  ]),
                 type: "youtube",
                 videoId: item.videoId || "",
                 caption: item.caption || "",
@@ -352,7 +395,14 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
             }
             if (item?.type === "resource") {
               return {
-                id: createClientItemId(),
+                id:
+                  item.id ||
+                  createStableId("course-item", [
+                    block.id || block.title || "lesson",
+                    "resource",
+                    index,
+                    item.fileUrl,
+                  ]),
                 type: "resource",
                 title: item.title || "",
                 fileUrl: item.fileUrl || "",
@@ -371,7 +421,7 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
       case "module":
         flushLesson();
         mappedBlocks.push({
-          id: block.id,
+          id: block.id || createStableId("course-block", ["module", block.title, block.summary]),
           type: "module",
           title: block.title,
           summary: block.summary || "",
@@ -384,7 +434,7 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
       case "announcement":
         flushLesson();
         mappedBlocks.push({
-          id: block.id,
+          id: block.id || createStableId("course-block", ["announcement", block.title, block.contentHtml]),
           type: "announcement",
           title: block.title,
           tone: block.tone,
@@ -394,7 +444,7 @@ function mapInitialBlocks(course?: WorkspaceCourseDetail | null): EditableCourse
       case "assessment":
         flushLesson();
         mappedBlocks.push({
-          id: block.id,
+          id: block.id || createStableId("course-block", ["assessment", block.questionPaperId]),
           type: "assessment",
           questionPaperId: block.questionPaperId,
           titleOverride: block.titleOverride || "",

@@ -6,14 +6,24 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { syncExamRuntimeMongoProjectionsForPaper } from "@/lib/exam-runtime";
+import {
+  listOnlineTestLoadProfiles,
+  loadOnlineTestLoadConfigFile,
+  resolveOnlineTestLoadProfile,
+  resolveProfileLocalConcurrency,
+} from "./online-test-load-config.ts";
 
 type ParsedArgs = {
   baseUrl: string;
   schoolKey: string;
   paperId: string;
   studentsFile: string;
+  configFile?: string;
+  profileName?: string;
   outFile: string;
   gateOutFile: string;
+  runnerCount: number;
+  runnerIndex: number;
   concurrency: number;
   rounds: number;
   roundDelayMs: number;
@@ -75,6 +85,13 @@ type AuditRow = {
 };
 
 function printHelp() {
+  const availableProfiles = listOnlineTestLoadProfiles()
+    .map(
+      (profile) =>
+        `  - ${profile.name}: ${profile.description} (runners=${profile.recommendedRunnerCount}, total-concurrency=${profile.targetTotalConcurrency})`,
+    )
+    .join("\n");
+
   console.log(
     [
       "Usage: npm run gate:student-tests:load -- --school=<schoolKey> --paper=<paperId> --students=<jsonFile> [options]",
@@ -86,8 +103,12 @@ function printHelp() {
       "",
       "Options:",
       "  --base=<url>                  App base URL (default: http://127.0.0.1:3000)",
+      "  --config=<jsonFile>           Optional JSON config file with load/gate defaults",
+      "  --profile=<name>              Named load profile preset",
       "  --out=<jsonFile>              Stress summary output path",
       "  --gate-out=<jsonFile>         Gate report output path",
+      "  --runner-count=<n>            Number of distributed runners sharing the same students file (default: 1)",
+      "  --runner-index=<n>            Zero-based runner shard index (default: 0)",
       "  --concurrency=<n>             Concurrent student flows (default: 100)",
       "  --rounds=<n>                  Save rounds before final submit (default: 3)",
       "  --round-delay-ms=<ms>         Delay between save rounds (default: 400)",
@@ -108,12 +129,16 @@ function printHelp() {
       "Notes:",
       "  - This script wraps the raw stress harness, enforces latency/failure thresholds, and audits persisted attempts.",
       "  - The gate exits non-zero when any threshold or persistence audit fails.",
+      "  - When --runner-count > 1, this runner only executes its assigned shard from the shared students file.",
+      "",
+      "Profiles:",
+      availableProfiles,
     ].join("\n"),
   );
 }
 
-function parseNumber(value: string | undefined, defaultValue: number) {
-  const normalized = String(value || "").trim();
+function parseNumber(value: unknown, defaultValue: number) {
+  const normalized = String(value ?? "").trim();
   if (!normalized) return defaultValue;
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) {
@@ -122,7 +147,7 @@ function parseNumber(value: string | undefined, defaultValue: number) {
   return parsed;
 }
 
-function parsePositiveInt(value: string | undefined, defaultValue: number) {
+function parsePositiveInt(value: unknown, defaultValue: number) {
   const parsed = parseNumber(value, defaultValue);
   if (parsed <= 0) {
     throw new Error(`Expected a positive integer, received: ${value}`);
@@ -130,8 +155,16 @@ function parsePositiveInt(value: string | undefined, defaultValue: number) {
   return Math.floor(parsed);
 }
 
-function parseBoolean(value: string | undefined, defaultValue: boolean) {
-  const normalized = String(value || "")
+function parseNonNegativeInt(value: unknown, defaultValue: number) {
+  const parsed = parseNumber(value, defaultValue);
+  if (parsed < 0) {
+    throw new Error(`Expected a non-negative integer, received: ${value}`);
+  }
+  return Math.floor(parsed);
+}
+
+function parseBoolean(value: unknown, defaultValue: boolean) {
+  const normalized = String(value ?? "")
     .trim()
     .toLowerCase();
   if (!normalized) return defaultValue;
@@ -140,7 +173,7 @@ function parseBoolean(value: string | undefined, defaultValue: boolean) {
   throw new Error(`Invalid boolean value: ${value}`);
 }
 
-function parseArgs(argv: string[]): ParsedArgs {
+async function parseArgs(argv: string[]): Promise<ParsedArgs> {
   const argMap = new Map<string, string>();
   for (const rawArg of argv) {
     const arg = String(rawArg || "");
@@ -149,41 +182,166 @@ function parseArgs(argv: string[]): ParsedArgs {
     argMap.set(key, rest.join("="));
   }
 
-  const schoolKey = String(argMap.get("school") || "").trim().toLowerCase();
-  const paperId = String(argMap.get("paper") || "").trim();
-  const studentsFile = String(argMap.get("students") || "").trim();
+  const configFile =
+    String(argMap.get("config") || process.env.ONLINE_TEST_GATE_CONFIG || "").trim() ||
+    undefined;
+  const config = await loadOnlineTestLoadConfigFile(configFile);
+  const profileName = String(
+    argMap.get("profile") ||
+      process.env.ONLINE_TEST_GATE_PROFILE ||
+      config?.profile ||
+      "",
+  ).trim();
+  const profile = resolveOnlineTestLoadProfile(profileName);
+  if (profileName && !profile) {
+    throw new Error(
+      `Unknown load profile "${profileName}". Available profiles: ${listOnlineTestLoadProfiles()
+        .map((entry) => entry.name)
+        .join(", ")}.`,
+    );
+  }
+
+  const runnerCount = parsePositiveInt(
+    argMap.get("runner-count") ||
+      process.env.ONLINE_TEST_GATE_RUNNER_COUNT ||
+      config?.runnerCount,
+    profile?.recommendedRunnerCount || 1,
+  );
+  const runnerIndex = parseNonNegativeInt(
+    argMap.get("runner-index") ||
+      process.env.ONLINE_TEST_GATE_RUNNER_INDEX ||
+      config?.runnerIndex,
+    0,
+  );
+  if (runnerIndex >= runnerCount) {
+    throw new Error(
+      `--runner-index must be between 0 and ${runnerCount - 1} for runner-count=${runnerCount}.`,
+    );
+  }
+
+  const schoolKey = String(
+    argMap.get("school") || config?.schoolKey || "",
+  ).trim().toLowerCase();
+  const paperId = String(argMap.get("paper") || config?.paperId || "").trim();
+  const studentsFile = String(
+    argMap.get("students") || config?.studentsFile || "",
+  ).trim();
   if (!schoolKey || !paperId || !studentsFile) {
     throw new Error("Missing required --school, --paper, or --students argument.");
   }
 
   const outFile =
-    String(argMap.get("out") || "").trim() ||
+    String(argMap.get("out") || config?.outFile || "").trim() ||
     path.resolve(`/tmp/online-test-load-gate-${Date.now()}.json`);
   const gateOutFile =
-    String(argMap.get("gate-out") || "").trim() || `${outFile}.gate.json`;
+    String(argMap.get("gate-out") || config?.gateOutFile || "").trim() ||
+    `${outFile}.gate.json`;
 
   return {
-    baseUrl: String(argMap.get("base") || "http://127.0.0.1:3000").replace(/\/$/, ""),
+    baseUrl: String(
+      argMap.get("base") ||
+        process.env.ONLINE_TEST_GATE_BASE ||
+        config?.baseUrl ||
+        "http://127.0.0.1:3000",
+    ).replace(/\/$/, ""),
     schoolKey,
     paperId,
     studentsFile,
+    configFile: config?._resolvedFrom,
+    profileName: profile?.name,
     outFile,
     gateOutFile,
-    concurrency: parsePositiveInt(argMap.get("concurrency"), 100),
-    rounds: parsePositiveInt(argMap.get("rounds"), 3),
-    roundDelayMs: parsePositiveInt(argMap.get("round-delay-ms"), 400),
-    jitterMs: Math.max(0, Math.floor(parseNumber(argMap.get("jitter-ms"), 150))),
-    timeoutMs: parsePositiveInt(argMap.get("timeout-ms"), 15000),
-    sampleSize: parsePositiveInt(argMap.get("sample-size"), 10),
-    submitEnabled: parseBoolean(argMap.get("submit"), true),
-    heartbeatEnabled: parseBoolean(argMap.get("heartbeat"), true),
-    listFirstEnabled: parseBoolean(argMap.get("list-first"), true),
-    warmupEnabled: parseBoolean(argMap.get("warmup"), true),
-    maxFailureRatePct: parseNumber(argMap.get("max-failure-rate-pct"), 0.5),
-    maxP95ListMs: parsePositiveInt(argMap.get("max-p95-list-ms"), 1200),
-    maxP95StartMs: parsePositiveInt(argMap.get("max-p95-start-ms"), 1200),
-    maxP95SaveMs: parsePositiveInt(argMap.get("max-p95-save-ms"), 800),
-    maxP95SubmitMs: parsePositiveInt(argMap.get("max-p95-submit-ms"), 1500),
+    runnerCount,
+    runnerIndex,
+    concurrency: parsePositiveInt(
+      argMap.get("concurrency") ||
+        process.env.ONLINE_TEST_GATE_CONCURRENCY ||
+        config?.concurrency,
+      profile ? resolveProfileLocalConcurrency(profile, runnerCount) : 100,
+    ),
+    rounds: parsePositiveInt(
+      argMap.get("rounds") || process.env.ONLINE_TEST_GATE_ROUNDS || config?.rounds,
+      profile?.rounds || 3,
+    ),
+    roundDelayMs: parsePositiveInt(
+      argMap.get("round-delay-ms") ||
+        process.env.ONLINE_TEST_GATE_ROUND_DELAY_MS ||
+        config?.roundDelayMs,
+      profile?.roundDelayMs || 400,
+    ),
+    jitterMs: Math.max(
+      0,
+      Math.floor(
+        parseNumber(
+          argMap.get("jitter-ms") ||
+            process.env.ONLINE_TEST_GATE_JITTER_MS ||
+            config?.jitterMs,
+          profile?.jitterMs || 150,
+        ),
+      ),
+    ),
+    timeoutMs: parsePositiveInt(
+      argMap.get("timeout-ms") ||
+        process.env.ONLINE_TEST_GATE_TIMEOUT_MS ||
+        config?.timeoutMs,
+      profile?.timeoutMs || 15_000,
+    ),
+    sampleSize: parsePositiveInt(
+      argMap.get("sample-size") ||
+        process.env.ONLINE_TEST_GATE_SAMPLE_SIZE ||
+        config?.sampleSize,
+      profile?.sampleSize || 10,
+    ),
+    submitEnabled: parseBoolean(
+      argMap.get("submit") || process.env.ONLINE_TEST_GATE_SUBMIT || config?.submitEnabled,
+      profile?.submitEnabled ?? true,
+    ),
+    heartbeatEnabled: parseBoolean(
+      argMap.get("heartbeat") ||
+        process.env.ONLINE_TEST_GATE_HEARTBEAT ||
+        config?.heartbeatEnabled,
+      profile?.heartbeatEnabled ?? true,
+    ),
+    listFirstEnabled: parseBoolean(
+      argMap.get("list-first") ||
+        process.env.ONLINE_TEST_GATE_LIST_FIRST ||
+        config?.listFirstEnabled,
+      profile?.listFirstEnabled ?? true,
+    ),
+    warmupEnabled: parseBoolean(
+      argMap.get("warmup") || process.env.ONLINE_TEST_GATE_WARMUP || config?.warmupEnabled,
+      profile?.warmupEnabled ?? true,
+    ),
+    maxFailureRatePct: parseNumber(
+      argMap.get("max-failure-rate-pct") ||
+        process.env.ONLINE_TEST_GATE_MAX_FAILURE_RATE_PCT ||
+        config?.maxFailureRatePct,
+      profile?.maxFailureRatePct || 0.5,
+    ),
+    maxP95ListMs: parsePositiveInt(
+      argMap.get("max-p95-list-ms") ||
+        process.env.ONLINE_TEST_GATE_MAX_P95_LIST_MS ||
+        config?.maxP95ListMs,
+      profile?.maxP95ListMs || 1200,
+    ),
+    maxP95StartMs: parsePositiveInt(
+      argMap.get("max-p95-start-ms") ||
+        process.env.ONLINE_TEST_GATE_MAX_P95_START_MS ||
+        config?.maxP95StartMs,
+      profile?.maxP95StartMs || 1200,
+    ),
+    maxP95SaveMs: parsePositiveInt(
+      argMap.get("max-p95-save-ms") ||
+        process.env.ONLINE_TEST_GATE_MAX_P95_SAVE_MS ||
+        config?.maxP95SaveMs,
+      profile?.maxP95SaveMs || 800,
+    ),
+    maxP95SubmitMs: parsePositiveInt(
+      argMap.get("max-p95-submit-ms") ||
+        process.env.ONLINE_TEST_GATE_MAX_P95_SUBMIT_MS ||
+        config?.maxP95SubmitMs,
+      profile?.maxP95SubmitMs || 1500,
+    ),
   };
 }
 
@@ -194,6 +352,8 @@ function runStressScript(args: ParsedArgs) {
     `--school=${args.schoolKey}`,
     `--paper=${args.paperId}`,
     `--students=${args.studentsFile}`,
+    `--runner-count=${args.runnerCount}`,
+    `--runner-index=${args.runnerIndex}`,
     `--concurrency=${args.concurrency}`,
     `--rounds=${args.rounds}`,
     `--round-delay-ms=${args.roundDelayMs}`,
@@ -360,9 +520,21 @@ async function main() {
     return;
   }
 
-  const args = parseArgs(argv);
+  const args = await parseArgs(argv);
   await fs.mkdir(path.dirname(args.outFile), { recursive: true });
   await fs.mkdir(path.dirname(args.gateOutFile), { recursive: true });
+
+  const effectiveTotalConcurrency = args.concurrency * args.runnerCount;
+  console.log(
+    [
+      "Online test gate configuration",
+      `  profile: ${args.profileName || "custom"}`,
+      `  config: ${args.configFile || "none"}`,
+      `  runner: ${args.runnerIndex + 1}/${args.runnerCount}`,
+      `  local concurrency: ${args.concurrency}`,
+      `  effective total concurrency: ${effectiveTotalConcurrency}`,
+    ].join("\n"),
+  );
 
   const stressExitCode = runStressScript(args);
 
@@ -455,6 +627,11 @@ async function main() {
   const gateReport = {
     generatedAt: new Date().toISOString(),
     config: args,
+    distribution: {
+      runnerCount: args.runnerCount,
+      runnerIndex: args.runnerIndex,
+      effectiveTotalConcurrency,
+    },
     stressSummary: stressOutput.summary,
     requestSummary: requestRows,
     checks,

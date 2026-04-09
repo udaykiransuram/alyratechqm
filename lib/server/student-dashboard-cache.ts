@@ -243,3 +243,33 @@ export async function invalidateStudentDashboardCacheForStudent(
 ) {
   return invalidateStudentDashboardCacheForStudents(schoolKey, [studentId]);
 }
+
+export function scheduleStudentDashboardCacheInvalidation(params: {
+  schoolKey: string;
+  studentIds: string[];
+}) {
+  const schoolKey = String(params.schoolKey || "").trim();
+  const studentIds = Array.from(
+    new Set(
+      (Array.isArray(params.studentIds) ? params.studentIds : [])
+        .map((studentId) => String(studentId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (!schoolKey || studentIds.length === 0) {
+    return;
+  }
+
+  queueMicrotask(() => {
+    void invalidateStudentDashboardCacheForStudents(
+      schoolKey,
+      studentIds,
+    ).catch((error) => {
+      console.error(
+        "Failed to asynchronously invalidate student dashboard cache:",
+        error,
+      );
+    });
+  });
+}

@@ -21,6 +21,9 @@ import type {
   CourseSubjectSummary,
   StudentCourseDetail,
   StudentCourseDetailBlock,
+  StudentCourseListFilters,
+  StudentCourseListOptions,
+  StudentCourseListResult,
   StudentCourseSummary,
 } from "@/lib/courses/types";
 import { connectDB } from "@/lib/db";
@@ -69,6 +72,8 @@ type PersistedCourseProgressState = {
 const COURSE_PROGRESS_SELECT =
   "status startedAt lastViewedBlockId viewedBlockIds completedBlockIds bookmarkedBlockIds notes completionPercent completedAssessmentPaperIds lastActivityAt completedAt updatedAt";
 const MAX_COURSE_PROGRESS_WRITE_RETRIES = 4;
+const DEFAULT_STUDENT_COURSE_LIST_LIMIT = 12;
+const MAX_STUDENT_COURSE_LIST_LIMIT = 60;
 
 function mapClassSummary(value: any): CourseClassSummary | null {
   if (!value) return null;
@@ -757,6 +762,123 @@ async function buildStudentTestsMap(params: {
   );
 }
 
+function resolveStudentCourseListPage(value: unknown) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return 1;
+  }
+  return parsed;
+}
+
+function resolveStudentCourseListLimit(value: unknown) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return DEFAULT_STUDENT_COURSE_LIST_LIMIT;
+  }
+
+  return Math.max(1, Math.min(MAX_STUDENT_COURSE_LIST_LIMIT, parsed));
+}
+
+function normalizeStudentCourseListFilters(
+  filters?: StudentCourseListFilters,
+): StudentCourseListFilters {
+  return {
+    classId: String(filters?.classId || "").trim() || undefined,
+    sectionId: String(filters?.sectionId || "").trim() || undefined,
+    subjectId: String(filters?.subjectId || "").trim() || undefined,
+    query: String(filters?.query || "").trim() || undefined,
+  };
+}
+
+function filterStudentCourseSummaries(params: {
+  summaries: StudentCourseSummary[];
+  filters?: StudentCourseListFilters;
+}) {
+  const filters = normalizeStudentCourseListFilters(params.filters);
+  const normalizedQuery = String(filters.query || "").trim().toLowerCase();
+
+  return params.summaries.filter((course) => {
+    if (filters.classId && course.class?._id !== filters.classId) {
+      return false;
+    }
+
+    if (filters.subjectId) {
+      const subjectMatch = course.subjects.some(
+        (subject) => subject._id === filters.subjectId,
+      );
+      if (!subjectMatch) {
+        return false;
+      }
+    }
+
+    if (filters.sectionId) {
+      const hasSection =
+        course.assignedAcademicSections.length === 0 ||
+        course.assignedAcademicSections.some(
+          (section) => section._id === filters.sectionId,
+        );
+      if (!hasSection) {
+        return false;
+      }
+    }
+
+    if (normalizedQuery) {
+      const haystack = `${course.title} ${course.summary}`.toLowerCase();
+      if (!haystack.includes(normalizedQuery)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+function buildStudentCourseListOptions(
+  summaries: StudentCourseSummary[],
+): StudentCourseListOptions {
+  const classes = Array.from(
+    new Map(
+      summaries
+        .filter((course) => course.class?._id)
+        .map((course) => [course.class!._id, course.class!]),
+    ).values(),
+  );
+  const sections = Array.from(
+    new Map(
+      summaries
+        .flatMap((course) => course.assignedAcademicSections || [])
+        .filter((section) => section?._id)
+        .map((section) => [section._id, section]),
+    ).values(),
+  );
+  const subjects = Array.from(
+    new Map(
+      summaries
+        .flatMap((course) => course.subjects || [])
+        .filter((subject) => subject?._id)
+        .map((subject) => [subject._id, subject]),
+    ).values(),
+  );
+
+  return {
+    classes,
+    sections,
+    subjects,
+  };
+}
+
+function buildStudentCourseListStats(summaries: StudentCourseSummary[]) {
+  return {
+    total: summaries.length,
+    inProgress: summaries.filter((course) => course.status === "in_progress").length,
+    completed: summaries.filter((course) => course.status === "completed").length,
+    requiredAssessments: summaries.reduce(
+      (sum, course) => sum + Number(course.requiredAssessmentCount || 0),
+      0,
+    ),
+  };
+}
+
 function serializeStudentCourseSummary(params: {
   course: any;
   progress: any;
@@ -802,28 +924,14 @@ function serializeStudentCourseSummary(params: {
   };
 }
 
-export async function listStudentCourses(params: {
+async function loadStudentCourseSummaries(params: {
   schoolKey: string;
   studentId: string;
   studentPlacement: {
     classId?: string | null;
     academicSectionId?: string | null;
   };
-  filters?: {
-    classId?: string;
-    sectionId?: string;
-    subjectId?: string;
-    query?: string;
-  };
 }) {
-  if (isMockedE2ETestMode()) {
-    return getMockStudentCourseSummaries(
-      params.studentId,
-      params.studentPlacement,
-      params.filters,
-    );
-  }
-
   await connectDB();
   const now = new Date();
   const courses = await getStudentCoursesBase(params);
@@ -849,7 +957,7 @@ export async function listStudentCourses(params: {
     paperIds: collectAssessmentPaperIdsFromCourses(courses),
   });
 
-  const summaries = courses.map((course) =>
+  return courses.map((course) =>
     serializeStudentCourseSummary({
       course,
       progress: progressByCourseId.get(toId(course?._id)) || null,
@@ -857,43 +965,88 @@ export async function listStudentCourses(params: {
       now,
     }),
   );
+}
 
-  const normalizedQuery = String(params.filters?.query || "").trim().toLowerCase();
+export async function listStudentCourses(params: {
+  schoolKey: string;
+  studentId: string;
+  studentPlacement: {
+    classId?: string | null;
+    academicSectionId?: string | null;
+  };
+  filters?: {
+    classId?: string;
+    sectionId?: string;
+    subjectId?: string;
+    query?: string;
+  };
+}) {
+  if (isMockedE2ETestMode()) {
+    return getMockStudentCourseSummaries(
+      params.studentId,
+      params.studentPlacement,
+      params.filters,
+    );
+  }
 
-  return summaries.filter((course) => {
-    if (params.filters?.classId && course.class?._id !== params.filters.classId) {
-      return false;
-    }
-
-    if (params.filters?.subjectId) {
-      const subjectMatch = course.subjects.some(
-        (subject) => subject._id === params.filters?.subjectId,
-      );
-      if (!subjectMatch) {
-        return false;
-      }
-    }
-
-    if (params.filters?.sectionId) {
-      const hasSection =
-        course.assignedAcademicSections.length === 0 ||
-        course.assignedAcademicSections.some(
-          (section) => section._id === params.filters?.sectionId,
-        );
-      if (!hasSection) {
-        return false;
-      }
-    }
-
-    if (normalizedQuery) {
-      const haystack = `${course.title} ${course.summary}`.toLowerCase();
-      if (!haystack.includes(normalizedQuery)) {
-        return false;
-      }
-    }
-
-    return true;
+  const summaries = await loadStudentCourseSummaries(params);
+  return filterStudentCourseSummaries({
+    summaries,
+    filters: params.filters,
   });
+}
+
+export async function listStudentCoursesPage(params: {
+  schoolKey: string;
+  studentId: string;
+  studentPlacement: {
+    classId?: string | null;
+    academicSectionId?: string | null;
+  };
+  filters?: StudentCourseListFilters;
+  page?: number | string;
+  limit?: number | string;
+  includeOptions?: boolean;
+}): Promise<StudentCourseListResult> {
+  const normalizedFilters = normalizeStudentCourseListFilters(params.filters);
+  const requestedPage = resolveStudentCourseListPage(params.page);
+  const limit = resolveStudentCourseListLimit(params.limit);
+  const includeOptions = params.includeOptions !== false;
+
+  const allSummaries = isMockedE2ETestMode()
+    ? getMockStudentCourseSummaries(
+        params.studentId,
+        params.studentPlacement,
+      )
+    : await loadStudentCourseSummaries({
+        schoolKey: params.schoolKey,
+        studentId: params.studentId,
+        studentPlacement: params.studentPlacement,
+      });
+
+  const filteredSummaries = filterStudentCourseSummaries({
+    summaries: allSummaries,
+    filters: normalizedFilters,
+  });
+  const total = filteredSummaries.length;
+  const pages = Math.max(1, Math.ceil(total / limit));
+  const page = Math.min(requestedPage, pages);
+  const startIndex = (page - 1) * limit;
+  const endIndex = startIndex + limit;
+  const items = filteredSummaries.slice(startIndex, endIndex);
+
+  return {
+    items,
+    total,
+    page,
+    pages,
+    limit,
+    filters: normalizedFilters,
+    options: includeOptions
+      ? buildStudentCourseListOptions(allSummaries)
+      : { classes: [], sections: [], subjects: [] },
+    stats: buildStudentCourseListStats(filteredSummaries),
+  };
 }
 
 export async function getStudentCourseDetail(params: {
