@@ -1,4 +1,4 @@
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight, Edit, Eye, Plus } from "lucide-react";
 
 import DiaryBoardFiltersClient from "@/components/diary/DiaryBoardFiltersClient";
 import PageHero from "@/components/layout/PageHero";
@@ -357,14 +357,26 @@ export default async function DiaryPage({ searchParams }: DiaryPageProps) {
                           asChild
                           variant="outline"
                           size="sm"
-                          className="app-diary-list-button"
+                          className="app-row-action-button"
+                          aria-label={`View ${entry.title}`}
+                          title={`View ${entry.title}`}
                         >
-                          <AppPrefetchLink href={editHref}>Edit</AppPrefetchLink>
-                        </Button>
-                        <Button asChild size="sm" className="app-diary-list-button">
                           <AppPrefetchLink href={viewHref}>
-                            Open Entry
-                            <ArrowRight className="h-4 w-4" />
+                            <Eye className="h-4 w-4" />
+                            View
+                          </AppPrefetchLink>
+                        </Button>
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          className="app-row-action-button app-row-action-button-accent"
+                          aria-label={`Edit ${entry.title}`}
+                          title={`Edit ${entry.title}`}
+                        >
+                          <AppPrefetchLink href={editHref}>
+                            <Edit className="h-4 w-4" />
+                            Edit
                           </AppPrefetchLink>
                         </Button>
                       </div>

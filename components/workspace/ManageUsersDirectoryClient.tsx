@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { Archive, ChevronLeft, ChevronRight, Edit, Eye } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
@@ -102,6 +102,18 @@ function getUserDetailPath(user: ManagedUser) {
   }
 
   return `/workspace/admins/${user._id}`;
+}
+
+function getUserEditPath(user: ManagedUser) {
+  if (user.role === "student") {
+    return `/workspace/students/edit/${user._id}`;
+  }
+
+  if (user.role === "teacher") {
+    return `/workspace/teachers/edit/${user._id}`;
+  }
+
+  return `/workspace/admins/edit/${user._id}`;
 }
 
 export default function ManageUsersDirectoryClient({
@@ -480,8 +492,15 @@ export default function ManageUsersDirectoryClient({
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button asChild variant="outline" size="sm" className="app-button-compact">
+                            <div className="app-row-action-group justify-end">
+                              <Button
+                                asChild
+                                variant="outline"
+                                size="sm"
+                                className="app-row-action-button"
+                                aria-label={`View ${user.name}`}
+                                title={`View ${user.name}`}
+                              >
                                 <AppPrefetchLink
                                   href={buildReturnHref(getUserDetailPath(user))}
                                   relatedApiPrefetches={[
@@ -491,19 +510,47 @@ export default function ManageUsersDirectoryClient({
                                     "/api/subjects",
                                   ]}
                                 >
-                                  Open Profile
+                                  <Eye className="h-4 w-4" />
+                                  View
+                                </AppPrefetchLink>
+                              </Button>
+                              <Button
+                                asChild
+                                variant="outline"
+                                size="sm"
+                                className="app-row-action-button app-row-action-button-accent"
+                                aria-label={`Edit ${user.name}`}
+                                title={`Edit ${user.name}`}
+                              >
+                                <AppPrefetchLink
+                                  href={buildReturnHref(getUserEditPath(user))}
+                                  relatedApiPrefetches={[
+                                    `/api/users/${user._id}`,
+                                    "/api/classes",
+                                    "/api/sections",
+                                    "/api/subjects",
+                                  ]}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                  Edit
                                 </AppPrefetchLink>
                               </Button>
 
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="sm"
-                                    className="app-button-compact"
+                                    className="app-row-action-button app-row-action-button-danger"
                                     disabled={Boolean(archivingUserId)}
+                                    aria-label={`Archive ${user.name}`}
+                                    title={`Archive ${user.name}`}
                                   >
-                                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                                    {archivingUserId === user._id ? (
+                                      <Spinner />
+                                    ) : (
+                                      <Archive className="h-4 w-4" />
+                                    )}
                                     Archive
                                   </Button>
                                 </AlertDialogTrigger>

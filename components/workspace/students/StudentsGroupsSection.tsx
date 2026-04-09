@@ -2,6 +2,8 @@
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Accordion,
   AccordionContent,
@@ -17,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Archive, Edit, Eye } from "lucide-react";
 
 type StudentItem = {
   _id: string;
@@ -45,11 +48,17 @@ type StudentsGroupsSectionProps = {
   pagesByGroup: Record<string, number>;
   perGroupPageSize: number;
   archiveLoading: boolean;
+  canBulkUpdate: boolean;
+  selectedIdsByGroup: Record<string, Set<string>>;
   buildStudentViewHref: (studentId: string) => string;
   onChangeGroupPage: (groupId: string, direction: 1 | -1) => void;
   onExportCsv: (group: StudentGroup) => void;
   onOpenEditModal: (student: StudentItem, groupClassId: string) => void;
   onDeleteStudent: (studentId: string) => Promise<void>;
+  onToggleStudentSelection: (groupId: string, studentId: string) => void;
+  onToggleAllSelections: (groupId: string, studentIds: string[], checked: boolean) => void;
+  onOpenBulkDialog: (group: StudentGroup, studentIds: string[]) => void;
+  onClearGroupSelection: (groupId: string) => void;
 };
 
 const enrolledDateFormatter = new Intl.DateTimeFormat("en-GB", {
@@ -77,11 +86,17 @@ export default function StudentsGroupsSection({
   pagesByGroup,
   perGroupPageSize,
   archiveLoading,
+  canBulkUpdate,
+  selectedIdsByGroup,
   buildStudentViewHref,
   onChangeGroupPage,
   onExportCsv,
   onOpenEditModal,
   onDeleteStudent,
+  onToggleStudentSelection,
+  onToggleAllSelections,
+  onOpenBulkDialog,
+  onClearGroupSelection,
 }: StudentsGroupsSectionProps) {
   return (
     <div className="space-y-3">
@@ -91,10 +106,21 @@ export default function StudentsGroupsSection({
           const start = (groupPageIndex - 1) * perGroupPageSize;
           const end = start + perGroupPageSize;
           const pageItems = group.students.slice(start, end);
+          const selectedIds = selectedIdsByGroup[group.groupId] || new Set<string>();
+          const pageStudentIds = pageItems.map((student) => student._id);
+          const selectedOnPageCount = pageStudentIds.filter((id) =>
+            selectedIds.has(id),
+          ).length;
+          const pageAllSelected =
+            pageStudentIds.length > 0 && selectedOnPageCount === pageStudentIds.length;
+          const pageIndeterminate =
+            selectedOnPageCount > 0 && !pageAllSelected;
           const maxPage = Math.max(
             1,
             Math.ceil(group.students.length / perGroupPageSize),
           );
+
+          const selectedCount = selectedIds.size;
 
           return (
             <AccordionItem
@@ -160,13 +186,61 @@ export default function StudentsGroupsSection({
                         >
                           Export CSV
                         </Button>
+                        {canBulkUpdate && selectedCount > 0 ? (
+                          <>
+                            <Separator
+                              orientation="vertical"
+                              className="hidden h-6 sm:block"
+                            />
+                            <Button
+                              size="sm"
+                              className="app-button-compact"
+                              onClick={() =>
+                                onOpenBulkDialog(group, Array.from(selectedIds))
+                              }
+                            >
+                              Bulk update ({selectedCount})
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="app-button-compact"
+                              onClick={() => onClearGroupSelection(group.groupId)}
+                            >
+                              Clear
+                            </Button>
+                          </>
+                        ) : null}
                       </div>
                     </div>
                   </div>
-                  <div className="app-table-wrap">
+                  <div className="app-table-wrap app-table-dense">
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          {canBulkUpdate ? (
+                            <TableHead className="w-[54px]">
+                              <div className="flex items-center justify-center">
+                                <Checkbox
+                                  checked={
+                                    pageAllSelected
+                                      ? true
+                                      : pageIndeterminate
+                                        ? "indeterminate"
+                                        : false
+                                  }
+                                  onCheckedChange={(checked) =>
+                                    onToggleAllSelections(
+                                      group.groupId,
+                                      pageStudentIds,
+                                      Boolean(checked),
+                                    )
+                                  }
+                                  aria-label="Select all students on this page"
+                                />
+                              </div>
+                            </TableHead>
+                          ) : null}
                           <TableHead>Name</TableHead>
                           <TableHead>Roll No.</TableHead>
                           <TableHead>Email</TableHead>
@@ -178,7 +252,7 @@ export default function StudentsGroupsSection({
                         {pageItems.length === 0 ? (
                           <TableRow>
                             <TableCell
-                              colSpan={5}
+                              colSpan={canBulkUpdate ? 6 : 5}
                               className="text-center text-muted-foreground"
                             >
                               No students on this page.
@@ -187,6 +261,22 @@ export default function StudentsGroupsSection({
                         ) : (
                           pageItems.map((student) => (
                             <TableRow key={student._id}>
+                              {canBulkUpdate ? (
+                                <TableCell>
+                                  <div className="flex items-center justify-center">
+                                    <Checkbox
+                                      checked={selectedIds.has(student._id)}
+                                      onCheckedChange={() =>
+                                        onToggleStudentSelection(
+                                          group.groupId,
+                                          student._id,
+                                        )
+                                      }
+                                      aria-label={`Select ${student.name}`}
+                                    />
+                                  </div>
+                                </TableCell>
+                              ) : null}
                               <TableCell className="font-medium">
                                 {student.name}
                               </TableCell>
@@ -194,12 +284,14 @@ export default function StudentsGroupsSection({
                               <TableCell>{student.email || "-"}</TableCell>
                               <TableCell>{formatEnrolledAt(student.enrolledAt)}</TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-2">
+                                <div className="app-row-action-group">
                                   <Button
                                     asChild
                                     variant="outline"
                                     size="sm"
-                                    className="app-button-compact"
+                                    className="app-row-action-button"
+                                    aria-label={`View ${student.name}`}
+                                    title={`View ${student.name}`}
                                   >
                                     <AppPrefetchLink
                                       href={buildStudentViewHref(student._id)}
@@ -210,27 +302,38 @@ export default function StudentsGroupsSection({
                                         `/api/question-paper-response?student=${encodeURIComponent(student._id)}`,
                                       ]}
                                     >
+                                      <Eye className="h-4 w-4" />
                                       View
                                     </AppPrefetchLink>
                                   </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    className="app-button-compact"
+                                    className="app-row-action-button app-row-action-button-accent"
                                     onClick={() =>
                                       onOpenEditModal(student, group.classId)
                                     }
+                                    aria-label={`Edit ${student.name}`}
+                                    title={`Edit ${student.name}`}
                                   >
+                                    <Edit className="h-4 w-4" />
                                     Edit
                                   </Button>
                                   <Button
-                                    variant="destructive"
+                                    variant="outline"
                                     size="sm"
-                                    className="app-button-compact"
+                                    className="app-row-action-button app-row-action-button-danger"
                                     disabled={archiveLoading}
                                     onClick={() => void onDeleteStudent(student._id)}
+                                    aria-label={`Archive ${student.name}`}
+                                    title={`Archive ${student.name}`}
                                   >
-                                    {archiveLoading ? "Archiving..." : "Archive"}
+                                    {archiveLoading ? (
+                                      <Spinner />
+                                    ) : (
+                                      <Archive className="h-4 w-4" />
+                                    )}
+                                    Archive
                                   </Button>
                                 </div>
                               </TableCell>

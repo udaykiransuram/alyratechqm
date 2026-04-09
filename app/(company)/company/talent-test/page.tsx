@@ -140,20 +140,20 @@ export default function TalentTestAdmin() {
 
   if (loading) {
     return (
-      <div className="company-admin-page">
+      <div className="company-admin-page app-directory-stack">
         <div className="company-admin-loading">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="company-admin-page">
-      <div className="company-admin-header-block">
+    <div className="company-admin-page app-directory-stack">
+      <div className="company-admin-header-block app-surface app-section-header">
         <h1 className="company-admin-title">Talent Test Configuration</h1>
         <p className="company-admin-description">Manage the public talent-test offer, schedule, pricing, and registration availability.</p>
       </div>
 
-            <form onSubmit={handleSubmit} className="company-admin-form">
+      <form onSubmit={handleSubmit} className="company-admin-form app-surface app-section-body">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
             <label className="company-admin-field-label">

@@ -90,7 +90,7 @@ export default async function QuestionPapersPage({
         ? error.message
         : "We couldn't load question papers right now.";
     return (
-      <PageShell width="wide" padding="standard">
+      <PageShell width="wide" padding="standard" className="app-directory-stack">
         <FeedbackNotice variant="error">{message}</FeedbackNotice>
       </PageShell>
     );

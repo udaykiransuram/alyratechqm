@@ -59,7 +59,7 @@ const analyticsFlow = [
 
 export default function AnalyticsHubPage() {
   return (
-    <PageShell width="content" padding="relaxed">
+    <PageShell width="wide" padding="relaxed" className="app-directory-stack">
       <PageHero
         variant="overview"
         eyebrow="Insights"

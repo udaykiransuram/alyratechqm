@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 
-import { Trash2 } from "lucide-react";
+import { Archive } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
@@ -267,12 +267,19 @@ export default function ManageSectionsClient({
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button
-                                  variant="ghost"
+                                  variant="outline"
                                   size="sm"
-                                  className="app-button-compact"
+                                  className="app-row-action-button app-row-action-button-danger"
                                   disabled={Boolean(archivingSectionId)}
+                                  aria-label={`Archive ${section.name}`}
+                                  title={`Archive ${section.name}`}
                                 >
-                                  <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                                  {archivingSectionId === section._id ? (
+                                    <Spinner />
+                                  ) : (
+                                    <Archive className="h-4 w-4" />
+                                  )}
+                                  Archive
                                 </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>

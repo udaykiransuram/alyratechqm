@@ -9,6 +9,7 @@ import type {
 import { AlertTriangle, ArrowLeft, Search, ShieldCheck, Wrench } from 'lucide-react';
 
 import PageHero from '@/components/layout/PageHero';
+import PageShell from '@/components/layout/PageShell';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -416,7 +417,7 @@ export default function IndexingClient({
   };
 
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-5 sm:px-0">
+    <PageShell width="wide" padding="relaxed" className="app-directory-stack">
       <PageHero
         eyebrow="Company Admin"
         title="Maintenance Console"
@@ -957,6 +958,6 @@ export default function IndexingClient({
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

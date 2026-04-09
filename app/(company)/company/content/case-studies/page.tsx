@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
+import { Edit, Trash2 } from 'lucide-react';
 
 interface Metric {
   label: string;
@@ -213,21 +215,21 @@ export default function CaseStudiesAdmin() {
 
   if (loading) {
     return (
-      <div className="company-admin-page">
+      <div className="company-admin-page app-directory-stack">
         <div className="company-admin-loading">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="company-admin-page">
-      <div className="company-admin-header-block">
+    <div className="company-admin-page app-directory-stack">
+      <div className="company-admin-header-block app-surface app-section-header">
         <h1 className="company-admin-title">Manage Case Studies</h1>
         <p className="company-admin-description">Add, edit, or remove school success stories.</p>
       </div>
 
             {/* Form */}
-      <form onSubmit={handleSubmit} className="company-admin-form">
+      <form onSubmit={handleSubmit} className="company-admin-form app-surface app-section-body">
         <h2 className="text-xl font-semibold text-foreground">
           {editingId ? 'Edit' : 'Add New'} Case Study
         </h2>
@@ -454,28 +456,28 @@ export default function CaseStudiesAdmin() {
           </label>
         </div>
 
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="app-button-primary"
-          >
-            {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
-          </button>
-          {editingId && (
-            <button
-              type="button"
-              onClick={resetForm}
-              className="app-button-secondary"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="app-button-primary"
+                    >
+                      {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
+                    </button>
+                    {editingId && (
+                      <button
+                        type="button"
+                        onClick={resetForm}
+                        className="app-button-secondary"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
       </form>
 
       {/* List */}
-      <div className="company-admin-surface">
+      <div className="company-admin-surface app-surface app-section-body">
         <h2 className="mb-4 text-xl font-semibold text-foreground">All Case Studies</h2>
         <div className="space-y-4">
           {caseStudies.length === 0 ? (
@@ -505,23 +507,33 @@ export default function CaseStudiesAdmin() {
                   </div>
                 </div>
                 <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">{cs.challenge}</p>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted-foreground">Order: {cs.displayOrder}</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleEdit(cs)}
-                      className="app-button-compact-secondary"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(cs._id)}
-                      className="app-button-compact-secondary app-button-compact-danger"
-                    >
-                      Delete
-                    </button>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Order: {cs.displayOrder}</span>
+                    <div className="app-row-action-group">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="app-row-action-button app-row-action-button-accent"
+                        onClick={() => handleEdit(cs)}
+                        title="Edit case study"
+                        aria-label="Edit case study"
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="app-row-action-button app-row-action-button-danger"
+                        onClick={() => handleDelete(cs._id)}
+                        title="Delete case study"
+                        aria-label="Delete case study"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </Button>
+                    </div>
                   </div>
-                </div>
               </div>
             ))
           )}

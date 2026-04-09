@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { Trash2 } from "lucide-react";
+import { Archive } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
@@ -229,12 +229,19 @@ export default function ManageClassesClient({
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              className="app-button-compact"
+                              className="app-row-action-button app-row-action-button-danger"
                               disabled={Boolean(archivingClassId)}
+                              aria-label={`Archive ${classItem.name}`}
+                              title={`Archive ${classItem.name}`}
                             >
-                              <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                              {archivingClassId === classItem._id ? (
+                                <Spinner />
+                              ) : (
+                                <Archive className="h-4 w-4" />
+                              )}
+                              Archive
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>

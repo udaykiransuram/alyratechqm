@@ -39,7 +39,10 @@ export default function StudentPortalNav() {
   const pathname = usePathname() || "/student/tests";
 
   return (
-    <nav className="app-segmented-control" aria-label="Student portal sections">
+    <nav
+      className="app-segmented-control app-student-portal-sections"
+      aria-label="Student portal sections"
+    >
       {STUDENT_PORTAL_LINKS.map((link) => {
         const active = isActiveLink(pathname, link.href);
 

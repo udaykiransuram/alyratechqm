@@ -65,6 +65,7 @@ export default async function StudentReportQuestionPage({
     return (
       <PageShell width="wide" padding="standard">
         <PageHero
+          className="app-learning-hero"
           eyebrow="Analysis Report"
           title="Question Not Available"
           description="We could not load this question from your report."
@@ -103,6 +104,7 @@ export default async function StudentReportQuestionPage({
     return (
       <PageShell width="wide" padding="standard">
         <PageHero
+          className="app-learning-hero"
           eyebrow="Analysis Report"
           title="Question Not Found"
           description="This question is not part of the selected report."
@@ -124,6 +126,7 @@ export default async function StudentReportQuestionPage({
   return (
     <PageShell width="wide" padding="standard">
       <PageHero
+        className="app-learning-hero"
         variant="editor"
         eyebrow="Analysis Report"
         title={`Question ${questionNumber || "—"}`}

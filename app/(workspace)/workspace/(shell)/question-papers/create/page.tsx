@@ -65,37 +65,35 @@ export default async function CreateQuestionPaperPage({
   }
 
   return (
-    <PageShell width="wide" padding="standard">
-      <div className="space-y-3.5 sm:space-y-4">
-        <PageHero
-          variant="editor"
-          density="compact"
-          eyebrow="Assessments"
-          title="Create Question Paper"
-          description="Set the paper structure, section defaults, and question mix in one cleaner builder."
-          actions={
-            <ReturnBackButton
-              fallbackPath={returnToPath || "/workspace/question-papers"}
-              label="Cancel"
-            />
-          }
-          meta={
-            <>
-              <span className="app-meta-chip">Section-based builder</span>
-              <span className="app-meta-chip">Online or offline delivery</span>
-            </>
-          }
-        />
+    <PageShell width="wide" padding="standard" className="app-directory-stack">
+      <PageHero
+        variant="editor"
+        density="compact"
+        eyebrow="Assessments"
+        title="Create Question Paper"
+        description="Set the paper structure, section defaults, and question mix in one cleaner builder."
+        actions={
+          <ReturnBackButton
+            fallbackPath={returnToPath || "/workspace/question-papers"}
+            label="Cancel"
+          />
+        }
+        meta={
+          <>
+            <span className="app-meta-chip">Section-based builder</span>
+            <span className="app-meta-chip">Online or offline delivery</span>
+          </>
+        }
+      />
 
-        <CreateQuestionPaperPageClient
-          initialClasses={classes}
-          initialSections={sections}
-          initialSubjects={subjects}
-          initialTags={tags}
-          initialMessage={initialMessage}
-          returnTo={returnToPath || null}
-        />
-      </div>
+      <CreateQuestionPaperPageClient
+        initialClasses={classes}
+        initialSections={sections}
+        initialSubjects={subjects}
+        initialTags={tags}
+        initialMessage={initialMessage}
+        returnTo={returnToPath || null}
+      />
     </PageShell>
   );
 }

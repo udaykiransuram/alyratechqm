@@ -138,8 +138,8 @@ export default function StatsManagementPage() {
   };
 
   return (
-    <div className="company-admin-page">
-      <div className="company-admin-header-block">
+    <div className="company-admin-page app-directory-stack">
+      <div className="company-admin-header-block app-surface app-section-header">
         <h2 className="company-admin-title">Site Stats Management</h2>
         <p className="company-admin-description">
           Update statistics displayed across different pages
@@ -147,7 +147,7 @@ export default function StatsManagementPage() {
       </div>
 
       {/* Section Selector */}
-      <div className="mb-4">
+      <div className="mb-4 app-surface app-section-body">
         <label className="company-admin-field-label">
           Select Section
         </label>
@@ -168,7 +168,7 @@ export default function StatsManagementPage() {
       {loading ? (
         <div className="company-admin-loading">Loading...</div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 app-surface app-section-body">
           {stats.map((stat, index) => (
             <div
               key={index}

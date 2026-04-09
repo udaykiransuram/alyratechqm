@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MessageCircle } from "lucide-react";
+import { Edit, MessageCircle } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
@@ -354,7 +354,16 @@ export default function StudentDetailPageClient({
                   "/api/sections",
                 ]}
               >
-                <Button className="app-button-page">Edit Student</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="app-row-action-button app-row-action-button-accent"
+                  aria-label="Edit student"
+                  title="Edit student"
+                >
+                  <Edit className="h-4 w-4" />
+                  Edit
+                </Button>
               </AppPrefetchLink>
             </div>
           ) : (

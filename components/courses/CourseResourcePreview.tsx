@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Maximize2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,13 @@ export default function CourseResourcePreview({
   const [pdfNumPages, setPdfNumPages] = useState<number | null>(null);
   const [pdfThumbs, setPdfThumbs] = useState<string[]>([]);
   const [pdfThumbsLoading, setPdfThumbsLoading] = useState(false);
+  const [pdfDoc, setPdfDoc] = useState<any | null>(null);
+  const [pdfRenderError, setPdfRenderError] = useState<string | null>(null);
+  const inlineCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const inlineContainerRef = useRef<HTMLDivElement | null>(null);
+  const modalCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const modalContainerRef = useRef<HTMLDivElement | null>(null);
+  const pdfRenderTokenRef = useRef(0);
 
   const preview = useMemo(() => {
     const normalizedFileUrl = String(fileUrl || "").trim();
@@ -78,16 +86,18 @@ export default function CourseResourcePreview({
     setPdfNumPages(null);
     setPdfPage(1);
     setPdfPageInput("1");
+    setPdfDoc(null);
+    setPdfRenderError(null);
 
     const loadPdf = async () => {
       try {
         setPdfThumbsLoading(true);
         const pdfjs = await import("pdfjs-dist/build/pdf");
-        pdfjs.GlobalWorkerOptions.workerSrc =
-          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.3.93/pdf.worker.min.js";
+        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
         const task = pdfjs.getDocument(preview.normalizedFileUrl);
         const doc = await task.promise;
         if (cancelled) return;
+        setPdfDoc(doc);
         setPdfNumPages(doc.numPages);
 
         const maxThumbs = Math.min(doc.numPages, 8);
@@ -109,10 +119,14 @@ export default function CourseResourcePreview({
         if (!cancelled) {
           setPdfThumbs(thumbUrls);
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setPdfThumbs([]);
           setPdfNumPages(null);
+          setPdfDoc(null);
+          setPdfRenderError(
+            (error as Error | null)?.message || "Unable to preview this PDF.",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -128,14 +142,6 @@ export default function CourseResourcePreview({
     };
   }, [preview.isPdf, preview.normalizedFileUrl]);
 
-  if (!preview.normalizedFileUrl) {
-    return (
-      <div className="app-course-panel">
-        <p className="text-sm text-muted-foreground">Resource file is unavailable.</p>
-      </div>
-    );
-  }
-
   const previewLabel = preview.isPdf
     ? "Preview PDF"
     : preview.isDocx
@@ -145,6 +151,67 @@ export default function CourseResourcePreview({
         : null;
 
   const safePdfPage = Math.max(1, pdfNumPages ? Math.min(pdfPage, pdfNumPages) : pdfPage);
+
+  useEffect(() => {
+    if (!preview.isPdf || !pdfDoc) {
+      return;
+    }
+
+    let cancelled = false;
+    const token = (pdfRenderTokenRef.current += 1);
+
+    const renderPage = async (
+      canvas: HTMLCanvasElement | null,
+      container: HTMLDivElement | null,
+      scaleBoost: number,
+    ) => {
+      if (!canvas || !container) return;
+      const page = await pdfDoc.getPage(safePdfPage);
+      if (cancelled || token !== pdfRenderTokenRef.current) return;
+      const baseViewport = page.getViewport({ scale: 1 });
+      const containerWidth = Math.max(container.clientWidth, 320);
+      const targetScale = Math.min(
+        2.25,
+        Math.max(0.85, (containerWidth / baseViewport.width) * scaleBoost),
+      );
+      const viewport = page.getViewport({ scale: targetScale });
+      const outputScale = window.devicePixelRatio || 1;
+      const context = canvas.getContext("2d");
+      if (!context) return;
+
+      canvas.width = Math.floor(viewport.width * outputScale);
+      canvas.height = Math.floor(viewport.height * outputScale);
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+      context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+
+      await page.render({ canvasContext: context, viewport }).promise;
+    };
+
+    setPdfRenderError(null);
+    Promise.all([
+      renderPage(inlineCanvasRef.current, inlineContainerRef.current, 1),
+      renderPage(modalCanvasRef.current, modalContainerRef.current, 1.1),
+    ]).catch((error) => {
+      if (!cancelled) {
+        setPdfRenderError(
+          (error as Error | null)?.message || "Unable to preview this PDF.",
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [preview.isPdf, pdfDoc, safePdfPage, open]);
+
+  if (!preview.normalizedFileUrl) {
+    return (
+      <div className="app-course-panel">
+        <p className="text-sm text-muted-foreground">Resource file is unavailable.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="app-course-panel space-y-3">
@@ -173,7 +240,7 @@ export default function CourseResourcePreview({
       {previewLabel ? (
         <details className="app-course-resource-preview">
           <summary className="app-course-resource-summary">{previewLabel}</summary>
-          <div className="app-course-resource-iframe-shell">
+          <div className="app-course-resource-iframe-shell" ref={inlineContainerRef}>
             {preview.isVideo ? (
               <video
                 className="app-course-resource-iframe"
@@ -181,15 +248,21 @@ export default function CourseResourcePreview({
                 preload="metadata"
                 src={preview.normalizedFileUrl}
               />
+            ) : preview.isPdf ? (
+              <div className="app-course-resource-canvas-shell">
+                <canvas
+                  ref={inlineCanvasRef}
+                  className="app-course-resource-canvas"
+                />
+                {pdfRenderError ? (
+                  <p className="app-course-resource-error">{pdfRenderError}</p>
+                ) : null}
+              </div>
             ) : (
               <iframe
                 title="Resource preview"
                 className="app-course-resource-iframe"
-                src={
-                  preview.isPdf
-                    ? `${preview.pdfBaseUrl}${safePdfPage}`
-                    : preview.docxPreviewUrl || ""
-                }
+                src={preview.docxPreviewUrl || ""}
                 loading="lazy"
               />
             )}
@@ -318,7 +391,14 @@ export default function CourseResourcePreview({
                               setPdfPageInput(String(pageNumber));
                             }}
                           >
-                            <img src={thumb} alt={`Page ${pageNumber}`} />
+                            <Image
+                              src={thumb}
+                              alt={`Page ${pageNumber}`}
+                              width={160}
+                              height={208}
+                              unoptimized
+                              className="w-full rounded-md border border-border/60 bg-background"
+                            />
                             <span>Page {pageNumber}</span>
                           </button>
                         );
@@ -387,15 +467,26 @@ export default function CourseResourcePreview({
                       </div>
                     </div>
                   ) : null}
-                  <iframe
-                    title="Resource full screen"
-                    className="app-resource-modal-iframe"
-                    src={
-                      preview.isPdf
-                        ? `${preview.pdfBaseUrl}${safePdfPage}`
-                        : preview.docxPreviewUrl || ""
-                    }
-                  />
+                  {preview.isPdf ? (
+                    <div
+                      className="app-resource-modal-canvas-shell"
+                      ref={modalContainerRef}
+                    >
+                      <canvas
+                        ref={modalCanvasRef}
+                        className="app-resource-modal-canvas"
+                      />
+                      {pdfRenderError ? (
+                        <p className="app-course-resource-error">{pdfRenderError}</p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <iframe
+                      title="Resource full screen"
+                      className="app-resource-modal-iframe"
+                      src={preview.docxPreviewUrl || ""}
+                    />
+                  )}
                 </div>
               </div>
             )}

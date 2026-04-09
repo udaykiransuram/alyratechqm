@@ -88,8 +88,11 @@ const contentCards = [
 
 export default function CompanyContentDashboardPage() {
   return (
-    <div className="company-admin-page">
-            <section className="company-admin-card-grid" aria-label="Company CMS sections">
+    <div className="company-admin-page app-directory-stack">
+      <section
+        className="company-admin-card-grid app-surface app-section-body"
+        aria-label="Company CMS sections"
+      >
         {contentCards.map((card) => {
           const Icon = card.icon;
           return (

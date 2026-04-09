@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { cn } from "@/lib/utils";
 
 const cmsNavItems = [
@@ -39,7 +40,11 @@ export default function CompanyContentLayout({ children }: { children: ReactNode
   const pathname = usePathname() || "/company/content";
 
   return (
-    <div className="company-admin-shell app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
+    <PageShell
+      width="wide"
+      padding="relaxed"
+      className="company-admin-shell app-directory-stack"
+    >
       <PageHero
         eyebrow="Company CMS"
         title="Standardized public-site admin"
@@ -113,6 +118,6 @@ export default function CompanyContentLayout({ children }: { children: ReactNode
       </PageHero>
 
       <div className="company-admin-content">{children}</div>
-    </div>
+    </PageShell>
   );
 }

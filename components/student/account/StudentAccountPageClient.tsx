@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -195,8 +196,11 @@ export default function StudentAccountPageClient({
   return (
     <div className="app-student-page-shell">
       <PageHero
+        className="app-learning-hero"
         eyebrow="Student Portal"
         title="Student Account"
+        variant="overview"
+        density="compact"
         description="Update your contact details, keep your login secure, and jump straight into analysis reports for completed online tests."
         actions={
           latestReportHref ? (
@@ -245,6 +249,7 @@ export default function StudentAccountPageClient({
           },
         ]}
       >
+        <StudentPortalNav />
       </PageHero>
 
       {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
@@ -257,7 +262,7 @@ export default function StudentAccountPageClient({
           <CardHeader className="app-section-header">
             <CardTitle>Profile Details</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="app-section-body space-y-4">
             <div className="app-detail-grid">
               <div className="app-detail-item">
                 <p className="app-detail-label">Username</p>
@@ -355,7 +360,7 @@ export default function StudentAccountPageClient({
           <CardHeader className="app-section-header">
             <CardTitle>Change Password</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="app-section-body">
             <form onSubmit={handlePasswordChange} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="currentPassword">Current Password</Label>

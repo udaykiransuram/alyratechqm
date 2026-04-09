@@ -3,10 +3,10 @@ import {
   Bell,
   BookOpen,
   Copy,
+  Edit,
   ExternalLink,
   FileQuestion,
   FileText,
-  Pencil,
 } from "lucide-react";
 
 import StaticContentRenderer from "@/components/StaticContentRenderer";
@@ -211,10 +211,17 @@ export default async function WorkspaceCoursePage({
                   </AppPrefetchLink>
                 </Button>
               )}
-              <Button asChild className="app-button-page whitespace-nowrap">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="app-row-action-button app-row-action-button-accent"
+                aria-label={course.metadata.isTemplate ? "Edit template" : "Edit course"}
+                title={course.metadata.isTemplate ? "Edit template" : "Edit course"}
+              >
                 <AppPrefetchLink href={editHref}>
-                  <Pencil className="h-4 w-4" />
-                  {course.metadata.isTemplate ? "Edit Template" : "Edit Course"}
+                  <Edit className="h-4 w-4" />
+                  Edit
                 </AppPrefetchLink>
               </Button>
             </div>

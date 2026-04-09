@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import CourseFiltersPanel from "@/components/courses/CourseFiltersPanel";
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -181,6 +182,7 @@ export default async function StudentCoursesPage({ searchParams }: StudentCourse
           },
         ]}
       >
+        <StudentPortalNav />
       </PageHero>
 
       {loadError ? (

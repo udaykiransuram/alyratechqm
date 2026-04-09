@@ -4,6 +4,7 @@ import { useMemo } from "react";
 
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FeedbackNotice from "@/components/ui/feedback-notice";
@@ -148,6 +149,7 @@ export default function StudentTestLockedView({
   return (
     <div className="app-student-page-shell">
       <PageHero
+        className="app-learning-hero"
         eyebrow="Student Portal"
         title={paper.title}
         variant="overview"
@@ -210,7 +212,9 @@ export default function StudentTestLockedView({
             meta: "Breakdown",
           },
         ]}
-      />
+      >
+        <StudentPortalNav />
+      </PageHero>
 
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">

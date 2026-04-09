@@ -1,5 +1,6 @@
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Button } from "@/components/ui/button";
+import { Edit, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ListPaginationLinks from "@/components/ui/list-pagination-links";
 import {
@@ -110,8 +111,8 @@ export default async function AdminsPage({
           },
           {
             label: "Management flow",
-            value: "Create + View",
-            meta: "Use this page for browsing and the detail flow for edits.",
+            value: "Create + View + Edit",
+            meta: "Use this page for browsing while keeping detail and edit flows immediately available.",
           },
         ]}
       />
@@ -142,7 +143,7 @@ export default async function AdminsPage({
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -155,7 +156,7 @@ export default async function AdminsPage({
                         <Badge className="capitalize">{admin.role}</Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button asChild variant="outline" size="sm" className="app-button-compact">
+                        <div className="app-row-action-group justify-end">
                           <AppPrefetchLink
                             href={buildHrefWithReturnTo(
                               `${ADMINS_BASE_PATH}/${admin._id}`,
@@ -168,9 +169,41 @@ export default async function AdminsPage({
                               '/api/subjects',
                             ]}
                           >
-                            View
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="app-row-action-button"
+                              aria-label={`View ${admin.name}`}
+                              title="View admin"
+                            >
+                              <Eye className="h-4 w-4" />
+                              View
+                            </Button>
                           </AppPrefetchLink>
-                        </Button>
+                          <AppPrefetchLink
+                            href={buildHrefWithReturnTo(
+                              `${ADMINS_BASE_PATH}/edit/${admin._id}`,
+                              currentPath,
+                            )}
+                            relatedApiPrefetches={[
+                              `/api/users/${admin._id}`,
+                              '/api/classes',
+                              '/api/sections',
+                              '/api/subjects',
+                            ]}
+                          >
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="app-row-action-button app-row-action-button-accent"
+                              aria-label={`Edit ${admin.name}`}
+                              title="Edit admin"
+                            >
+                              <Edit className="h-4 w-4" />
+                              Edit
+                            </Button>
+                          </AppPrefetchLink>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

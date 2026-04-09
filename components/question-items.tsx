@@ -106,19 +106,30 @@ export function QuestionItem({
             </div>
           </div>
           {!readOnly ? (
-            <div className="flex shrink-0 items-center gap-2">
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setEditModalOpen(true)}>
+            <div className="app-row-action-group shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="app-row-action-button app-row-action-button-accent"
+                onClick={() => setEditModalOpen(true)}
+                aria-label="Edit question"
+                title="Edit question"
+              >
                 <Edit className="h-4 w-4" />
+                Edit
               </Button>
               {onDelete ? (
                 <Button
-                  variant="destructive"
-                  size="icon"
-                  className="h-8 w-8"
+                  variant="outline"
+                  size="sm"
+                  className="app-row-action-button app-row-action-button-danger"
                   onClick={onDelete}
                   disabled={isDeleting}
+                  aria-label="Delete question"
+                  title="Delete question"
                 >
                   {isDeleting ? <Spinner /> : <Trash2 className="h-4 w-4" />}
+                  Delete
                 </Button>
               ) : null}
             </div>

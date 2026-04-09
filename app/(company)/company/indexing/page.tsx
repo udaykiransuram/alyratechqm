@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import PageHero from '@/components/layout/PageHero';
+import PageShell from '@/components/layout/PageShell';
 import IndexingClient from './IndexingClient';
 import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,7 +35,7 @@ export default async function IndexingPage() {
   return (
     <Suspense
       fallback={
-        <div className="app-page-shell max-w-4xl px-4 py-6 sm:px-0">
+        <PageShell width="wide" padding="relaxed" className="app-directory-stack">
           <PageHero
             eyebrow="Operations"
             title="Maintenance Console"
@@ -45,7 +46,7 @@ export default async function IndexingPage() {
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-10 w-36" />
           </div>
-        </div>
+        </PageShell>
       }
     >
       <IndexingClient

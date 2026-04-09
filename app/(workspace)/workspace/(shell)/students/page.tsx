@@ -37,7 +37,7 @@ function readSearchValue(value: string | string[] | undefined) {
 }
 
 export default async function StudentsPage({ searchParams }: StudentsPageProps) {
-  const { schoolKey } = await requireWorkspaceStaffSession();
+  const { schoolKey, viewerRole } = await requireWorkspaceStaffSession();
   const resolvedSearchParams = await searchParams;
 
   const selectedClassId = String(readSearchValue(resolvedSearchParams.classId) || "").trim();
@@ -107,7 +107,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
       : "All Sections";
 
   return (
-    <PageShell width="wide" padding="standard">
+    <PageShell width="wide" padding="standard" className="app-directory-stack">
       <PageHero
         variant="directory"
         eyebrow="People"
@@ -165,6 +165,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
         totalGroups={result.totalGroups || 0}
         groupPage={result.page || 1}
         groupPages={result.pages || 1}
+        viewerRole={viewerRole}
         initialClassFilter={selectedClassId || "all"}
         initialSectionFilter={selectedSectionId || "all"}
         initialQuery={searchQuery}

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
+import { Edit, Trash2 } from 'lucide-react';
 
 interface PricingPlan {
   _id: string;
@@ -172,21 +174,21 @@ export default function PricingAdmin() {
 
   if (loading) {
     return (
-      <div className="company-admin-page">
+      <div className="company-admin-page app-directory-stack">
         <div className="company-admin-loading">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="company-admin-page">
-      <div className="company-admin-header-block">
+    <div className="company-admin-page app-directory-stack">
+      <div className="company-admin-header-block app-surface app-section-header">
         <h1 className="company-admin-title">Manage Pricing Plans</h1>
         <p className="company-admin-description">Configure pricing tiers and feature bundles using the same standardized admin surface.</p>
       </div>
 
             {/* Form */}
-      <form onSubmit={handleSubmit} className="company-admin-form">
+      <form onSubmit={handleSubmit} className="company-admin-form app-surface app-section-body">
         <h2 className="text-xl font-semibold text-foreground">
           {editingId ? 'Edit' : 'Add New'} Pricing Plan
         </h2>
@@ -366,7 +368,7 @@ export default function PricingAdmin() {
       </form>
 
       {/* List */}
-      <div className="company-admin-surface">
+      <div className="company-admin-surface app-surface app-section-body">
         <h2 className="mb-4 text-xl font-semibold text-foreground">All Pricing Plans</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {plans.length === 0 ? (
@@ -416,19 +418,31 @@ export default function PricingAdmin() {
                   )}
                 </div>
 
-                <div className="flex gap-2 border-t border-border/60 pt-3">
-                  <button
-                    onClick={() => handleEdit(plan)}
-                    className="app-button-compact-secondary flex-1"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(plan._id)}
-                    className="app-button-compact-secondary app-button-compact-danger flex-1"
-                  >
-                    Delete
-                  </button>
+                <div className="flex justify-end border-t border-border/60 pt-3">
+                  <div className="app-row-action-group">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="app-row-action-button app-row-action-button-accent"
+                      onClick={() => handleEdit(plan)}
+                      title="Edit pricing plan"
+                      aria-label="Edit pricing plan"
+                    >
+                      <Edit className="h-4 w-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="app-row-action-button app-row-action-button-danger"
+                      onClick={() => handleDelete(plan._id)}
+                      title="Delete pricing plan"
+                      aria-label="Delete pricing plan"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))

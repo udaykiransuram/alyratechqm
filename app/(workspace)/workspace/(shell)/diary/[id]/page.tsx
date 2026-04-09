@@ -1,4 +1,4 @@
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Edit } from "lucide-react";
 
 import StaticContentRenderer from "@/components/StaticContentRenderer";
 import PageHero from "@/components/layout/PageHero";
@@ -131,10 +131,17 @@ export default async function WorkspaceDiaryPage({
                   Back
                 </AppPrefetchLink>
               </Button>
-              <Button asChild>
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="app-row-action-button app-row-action-button-accent"
+                aria-label="Edit entry"
+                title="Edit entry"
+              >
                 <AppPrefetchLink href={editHref}>
-                  <Pencil className="h-4 w-4" />
-                  Edit Entry
+                  <Edit className="h-4 w-4" />
+                  Edit
                 </AppPrefetchLink>
               </Button>
               <DiaryArchiveButton entryId={id} returnToPath={backHref} />

@@ -6,6 +6,7 @@ import { MessageCircle } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -436,9 +437,11 @@ export default function StudentTestsPageClient({
         data-student-tests-client-ready={clientReady ? "true" : "false"}
       >
         <PageHero
+          className="app-learning-hero"
           eyebrow="Student Portal"
           title="Tests"
           variant="overview"
+          density="compact"
           description="View and continue your assigned tests."
           meta={
             <>
@@ -469,6 +472,7 @@ export default function StudentTestsPageClient({
             },
           ]}
         >
+          <StudentPortalNav />
         </PageHero>
         <FeedbackNotice variant="error">{error}</FeedbackNotice>
       </div>
@@ -481,9 +485,11 @@ export default function StudentTestsPageClient({
       data-student-tests-client-ready={clientReady ? "true" : "false"}
     >
       <PageHero
+        className="app-learning-hero"
         eyebrow="Student Portal"
         title="Tests"
         variant="overview"
+        density="compact"
         description="View and continue your assigned tests."
         meta={
           <>
@@ -517,6 +523,7 @@ export default function StudentTestsPageClient({
           },
         ]}
       >
+        <StudentPortalNav />
       </PageHero>
 
       {submissionNotice ? (

@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDown,
@@ -1530,102 +1537,127 @@ export default function CourseEditorClient({
     return null;
   };
 
-  const serializeBlocksForApi = () =>
-    blocks.map((block) => {
-      switch (block.type) {
-        case "module":
-          return {
-            id: block.id,
-            type: block.type,
-            title: block.title,
-            summary: block.summary,
-          };
-        case "lesson":
-          return {
-            id: block.id,
-            type: block.type,
-            title: block.title,
-            summary: block.summary,
-            estimatedMinutes: block.estimatedMinutes.trim()
-              ? Number(block.estimatedMinutes)
-              : null,
-            items: block.items.map((item) => {
-              if (item.type === "text") {
+  const serializeBlocksForApi = useCallback(
+    () =>
+      blocks.map((block) => {
+        switch (block.type) {
+          case "module":
+            return {
+              id: block.id,
+              type: block.type,
+              title: block.title,
+              summary: block.summary,
+            };
+          case "lesson":
+            return {
+              id: block.id,
+              type: block.type,
+              title: block.title,
+              summary: block.summary,
+              estimatedMinutes: block.estimatedMinutes.trim()
+                ? Number(block.estimatedMinutes)
+                : null,
+              items: block.items.map((item) => {
+                if (item.type === "text") {
+                  return {
+                    type: item.type,
+                    contentHtml: item.contentHtml,
+                  };
+                }
+                if (item.type === "image") {
+                  return {
+                    type: item.type,
+                    imageUrl: item.imageUrl,
+                    altText: item.altText,
+                    caption: item.caption,
+                    imageFit: item.imageFit,
+                    imageWidth: item.imageWidth,
+                    imageHeight: item.imageHeight,
+                  };
+                }
+                if (item.type === "youtube") {
+                  return {
+                    type: item.type,
+                    youtubeUrl: item.urlInput,
+                    videoId: resolveYouTubeVideoId(item.urlInput) || item.videoId,
+                    caption: item.caption,
+                  };
+                }
                 return {
                   type: item.type,
-                  contentHtml: item.contentHtml,
-                };
-              }
-              if (item.type === "image") {
-                return {
-                  type: item.type,
-                  imageUrl: item.imageUrl,
-                  altText: item.altText,
+                  title: item.title,
+                  fileUrl: item.fileUrl,
+                  fileName: item.fileName,
                   caption: item.caption,
-                  imageFit: item.imageFit,
-                  imageWidth: item.imageWidth,
-                  imageHeight: item.imageHeight,
                 };
-              }
-              if (item.type === "youtube") {
-                return {
-                  type: item.type,
-                  youtubeUrl: item.urlInput,
-                  videoId: resolveYouTubeVideoId(item.urlInput) || item.videoId,
-                  caption: item.caption,
-                };
-              }
-              return {
-                type: item.type,
-                title: item.title,
-                fileUrl: item.fileUrl,
-                fileName: item.fileName,
-                caption: item.caption,
-              };
-            }),
-          };
-        case "announcement":
-          return block;
-        case "assessment":
-          return {
-            id: block.id,
-            type: block.type,
-            questionPaperId: block.questionPaperId,
-            titleOverride: block.titleOverride,
-            required: block.required,
-            minimumScorePct: block.minimumScorePct.trim()
-              ? Number(block.minimumScorePct)
-              : null,
-          };
-      }
-    });
+              }),
+            };
+          case "announcement":
+            return block;
+          case "assessment":
+            return {
+              id: block.id,
+              type: block.type,
+              questionPaperId: block.questionPaperId,
+              titleOverride: block.titleOverride,
+              required: block.required,
+              minimumScorePct: block.minimumScorePct.trim()
+                ? Number(block.minimumScorePct)
+                : null,
+            };
+        }
+      }),
+    [blocks],
+  );
 
-  const buildCoursePayload = (targetStatus: "draft" | "published") => ({
-    title,
-    summary,
-    class: classId,
-    subjectIds: selectedSubjectIds,
-    assignedAcademicSections: assignedSectionIds,
-    status: targetStatus,
-    coverImageUrl,
-    coverImageAltText,
-    startsAt: startsAt || null,
-    dueAt: dueAt || null,
-    completionBadgeLabel,
-    enforceSequentialProgress,
-    allowNotes,
-    allowBookmarks,
-    isTemplate: templateToggleLocked ? true : isTemplate,
-    templateFromCourseId:
-      mode === "create" && creationContext.mode === "template"
-        ? creationContext.sourceCourseId || undefined
-        : undefined,
-    versionFromCourseId:
-      mode === "create" && creationContext.mode === "template-version"
-        ? creationContext.sourceCourseId || undefined
-        : undefined,
-    blocks: serializeBlocksForApi(),
-  });
+  const buildCoursePayload = useCallback(
+    (targetStatus: "draft" | "published") => ({
+      title,
+      summary,
+      class: classId,
+      subjectIds: selectedSubjectIds,
+      assignedAcademicSections: assignedSectionIds,
+      status: targetStatus,
+      coverImageUrl,
+      coverImageAltText,
+      startsAt: startsAt || null,
+      dueAt: dueAt || null,
+      completionBadgeLabel,
+      enforceSequentialProgress,
+      allowNotes,
+      allowBookmarks,
+      isTemplate: templateToggleLocked ? true : isTemplate,
+      templateFromCourseId:
+        mode === "create" && creationContext.mode === "template"
+          ? creationContext.sourceCourseId || undefined
+          : undefined,
+      versionFromCourseId:
+        mode === "create" && creationContext.mode === "template-version"
+          ? creationContext.sourceCourseId || undefined
+          : undefined,
+      blocks: serializeBlocksForApi(),
+    }),
+    [
+      title,
+      summary,
+      classId,
+      selectedSubjectIds,
+      assignedSectionIds,
+      coverImageUrl,
+      coverImageAltText,
+      startsAt,
+      dueAt,
+      completionBadgeLabel,
+      enforceSequentialProgress,
+      allowNotes,
+      allowBookmarks,
+      templateToggleLocked,
+      isTemplate,
+      mode,
+      creationContext,
+      serializeBlocksForApi,
+    ],
+  );
 
   const canAutosave =
     Boolean(title.trim()) && Boolean(classId) && selectedSubjectIds.length > 0;
@@ -1714,6 +1746,7 @@ export default function CourseEditorClient({
     allowBookmarks,
     allowNotes,
     blocks,
+    buildCoursePayload,
     courseId,
     returnToPath,
   ]);

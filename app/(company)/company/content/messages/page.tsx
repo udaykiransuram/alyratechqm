@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
+import { Mail, Trash2 } from 'lucide-react';
 
 type Message = {
   _id: string;
@@ -50,8 +51,8 @@ export default function AdminMessagesPage() {
   const totalPages = Math.max(Math.ceil(total / pageSize), 1);
 
   return (
-    <div className="company-admin-page">
-      <div className="company-admin-header">
+    <div className="company-admin-page app-directory-stack">
+      <div className="company-admin-header app-surface app-section-header">
         <div>
           <h2 className="company-admin-title">Contact Messages</h2>
           <p className="company-admin-description">View and manage inquiries sent from the Contact page.</p>
@@ -93,7 +94,7 @@ export default function AdminMessagesPage() {
         </div>
       </div>
 
-      <div className="company-admin-table-wrap">
+      <div className="company-admin-table-wrap app-surface app-section-body">
         <table className="min-w-full">
           <thead>
             <tr>
@@ -120,21 +121,25 @@ export default function AdminMessagesPage() {
                   <td className="max-w-md px-4 py-3 align-top text-sm text-foreground">{msg.message}</td>
                   <td className="whitespace-normal break-words px-4 py-3 align-top text-xs text-muted-foreground">{new Date(msg.createdAt).toLocaleString()}</td>
                   <td className="px-4 py-3 align-top text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="app-row-action-group justify-end">
                       <Button
+                        variant="outline"
                         size="sm"
-                        variant={msg.read ? 'outline' : 'default'}
-                        className={msg.read ? 'app-button-compact' : 'app-button-compact'}
+                        className="app-row-action-button"
                         onClick={() => toggleRead(msg._id, !msg.read)}
                       >
+                        <Mail className="h-4 w-4" />
                         {msg.read ? 'Mark Unread' : 'Mark Read'}
                       </Button>
                       <Button
-                        size="sm"
                         variant="outline"
-                        className="app-button-compact app-button-compact-danger"
+                        size="sm"
+                        className="app-row-action-button app-row-action-button-danger"
                         onClick={() => remove(msg._id)}
+                        title="Delete message"
+                        aria-label="Delete message"
                       >
+                        <Trash2 className="h-4 w-4" />
                         Delete
                       </Button>
                     </div>

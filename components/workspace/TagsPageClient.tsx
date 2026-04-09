@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Plus } from "lucide-react";
+import { Archive, Edit, LoaderCircle, Plus } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
@@ -428,29 +428,40 @@ export default function TagsPageClient({
                         </div>
                       </div>
 
-                      <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-4">
-                        <AppPrefetchLink
-                          href={buildReturnHref(`/workspace/tags/edit/${tag._id}`)}
-                          className="flex-1"
-                        >
-                          <Button
-                            disabled={deletingTagId === tag._id}
-                            size="sm"
-                            variant="outline"
-                            className="app-button-compact w-full"
+                      <div className="border-t border-border/60 bg-muted/10 p-4">
+                        <div className="app-row-action-group justify-end">
+                          <AppPrefetchLink
+                            href={buildReturnHref(`/workspace/tags/edit/${tag._id}`)}
                           >
-                            Edit
+                            <Button
+                              disabled={deletingTagId === tag._id}
+                              size="sm"
+                              variant="outline"
+                              className="app-row-action-button app-row-action-button-accent"
+                              aria-label={`Edit ${tag.name}`}
+                              title={`Edit ${tag.name}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                              Edit
+                            </Button>
+                          </AppPrefetchLink>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="app-row-action-button app-row-action-button-danger"
+                            onClick={() => openArchiveDialog(tag._id)}
+                            disabled={deletingTagId === tag._id}
+                            aria-label={`Archive ${tag.name}`}
+                            title={`Archive ${tag.name}`}
+                          >
+                            {deletingTagId === tag._id ? (
+                              <Spinner />
+                            ) : (
+                              <Archive className="h-4 w-4" />
+                            )}
+                            Archive
                           </Button>
-                        </AppPrefetchLink>
-                        <Button
-                          onClick={() => openArchiveDialog(tag._id)}
-                          disabled={deletingTagId === tag._id}
-                          variant="destructive"
-                          size="sm"
-                          className="app-button-compact flex-1"
-                        >
-                          {deletingTagId === tag._id ? <Spinner /> : "Archive"}
-                        </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

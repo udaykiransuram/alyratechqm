@@ -22,11 +22,21 @@ const FILE_EXTENSION_BY_MIME_TYPE = new Map<string, string>([
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "pptx",
   ],
+  ["video/mp4", "mp4"],
+  ["video/webm", "webm"],
+  ["video/quicktime", "mov"],
+  ["video/x-m4v", "m4v"],
 ]);
 
 const SUPPORTED_FILE_EXTENSIONS = new Set(
   Array.from(FILE_EXTENSION_BY_MIME_TYPE.values()),
 );
+
+const FILE_MIME_TYPES_BY_EXTENSION = new Map(
+  Array.from(FILE_EXTENSION_BY_MIME_TYPE.entries()).map(([mime, ext]) => [ext, mime]),
+);
+
+const BLOB_CACHE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 function sanitizePathSegment(value: string) {
   return String(value || "")
@@ -81,30 +91,11 @@ function guessMimeTypeFromFileName(fileName: string) {
     .split(".")
     .pop();
 
-  switch (extension) {
-    case "pdf":
-      return "application/pdf";
-    case "txt":
-      return "text/plain";
-    case "csv":
-      return "text/csv";
-    case "zip":
-      return "application/zip";
-    case "doc":
-      return "application/msword";
-    case "docx":
-      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-    case "xls":
-      return "application/vnd.ms-excel";
-    case "xlsx":
-      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    case "ppt":
-      return "application/vnd.ms-powerpoint";
-    case "pptx":
-      return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-    default:
-      return null;
+  if (!extension) {
+    return null;
   }
+
+  return FILE_MIME_TYPES_BY_EXTENSION.get(extension) || null;
 }
 
 export type StorePublicFileInput = {
@@ -114,6 +105,131 @@ export type StorePublicFileInput = {
   mimeType?: string | null;
   relativeFolder: string;
 };
+
+type StoredPublicFile = {
+  url: string;
+  fileName: string;
+  storedFileName: string;
+  mimeType: string;
+  size: number;
+};
+
+type VercelBlobPutOptions = {
+  access: "public";
+  addRandomSuffix: boolean;
+  cacheControlMaxAge: number;
+  contentType: string;
+  token: string;
+};
+
+type VercelBlobPutResult = {
+  url: string;
+  pathname: string;
+  contentType?: string | null;
+};
+
+type VercelBlobModule = {
+  put: (
+    pathname: string,
+    body: Buffer,
+    options: VercelBlobPutOptions,
+  ) => Promise<VercelBlobPutResult>;
+};
+
+function shouldUseBlobStorage() {
+  return process.env.NODE_ENV === "production";
+}
+
+async function loadBlobModule() {
+  const dynamicImport = new Function(
+    "specifier",
+    "return import(specifier)",
+  ) as (specifier: string) => Promise<VercelBlobModule>;
+
+  try {
+    const blobModule = await dynamicImport("@vercel/blob");
+    if (typeof blobModule?.put !== "function") {
+      throw new Error("Missing Vercel Blob put() export.");
+    }
+
+    return blobModule;
+  } catch (error) {
+    const reason =
+      error instanceof Error && error.message.trim()
+        ? ` ${error.message.trim()}`
+        : "";
+    throw new Error(
+      `Vercel Blob SDK is unavailable for production file uploads.${reason}`,
+    );
+  }
+}
+
+async function storePublicFileLocally({
+  buffer,
+  relativeDir,
+  storedFileName,
+  displayFileName,
+  normalizedMimeType,
+}: {
+  buffer: Buffer;
+  relativeDir: string;
+  storedFileName: string;
+  displayFileName: string;
+  normalizedMimeType: string;
+}): Promise<StoredPublicFile> {
+  const absoluteDir = path.join(process.cwd(), "public", relativeDir);
+
+  await mkdir(absoluteDir, { recursive: true });
+  await writeFile(path.join(absoluteDir, storedFileName), buffer);
+
+  return {
+    url: `/${relativeDir.replace(/\\/g, "/")}/${storedFileName}`,
+    fileName: displayFileName,
+    storedFileName,
+    mimeType: normalizedMimeType,
+    size: buffer.length,
+  };
+}
+
+async function storePublicFileInBlob({
+  buffer,
+  relativeDir,
+  storedFileName,
+  displayFileName,
+  normalizedMimeType,
+}: {
+  buffer: Buffer;
+  relativeDir: string;
+  storedFileName: string;
+  displayFileName: string;
+  normalizedMimeType: string;
+}): Promise<StoredPublicFile> {
+  const token = String(process.env.BLOB_READ_WRITE_TOKEN || "").trim();
+
+  if (!token) {
+    throw new Error(
+      "Vercel Blob is not configured. Set BLOB_READ_WRITE_TOKEN for production file uploads.",
+    );
+  }
+
+  const { put } = await loadBlobModule();
+  const pathname = path.posix.join(relativeDir, storedFileName);
+  const blob = await put(pathname, buffer, {
+    access: "public",
+    addRandomSuffix: false,
+    cacheControlMaxAge: BLOB_CACHE_MAX_AGE_SECONDS,
+    contentType: normalizedMimeType,
+    token,
+  });
+
+  return {
+    url: blob.url,
+    fileName: displayFileName,
+    storedFileName: path.posix.basename(blob.pathname || pathname),
+    mimeType: String(blob.contentType || normalizedMimeType),
+    size: buffer.length,
+  };
+}
 
 export async function storePublicFile({
   buffer,
@@ -157,14 +273,19 @@ export async function storePublicFile({
     throw new Error("Unsupported file format.");
   }
 
-  await mkdir(absoluteDir, { recursive: true });
-  await writeFile(path.join(absoluteDir, storedFileName), buffer);
-
-  return {
-    url: `/${relativeDir.replace(/\\/g, "/")}/${storedFileName}`,
-    fileName: displayFileName,
-    storedFileName,
-    mimeType: normalizedMimeType,
-    size: buffer.length,
-  };
+  return shouldUseBlobStorage()
+    ? storePublicFileInBlob({
+        buffer,
+        relativeDir: relativeDir.replace(/\\/g, "/"),
+        storedFileName,
+        displayFileName,
+        normalizedMimeType,
+      })
+    : storePublicFileLocally({
+        buffer,
+        relativeDir,
+        storedFileName,
+        displayFileName,
+        normalizedMimeType,
+      });
 }

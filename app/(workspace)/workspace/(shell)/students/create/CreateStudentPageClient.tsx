@@ -210,16 +210,27 @@ export default function CreateStudentPageClient({
       const structureSummary = buildWorkspaceBulkStructureSummary(data);
       const failed = results.filter((result: any) => !result.success);
       const created = results.filter((result: any) => result.success && !result.existed);
-      const existing = results.filter((result: any) => result.existed);
+      const updated = results.filter((result: any) => result.updated);
+      const existing = results.filter(
+        (result: any) => result.existed && !result.updated,
+      );
+      const topFailures = failed.slice(0, 5).map((result: any) => {
+        const rowNumber = result.rowNumber ? `Row ${result.rowNumber}` : "Row";
+        return `${rowNumber}: ${result.message || "Failed"}`;
+      });
 
       setBulkFeedback({
         message: [
           "Bulk upload complete.",
           ...structureSummary,
           `Created: ${created.length}.`,
+          updated.length ? `Updated: ${updated.length}.` : null,
           `Existing: ${existing.length}.`,
           `Failed after upload: ${failed.length}.`,
           skippedRows.length ? `Skipped before upload: ${skippedRows.length}.` : null,
+          topFailures.length
+            ? `Top errors: ${topFailures.join(" | ")}.`
+            : null,
         ]
           .filter(Boolean)
           .join(" "),

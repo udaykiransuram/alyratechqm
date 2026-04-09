@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
+import { Trash2 } from 'lucide-react';
 
 type Page = 'homepage' | 'product' | 'about' | 'benefits' | 'talent-test' | 'case-study' | 'contact';
 
@@ -130,8 +132,8 @@ export default function FAQManagementPage() {
   };
 
   return (
-    <div className="company-admin-page">
-      <div className="company-admin-header">
+    <div className="company-admin-page app-directory-stack">
+      <div className="company-admin-header app-surface app-section-header">
         <div>
           <h2 className="company-admin-title">FAQ Management</h2>
           <p className="company-admin-description">
@@ -147,7 +149,7 @@ export default function FAQManagementPage() {
       </div>
 
       {/* Page selector */}
-      <div className="company-admin-tabs">
+      <div className="company-admin-tabs app-surface app-section-body">
         {pages.map(p => (
           <button
             key={p.value}
@@ -214,13 +216,20 @@ export default function FAQManagementPage() {
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-end gap-3">
-                <button
-                  onClick={() => deleteFaq(index)}
-                  className="app-button-secondary app-button-compact-danger"
-                >
-                  Delete
-                </button>
+              <div className="mt-4 flex justify-end items-center gap-3">
+                <div className="app-row-action-group">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="app-row-action-button app-row-action-button-danger"
+                    onClick={() => deleteFaq(index)}
+                    title="Delete FAQ"
+                    aria-label="Delete FAQ"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
                 <button
                   onClick={() => saveFaq(index)}
                   disabled={saving === String(index)}

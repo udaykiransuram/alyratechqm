@@ -109,8 +109,8 @@ export default function ContactInfoPage() {
   ];
 
   return (
-    <div className="company-admin-page">
-      <div className="company-admin-header">
+    <div className="company-admin-page app-directory-stack">
+      <div className="company-admin-header app-surface app-section-header">
         <div>
           <h2 className="company-admin-title">Contact Information</h2>
           <p className="company-admin-description">
@@ -126,7 +126,7 @@ export default function ContactInfoPage() {
         </button>
       </div>
 
-            <div className="company-admin-form">
+      <div className="company-admin-form app-surface app-section-body">
         <div className="space-y-5">
           {fields.map(f => (
             <div key={f.key}>

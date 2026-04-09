@@ -1,9 +1,15 @@
 "use client";
 
-import { MessageCircle } from "lucide-react";
+import {
+  Archive,
+  Edit,
+  Eye,
+  MessageCircle,
+} from "lucide-react";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 type QuestionPaperDirectoryRowActionsProps = {
   paperId: string;
@@ -42,18 +48,20 @@ export default function QuestionPaperDirectoryRowActions({
 
   return (
     <div className="min-w-0 space-y-2">
-      <div className="grid gap-2 sm:flex sm:flex-wrap">
+      <div className="app-row-action-group">
         <AppPrefetchLink
           href={buildReturnHref(`/workspace/question-papers/view/${paperId}`)}
           relatedApiPrefetches={[`/api/question-papers/${paperId}`]}
-          className="w-full sm:w-auto"
         >
           <Button
             variant="outline"
             size="sm"
-            className="app-button-compact w-full sm:w-auto"
+            className="app-row-action-button"
+            aria-label="View question paper"
+            title="View question paper"
           >
-            Open
+            <Eye className="h-4 w-4" />
+            View
           </Button>
         </AppPrefetchLink>
         <AppPrefetchLink
@@ -64,16 +72,32 @@ export default function QuestionPaperDirectoryRowActions({
             "/api/sections",
             "/api/subjects",
           ]}
-          className="w-full sm:w-auto"
         >
           <Button
             variant="outline"
             size="sm"
-            className="app-button-compact w-full sm:w-auto"
+            className="app-row-action-button app-row-action-button-accent"
+            aria-label="Edit question paper"
+            title="Edit question paper"
           >
+            <Edit className="h-4 w-4" />
             Edit
           </Button>
         </AppPrefetchLink>
+        <Button
+          variant="outline"
+          size="sm"
+          className="app-row-action-button app-row-action-button-danger"
+          onClick={onArchive}
+          disabled={isDeleting}
+          aria-label="Archive question paper"
+          title="Archive question paper"
+        >
+          {isDeleting ? <Spinner /> : <Archive className="h-4 w-4" />}
+          Archive
+        </Button>
+      </div>
+      <div className="grid gap-2 sm:flex sm:flex-wrap">
         <AppPrefetchLink
           href={buildReturnHref(responsesHref)}
           relatedApiPrefetches={[
@@ -112,12 +136,14 @@ export default function QuestionPaperDirectoryRowActions({
           ]}
           className="w-full sm:w-auto"
         >
-          <Button size="sm" className="app-button-compact w-full sm:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            className="app-button-compact w-full sm:w-auto"
+          >
             Analytics
           </Button>
         </AppPrefetchLink>
-      </div>
-      <div className="grid gap-2 sm:flex sm:flex-wrap">
         <Button
           variant="outline"
           size="sm"
@@ -136,15 +162,6 @@ export default function QuestionPaperDirectoryRowActions({
           disabled={isExcelLoading}
         >
           {isExcelLoading ? "Downloading..." : "Download Excel"}
-        </Button>
-        <Button
-          variant="destructive"
-          size="sm"
-          className="app-button-compact w-full sm:w-auto"
-          onClick={onArchive}
-          disabled={isDeleting}
-        >
-          {isDeleting ? "Archiving..." : "Archive"}
         </Button>
       </div>
     </div>

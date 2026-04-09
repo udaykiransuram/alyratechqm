@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
+import { Edit, Trash2 } from 'lucide-react';
 
 type Testimonial = {
   _id?: string;
@@ -148,8 +150,8 @@ export default function TestimonialsPage() {
   };
 
   return (
-    <div className="company-admin-page">
-      <div className="company-admin-header-block">
+    <div className="company-admin-page app-directory-stack">
+      <div className="company-admin-header-block app-surface app-section-header">
         <h2 className="company-admin-title">Testimonials Management</h2>
         <p className="company-admin-description">
           Add, edit, or remove customer testimonials
@@ -157,7 +159,7 @@ export default function TestimonialsPage() {
       </div>
 
             {/* Form */}
-      <form onSubmit={handleSubmit} className="company-admin-form">
+      <form onSubmit={handleSubmit} className="company-admin-form app-surface app-section-body">
         <h3 className="mb-4 text-lg font-bold text-foreground">
           {editingId ? 'Edit Testimonial' : 'Add New Testimonial'}
         </h3>
@@ -296,7 +298,7 @@ export default function TestimonialsPage() {
       </form>
 
       {/* List */}
-      <div>
+      <div className="app-surface app-section-body">
         <h3 className="mb-4 text-lg font-bold text-foreground">Existing Testimonials</h3>
 
         {loading ? (
@@ -332,19 +334,31 @@ export default function TestimonialsPage() {
                       {t.location && <> • {t.location}</>}
                     </div>
                   </div>
-                  <div className="ml-4 flex gap-2">
-                    <button
-                      onClick={() => handleEdit(t)}
-                      className="app-button-compact-primary"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(t._id!)}
-                      className="app-button-compact-secondary app-button-compact-danger"
-                    >
-                      Delete
-                    </button>
+                  <div className="ml-4">
+                    <div className="app-row-action-group">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="app-row-action-button app-row-action-button-accent"
+                        onClick={() => handleEdit(t)}
+                        title="Edit testimonial"
+                        aria-label="Edit testimonial"
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="app-row-action-button app-row-action-button-danger"
+                        onClick={() => handleDelete(t._id!)}
+                        title="Delete testimonial"
+                        aria-label="Delete testimonial"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

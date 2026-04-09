@@ -53,7 +53,14 @@ export function normalizeAnalyticsTagTypeName(value: unknown) {
   return TAG_TYPE_ALIAS_MAP[normalizedKey] || normalizedKey;
 }
 
-function toId(value: unknown, seen = new WeakSet<object>()): string {
+function toId(
+  value: unknown,
+  seen = new WeakSet<object>(),
+  depth = 0,
+): string {
+  if (depth > 6) {
+    return "";
+  }
   if (!value) return "";
 
   if (typeof value === "string" || typeof value === "number") {
@@ -74,7 +81,7 @@ function toId(value: unknown, seen = new WeakSet<object>()): string {
     if (typeof value.valueOf === "function") {
       const primitiveValue = value.valueOf();
       if (primitiveValue && primitiveValue !== value) {
-        const normalizedPrimitive = toId(primitiveValue, seen);
+        const normalizedPrimitive = toId(primitiveValue, seen, depth + 1);
         if (normalizedPrimitive) {
           return normalizedPrimitive;
         }
@@ -82,7 +89,7 @@ function toId(value: unknown, seen = new WeakSet<object>()): string {
     }
 
     if ("_id" in value && value._id && value._id !== value) {
-      const nestedId = toId(value._id, seen);
+      const nestedId = toId(value._id, seen, depth + 1);
       if (nestedId) {
         return nestedId;
       }

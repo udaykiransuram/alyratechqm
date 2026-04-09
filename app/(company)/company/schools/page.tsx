@@ -4,7 +4,7 @@ import Link from "next/link";
 import React, { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Building2,
-  Pencil,
+  Edit,
   Trash2,
 } from "lucide-react";
 
@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { fetchApiJson } from "@/lib/client/api";
 import { clearSchoolKeyCookie, getSchoolKeyFromCookie } from "@/lib/client/school";
 
@@ -319,7 +320,7 @@ export default function ManageSchoolsPage() {
   }
 
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
+    <PageShell width="wide" padding="relaxed" className="app-directory-stack">
       <PageHero
         eyebrow="Company Admin"
         title="Manage Schools"
@@ -641,15 +642,17 @@ export default function ManageSchoolsPage() {
                               : "—"}
                           </TableCell>
                           <TableCell>
-                            <div className="flex justify-end gap-2">
+                            <div className="app-row-action-group justify-end">
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="app-button-compact"
+                                className="app-row-action-button app-row-action-button-accent"
                                 onClick={() => void handleOpenEditSchool(school)}
+                                title="Edit school"
+                                aria-label="Edit school"
                               >
-                                <Pencil className="h-4 w-4" />
+                                <Edit className="h-4 w-4" />
                                 Edit
                               </Button>
 
@@ -659,10 +662,16 @@ export default function ManageSchoolsPage() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    className="app-button-compact app-button-compact-danger"
+                                    className="app-row-action-button app-row-action-button-danger"
                                     disabled={deletingId === school._id}
+                                    title="Delete school"
+                                    aria-label="Delete school"
                                   >
-                                    <Trash2 className="h-4 w-4" />
+                                    {deletingId === school._id ? (
+                                      <Spinner />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
                                     Delete
                                   </Button>
                                 </AlertDialogTrigger>
@@ -885,6 +894,6 @@ export default function ManageSchoolsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

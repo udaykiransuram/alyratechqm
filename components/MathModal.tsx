@@ -30,8 +30,8 @@ const RECENT_KEY = 'recent_math_expressions';
 
 const mathFieldStyle: CSSProperties = {
   width: '100%',
-  minHeight: '132px',
-  fontSize: '1.25rem',
+  minHeight: '176px',
+  fontSize: '1.35rem',
   background: 'transparent',
   outline: 'none',
 };
@@ -204,7 +204,7 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent
-        className="z-[80] flex h-[100dvh] w-screen max-w-none flex-col overflow-hidden p-0 sm:h-auto sm:max-h-[min(92vh,860px)] sm:w-[min(96vw,1180px)] sm:max-w-[1180px]"
+        className="app-math-modal z-[80] flex h-[100dvh] w-screen max-w-none flex-col overflow-hidden p-0 sm:h-[98vh] sm:max-h-[98vh] sm:w-[min(99vw,1480px)] sm:max-w-[1480px]"
         aria-describedby="math-dialog-description"
         onPointerDownOutside={(event) => {
           const target = event.target as HTMLElement;
@@ -213,14 +213,14 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
           }
         }}
       >
-        <DialogHeader className="border-b border-border/60 bg-muted/20 px-4 py-3.5 pr-12 text-left sm:px-5 sm:pr-14">
+        <DialogHeader className="border-b border-border/60 bg-muted/20 px-4 py-2.5 pr-12 text-left sm:px-5 sm:py-2 sm:pr-14">
           <DialogTitle className="text-lg sm:text-xl">Insert Math</DialogTitle>
           <DialogDescription id="math-dialog-description">
             Enter or edit a LaTeX expression, preview it instantly, and insert it in inline or block mode.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto bg-muted/20 p-3 sm:p-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(380px,0.8fr)] lg:gap-4">
+        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto bg-muted/20 p-3 sm:p-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(460px,0.9fr)] xl:gap-4">
           <div className="app-surface overflow-hidden shadow-none">
             <div className="app-section-header py-3.5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -249,8 +249,8 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
                   <math-field ref={mathRef} onInput={handleFieldInput} style={mathFieldStyle} />
                 ) : (
                   <textarea
-                    rows={6}
-                    className="app-form-textarea min-h-[160px] border-0 bg-transparent px-0 py-0 text-base shadow-none focus-visible:ring-0"
+                    rows={8}
+                    className="app-form-textarea min-h-[220px] border-0 bg-transparent px-0 py-0 text-base shadow-none focus-visible:ring-0"
                     value={latex}
                     onChange={handleTextareaChange}
                     placeholder="e.g. \frac{a}{b}"
@@ -271,7 +271,7 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
               </div>
               <div className="app-section-body space-y-2.5">
                 <div
-                  className="min-h-[180px] rounded-xl border border-border/60 bg-background px-5 py-4 text-base text-foreground"
+                  className="min-h-[240px] rounded-xl border border-border/60 bg-background px-5 py-4 text-base text-foreground"
                   dangerouslySetInnerHTML={{
                     __html: previewHtml || '<span class="text-sm text-muted-foreground">Start typing to preview the expression.</span>',
                   }}
@@ -306,7 +306,7 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
           </div>
         </div>
 
-        <DialogFooter className="border-t border-border/60 bg-muted/10 px-4 py-3 sm:px-5">
+        <DialogFooter className="border-t border-border/60 bg-muted/10 px-4 py-2 sm:px-5">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>

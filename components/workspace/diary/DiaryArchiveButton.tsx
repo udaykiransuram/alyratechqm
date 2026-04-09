@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { Archive } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchApiJson } from "@/lib/client/api";
 
@@ -62,12 +63,15 @@ export default function DiaryArchiveButton({
     <Button
       type="button"
       variant="outline"
-      className="text-destructive hover:text-destructive"
+      size="sm"
+      className="app-row-action-button app-row-action-button-danger"
       onClick={() => void handleArchive()}
       disabled={archiving}
+      aria-label="Archive entry"
+      title="Archive entry"
     >
-      <Trash2 className="h-4 w-4" />
-      {archiving ? "Archiving..." : "Archive"}
+      {archiving ? <Spinner /> : <Archive className="h-4 w-4" />}
+      Archive
     </Button>
   );
 }

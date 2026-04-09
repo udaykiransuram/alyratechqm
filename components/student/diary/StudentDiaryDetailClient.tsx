@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2, Clock3, ExternalLink, FileImage, FileText, Vid
 import StaticContentRenderer from "@/components/StaticContentRenderer";
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -190,7 +191,9 @@ export default function StudentDiaryDetailClient({
             ) : null}
           </>
         }
-      />
+      >
+        <StudentPortalNav />
+      </PageHero>
 
       {error ? <FeedbackNotice variant="error">{error}</FeedbackNotice> : null}
 

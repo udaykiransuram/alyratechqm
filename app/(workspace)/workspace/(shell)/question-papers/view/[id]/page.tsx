@@ -113,7 +113,11 @@ export default async function ViewQuestionPaperPage({
 
   if (!paper) {
     return (
-      <PageShell width="wide" padding="standard">
+      <PageShell
+        width="wide"
+        padding="standard"
+        className="app-directory-stack"
+      >
         <PageHero
           variant="editor"
           eyebrow="Assessments"
@@ -166,7 +170,7 @@ export default async function ViewQuestionPaperPage({
   });
 
   return (
-    <PageShell width="wide" padding="standard">
+    <PageShell width="wide" padding="standard" className="app-directory-stack">
       <PageHero
         variant="editor"
         eyebrow="Assessments"
@@ -229,7 +233,20 @@ export default async function ViewQuestionPaperPage({
         ]}
       />
 
-      <QuestionPaperToolbar paper={paper} />
+      <div className="app-toolbar app-toolbar-compact">
+        <div className="app-toolbar-row">
+          <div className="app-toolbar-copy">
+            <p className="app-toolbar-title">Paper actions</p>
+            <p className="app-toolbar-note">
+              Edit, duplicate, or create multiple copies without leaving this
+              review page.
+            </p>
+          </div>
+          <div className="app-toolbar-actions">
+            <QuestionPaperToolbar paper={paper} />
+          </div>
+        </div>
+      </div>
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="min-w-0 space-y-4">

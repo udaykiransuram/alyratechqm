@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle, Grid3X3, Info } from "lucide-react";
+import { ArrowLeft, CheckCircle, Edit, Grid3X3, Info } from "lucide-react";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { ContentRenderer } from "@/components/ContentRenderer";
@@ -129,7 +129,14 @@ export default async function ViewQuestionPage({
                 Back
               </AppPrefetchLink>
             </Button>
-            <Button asChild className="app-button-page">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="app-row-action-button app-row-action-button-accent"
+              aria-label="Edit question"
+              title="Edit question"
+            >
               <AppPrefetchLink
                 href={editHref}
                 relatedApiPrefetches={[
@@ -138,6 +145,7 @@ export default async function ViewQuestionPage({
                   "/api/tags/with-subjects",
                 ]}
               >
+                <Edit className="h-4 w-4" />
                 Edit
               </AppPrefetchLink>
             </Button>

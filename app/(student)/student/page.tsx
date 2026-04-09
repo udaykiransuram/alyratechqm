@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -173,7 +174,9 @@ export default async function StudentHomePage() {
             meta: "Latest updates from teachers.",
           },
         ]}
-      />
+      >
+        <StudentPortalNav />
+      </PageHero>
 
       <div className="grid gap-5 xl:grid-cols-2">
         <Card className="app-surface overflow-hidden">

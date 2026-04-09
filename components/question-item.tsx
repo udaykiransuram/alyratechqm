@@ -5,7 +5,7 @@ import QuestionTagList from '@/components/questions/QuestionTagList';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Edit, Eye, Trash2 } from 'lucide-react';
+import { Archive, Edit, Eye } from 'lucide-react';
 import { Spinner } from './ui/spinner';
 import { ContentRenderer } from './ContentRenderer';
 import { useReturnHrefBuilder } from '@/hooks/useReturnNavigation';
@@ -78,14 +78,22 @@ export function QuestionItem({ question, onDelete, onArchive, isDeleting = false
             <ContentRenderer htmlContent={sanitizedQuestionContent} />
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="app-row-action-group shrink-0">
           <AppPrefetchLink
             href={buildReturnHref(`/workspace/questions/view/${question._id}`)}
             title="View question"
             relatedApiPrefetches={[`/api/questions/${question._id}`]}
           >
-            <Button variant="outline" size="icon" className="h-8 w-8" disabled={isDeleting} aria-label="View question">
+            <Button
+              variant="outline"
+              size="sm"
+              className="app-row-action-button"
+              disabled={isDeleting}
+              aria-label="View question"
+              title="View question"
+            >
               <Eye className="h-4 w-4" />
+              View
             </Button>
           </AppPrefetchLink>
           <AppPrefetchLink
@@ -97,20 +105,29 @@ export function QuestionItem({ question, onDelete, onArchive, isDeleting = false
               '/api/tags/with-subjects',
             ]}
           >
-            <Button variant="outline" size="icon" className="h-8 w-8" disabled={isDeleting} aria-label="Edit question">
+            <Button
+              variant="outline"
+              size="sm"
+              className="app-row-action-button app-row-action-button-accent"
+              disabled={isDeleting}
+              aria-label="Edit question"
+              title="Edit question"
+            >
               <Edit className="h-4 w-4" />
+              Edit
             </Button>
           </AppPrefetchLink>
           <Button
-            variant="destructive"
-            size="icon"
-            className="h-8 w-8"
+            variant="outline"
+            size="sm"
+            className="app-row-action-button app-row-action-button-danger"
             onClick={() => handleDelete?.(question._id)}
             disabled={isDeleting || !handleDelete}
             aria-label="Archive question"
             title="Archive question"
           >
-            {isDeleting ? <Spinner /> : <Trash2 className="h-4 w-4" />}
+            {isDeleting ? <Spinner /> : <Archive className="h-4 w-4" />}
+            Archive
           </Button>
         </div>
       </CardHeader>

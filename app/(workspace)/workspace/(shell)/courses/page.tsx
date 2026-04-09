@@ -1,4 +1,4 @@
-import { ArrowRight, Copy, Plus } from "lucide-react";
+import { ArrowRight, Copy, Edit, Eye, Plus } from "lucide-react";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import CourseFiltersClient from "@/components/courses/CourseFiltersClient";
@@ -447,6 +447,32 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
                         </div>
 
                         <div className="app-course-action-row">
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="app-row-action-button"
+                            aria-label={course.metadata.isTemplate ? `View ${course.title} template` : `View ${course.title}`}
+                            title={course.metadata.isTemplate ? "View template" : "View course"}
+                          >
+                            <AppPrefetchLink href={viewHref}>
+                              <Eye className="h-4 w-4" />
+                              View
+                            </AppPrefetchLink>
+                          </Button>
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="app-row-action-button app-row-action-button-accent"
+                            aria-label={`Edit ${course.title}`}
+                            title={`Edit ${course.title}`}
+                          >
+                            <AppPrefetchLink href={editHref}>
+                              <Edit className="h-4 w-4" />
+                              Edit
+                            </AppPrefetchLink>
+                          </Button>
                           {course.metadata.isTemplate ? (
                             <>
                               <Button
@@ -476,13 +502,6 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
                                 variant="outline"
                                 className="app-button-compact-secondary app-course-action-button"
                               >
-                                <AppPrefetchLink href={editHref}>Edit</AppPrefetchLink>
-                              </Button>
-                              <Button
-                                asChild
-                                variant="outline"
-                                className="app-button-compact-secondary app-course-action-button"
-                              >
                                 <AppPrefetchLink href={duplicateHref}>
                                   <Copy className="h-4 w-4" />
                                   Duplicate
@@ -490,12 +509,6 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
                               </Button>
                             </>
                           )}
-                          <Button asChild className="app-button-compact-primary app-course-action-button">
-                            <AppPrefetchLink href={viewHref}>
-                              {course.metadata.isTemplate ? "View Template" : "View Course"}
-                              <ArrowRight className="h-4 w-4" />
-                            </AppPrefetchLink>
-                          </Button>
                         </div>
 
                         {learningTools.length > 0 ? (

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/button";
 import type { SearchableCommandOption } from "@/components/ui/searchable-command-select";
 import { fetchApiJson } from "@/lib/client/api";
@@ -167,7 +168,7 @@ export default function ActivityClient({
   }, [loadLogs]);
 
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
+    <PageShell width="wide" padding="relaxed" className="app-directory-stack">
       <PageHero
         eyebrow="Company Admin"
         title="Operations Activity"
@@ -388,6 +389,6 @@ export default function ActivityClient({
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

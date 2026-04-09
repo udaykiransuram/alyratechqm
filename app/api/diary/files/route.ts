@@ -9,7 +9,7 @@ import { storePublicFile } from "@/lib/server/public-file-storage";
 const MAX_FILE_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_FILE_UPLOAD_SIZE_LABEL = "20 MB";
 const SUPPORTED_FILE_FORMATS_LABEL =
-  "PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, and ZIP";
+  "PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, ZIP, and MP4";
 
 export async function POST(req: NextRequest) {
   const auth = await requireTenantSession(req, {

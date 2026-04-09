@@ -7,6 +7,7 @@ import PageShell from "@/components/layout/PageShell";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Edit } from "lucide-react";
 import FeedbackNotice from "@/components/ui/feedback-notice";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
 import {
@@ -276,7 +277,16 @@ export default function TeacherDetailPageClient({
                   "/api/subjects",
                 ]}
               >
-                <Button className="app-button-page">Edit Teacher</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="app-row-action-button app-row-action-button-accent"
+                  aria-label="Edit teacher"
+                  title="Edit teacher"
+                >
+                  <Edit className="h-4 w-4" />
+                  Edit
+                </Button>
               </AppPrefetchLink>
             </div>
           ) : (

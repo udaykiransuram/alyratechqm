@@ -1,9 +1,10 @@
 import PageHero from "@/components/layout/PageHero";
+import PageShell from "@/components/layout/PageShell";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function CompanyHealthLoading() {
   return (
-    <div className="app-page-shell max-w-[88rem] px-4 py-6 sm:px-0">
+    <PageShell width="wide" padding="relaxed" className="app-directory-stack">
       <PageHero
         eyebrow="Company Admin"
         title="System Health"
@@ -36,6 +37,6 @@ export default function CompanyHealthLoading() {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

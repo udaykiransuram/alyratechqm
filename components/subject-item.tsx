@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { useReturnHrefBuilder } from '@/hooks/useReturnNavigation';
+import { Archive, Edit } from 'lucide-react';
 
 interface TagType {
   _id: string;
@@ -72,29 +73,36 @@ export function SubjectItem({ subject, onDelete, isLoading }: SubjectItemProps) 
             </div>
           </div>
 
-          <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-4">
-            <AppPrefetchLink
-              href={buildReturnHref(`/workspace/subjects/edit/${subject._id}`)}
-              className="flex-1"
-            >
-              <Button
-                disabled={isLoading}
-                size="sm"
-                variant="outline"
-                className="app-button-compact w-full"
+          <div className="border-t border-border/60 bg-muted/10 p-4">
+            <div className="app-row-action-group justify-end">
+              <AppPrefetchLink
+                href={buildReturnHref(`/workspace/subjects/edit/${subject._id}`)}
               >
-                Edit
+                <Button
+                  disabled={isLoading}
+                  size="sm"
+                  variant="outline"
+                  className="app-row-action-button app-row-action-button-accent"
+                  aria-label={`Edit ${subject.name}`}
+                  title={`Edit ${subject.name}`}
+                >
+                  <Edit className="h-4 w-4" />
+                  Edit
+                </Button>
+              </AppPrefetchLink>
+              <Button
+                onClick={() => onDelete(subject._id)}
+                disabled={isLoading}
+                variant="outline"
+                size="sm"
+                className="app-row-action-button app-row-action-button-danger"
+                aria-label={`Archive ${subject.name}`}
+                title={`Archive ${subject.name}`}
+              >
+                {isLoading ? <Spinner /> : <Archive className="h-4 w-4" />}
+                Archive
               </Button>
-            </AppPrefetchLink>
-            <Button
-              onClick={() => onDelete(subject._id)}
-              disabled={isLoading}
-              variant="destructive"
-              size="sm"
-              className="app-button-compact flex-1"
-            >
-              {isLoading ? <Spinner /> : 'Archive'}
-            </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -125,9 +133,11 @@ export function SubjectItemSkeleton() {
               </div>
             </div>
           </div>
-          <div className="flex gap-2 border-t border-border/60 bg-muted/10 p-4">
-            <div className="h-9 flex-1 rounded-xl bg-muted" />
-            <div className="h-9 flex-1 rounded-xl bg-muted" />
+          <div className="border-t border-border/60 bg-muted/10 p-4">
+            <div className="flex justify-end gap-2">
+              <div className="h-9 w-9 rounded-xl bg-muted" />
+              <div className="h-9 w-9 rounded-xl bg-muted" />
+            </div>
           </div>
         </CardContent>
       </Card>

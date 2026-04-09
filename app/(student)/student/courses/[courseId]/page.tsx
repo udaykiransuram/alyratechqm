@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import StudentCourseDetailPageClient from "@/components/student/courses/StudentCourseDetailPageClient";
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
 import { authOptions } from "@/lib/auth";
@@ -58,6 +59,7 @@ export default async function StudentCoursePage({
     return (
       <div className="app-student-page-shell">
         <PageHero
+          className="app-learning-hero"
           eyebrow="Student Portal"
           title="Course"
           variant="overview"
@@ -69,6 +71,7 @@ export default async function StudentCoursePage({
             </Button>
           }
         >
+          <StudentPortalNav />
         </PageHero>
         <FeedbackNotice variant="error">
           {loadError || "Course not found."}

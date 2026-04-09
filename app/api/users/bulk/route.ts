@@ -6,6 +6,9 @@ import { recordTenantAudit } from "@/lib/audit";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { requireTenantSession } from "@/lib/api-auth";
+import { clearStudentSession } from "@/lib/redis";
+import { invalidateStudentSessionValidationCache } from "@/lib/student-session-cache";
+import { invalidateStudentTestResourceCache } from "@/lib/student-test-server";
 import {
   isSameStudentPlacement,
   normalizeEmail,
@@ -107,6 +110,30 @@ function stringifyUnknownError(error: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+function invalidateStudentAccessCaches(params: {
+  schoolKey: string;
+  studentId: string;
+  previousClassId?: string;
+  nextClassId?: string;
+}) {
+  const {
+    schoolKey,
+    studentId,
+    previousClassId = "",
+    nextClassId = "",
+  } = params;
+
+  invalidateStudentSessionValidationCache({ schoolKey, studentId });
+  invalidateStudentTestResourceCache({ schoolKey, studentId });
+
+  if (previousClassId) {
+    invalidateStudentTestResourceCache({ schoolKey, classId: previousClassId });
+  }
+  if (nextClassId && nextClassId !== previousClassId) {
+    invalidateStudentTestResourceCache({ schoolKey, classId: nextClassId });
+  }
 }
 
 async function recordTenantAuditSafe(
@@ -1408,7 +1435,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const {
-      User,
+      User: UserModel,
       AcademicSection: AcademicSectionModel,
       Class: ClassModel,
       Subject: SubjectModel,
@@ -1469,13 +1496,13 @@ export async function POST(request: NextRequest) {
 
     const [existingUsersByEmail, existingStudentsByRollNumber] = await Promise.all([
       preloadExistingUsersByEmail(
-        User,
+        UserModel,
         preparedRows
           .map((row) => row.email)
           .filter((value): value is string => Boolean(value)),
       ),
       preloadExistingStudentsByRollNumber(
-        User,
+        UserModel,
         preparedRows
           .filter((row) => row.role === "student")
           .map((row) => row.finalRollNumber)
@@ -1486,9 +1513,13 @@ export async function POST(request: NextRequest) {
     const results: any[] = [];
     for (const row of preparedRows) {
       const student = row.source;
+      const rowNumber = row.rowNumber;
+      const pushResult = (result: Record<string, unknown>) => {
+        results.push({ rowNumber, ...result });
+      };
       const rowConflictMessages = conflictsByRow.get(row.rowNumber);
       if (rowConflictMessages?.length) {
-        results.push({
+        pushResult({
           success: false,
           message: rowConflictMessages.join(" "),
           student,
@@ -1521,15 +1552,15 @@ export async function POST(request: NextRequest) {
         } = row;
 
         if (!name || !role) {
-          results.push({
-            success: false,
-            message: "Name and role are required.",
-            student,
-          });
+        pushResult({
+          success: false,
+          message: "Name and role are required.",
+          student,
+        });
           continue;
         }
         if (role === "student" && !finalRollNumber) {
-          results.push({
+          pushResult({
             success: false,
             message: "rollNumber is required for students.",
             student,
@@ -1537,7 +1568,7 @@ export async function POST(request: NextRequest) {
           continue;
         }
         if (!finalMobileNumber || !String(finalMobileNumber).trim()) {
-          results.push({
+          pushResult({
             success: false,
             message: "Phone number is required.",
             student,
@@ -1548,7 +1579,7 @@ export async function POST(request: NextRequest) {
           const studentPasswordSourceValidation =
             validateStudentDefaultPasswordSource(finalMobileNumber);
           if (!studentPasswordSourceValidation.ok) {
-            results.push({
+            pushResult({
               success: false,
               message: studentPasswordSourceValidation.message,
               student,
@@ -1560,7 +1591,7 @@ export async function POST(request: NextRequest) {
           role === "teacher" &&
           (normalizedClassIds.length === 0 || normalizedSubjectIds.length === 0)
         ) {
-          results.push({
+          pushResult({
             success: false,
             message: "Teachers must have at least one class and one subject.",
             student,
@@ -1589,7 +1620,7 @@ export async function POST(request: NextRequest) {
             state: structureState,
           });
           if (!classResolution.ok) {
-            results.push({
+            pushResult({
               success: false,
               message: classResolution.message,
               student,
@@ -1607,7 +1638,7 @@ export async function POST(request: NextRequest) {
               ...structureContext,
             });
             if (!sectionResolution.ok) {
-              results.push({
+              pushResult({
                 success: false,
                 message: sectionResolution.message,
                 student,
@@ -1628,7 +1659,7 @@ export async function POST(request: NextRequest) {
               state: structureState,
             });
             if (!classResolution.ok) {
-              results.push({
+              pushResult({
                 success: false,
                 message: classResolution.message,
                 student,
@@ -1649,7 +1680,7 @@ export async function POST(request: NextRequest) {
               ...structureContext,
             });
             if (!sectionResolution.ok) {
-              results.push({
+              pushResult({
                 success: false,
                 message: sectionResolution.message,
                 student,
@@ -1672,7 +1703,7 @@ export async function POST(request: NextRequest) {
               },
             );
             if (!subjectResolution.ok) {
-              results.push({
+              pushResult({
                 success: false,
                 message: subjectResolution.message,
                 student,
@@ -1693,7 +1724,7 @@ export async function POST(request: NextRequest) {
             resolvedAcademicSectionId,
           );
           if (!sectionValidation.ok) {
-            results.push({
+            pushResult({
               success: false,
               message: sectionValidation.message,
               student,
@@ -1702,45 +1733,31 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        let existingStudentMatch: any | null = null;
         if (role === "student" && finalRollNumber) {
           const rollLookupKey = toRollLookupKey(finalRollNumber);
           const existingStudents =
             existingStudentsByRollNumber.get(rollLookupKey) || [];
 
-          if (existingStudents.length > 0) {
-            if (
-              existingStudents.length === 1 &&
-              isSameStudentPlacement(
-                existingStudents[0],
-                resolvedClassId,
-                resolvedAcademicSectionId,
-              )
-            ) {
-              if (email) {
-                existingUsersByEmail.set(email, existingStudents[0]);
-              }
-              results.push({
-                success: true,
-                user: existingStudents[0],
-                existed: true,
-              });
-              continue;
-            }
-
-            results.push({
+          if (existingStudents.length > 1) {
+            pushResult({
               success: false,
               message:
-                "Roll number must be unique within the school because students use it to sign in.",
+                "Multiple students share this roll number. Resolve duplicates before updating.",
               student,
             });
             continue;
+          }
+
+          if (existingStudents.length === 1) {
+            existingStudentMatch = existingStudents[0];
           }
         }
 
         if (email) {
           const existingUser = existingUsersByEmail.get(email);
-          if (existingUser) {
-            results.push({
+          if (existingUser && (!existingStudentMatch || String(existingUser._id) !== String(existingStudentMatch._id))) {
+            pushResult({
               success: false,
               message: "A user with this email already exists.",
               student,
@@ -1762,10 +1779,78 @@ export async function POST(request: NextRequest) {
           password: effectivePassword,
         });
         if (!passwordValidation.ok) {
-          results.push({
+          pushResult({
             success: false,
             message: passwordValidation.message,
             student,
+          });
+          continue;
+        }
+
+        if (existingStudentMatch && role === "student") {
+          const updateSet: Record<string, any> = {
+            name,
+            email,
+            mobileNumber: String(finalMobileNumber).trim(),
+            gender,
+            fatherName: fatherName || undefined,
+            class: resolvedClassId || undefined,
+            academicSection: resolvedAcademicSectionId || undefined,
+            rollNumber: finalRollNumber,
+            classIds: undefined,
+            academicSectionIds: undefined,
+            subjectIds: undefined,
+            hasAllClasses: false,
+            hasAllSections: false,
+            hasAllSubjects: false,
+          };
+
+          if (normalizedStudent.enrolledat) {
+            updateSet.enrolledAt = normalizedStudent.enrolledat;
+          }
+
+          if (effectivePassword) {
+            updateSet.passwordHash = await bcrypt.hash(String(effectivePassword), 10);
+          }
+
+          const updatedUser = await UserModel.findOneAndUpdate(
+            { _id: existingStudentMatch._id, ...buildArchiveFilter(false) },
+            {
+              $set: updateSet,
+              $unset: {
+                activeStudentSessionId: 1,
+                activeStudentSessionLastSeenAt: 1,
+              },
+            },
+            { new: true, runValidators: true },
+          ).select("_id name email class academicSection rollNumber");
+
+          if (!updatedUser) {
+          pushResult({
+            success: false,
+            message: "Student not found for update.",
+            student,
+          });
+            continue;
+          }
+
+          if (email) {
+            existingUsersByEmail.set(email, updatedUser);
+          }
+
+          await clearStudentSession(schoolKey, String(updatedUser._id)).catch(() => undefined);
+          invalidateStudentAccessCaches({
+            schoolKey,
+            studentId: String(updatedUser._id),
+            previousClassId: normalizeId(existingStudentMatch.class),
+            nextClassId: normalizeId(updatedUser.class),
+          });
+
+          pushResult({
+            success: true,
+            user: updatedUser,
+            existed: true,
+            updated: true,
           });
           continue;
         }
@@ -1775,7 +1860,7 @@ export async function POST(request: NextRequest) {
           passwordHash = await bcrypt.hash(String(effectivePassword), 10);
         }
 
-        const newUser = new User({
+        const newUser = new UserModel({
           name,
           email,
           passwordHash,
@@ -1827,7 +1912,7 @@ export async function POST(request: NextRequest) {
               "Roll number must be unique within the school because students use it to sign in.";
           }
 
-          results.push({
+          pushResult({
             success: false,
             message,
             student,
@@ -1848,9 +1933,9 @@ export async function POST(request: NextRequest) {
           ]);
         }
 
-        results.push({ success: true, user: newUser });
+        pushResult({ success: true, user: newUser });
       } catch (rowError) {
-        results.push({
+        pushResult({
           success: false,
           message: stringifyUnknownError(
             rowError,

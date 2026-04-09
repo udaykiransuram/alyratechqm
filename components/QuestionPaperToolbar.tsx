@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Pencil } from "lucide-react";
+import { Copy, Edit } from "lucide-react";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Button } from "@/components/ui/button";
@@ -167,7 +167,7 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
 
   return (
     <>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
         <AppPrefetchLink
           href={editHref}
           relatedApiPrefetches={[
@@ -178,8 +178,14 @@ export function QuestionPaperToolbar({ paper }: { paper: any }) {
             "/api/tags/with-subjects",
           ]}
         >
-          <Button variant="secondary" className="app-button-inline">
-            <Pencil className="h-4 w-4" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="app-row-action-button app-row-action-button-accent"
+            aria-label="Edit question paper"
+            title="Edit question paper"
+          >
+            <Edit className="h-4 w-4" />
             Edit
           </Button>
         </AppPrefetchLink>

@@ -63,6 +63,7 @@ export default function StudentTestPageClient({
     return (
       <div className="app-student-page-shell">
         <PageHero
+          className="app-learning-hero"
           eyebrow="Student Portal"
           title="Test"
           variant="overview"

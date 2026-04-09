@@ -291,8 +291,8 @@ export default function PublicThemeStudioClient() {
   };
 
   return (
-    <div className="company-admin-page">
-      <div className="company-admin-banner flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="company-admin-page app-directory-stack">
+      <div className="company-admin-banner app-surface app-section-header flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
             <Paintbrush2 className="h-4 w-4" />

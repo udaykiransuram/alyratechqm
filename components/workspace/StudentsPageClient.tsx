@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   SearchableCommandSelect,
@@ -75,6 +76,7 @@ export type StudentsPageClientProps = {
   totalGroups: number;
   groupPage: number;
   groupPages: number;
+  viewerRole: "admin" | "teacher";
   initialClassFilter: string;
   initialSectionFilter: string;
   initialQuery: string;
@@ -112,6 +114,7 @@ export default function StudentsPageClient({
   totalGroups,
   groupPage,
   groupPages,
+  viewerRole,
   initialClassFilter,
   initialSectionFilter,
   initialQuery,
@@ -136,6 +139,13 @@ export default function StudentsPageClient({
 
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [editStudent, setEditStudent] = useState<StudentEditDraft | null>(null);
+  const [selectedByGroup, setSelectedByGroup] = useState<Record<string, Set<string>>>({});
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkGroupId, setBulkGroupId] = useState<string | null>(null);
+  const [bulkStudentIds, setBulkStudentIds] = useState<string[]>([]);
+  const [bulkClassId, setBulkClassId] = useState<string>("");
+  const [bulkSectionId, setBulkSectionId] = useState<string>("none");
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   useEffect(() => {
     setSelectedClass(initialClassFilter);
@@ -151,6 +161,24 @@ export default function StudentsPageClient({
       return;
     }
     setPages(buildInitialGroupPages(groups));
+  }, [groups]);
+
+  useEffect(() => {
+    setSelectedByGroup((previous) => {
+      const next: Record<string, Set<string>> = {};
+      groups.forEach((group) => {
+        const prevSet = previous[group.groupId];
+        if (!prevSet || prevSet.size === 0) return;
+        const allowedIds = new Set(group.students.map((student) => student._id));
+        const filtered = new Set(
+          Array.from(prevSet).filter((id) => allowedIds.has(id)),
+        );
+        if (filtered.size > 0) {
+          next[group.groupId] = filtered;
+        }
+      });
+      return next;
+    });
   }, [groups]);
 
   const availableSections = useMemo(() => {
@@ -201,6 +229,24 @@ export default function StudentsPageClient({
     Boolean(appliedQuery),
     includeEmptyGroups,
   ].filter(Boolean).length;
+
+  const bulkSections = useMemo(() => {
+    if (!bulkClassId) return [];
+    return sections.filter((section) => getSectionClassId(section) === bulkClassId);
+  }, [bulkClassId, sections]);
+
+  const bulkClassOptions = useMemo<SearchableCommandOption[]>(
+    () => classes.map((classItem) => ({ value: classItem._id, label: classItem.name })),
+    [classes],
+  );
+
+  const bulkSectionOptions = useMemo<SearchableCommandOption[]>(
+    () => [
+      { value: "none", label: "No section" },
+      ...bulkSections.map((section) => ({ value: section._id, label: section.name })),
+    ],
+    [bulkSections],
+  );
 
   const navigateWithFilters = ({
     nextClass = selectedClass,
@@ -331,6 +377,94 @@ export default function StudentsPageClient({
       alert(error.message || "Failed to archive student");
     } finally {
       setArchiveLoading(false);
+    }
+  };
+
+  const toggleStudentSelection = (groupId: string, studentId: string) => {
+    setSelectedByGroup((previous) => {
+      const next = { ...previous };
+      const groupSet = new Set(next[groupId] || []);
+      if (groupSet.has(studentId)) {
+        groupSet.delete(studentId);
+      } else {
+        groupSet.add(studentId);
+      }
+      if (groupSet.size === 0) {
+        delete next[groupId];
+      } else {
+        next[groupId] = groupSet;
+      }
+      return next;
+    });
+  };
+
+  const toggleAllSelections = (groupId: string, studentIds: string[], checked: boolean) => {
+    setSelectedByGroup((previous) => {
+      const next = { ...previous };
+      if (!checked) {
+        const groupSet = new Set(next[groupId] || []);
+        studentIds.forEach((id) => groupSet.delete(id));
+        if (groupSet.size === 0) {
+          delete next[groupId];
+        } else {
+          next[groupId] = groupSet;
+        }
+        return next;
+      }
+
+      const merged = new Set(next[groupId] || []);
+      studentIds.forEach((id) => merged.add(id));
+      next[groupId] = merged;
+      return next;
+    });
+  };
+
+  const clearGroupSelection = (groupId: string) => {
+    setSelectedByGroup((previous) => {
+      if (!previous[groupId]) return previous;
+      const next = { ...previous };
+      delete next[groupId];
+      return next;
+    });
+  };
+
+  const openBulkDialog = (group: StudentGroup, studentIds: string[]) => {
+    setBulkGroupId(group.groupId);
+    setBulkStudentIds(studentIds);
+    setBulkClassId(group.classId);
+    setBulkSectionId(group.academicSectionId || "none");
+    setBulkDialogOpen(true);
+  };
+
+  const submitBulkUpdate = async () => {
+    if (!bulkClassId || bulkStudentIds.length === 0) {
+      return;
+    }
+
+    try {
+      setBulkSaving(true);
+      const response = await fetch("/api/users/students/bulk-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentIds: bulkStudentIds,
+          classId: bulkClassId,
+          academicSectionId: bulkSectionId === "none" ? "" : bulkSectionId,
+        }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.message || "Failed to update students.");
+      }
+      if (bulkGroupId) {
+        clearGroupSelection(bulkGroupId);
+      }
+      setBulkDialogOpen(false);
+      router.refresh();
+    } catch (error: any) {
+      alert(error.message || "Failed to update students.");
+    } finally {
+      setBulkSaving(false);
     }
   };
 
@@ -471,6 +605,8 @@ export default function StudentsPageClient({
             pagesByGroup={pages}
             perGroupPageSize={perGroupPageSize}
             archiveLoading={archiveLoading}
+            canBulkUpdate={viewerRole === "admin"}
+            selectedIdsByGroup={selectedByGroup}
             buildStudentViewHref={(studentId) =>
               buildReturnHref(`/workspace/students/${studentId}`)
             }
@@ -478,6 +614,10 @@ export default function StudentsPageClient({
             onExportCsv={exportCSV}
             onOpenEditModal={openEditModal}
             onDeleteStudent={deleteStudent}
+            onToggleStudentSelection={toggleStudentSelection}
+            onToggleAllSelections={toggleAllSelections}
+            onOpenBulkDialog={openBulkDialog}
+            onClearGroupSelection={clearGroupSelection}
           />
         </div>
       )}
@@ -492,6 +632,64 @@ export default function StudentsPageClient({
           onSaved={() => router.refresh()}
         />
       ) : null}
+
+      <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+        <DialogContent className="app-resource-modal">
+          <DialogHeader>
+            <DialogTitle>Bulk update students</DialogTitle>
+          </DialogHeader>
+          <div className="app-resource-modal-frame">
+            <div className="space-y-4 px-4 py-4 sm:px-5">
+              <div className="app-surface space-y-2 border border-border/60 p-4 shadow-none">
+                <p className="text-sm font-semibold text-foreground">
+                  {bulkStudentIds.length} selected student{bulkStudentIds.length === 1 ? "" : "s"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Update class and section for the selected students in one action.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="app-field-label">Class</label>
+                  <SearchableCommandSelect
+                    value={bulkClassId}
+                    options={bulkClassOptions}
+                    onValueChange={(value) => {
+                      setBulkClassId(value);
+                      setBulkSectionId("none");
+                    }}
+                    placeholder="Select class"
+                    searchPlaceholder="Search classes..."
+                    emptyText="No classes found."
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="app-field-label">Section</label>
+                  <SearchableCommandSelect
+                    value={bulkSectionId}
+                    options={bulkSectionOptions}
+                    onValueChange={setBulkSectionId}
+                    placeholder="Select section"
+                    searchPlaceholder="Search sections..."
+                    emptyText="No sections found."
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={submitBulkUpdate}
+              disabled={bulkSaving || !bulkClassId || bulkStudentIds.length === 0}
+            >
+              {bulkSaving ? "Updating..." : "Apply changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
