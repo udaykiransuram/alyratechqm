@@ -192,7 +192,6 @@
     "@types/date-fns": "^2.5.3",
     "@types/formidable": "^3.4.5",
     "@types/katex": "^0.16.7",
-    "@types/mammoth": "^1.4.4",
     "@types/node": "^20",
     "@types/pdf-parse": "^1.1.5",
     "@types/pdfkit": "^0.17.2",
