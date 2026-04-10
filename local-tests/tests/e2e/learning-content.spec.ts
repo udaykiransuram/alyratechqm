@@ -40,19 +40,11 @@ test.describe("Learning content automation @desktop", () => {
     expect(response, "workspace course create page should respond").not.toBeNull();
     expect(response?.status() ?? 0).toBeLessThan(400);
     await expect(page.getByRole("heading", { name: "Create Course" })).toBeVisible();
-    await expect(page.getByText("Professional Course Builder")).toBeVisible();
-    await page.getByLabel("Course title").fill("Playwright Builder Course");
-    await page.getByRole("button", { name: /Select class/i }).click();
-    await page.getByRole("option", { name: "CLASS X" }).click();
-    await page.getByRole("button", { name: /Select subjects/i }).click();
-    await page.getByRole("option", { name: "Mathematics" }).click();
-    await page.getByRole("button", { name: "Done" }).click();
-    await page.getByRole("button", { name: /Continue to curriculum/i }).click();
-    await expect(page.getByDisplayValue("Lesson 1")).toBeVisible();
-    await expect(page.getByText("Module 1").first()).toBeVisible();
-    await page.getByRole("button", { name: /Special block/i }).click();
+    await expect(page.getByRole("heading", { name: "Course Setup" })).toBeVisible();
+    await page.getByRole("button", { name: "Lesson" }).click();
     await page.getByRole("button", { name: "Assessment" }).click();
-    await expect(page.getByText("Assessment block")).toBeVisible();
+    await expect(page.getByDisplayValue("Lesson 1")).toBeVisible();
+    await expect(page.getByText("Linked paper")).toBeVisible();
 
     response = await navigateToAppRoute(page, "/workspace/diary");
     expect(response, "workspace diary page should respond").not.toBeNull();
