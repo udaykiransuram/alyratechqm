@@ -310,14 +310,29 @@ async function validateStudentSession(
 
       return null;
     } catch (error) {
-      console.error(
-        redisStrict
-          ? "Failed to validate Redis student session for a Redis-strict hot path:"
-          : "Failed to validate Redis student session. Falling back to DB session validation:",
-        error,
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : String(error || "Unknown Redis error.");
+
       if (redisStrict) {
+        console.error(
+          "Failed to validate Redis student session for a Redis-strict hot path:",
+          error,
+        );
         return buildStudentSessionValidationUnavailableResponse();
+      }
+
+      if (
+        errorMessage === "Redis student session missing or unavailable." ||
+        errorMessage === "Redis student session validation unavailable."
+      ) {
+        console.warn(
+          "Redis student session validation unavailable for a non-strict path; falling back to DB session validation.",
+        );
+      } else {
+        console.error(
+          "Failed to validate Redis student session. Falling back to DB session validation:",
+          error,
+        );
       }
     }
   }

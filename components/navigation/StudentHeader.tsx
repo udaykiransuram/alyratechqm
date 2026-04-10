@@ -30,6 +30,7 @@ export default function StudentHeader({
   initialUnreadCount = 0,
 }: StudentHeaderProps) {
   const pathname = usePathname();
+  const hideStudentChrome = shouldHideStudentChrome(pathname);
   const [notifications, setNotifications] = useState<StudentNotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(
     Number.isFinite(initialUnreadCount) ? Math.max(0, Number(initialUnreadCount)) : 0,
@@ -148,6 +149,10 @@ export default function StudentHeader({
   }, [hasLoadedNotifications]);
 
   useEffect(() => {
+    if (hideStudentChrome) {
+      return;
+    }
+
     const clearScheduledUnreadRefresh = () => {
       if (unreadRefreshTimeoutRef.current !== null) {
         window.clearTimeout(unreadRefreshTimeoutRef.current);
@@ -184,9 +189,9 @@ export default function StudentHeader({
       source.removeEventListener("notification.created", handleCreated);
       source.close();
     };
-  }, []);
+  }, [hideStudentChrome]);
 
-  if (shouldHideStudentChrome(pathname)) {
+  if (hideStudentChrome) {
     return null;
   }
 

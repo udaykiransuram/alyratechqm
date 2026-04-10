@@ -10,7 +10,7 @@ import FeedbackNotice from "@/components/ui/feedback-notice";
 import PageLoadingState from "@/components/ui/page-loading-state";
 
 import type { StudentTestDetailResponse } from "./student-test-types";
-import { useStudentTestRuntime } from "./useStudentTestRuntime";
+import { useStudentTestRuntime } from "./useStudentTestRuntimeV2";
 
 const StudentTestLockedView = dynamic(
   () => import("./StudentTestLockedView"),
@@ -128,9 +128,12 @@ export default function StudentTestPageClient({
     );
   }
 
+  const shouldShowFullscreenGate =
+    runtime.isExamLocked || !runtime.isFullscreen;
+
   return (
     <div ref={runtime.examContainerRef} className="min-h-[100dvh]">
-      {runtime.isExamLocked ? (
+      {shouldShowFullscreenGate ? (
         <StudentTestFullscreenGateView
           paperTitle={runtime.paper.title}
           testsHref={testsHref}

@@ -762,6 +762,7 @@
         border-radius: 0.25rem;
         transition: background-color 0.2s ease;
         user-select: none;
+        font-size: 1.15em;
       }
 
       .math-rendered:hover {
@@ -772,6 +773,7 @@
         display: block;
         text-align: center;
         margin: 1em 0;
+        font-size: 1.2em;
       }
 
       /* TipTap's default class for selected nodes (applies to any selected node, including math) */
@@ -829,10 +831,15 @@
       .ProseMirror .math-node {
         /* Reset font-size and line-height that prose might be setting. */
         /* KaTeX uses ems for sizing, so resetting to the base is crucial. */
-        font-size: 1em;
-        line-height: 1.2;
+        font-size: 1.15em;
+        line-height: 1.25;
         font-family: 'KaTeX_Main', 'Times New Roman', serif; /* Be explicit */
         display: inline-block; /* Helps with alignment and prevents weird wrapping */
+      }
+
+      /* Global KaTeX scale for read views (questions, reports, previews). */
+      .katex {
+        font-size: 1.15em;
       }
 
       /* Target all elements within the KaTeX rendered output to reset prose styles */

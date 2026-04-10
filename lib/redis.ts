@@ -677,10 +677,15 @@ export async function readSharedCacheEntry<T>(key: string) {
     return null;
   }
 
-  const payload = await runRedisCommand<string>([
-    "GET",
-    buildSharedCacheKey(normalizedKey),
-  ]);
+  let payload: string | null = null;
+  try {
+    payload = await runRedisCommand<string>([
+      "GET",
+      buildSharedCacheKey(normalizedKey),
+    ]);
+  } catch {
+    return null;
+  }
 
   if (typeof payload !== "string") {
     return null;

@@ -24,7 +24,7 @@ export default function StudentTestFullscreenGateView({
   onResumeFullscreen,
 }: StudentTestFullscreenGateViewProps) {
   return (
-    <div className="app-page-shell flex min-h-[calc(100dvh-4rem)] items-center justify-center px-4 py-6 sm:px-6">
+    <div className="fixed inset-0 z-[1400] flex min-h-[100dvh] items-center justify-center bg-background px-4 py-6 sm:px-6">
       <div className="w-full max-w-2xl space-y-4">
         {actionError ? (
           <FeedbackNotice variant="error">{actionError}</FeedbackNotice>
