@@ -20,6 +20,32 @@ function getCronSecret() {
   return String(process.env.CRON_SECRET || "").trim();
 }
 
+function isScheduledCronEnabled() {
+  const normalized = String(
+    process.env.ENABLE_STUDENT_NOTIFICATION_CRON ||
+      process.env.ENABLE_VERCEL_CRONS ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+
+  return (
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "yes" ||
+    normalized === "on"
+  );
+}
+
+function buildScheduledCronDisabledResponse() {
+  return NextResponse.json({
+    success: true,
+    mode: "scheduled",
+    skipped: true,
+    message: "Scheduled student notification cron is disabled for this deployment.",
+  });
+}
+
 function secureEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
@@ -253,6 +279,10 @@ export async function GET(req: NextRequest) {
       },
       { status: 401 },
     );
+  }
+
+  if (!isScheduledCronEnabled()) {
+    return buildScheduledCronDisabledResponse();
   }
 
   const result = await runScheduledWorkerFromRequest(req);
