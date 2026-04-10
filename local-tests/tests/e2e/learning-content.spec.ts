@@ -41,10 +41,12 @@ test.describe("Learning content automation @desktop", () => {
     expect(response?.status() ?? 0).toBeLessThan(400);
     await expect(page.getByRole("heading", { name: "Create Course" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Course Setup" })).toBeVisible();
-    await page.getByRole("button", { name: "Lesson" }).click();
-    await page.getByRole("button", { name: "Assessment" }).click();
+    await expect(page.getByRole("heading", { name: "Curriculum" })).toBeVisible();
+    await expect(page.getByDisplayValue("Module 1")).toBeVisible();
     await expect(page.getByDisplayValue("Lesson 1")).toBeVisible();
-    await expect(page.getByText("Linked paper")).toBeVisible();
+    await page.getByRole("button", { name: "Add special block" }).click();
+    await page.getByRole("button", { name: "Assessment" }).click();
+    await expect(page.getByText("Link a question paper.")).toBeVisible();
 
     response = await navigateToAppRoute(page, "/workspace/diary");
     expect(response, "workspace diary page should respond").not.toBeNull();

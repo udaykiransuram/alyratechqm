@@ -6,20 +6,17 @@ import {
   useMemo,
   useRef,
   useState,
-  type DragEvent,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
-  Bell,
-  BookOpen,
-  FileQuestion,
+  FileImage,
   FileText,
-  GripVertical,
   Plus,
   Save,
   Trash2,
+  Video,
 } from "lucide-react";
 
 import RichTextEditor from "@/components/RichTextEditor";
@@ -149,6 +146,38 @@ type EditableCourseBlock =
   | EditableAnnouncementBlock
   | EditableAssessmentBlock;
 
+type EditableSpecialBlock = EditableAnnouncementBlock | EditableAssessmentBlock;
+
+type ModuleCurriculumChild =
+  | {
+      kind: "lesson";
+      block: EditableLessonBlock;
+      blockIndex: number;
+    }
+  | {
+      kind: "special";
+      block: EditableSpecialBlock;
+      blockIndex: number;
+    };
+
+type CurriculumRenderEntry =
+  | {
+      kind: "module";
+      module: EditableModuleBlock;
+      moduleIndex: number;
+      children: ModuleCurriculumChild[];
+    }
+  | {
+      kind: "special";
+      block: EditableSpecialBlock;
+      blockIndex: number;
+    }
+  | {
+      kind: "orphan-lesson";
+      block: EditableLessonBlock;
+      blockIndex: number;
+    };
+
 type CourseEditorClientProps = {
   mode: "create" | "edit";
   courseId?: string;
@@ -208,35 +237,114 @@ function formatDateTimeLocalInput(value?: string | null) {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
-function buildEmptyBlock(type: EditableCourseBlock["type"]): EditableCourseBlock {
-  const id = createClientBlockId();
+function createLessonItem(
+  type: EditableLessonItem["type"],
+  overrides?: Partial<EditableLessonItem>,
+): EditableLessonItem {
+  const id = createClientItemId();
 
+  if (type === "text") {
+    return {
+      id,
+      type,
+      contentHtml: "",
+      ...overrides,
+    } as EditableLessonTextItem;
+  }
+
+  if (type === "image") {
+    return {
+      id,
+      type,
+      imageUrl: "",
+      altText: "",
+      caption: "",
+      imageFit: "contain",
+      imageWidth: "standard",
+      imageHeight: "large",
+      ...overrides,
+    } as EditableLessonImageItem;
+  }
+
+  if (type === "youtube") {
+    return {
+      id,
+      type,
+      videoId: "",
+      caption: "",
+      urlInput: "",
+      ...overrides,
+    } as EditableLessonYoutubeItem;
+  }
+
+  return {
+    id,
+    type,
+    title:
+      overrides && "title" in overrides && typeof overrides.title === "string"
+        ? overrides.title
+        : "",
+    fileUrl: "",
+    fileName: "",
+    caption: "",
+    ...overrides,
+  } as EditableLessonResourceItem;
+}
+
+function createModuleBlock(title = ""): EditableModuleBlock {
+  return {
+    id: createClientBlockId(),
+    type: "module",
+    title,
+    summary: "",
+  };
+}
+
+function createLessonBlock(params?: {
+  title?: string;
+  itemType?: EditableLessonItem["type"];
+  itemOverrides?: Partial<EditableLessonItem>;
+}): EditableLessonBlock {
+  const itemType = params?.itemType || "text";
+
+  return {
+    id: createClientBlockId(),
+    type: "lesson",
+    title: params?.title || "",
+    summary: "",
+    estimatedMinutes: "",
+    items: [createLessonItem(itemType, params?.itemOverrides)],
+  };
+}
+
+function buildStarterCourseBlocks(): EditableCourseBlock[] {
+  return [createModuleBlock("Module 1"), createLessonBlock({ title: "Lesson 1" })];
+}
+
+function shouldSeedStarterCourseBlocks(params: {
+  mode: "create" | "edit";
+  creationContext: CourseEditorClientProps["creationContext"];
+  initialCourse?: WorkspaceCourseDetail | null;
+  mappedBlocks: EditableCourseBlock[];
+}) {
+  return (
+    params.mode === "create" &&
+    !params.initialCourse &&
+    params.creationContext?.mode === "standard" &&
+    params.creationContext?.startAsTemplate !== true &&
+    params.mappedBlocks.length === 0
+  );
+}
+
+function buildEmptyBlock(type: EditableCourseBlock["type"]): EditableCourseBlock {
   switch (type) {
     case "module":
-      return {
-        id,
-        type,
-        title: "",
-        summary: "",
-      };
+      return createModuleBlock();
     case "lesson":
-      return {
-        id,
-        type,
-        title: "",
-        summary: "",
-        estimatedMinutes: "",
-        items: [
-          {
-            id: createClientItemId(),
-            type: "text",
-            contentHtml: "",
-          },
-        ],
-      };
+      return createLessonBlock();
     case "announcement":
       return {
-        id,
+        id: createClientBlockId(),
         type,
         title: "",
         tone: "info",
@@ -244,7 +352,7 @@ function buildEmptyBlock(type: EditableCourseBlock["type"]): EditableCourseBlock
       };
     case "assessment":
       return {
-        id,
+        id: createClientBlockId(),
         type,
         questionPaperId: "",
         titleOverride: "",
@@ -562,6 +670,142 @@ function formatPaperOptionLabel(paper: WorkspaceCoursePaperOption) {
   return `${paper.title}${classLabel}`;
 }
 
+function isSpecialCourseBlock(block: EditableCourseBlock): block is EditableSpecialBlock {
+  return block.type === "announcement" || block.type === "assessment";
+}
+
+function buildCurriculumEntries(blocks: EditableCourseBlock[]): CurriculumRenderEntry[] {
+  const entries: CurriculumRenderEntry[] = [];
+  let activeModuleEntry: Extract<CurriculumRenderEntry, { kind: "module" }> | null = null;
+
+  blocks.forEach((block, blockIndex) => {
+    if (block.type === "module") {
+      activeModuleEntry = {
+        kind: "module",
+        module: block,
+        moduleIndex: blockIndex,
+        children: [],
+      };
+      entries.push(activeModuleEntry);
+      return;
+    }
+
+    if (block.type === "lesson") {
+      if (activeModuleEntry) {
+        activeModuleEntry.children.push({
+          kind: "lesson",
+          block,
+          blockIndex,
+        });
+        return;
+      }
+
+      entries.push({
+        kind: "orphan-lesson",
+        block,
+        blockIndex,
+      });
+      return;
+    }
+
+    if (!isSpecialCourseBlock(block)) {
+      return;
+    }
+
+    if (activeModuleEntry) {
+      activeModuleEntry.children.push({
+        kind: "special",
+        block,
+        blockIndex,
+      });
+      return;
+    }
+
+    entries.push({
+      kind: "special",
+      block,
+      blockIndex,
+    });
+  });
+
+  return entries;
+}
+
+function stripHtmlToText(value: string) {
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function summarizeText(value: string, maxLength = 88) {
+  const plainText = stripHtmlToText(value);
+  if (!plainText) {
+    return "";
+  }
+
+  if (plainText.length <= maxLength) {
+    return plainText;
+  }
+
+  return `${plainText.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function getLessonItemTypeLabel(item: EditableLessonItem) {
+  switch (item.type) {
+    case "text":
+      return "Text";
+    case "image":
+      return "Image";
+    case "youtube":
+      return "Video";
+    case "resource":
+      return "File";
+  }
+}
+
+function getLessonItemSummary(item: EditableLessonItem) {
+  switch (item.type) {
+    case "text":
+      return summarizeText(item.contentHtml) || "Add lesson notes, explanation, or instructions.";
+    case "image":
+      return item.caption || item.altText || item.imageUrl || "Add an image and optional caption.";
+    case "youtube":
+      return item.caption || item.urlInput || "Paste a YouTube link.";
+    case "resource":
+      return item.title || item.fileName || item.caption || "Upload a supporting resource.";
+  }
+}
+
+function getLessonItemIcon(item: EditableLessonItem) {
+  switch (item.type) {
+    case "text":
+      return FileText;
+    case "image":
+      return FileImage;
+    case "youtube":
+      return Video;
+    case "resource":
+      return FileText;
+  }
+}
+
+function getSpecialBlockTitle(
+  block: EditableSpecialBlock,
+  paperOptionsById: Map<string, WorkspaceCoursePaperOption>,
+) {
+  if (block.type === "announcement") {
+    return block.title || "Announcement";
+  }
+
+  return (
+    block.titleOverride ||
+    paperOptionsById.get(block.questionPaperId)?.title ||
+    "Assessment"
+  );
+}
+
 function getBlockTypeLabel(block: EditableCourseBlock) {
   switch (block.type) {
     case "module":
@@ -572,19 +816,6 @@ function getBlockTypeLabel(block: EditableCourseBlock) {
       return "Announcement";
     case "assessment":
       return "Assessment";
-  }
-}
-
-function getBlockIcon(block: EditableCourseBlock) {
-  switch (block.type) {
-    case "module":
-      return BookOpen;
-    case "lesson":
-      return FileText;
-    case "announcement":
-      return Bell;
-    case "assessment":
-      return FileQuestion;
   }
 }
 
@@ -864,15 +1095,31 @@ export default function CourseEditorClient({
       ? initialCourse!.assignedAcademicSections.map((section) => section._id)
       : [],
   );
-  const [blocks, setBlocks] = useState<EditableCourseBlock[]>(
-    mapInitialBlocks(initialCourse),
-  );
+  const [blocks, setBlocks] = useState<EditableCourseBlock[]>(() => {
+    const mappedBlocks = mapInitialBlocks(initialCourse);
+
+    if (
+      shouldSeedStarterCourseBlocks({
+        mode,
+        creationContext,
+        initialCourse,
+        mappedBlocks,
+      })
+    ) {
+      return buildStarterCourseBlocks();
+    }
+
+    return mappedBlocks;
+  });
   const [formError, setFormError] = useState<string | null>(null);
   const [savingTarget, setSavingTarget] = useState<"draft" | "published" | null>(null);
   const [uploadingImageTarget, setUploadingImageTarget] = useState<string | null>(null);
   const [uploadingFileBlockId, setUploadingFileBlockId] = useState<string | null>(null);
-  const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState(false);
+  const [expandedLessonItems, setExpandedLessonItems] = useState<
+    Record<string, string[]>
+  >({});
+  const [settingsPanelValue, setSettingsPanelValue] = useState<string>("");
+  const [previewPanelValue, setPreviewPanelValue] = useState<string>("");
   const [autosaveStatus, setAutosaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
@@ -1113,6 +1360,17 @@ export default function CourseEditorClient({
   };
 
   const removeLessonItem = (blockId: string, itemId: string) => {
+    setExpandedLessonItems((currentItems) => {
+      if (!Object.prototype.hasOwnProperty.call(currentItems, blockId)) {
+        return currentItems;
+      }
+
+      return {
+        ...currentItems,
+        [blockId]: currentItems[blockId].filter((value) => value !== itemId),
+      };
+    });
+
     setBlocks((currentBlocks) =>
       currentBlocks.map((block) => {
         if (block.id !== blockId || block.type !== "lesson") {
@@ -1132,41 +1390,14 @@ export default function CourseEditorClient({
     type: EditableLessonItem["type"],
     overrides?: Partial<EditableLessonItem>,
   ) => {
-    const nextItemId = createClientItemId();
+    const newItem = createLessonItem(type, overrides);
 
-    const newItem: EditableLessonItem =
-      type === "text"
-        ? { id: nextItemId, type: "text", contentHtml: "" }
-        : type === "image"
-          ? {
-              id: nextItemId,
-              type: "image",
-              imageUrl: "",
-              altText: "",
-              caption: "",
-              imageFit: "contain",
-              imageWidth: "standard",
-              imageHeight: "large",
-            }
-          : type === "youtube"
-            ? {
-                id: nextItemId,
-                type: "youtube",
-                videoId: "",
-                caption: "",
-                urlInput: "",
-              }
-            : {
-                id: nextItemId,
-                type: "resource",
-                title:
-                  overrides && "title" in overrides && typeof overrides.title === "string"
-                    ? overrides.title
-                    : "",
-                fileUrl: "",
-                fileName: "",
-                caption: "",
-              };
+    setExpandedLessonItems((currentItems) => ({
+      ...currentItems,
+      [blockId]: Array.from(
+        new Set([...(currentItems[blockId] || []), newItem.id]),
+      ),
+    }));
 
     setBlocks((currentBlocks) =>
       currentBlocks.map((block) => {
@@ -1189,6 +1420,63 @@ export default function CourseEditorClient({
 
       if (currentIndex < 0 || nextIndex < 0 || nextIndex >= currentBlocks.length) {
         return currentBlocks;
+      }
+
+      if (currentBlocks[currentIndex].type === "module") {
+        let currentModuleEnd = currentBlocks.length;
+        for (let index = currentIndex + 1; index < currentBlocks.length; index += 1) {
+          if (currentBlocks[index].type === "module") {
+            currentModuleEnd = index;
+            break;
+          }
+        }
+
+        const currentModuleLength = currentModuleEnd - currentIndex;
+        const movingSegment = currentBlocks.slice(currentIndex, currentModuleEnd);
+
+        if (direction < 0) {
+          let previousModuleIndex = -1;
+          for (let index = currentIndex - 1; index >= 0; index -= 1) {
+            if (currentBlocks[index].type === "module") {
+              previousModuleIndex = index;
+              break;
+            }
+          }
+
+          if (previousModuleIndex < 0) {
+            return currentBlocks;
+          }
+
+          const nextBlocks = [...currentBlocks];
+          nextBlocks.splice(currentIndex, currentModuleLength);
+          nextBlocks.splice(previousModuleIndex, 0, ...movingSegment);
+          return nextBlocks;
+        }
+
+        let nextModuleIndex = -1;
+        for (let index = currentModuleEnd; index < currentBlocks.length; index += 1) {
+          if (currentBlocks[index].type === "module") {
+            nextModuleIndex = index;
+            break;
+          }
+        }
+
+        if (nextModuleIndex < 0) {
+          return currentBlocks;
+        }
+
+        let nextModuleEnd = currentBlocks.length;
+        for (let index = nextModuleIndex + 1; index < currentBlocks.length; index += 1) {
+          if (currentBlocks[index].type === "module") {
+            nextModuleEnd = index;
+            break;
+          }
+        }
+
+        const nextBlocks = [...currentBlocks];
+        nextBlocks.splice(currentIndex, currentModuleLength);
+        nextBlocks.splice(nextModuleEnd - currentModuleLength, 0, ...movingSegment);
+        return nextBlocks;
       }
 
       if (currentBlocks[currentIndex].type === "lesson") {
@@ -1227,60 +1515,36 @@ export default function CourseEditorClient({
     });
   };
 
-  const moveBlockTo = (sourceId: string, targetId: string) => {
-    setBlocks((currentBlocks) => {
-      const sourceIndex = currentBlocks.findIndex((block) => block.id === sourceId);
-      const targetIndex = currentBlocks.findIndex((block) => block.id === targetId);
-
-      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
-        return currentBlocks;
+  const removeBlock = (blockId: string) => {
+    setExpandedLessonItems((currentItems) => {
+      if (!Object.prototype.hasOwnProperty.call(currentItems, blockId)) {
+        return currentItems;
       }
 
-      const nextBlocks = [...currentBlocks];
-      const [movingBlock] = nextBlocks.splice(sourceIndex, 1);
-      nextBlocks.splice(targetIndex, 0, movingBlock);
-      return nextBlocks;
+      const nextItems = { ...currentItems };
+      delete nextItems[blockId];
+      return nextItems;
     });
-  };
 
-  const removeBlock = (blockId: string) => {
     setBlocks((currentBlocks) => currentBlocks.filter((block) => block.id !== blockId));
   };
 
   const addBlock = (type: EditableCourseBlock["type"]) => {
-    setBlocks((currentBlocks) => [...currentBlocks, buildEmptyBlock(type)]);
-  };
+    setBlocks((currentBlocks) => {
+      if (type === "module") {
+        const nextModuleNumber =
+          currentBlocks.filter((block) => block.type === "module").length + 1;
+        return [...currentBlocks, createModuleBlock(`Module ${nextModuleNumber}`)];
+      }
 
-  const handleBlockDragStart = (blockId: string) => (event: DragEvent) => {
-    setDraggingBlockId(blockId);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", blockId);
-  };
-
-  const handleBlockDragOver = (_blockId: string) => (event: DragEvent) => {
-    if (draggingBlockId) {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-    }
-  };
-
-  const handleBlockDrop = (blockId: string) => (event: DragEvent) => {
-    event.preventDefault();
-    const sourceId = draggingBlockId || event.dataTransfer.getData("text/plain");
-    if (!sourceId || sourceId === blockId) {
-      setDraggingBlockId(null);
-      return;
-    }
-
-    moveBlockTo(sourceId, blockId);
-    setDraggingBlockId(null);
-  };
-
-  const handleBlockDragEnd = () => {
-    setDraggingBlockId(null);
+      return [...currentBlocks, buildEmptyBlock(type)];
+    });
   };
 
   const duplicateLessonBlock = (blockId: string) => {
+    let clonedBlockId = "";
+    let clonedItemIds: string[] = [];
+
     setBlocks((currentBlocks) => {
       const index = currentBlocks.findIndex((block) => block.id === blockId);
       if (index < 0) {
@@ -1302,10 +1566,20 @@ export default function CourseEditorClient({
         })),
       };
 
+      clonedBlockId = clonedBlock.id;
+      clonedItemIds = clonedBlock.items.slice(0, 1).map((item) => item.id);
+
       const nextBlocks = [...currentBlocks];
       nextBlocks.splice(index + 1, 0, clonedBlock);
       return nextBlocks;
     });
+
+    if (clonedBlockId) {
+      setExpandedLessonItems((currentItems) => ({
+        ...currentItems,
+        [clonedBlockId]: clonedItemIds,
+      }));
+    }
   };
 
   const moveLessonToModule = (blockId: string, direction: "prev" | "next") => {
@@ -1389,6 +1663,12 @@ export default function CourseEditorClient({
     }
     return blocks.slice(currentModuleIndex + 1).some((block) => block.type === "module");
   };
+
+  const canMoveModuleSectionUp = (moduleIndex: number) =>
+    blocks.slice(0, moduleIndex).some((block) => block.type === "module");
+
+  const canMoveModuleSectionDown = (moduleIndex: number) =>
+    blocks.slice(moduleIndex + 1).some((block) => block.type === "module");
 
   useEffect(() => {
     const paperId = searchParams.get("paperId");
@@ -2090,16 +2370,40 @@ export default function CourseEditorClient({
     [blocks],
   );
 
+  const curriculumEntries = useMemo(
+    () => buildCurriculumEntries(blocks),
+    [blocks],
+  );
+  const moduleCount = blockCounts.module || 0;
+  const lessonCount = blockCounts.lesson || 0;
   const setupComplete = Boolean(title.trim() && classId && selectedSubjectIds.length > 0);
   const buildComplete = hasModule && blocks.some((block) => block.type === "lesson");
   const publishReady = setupComplete && buildComplete;
-  const completedSteps = [
-    setupComplete,
-    buildComplete,
-    publishReady,
+  const configuredCourseSettingsCount = [
+    Boolean(coverImageUrl),
+    Boolean(startsAt),
+    Boolean(dueAt),
+    Boolean(completionBadgeLabel),
+    enforceSequentialProgress,
+    !allowNotes,
+    !allowBookmarks,
+    isTemplate,
   ].filter(Boolean).length;
-  const progressWidth = `${Math.round((completedSteps / 3) * 100)}%`;
-  const progressLabel = `${Math.min(completedSteps, 3)}/3`;
+  const settingsSummary =
+    configuredCourseSettingsCount > 0
+      ? `${configuredCourseSettingsCount} setting${
+          configuredCourseSettingsCount === 1 ? "" : "s"
+        } configured`
+      : "Cover, schedule, student tools, and template options";
+  const previewSummary =
+    blocks.length > 0
+      ? `${blocks.length} block${blocks.length === 1 ? "" : "s"} ready to preview`
+      : "Preview becomes available once you add content.";
+
+  const getExpandedLessonItemValues = (lesson: EditableLessonBlock) =>
+    Object.prototype.hasOwnProperty.call(expandedLessonItems, lesson.id)
+      ? expandedLessonItems[lesson.id]
+      : lesson.items.slice(0, 1).map((item) => item.id);
 
   const addQuickLessonBlock = (type: EditableLessonItem["type"]) => {
     if (!hasModule) {
@@ -2110,38 +2414,16 @@ export default function CourseEditorClient({
       return;
     }
 
-    const blockId = createClientBlockId();
-    const itemId = createClientItemId();
-    const item: EditableLessonItem =
-      type === "text"
-        ? { id: itemId, type: "text", contentHtml: "" }
-        : type === "image"
-          ? {
-              id: itemId,
-              type: "image",
-              imageUrl: "",
-              altText: "",
-              caption: "",
-              imageFit: "contain",
-              imageWidth: "standard",
-              imageHeight: "large",
-            }
-          : type === "youtube"
-            ? {
-                id: itemId,
-                type: "youtube",
-                videoId: "",
-                caption: "",
-                urlInput: "",
-              }
-            : {
-                id: itemId,
-                type: "resource",
-                title: "",
-                fileUrl: "",
-                fileName: "",
-                caption: "",
-              };
+    const nextLessonNumber = lessonCount + 1;
+    const nextLessonBlock = createLessonBlock({
+      title: `Lesson ${nextLessonNumber}`,
+      itemType: type,
+    });
+
+    setExpandedLessonItems((currentItems) => ({
+      ...currentItems,
+      [nextLessonBlock.id]: nextLessonBlock.items.map((item) => item.id),
+    }));
 
     setBlocks((currentBlocks) => {
       const lastModuleIndex = [...currentBlocks]
@@ -2156,20 +2438,13 @@ export default function CourseEditorClient({
       let insertIndex = lastModuleIndex + 1;
       while (
         insertIndex < currentBlocks.length &&
-        currentBlocks[insertIndex].type === "lesson"
+        currentBlocks[insertIndex].type !== "module"
       ) {
         insertIndex += 1;
       }
 
       const nextBlocks = [...currentBlocks];
-      nextBlocks.splice(insertIndex, 0, {
-        id: blockId,
-        type: "lesson",
-        title: "",
-        summary: "",
-        estimatedMinutes: "",
-        items: [item],
-      });
+      nextBlocks.splice(insertIndex, 0, nextLessonBlock);
 
       return nextBlocks;
     });
@@ -2179,38 +2454,16 @@ export default function CourseEditorClient({
     moduleIndex: number,
     type: EditableLessonItem["type"] = "text",
   ) => {
-    const blockId = createClientBlockId();
-    const itemId = createClientItemId();
-    const item: EditableLessonItem =
-      type === "text"
-        ? { id: itemId, type: "text", contentHtml: "" }
-        : type === "image"
-          ? {
-              id: itemId,
-              type: "image",
-              imageUrl: "",
-              altText: "",
-              caption: "",
-              imageFit: "contain",
-              imageWidth: "standard",
-              imageHeight: "large",
-            }
-          : type === "youtube"
-            ? {
-                id: itemId,
-                type: "youtube",
-                videoId: "",
-                caption: "",
-                urlInput: "",
-              }
-            : {
-                id: itemId,
-                type: "resource",
-                title: "",
-                fileUrl: "",
-                fileName: "",
-                caption: "",
-              };
+    const nextLessonNumber = lessonCount + 1;
+    const nextLessonBlock = createLessonBlock({
+      title: `Lesson ${nextLessonNumber}`,
+      itemType: type,
+    });
+
+    setExpandedLessonItems((currentItems) => ({
+      ...currentItems,
+      [nextLessonBlock.id]: nextLessonBlock.items.map((item) => item.id),
+    }));
 
     setBlocks((currentBlocks) => {
       if (!currentBlocks[moduleIndex] || currentBlocks[moduleIndex].type !== "module") {
@@ -2220,24 +2473,1000 @@ export default function CourseEditorClient({
       let insertIndex = moduleIndex + 1;
       while (
         insertIndex < currentBlocks.length &&
-        currentBlocks[insertIndex].type === "lesson"
+        currentBlocks[insertIndex].type !== "module"
       ) {
         insertIndex += 1;
       }
 
       const nextBlocks = [...currentBlocks];
-      nextBlocks.splice(insertIndex, 0, {
-        id: blockId,
-        type: "lesson",
-        title: "",
-        summary: "",
-        estimatedMinutes: "",
-        items: [item],
-      });
+      nextBlocks.splice(insertIndex, 0, nextLessonBlock);
 
       return nextBlocks;
     });
   };
+
+  const renderLessonItemEditor = (
+    lessonBlock: EditableLessonBlock,
+    item: EditableLessonItem,
+  ) => {
+    const itemError = inlineErrors.blocks[lessonBlock.id]?.itemErrors?.[item.id];
+
+    if (item.type === "text") {
+      return (
+        <FormField
+          label="Text content"
+          hint={itemError || undefined}
+          hintTone={itemError ? "error" : "muted"}
+        >
+          <RichTextEditor
+            initialContent={item.contentHtml}
+            onChange={(html) =>
+              updateLessonItem<EditableLessonTextItem>(
+                lessonBlock.id,
+                item.id,
+                (currentItem) => ({
+                  ...currentItem,
+                  contentHtml: html,
+                }),
+              )
+            }
+            editorKey={`${lessonBlock.id}-${item.id}`}
+            imageUploadEndpoint="/api/courses/images"
+            compact
+          />
+        </FormField>
+      );
+    }
+
+    if (item.type === "image") {
+      return (
+        <div className="space-y-4">
+          <FormField
+            label="Image source"
+            hint={itemError || undefined}
+            hintTone={itemError ? "error" : "muted"}
+          >
+            <div className="space-y-3">
+              <Input
+                value={item.imageUrl}
+                onChange={(event) =>
+                  updateLessonItem<EditableLessonImageItem>(
+                    lessonBlock.id,
+                    item.id,
+                    (currentItem) => ({
+                      ...currentItem,
+                      imageUrl: event.target.value,
+                    }),
+                  )
+                }
+                placeholder="https://example.com/lesson-image.webp"
+              />
+              <FilePickerField
+                id={`lesson-image-${item.id}`}
+                label="Image upload"
+                hideLabel
+                buttonLabel="Upload image"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml"
+                placeholder="No image selected"
+                selectedFileName={
+                  uploadingImageTarget === item.id ? "Uploading..." : null
+                }
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null;
+                  event.target.value = "";
+                  void handleLessonItemImageUpload(lessonBlock.id, item.id, file);
+                }}
+              />
+              {uploadingImageTarget === item.id ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Spinner />
+                  Uploading image...
+                </div>
+              ) : null}
+            </div>
+          </FormField>
+
+          <Accordion type="single" collapsible className="pt-1">
+            <AccordionItem value={`image-settings-${item.id}`} className="border-none">
+              <AccordionTrigger className="app-course-inline-accordion-trigger">
+                Item settings
+              </AccordionTrigger>
+              <AccordionContent className="app-course-inline-accordion-content space-y-4">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <FormField label="Alt text">
+                    <Input
+                      value={item.altText}
+                      onChange={(event) =>
+                        updateLessonItem<EditableLessonImageItem>(
+                          lessonBlock.id,
+                          item.id,
+                          (currentItem) => ({
+                            ...currentItem,
+                            altText: event.target.value,
+                          }),
+                        )
+                      }
+                      placeholder="Describe the image for accessibility"
+                    />
+                  </FormField>
+                  <FormField label="Caption">
+                    <Input
+                      value={item.caption}
+                      onChange={(event) =>
+                        updateLessonItem<EditableLessonImageItem>(
+                          lessonBlock.id,
+                          item.id,
+                          (currentItem) => ({
+                            ...currentItem,
+                            caption: event.target.value,
+                          }),
+                        )
+                      }
+                      placeholder="Optional caption"
+                    />
+                  </FormField>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <FormField label="Image fit">
+                    <Select
+                      value={item.imageFit}
+                      onValueChange={(value) =>
+                        updateLessonItem<EditableLessonImageItem>(
+                          lessonBlock.id,
+                          item.id,
+                          (currentItem) => ({
+                            ...currentItem,
+                            imageFit: value as EditableLessonImageItem["imageFit"],
+                          }),
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select fit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COURSE_IMAGE_FIT_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                  <FormField label="Image width">
+                    <Select
+                      value={item.imageWidth}
+                      onValueChange={(value) =>
+                        updateLessonItem<EditableLessonImageItem>(
+                          lessonBlock.id,
+                          item.id,
+                          (currentItem) => ({
+                            ...currentItem,
+                            imageWidth: value as EditableLessonImageItem["imageWidth"],
+                          }),
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select width" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COURSE_IMAGE_WIDTH_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                  <FormField label="Frame height">
+                    <Select
+                      value={item.imageHeight}
+                      onValueChange={(value) =>
+                        updateLessonItem<EditableLessonImageItem>(
+                          lessonBlock.id,
+                          item.id,
+                          (currentItem) => ({
+                            ...currentItem,
+                            imageHeight: value as EditableLessonImageItem["imageHeight"],
+                          }),
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select height" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COURSE_IMAGE_HEIGHT_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
+          {item.imageUrl ? (
+            <div className={getCourseImageDisplayClasses(item).wrapperClassName}>
+              <div className={getCourseImageDisplayClasses(item).frameClassName}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.imageUrl}
+                  alt={item.altText || "Lesson image preview"}
+                  className={getCourseImageDisplayClasses(item).imageClassName}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (item.type === "youtube") {
+      return (
+        <div className="space-y-4">
+          <FormField
+            label="YouTube link"
+            hint={itemError || undefined}
+            hintTone={itemError ? "error" : "muted"}
+          >
+            <Input
+              value={item.urlInput}
+              onChange={(event) =>
+                updateLessonItem<EditableLessonYoutubeItem>(
+                  lessonBlock.id,
+                  item.id,
+                  (currentItem) => ({
+                    ...currentItem,
+                    urlInput: event.target.value,
+                    videoId:
+                      resolveYouTubeVideoId(event.target.value) || currentItem.videoId,
+                  }),
+                )
+              }
+              placeholder="https://www.youtube.com/watch?v=..."
+            />
+          </FormField>
+
+          <FormField label="Caption">
+            <Textarea
+              value={item.caption}
+              onChange={(event) =>
+                updateLessonItem<EditableLessonYoutubeItem>(
+                  lessonBlock.id,
+                  item.id,
+                  (currentItem) => ({
+                    ...currentItem,
+                    caption: event.target.value,
+                  }),
+                )
+              }
+              className="min-h-[96px]"
+              placeholder="Optional context or instructions for the video."
+            />
+          </FormField>
+
+          {resolveYouTubeVideoId(item.urlInput) ? (
+            <div className="app-course-media-frame">
+              <div className="aspect-video w-full">
+                <iframe
+                  title="YouTube preview"
+                  src={buildYouTubeEmbedUrl(
+                    resolveYouTubeVideoId(item.urlInput) || "",
+                  )}
+                  className="h-full w-full"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    const resourceTitleError =
+      itemError && itemError.includes("title") ? itemError : undefined;
+    const resourceUploadError =
+      itemError && itemError.includes("Upload") ? itemError : undefined;
+
+    return (
+      <div className="space-y-4">
+        <FormField
+          label="Resource title"
+          hint={resourceTitleError}
+          hintTone={resourceTitleError ? "error" : "muted"}
+        >
+          <Input
+            value={item.title}
+            onChange={(event) =>
+              updateLessonItem<EditableLessonResourceItem>(
+                lessonBlock.id,
+                item.id,
+                (currentItem) => ({
+                  ...currentItem,
+                  title: event.target.value,
+                }),
+              )
+            }
+            placeholder="Formula sheet"
+          />
+        </FormField>
+
+        <FormField
+          label="Resource or video file"
+          hint={resourceUploadError || "PDF, DOCX, or video files are supported."}
+          hintTone={resourceUploadError ? "error" : "muted"}
+        >
+          <FilePickerField
+            id={`lesson-resource-${item.id}`}
+            label="Upload resource file"
+            hideLabel
+            buttonLabel="Upload file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.mp4,.mov,.webm,.m4v,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip,video/mp4,video/webm,video/quicktime,video/x-m4v"
+            placeholder="No file selected"
+            selectedFileName={
+              uploadingFileBlockId === item.id ? "Uploading..." : item.fileName || null
+            }
+            onChange={(event) => {
+              const file = event.target.files?.[0] || null;
+              event.target.value = "";
+              void handleLessonItemResourceUpload(lessonBlock.id, item.id, file);
+            }}
+          />
+        </FormField>
+
+        {uploadingFileBlockId === item.id ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner />
+            Uploading resource...
+          </div>
+        ) : null}
+
+        <Accordion type="single" collapsible className="pt-1">
+          <AccordionItem value={`resource-settings-${item.id}`} className="border-none">
+            <AccordionTrigger className="app-course-inline-accordion-trigger">
+              Item settings
+            </AccordionTrigger>
+            <AccordionContent className="app-course-inline-accordion-content">
+              <FormField label="Caption">
+                <Input
+                  value={item.caption}
+                  onChange={(event) =>
+                    updateLessonItem<EditableLessonResourceItem>(
+                      lessonBlock.id,
+                      item.id,
+                      (currentItem) => ({
+                        ...currentItem,
+                        caption: event.target.value,
+                      }),
+                    )
+                  }
+                  placeholder="Optional context for the download"
+                />
+              </FormField>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
+        {item.fileUrl ? (
+          <CourseResourcePreview
+            title={item.title}
+            fileUrl={item.fileUrl}
+            fileName={item.fileName}
+            caption={item.caption}
+            showPreviewButton
+          />
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderSpecialBlockPanel = (
+    block: EditableSpecialBlock,
+    blockIndex: number,
+    moduleTitle?: string,
+  ) => {
+    const blockTitle = getSpecialBlockTitle(block, paperOptionsById);
+    const blockSummary =
+      block.type === "announcement"
+        ? summarizeText(block.contentHtml) || "Add the announcement message."
+        : block.questionPaperId
+          ? paperOptionsById.get(block.questionPaperId)?.title || "Linked assessment"
+          : "Link a question paper.";
+
+    return (
+      <Accordion
+        key={block.id}
+        type="single"
+        collapsible
+        className="app-course-special-block"
+      >
+        <AccordionItem value={block.id} className="border-none">
+          <AccordionTrigger className="app-course-special-trigger">
+            <div className="space-y-2 text-left">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={block.type === "announcement" ? "info" : "warning"}>
+                  {getBlockTypeLabel(block)}
+                </Badge>
+                {moduleTitle ? <Badge variant="outline">{moduleTitle}</Badge> : null}
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">{blockTitle}</p>
+                <p className="text-xs leading-5 text-muted-foreground">{blockSummary}</p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="app-course-special-content space-y-4">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => moveBlock(block.id, -1)}
+                disabled={blockIndex === 0}
+                aria-label="Move block up"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => moveBlock(block.id, 1)}
+                disabled={blockIndex === blocks.length - 1}
+                aria-label="Move block down"
+              >
+                <ArrowDown className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => removeBlock(block.id)}
+                aria-label="Remove block"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {block.type === "announcement" ? (
+              <>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                  <FormField
+                    label="Announcement title"
+                    hint={inlineErrors.blocks[block.id]?.title}
+                    hintTone={inlineErrors.blocks[block.id]?.title ? "error" : "muted"}
+                  >
+                    <Input
+                      value={block.title}
+                      onChange={(event) =>
+                        updateBlock<EditableAnnouncementBlock>(
+                          block.id,
+                          (currentBlock) => ({
+                            ...currentBlock,
+                            title: event.target.value,
+                          }),
+                        )
+                      }
+                      placeholder="Before you start the baseline test"
+                    />
+                  </FormField>
+                  <FormField label="Tone">
+                    <Select
+                      value={block.tone}
+                      onValueChange={(value) =>
+                        updateBlock<EditableAnnouncementBlock>(
+                          block.id,
+                          (currentBlock) => ({
+                            ...currentBlock,
+                            tone: value as CourseAnnouncementTone,
+                          }),
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select tone" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="info">Info</SelectItem>
+                        <SelectItem value="success">Success</SelectItem>
+                        <SelectItem value="warning">Warning</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                </div>
+
+                <FormField
+                  label="Announcement content"
+                  hint={inlineErrors.blocks[block.id]?.title}
+                  hintTone={inlineErrors.blocks[block.id]?.title ? "error" : "muted"}
+                >
+                  <RichTextEditor
+                    initialContent={block.contentHtml}
+                    onChange={(html) =>
+                      updateBlock<EditableAnnouncementBlock>(
+                        block.id,
+                        (currentBlock) => ({
+                          ...currentBlock,
+                          contentHtml: html,
+                        }),
+                      )
+                    }
+                    editorKey={`${block.id}-announcement`}
+                    imageUploadEndpoint="/api/courses/images"
+                    compact
+                  />
+                </FormField>
+              </>
+            ) : (
+              <>
+                <FormField
+                  label="Linked question paper"
+                  hint={inlineErrors.blocks[block.id]?.assessment}
+                  hintTone={inlineErrors.blocks[block.id]?.assessment ? "error" : "muted"}
+                >
+                  <SearchableCommandSelect
+                    value={block.questionPaperId}
+                    options={paperOptions}
+                    onValueChange={(value) =>
+                      updateBlock<EditableAssessmentBlock>(
+                        block.id,
+                        (currentBlock) => ({
+                          ...currentBlock,
+                          questionPaperId: value,
+                        }),
+                      )
+                    }
+                    placeholder="Select question paper"
+                    searchPlaceholder="Search papers..."
+                    emptyText="No matching papers found."
+                    clearLabel="Clear"
+                    onClear={() =>
+                      updateBlock<EditableAssessmentBlock>(
+                        block.id,
+                        (currentBlock) => ({
+                          ...currentBlock,
+                          questionPaperId: "",
+                        }),
+                      )
+                    }
+                    showCloseAction
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button asChild variant="outline" size="sm">
+                      <AppPrefetchLink
+                        href={buildHrefWithReturnTo(
+                          "/workspace/question-papers/create",
+                          `${currentEditorPath}${
+                            currentEditorPath.includes("?") ? "&" : "?"
+                          }linkAssessmentId=${encodeURIComponent(block.id)}`,
+                        )}
+                      >
+                        Create question paper
+                      </AppPrefetchLink>
+                    </Button>
+                    {block.questionPaperId ? (
+                      <Button asChild variant="outline" size="sm">
+                        <AppPrefetchLink
+                          href={buildHrefWithReturnTo(
+                            `/workspace/question-papers/edit/${block.questionPaperId}`,
+                            currentEditorPath,
+                          )}
+                        >
+                          Edit selected paper
+                        </AppPrefetchLink>
+                      </Button>
+                    ) : null}
+                  </div>
+                </FormField>
+
+                {firstAssessmentIndex === blockIndex ? (
+                  <p className="text-xs text-muted-foreground">
+                    This assessment will also appear in the student tests list.
+                  </p>
+                ) : null}
+
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <FormField label="Title override">
+                    <Input
+                      value={block.titleOverride}
+                      onChange={(event) =>
+                        updateBlock<EditableAssessmentBlock>(
+                          block.id,
+                          (currentBlock) => ({
+                            ...currentBlock,
+                            titleOverride: event.target.value,
+                          }),
+                        )
+                      }
+                      placeholder="Baseline Test"
+                    />
+                  </FormField>
+                  <FormField
+                    label="Minimum score %"
+                    hint={inlineErrors.blocks[block.id]?.minimumScore}
+                    hintTone={inlineErrors.blocks[block.id]?.minimumScore ? "error" : "muted"}
+                  >
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={block.minimumScorePct}
+                      onChange={(event) =>
+                        updateBlock<EditableAssessmentBlock>(
+                          block.id,
+                          (currentBlock) => ({
+                            ...currentBlock,
+                            minimumScorePct: event.target.value,
+                          }),
+                        )
+                      }
+                      placeholder="70"
+                    />
+                  </FormField>
+                  <FormField label="Requirement">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant={block.required ? "primary" : "outline"}
+                        onClick={() =>
+                          updateBlock<EditableAssessmentBlock>(
+                            block.id,
+                            (currentBlock) => ({
+                              ...currentBlock,
+                              required: true,
+                            }),
+                          )
+                        }
+                        className="flex-1"
+                      >
+                        Required
+                      </Button>
+                      <Button
+                        variant={!block.required ? "primary" : "outline"}
+                        onClick={() =>
+                          updateBlock<EditableAssessmentBlock>(
+                            block.id,
+                            (currentBlock) => ({
+                              ...currentBlock,
+                              required: false,
+                            }),
+                          )
+                        }
+                        className="flex-1"
+                      >
+                        Optional
+                      </Button>
+                    </div>
+                  </FormField>
+                </div>
+
+                {block.questionPaperId ? (
+                  <div className="app-course-panel">
+                    {paperOptionsById.get(block.questionPaperId) ? (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">
+                            {paperOptionsById.get(block.questionPaperId)?.onlineEnabled
+                              ? "Online ready"
+                              : "Unavailable"}
+                          </Badge>
+                          {paperOptionsById
+                            .get(block.questionPaperId)
+                            ?.subjects.map((subject) => (
+                              <Badge key={subject._id} variant="outline">
+                                {subject.name}
+                              </Badge>
+                            ))}
+                        </div>
+                        <p className="text-sm font-semibold text-foreground">
+                          {paperOptionsById.get(block.questionPaperId)?.title}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {paperOptionsById.get(block.questionPaperId)?.duration} min •{" "}
+                          {paperOptionsById.get(block.questionPaperId)?.totalMarks} marks
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-amber-700 dark:text-amber-300">
+                        This linked paper is not compatible with the current class, subject, or
+                        section scope. Choose another assessment before saving.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+              </>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    );
+  };
+
+  const renderLessonPanel = (
+    lessonBlock: EditableLessonBlock,
+    blockIndex: number,
+    moduleTitle?: string,
+    orphaned = false,
+  ) => (
+    <div
+      key={lessonBlock.id}
+      className={cn(
+        "app-course-lesson-panel",
+        orphaned && "app-course-lesson-panel-orphaned",
+      )}
+    >
+      <div className="app-course-lesson-toolbar">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">Lesson</Badge>
+            {moduleTitle ? <Badge variant="outline">{moduleTitle}</Badge> : null}
+            {orphaned ? <Badge variant="warning">Needs module</Badge> : null}
+            <Badge variant="outline">
+              {lessonBlock.items.length} item{lessonBlock.items.length === 1 ? "" : "s"}
+            </Badge>
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">
+              {lessonBlock.title || "Untitled lesson"}
+            </p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {lessonBlock.summary || "Keep the lesson summary short so teachers can scan it quickly."}
+            </p>
+          </div>
+        </div>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm">
+              Actions
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-60 p-2">
+            <div className="grid gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="justify-start"
+                onClick={() => duplicateLessonBlock(lessonBlock.id)}
+              >
+                Duplicate lesson
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="justify-start"
+                onClick={() => moveLessonToModule(lessonBlock.id, "prev")}
+                disabled={!canMoveLessonToPrevModule(blockIndex)}
+              >
+                Move to previous module
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="justify-start"
+                onClick={() => moveLessonToModule(lessonBlock.id, "next")}
+                disabled={!canMoveLessonToNextModule(blockIndex)}
+              >
+                Move to next module
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="justify-start"
+                onClick={() => moveBlock(lessonBlock.id, -1)}
+                disabled={blockIndex === 0}
+              >
+                Move up
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="justify-start"
+                onClick={() => moveBlock(lessonBlock.id, 1)}
+                disabled={blockIndex === blocks.length - 1}
+              >
+                Move down
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="justify-start text-rose-600 hover:text-rose-700"
+                onClick={() => removeBlock(lessonBlock.id)}
+              >
+                Remove lesson
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.55fr)]">
+        <FormField
+          label="Lesson title"
+          hint={inlineErrors.blocks[lessonBlock.id]?.title}
+          hintTone={inlineErrors.blocks[lessonBlock.id]?.title ? "error" : "muted"}
+        >
+          <Input
+            value={lessonBlock.title}
+            onChange={(event) =>
+              updateBlock<EditableLessonBlock>(lessonBlock.id, (currentBlock) => ({
+                ...currentBlock,
+                title: event.target.value,
+              }))
+            }
+            placeholder="Lesson 1: Diagnostic mindset"
+          />
+        </FormField>
+
+        <FormField label="Estimated minutes">
+          <Input
+            type="number"
+            min="0"
+            max="600"
+            step="1"
+            value={lessonBlock.estimatedMinutes}
+            onChange={(event) =>
+              updateBlock<EditableLessonBlock>(lessonBlock.id, (currentBlock) => ({
+                ...currentBlock,
+                estimatedMinutes: event.target.value,
+              }))
+            }
+            placeholder="15"
+          />
+        </FormField>
+      </div>
+
+      <FormField label="Lesson summary">
+        <Textarea
+          value={lessonBlock.summary}
+          onChange={(event) =>
+            updateBlock<EditableLessonBlock>(lessonBlock.id, (currentBlock) => ({
+              ...currentBlock,
+              summary: event.target.value,
+            }))
+          }
+          placeholder="Optional context for this lesson."
+          className="min-h-[92px]"
+        />
+      </FormField>
+
+      {inlineErrors.blocks[lessonBlock.id]?.summary ? (
+        <div className="app-course-editor-inline-error">
+          {inlineErrors.blocks[lessonBlock.id]?.summary}
+        </div>
+      ) : null}
+
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Lesson content</p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Add notes, media, or downloads without opening separate nested cards.
+            </p>
+          </div>
+          <div className="app-course-chip-cloud">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => addLessonItem(lessonBlock.id, "text")}
+            >
+              <Plus className="h-4 w-4" />
+              Text
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => addLessonItem(lessonBlock.id, "image")}
+            >
+              <Plus className="h-4 w-4" />
+              Image
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => addLessonItem(lessonBlock.id, "youtube")}
+            >
+              <Plus className="h-4 w-4" />
+              YouTube
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                addLessonItem(lessonBlock.id, "resource", {
+                  title: "Video",
+                })
+              }
+            >
+              <Plus className="h-4 w-4" />
+              Video file
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => addLessonItem(lessonBlock.id, "resource")}
+            >
+              <Plus className="h-4 w-4" />
+              Resource
+            </Button>
+          </div>
+        </div>
+
+        {lessonBlock.items.length === 0 ? (
+          <div className="app-course-editor-empty-state">
+            Add the first lesson item to start building this lesson.
+          </div>
+        ) : null}
+
+        {inlineErrors.blocks[lessonBlock.id]?.items ? (
+          <p className="text-xs text-rose-600">
+            {inlineErrors.blocks[lessonBlock.id]?.items}
+          </p>
+        ) : null}
+
+        <Accordion
+          type="multiple"
+          value={getExpandedLessonItemValues(lessonBlock)}
+          onValueChange={(nextValues) =>
+            setExpandedLessonItems((currentItems) => ({
+              ...currentItems,
+              [lessonBlock.id]: nextValues,
+            }))
+          }
+          className="space-y-3"
+        >
+          {lessonBlock.items.map((item, itemIndex) => {
+            const ItemIcon = getLessonItemIcon(item);
+
+            return (
+              <AccordionItem
+                key={item.id}
+                value={item.id}
+                className="app-course-lesson-item-shell"
+              >
+                <div className="flex items-start gap-2">
+                  <AccordionTrigger className="app-course-lesson-item-trigger">
+                    <div className="flex min-w-0 items-start gap-3 text-left">
+                      <div className="app-course-lesson-item-icon">
+                        <ItemIcon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">{getLessonItemTypeLabel(item)}</Badge>
+                          <span className="text-xs text-muted-foreground">
+                            Item {itemIndex + 1}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-foreground">
+                          {getLessonItemSummary(item)}
+                        </p>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => removeLessonItem(lessonBlock.id, item.id)}
+                    aria-label="Remove lesson item"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <AccordionContent className="app-course-lesson-item-content">
+                  {renderLessonItemEditor(lessonBlock, item)}
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      </div>
+    </div>
+  );
 
   const scrollToSection = (targetId: string) => {
     if (typeof document === "undefined") return;
@@ -2258,27 +3487,33 @@ export default function CourseEditorClient({
           </FeedbackNotice>
         ) : null}
 
-        <Card className="app-course-editor-card" id="course-setup">
-          <CardHeader className="app-section-header">
-            <div className="space-y-2">
-              <CardTitle>Course Setup</CardTitle>
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-muted-foreground">
-                  <a className="hover:text-foreground" href="#course-setup">Setup</a>
-                  <span>→</span>
-                  <a className="hover:text-foreground" href="#course-blocks">Build</a>
-                  <span>→</span>
-                  <a className="hover:text-foreground" href="#course-publish">Assign & Publish</a>
-                  <span className="ml-1 rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground">
-                    {progressLabel}
-                  </span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all"
-                    style={{ width: progressWidth }}
-                  />
-                </div>
+        <Card className="app-course-editor-card app-course-editor-section-card" id="course-setup">
+          <CardHeader
+            className="app-section-header app-course-editor-section-header"
+            data-course-section="setup"
+          >
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={setupComplete ? "success" : "warning"}>
+                  {setupComplete ? "Scope ready" : "Finish scope"}
+                </Badge>
+                <Badge variant="outline">
+                  {selectedSubjectIds.length} subject{selectedSubjectIds.length === 1 ? "" : "s"}
+                </Badge>
+                <Badge variant="outline">
+                  {assignedSectionIds.length > 0
+                    ? `${assignedSectionIds.length} section${
+                        assignedSectionIds.length === 1 ? "" : "s"
+                      }`
+                    : "All sections"}
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                <CardTitle>Course Setup</CardTitle>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Start with the teaching scope. Course settings stay tucked away until you
+                  need them.
+                </p>
               </div>
             </div>
           </CardHeader>
@@ -2348,6 +3583,7 @@ export default function CourseEditorClient({
                   showCloseAction
                 />
               </FormField>
+
               <FormField label="Assigned sections">
                 <SearchableMultiSelectPopover
                   selectedValues={assignedSectionIds}
@@ -2388,29 +3624,25 @@ export default function CourseEditorClient({
               />
             </FormField>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => scrollToSection("course-blocks")}
-                disabled={!setupComplete}
-              >
-                Continue to Build
-              </Button>
-              {!setupComplete ? (
-                <span className="text-xs text-muted-foreground">
-                  Add a title, class, and subjects to continue.
-                </span>
-              ) : null}
-            </div>
-
-            <Accordion type="single" collapsible className="pt-1">
-              <AccordionItem value="advanced" className="border-none">
-                <AccordionTrigger className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-3 text-sm font-semibold text-foreground hover:no-underline data-[state=open]:bg-muted/40">
-                  Advanced settings
+            <Accordion
+              type="single"
+              collapsible
+              value={settingsPanelValue}
+              onValueChange={setSettingsPanelValue}
+              className="pt-1"
+            >
+              <AccordionItem value="settings" className="border-none">
+                <AccordionTrigger className="app-course-inline-accordion-trigger app-course-settings-trigger">
+                  <div className="space-y-1 text-left">
+                    <span className="block text-sm font-semibold text-foreground">
+                      Course settings
+                    </span>
+                    <span className="block text-xs leading-5 text-muted-foreground">
+                      {settingsSummary}
+                    </span>
+                  </div>
                 </AccordionTrigger>
-                <AccordionContent className="mt-3 space-y-5 rounded-2xl border border-border/50 bg-[hsl(var(--app-surface-1)/0.96)] p-5">
+                <AccordionContent className="app-course-inline-accordion-content space-y-5">
                   <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
                     <FormField label="Cover image">
                       <div className="space-y-3">
@@ -2514,293 +3746,265 @@ export default function CourseEditorClient({
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => scrollToSection("course-curriculum")}
+                disabled={!setupComplete}
+              >
+                Continue to Curriculum
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {setupComplete
+                  ? "Scope is ready. Start shaping the learning flow."
+                  : "Add a title, class, and subjects to continue."}
+              </span>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="app-course-editor-card" id="course-blocks">
-          <CardHeader className="app-section-header">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <CardTitle>Course Blocks</CardTitle>
+        <Card
+          className="app-course-editor-card app-course-editor-section-card"
+          id="course-curriculum"
+        >
+          <CardHeader
+            className="app-section-header app-course-editor-section-header"
+            data-course-section="curriculum"
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={buildComplete ? "success" : "warning"}>
+                    {buildComplete ? "Curriculum ready" : "Build the flow"}
+                  </Badge>
+                  <Badge variant="outline">
+                    {moduleCount} module{moduleCount === 1 ? "" : "s"}
+                  </Badge>
+                  <Badge variant="outline">
+                    {lessonCount} lesson{lessonCount === 1 ? "" : "s"}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <CardTitle>Curriculum</CardTitle>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Modules stay primary, lessons stay readable, and special blocks stay
+                    available without taking over the page.
+                  </p>
+                </div>
               </div>
-              <div className="app-course-chip-cloud app-editor-action-cloud">
-                <Button
-                  variant={previewMode ? "primary" : "outline"}
-                  size="sm"
-                  onClick={() => setPreviewMode((current) => !current)}
-                >
-                  {previewMode ? "Editing view" : "Preview"}
+
+              <div className="app-course-chip-cloud">
+                <Button variant="outline" size="sm" onClick={() => addBlock("module")}>
+                  <Plus className="h-4 w-4" />
+                  Add module
                 </Button>
-                {!previewMode ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Plus className="h-4 w-4" />
+                      Add special block
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-56 p-2">
+                    <div className="grid gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start"
+                        onClick={() => addBlock("announcement")}
+                      >
+                        Announcement
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start"
+                        onClick={() => addBlock("assessment")}
+                      >
+                        Assessment
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                {hasModule ? (
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button variant="outline" size="sm">
                         <Plus className="h-4 w-4" />
-                        Quick add
+                        Quick lesson
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent align="end" className="w-52 p-2">
-                      {!hasModule ? (
-                        <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">
-                            Create a module to add lessons.
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => addBlock("module")}
-                          >
-                            <Plus className="h-4 w-4" />
-                            Create module
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="grid gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => addQuickLessonBlock("text")}
-                          >
-                            <Plus className="h-4 w-4" />
-                            Text
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => addQuickLessonBlock("image")}
-                          >
-                            <Plus className="h-4 w-4" />
-                            Image
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => addQuickLessonBlock("youtube")}
-                          >
-                            <Plus className="h-4 w-4" />
-                            YouTube
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => addBlock("assessment")}
-                          >
-                            <Plus className="h-4 w-4" />
-                            Assessment
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => addQuickLessonBlock("resource")}
-                          >
-                            <Plus className="h-4 w-4" />
-                            File
-                          </Button>
-                          <div className="my-1 h-px bg-border/60" />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => addBlock("module")}
-                          >
-                            <Plus className="h-4 w-4" />
-                            Module
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => addBlock("announcement")}
-                          >
-                            <Plus className="h-4 w-4" />
-                            Announcement
-                          </Button>
-                        </div>
-                      )}
+                      <div className="grid gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start"
+                          onClick={() => addQuickLessonBlock("text")}
+                        >
+                          Text lesson
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start"
+                          onClick={() => addQuickLessonBlock("image")}
+                        >
+                          Image lesson
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start"
+                          onClick={() => addQuickLessonBlock("youtube")}
+                        >
+                          Video lesson
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start"
+                          onClick={() => addQuickLessonBlock("resource")}
+                        >
+                          Resource lesson
+                        </Button>
+                      </div>
                     </PopoverContent>
                   </Popover>
                 ) : null}
               </div>
             </div>
           </CardHeader>
-          <CardContent className="app-section-body space-y-4">
-            {previewMode ? (
-              <CoursePreview blocks={blocks} paperOptionsById={paperOptionsById} />
-            ) : null}
-
-            {!previewMode && blocks.length === 0 ? (
-              <div className="rounded-[1.25rem] border border-dashed border-border/70 bg-muted/15 p-6 text-sm text-muted-foreground">
-                Add your first block to start building the course flow.
-              </div>
-            ) : null}
-
-            {!previewMode && !hasModule ? (
-              <div className="rounded-[1.25rem] border border-dashed border-border/70 bg-muted/15 p-6 text-sm text-muted-foreground">
+          <CardContent className="app-section-body space-y-5">
+            {curriculumEntries.length === 0 ? (
+              <div className="app-course-editor-empty-state">
                 <div className="space-y-3">
-                  <p>Create a module first. Lessons live inside modules.</p>
-                  <Button variant="outline" size="sm" onClick={() => addBlock("module")}>
+                  <p>Start with the first module and lesson to make the course feel real.</p>
+                  <Button variant="outline" size="sm" onClick={() => setBlocks(buildStarterCourseBlocks())}>
                     <Plus className="h-4 w-4" />
-                    Create module
+                    Start with Module 1
                   </Button>
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div className="space-y-5">
+                {curriculumEntries.map((entry) => {
+                  if (entry.kind === "module") {
+                    const childLessonCount = entry.children.filter(
+                      (child) => child.kind === "lesson",
+                    ).length;
+                    const childSpecialCount = entry.children.filter(
+                      (child) => child.kind === "special",
+                    ).length;
 
-            {!previewMode &&
-              blocks.map((block, index) => {
-                const Icon = getBlockIcon(block);
-                const moduleContext =
-                  block.type === "lesson"
-                    ? (() => {
-                        for (let i = index - 1; i >= 0; i -= 1) {
-                          if (blocks[i].type === "module") {
-                            return blocks[i] as EditableModuleBlock;
-                          }
-                        }
-                        return null;
-                      })()
-                    : null;
-
-                return (
-                  <Card
-                    key={block.id}
-                    className={cn(
-                      "app-course-editor-block-card",
-                      draggingBlockId === block.id && "app-course-editor-block-card-dragging",
-                      block.type === "lesson" && moduleContext && "app-course-editor-lesson-nested",
-                      block.type === "lesson" && !moduleContext && "app-course-editor-lesson-orphan",
-                    )}
-                  >
-                  <CardHeader className="app-course-editor-block-header">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <button
-                          type="button"
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-background text-muted-foreground"
-                          aria-label="Use arrows to reorder"
-                        >
-                          <GripVertical className="h-4 w-4" />
-                        </button>
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-background">
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="secondary">{getBlockTypeLabel(block)}</Badge>
-                            <span className="text-sm text-muted-foreground">
-                              Block {index + 1}
-                            </span>
-                            {block.type === "lesson" && moduleContext ? (
+                    return (
+                      <section key={entry.module.id} className="app-course-module-shell">
+                        <div className="app-course-module-header">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="info">Module</Badge>
                               <Badge variant="outline">
-                                Module: {moduleContext.title || "Untitled module"}
+                                {childLessonCount} lesson{childLessonCount === 1 ? "" : "s"}
                               </Badge>
-                            ) : null}
+                              {childSpecialCount > 0 ? (
+                                <Badge variant="outline">
+                                  {childSpecialCount} special block
+                                  {childSpecialCount === 1 ? "" : "s"}
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <p className="text-sm leading-6 text-muted-foreground">
+                              Keep the module summary high level, then add the lessons below it.
+                            </p>
+                          </div>
+
+                          <div className="app-course-chip-cloud">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => addLessonToModule(entry.moduleIndex)}
+                            >
+                              <Plus className="h-4 w-4" />
+                              Add lesson
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon-sm"
+                              onClick={() => moveBlock(entry.module.id, -1)}
+                              disabled={!canMoveModuleSectionUp(entry.moduleIndex)}
+                              aria-label="Move block up"
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon-sm"
+                              onClick={() => moveBlock(entry.module.id, 1)}
+                              disabled={!canMoveModuleSectionDown(entry.moduleIndex)}
+                              aria-label="Move block down"
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon-sm"
+                              onClick={() => removeBlock(entry.module.id)}
+                              aria-label="Remove block"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {block.type === "lesson" ? (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => duplicateLessonBlock(block.id)}
-                            >
-                              Duplicate lesson
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => moveLessonToModule(block.id, "prev")}
-                              disabled={!canMoveLessonToPrevModule(index)}
-                            >
-                              Move to previous module
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => moveLessonToModule(block.id, "next")}
-                              disabled={!canMoveLessonToNextModule(index)}
-                            >
-                              Move to next module
-                            </Button>
-                          </>
-                        ) : null}
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          onClick={() => moveBlock(block.id, -1)}
-                          disabled={index === 0}
-                          aria-label="Move block up"
-                        >
-                          <ArrowUp className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          onClick={() => moveBlock(block.id, 1)}
-                          disabled={index === blocks.length - 1}
-                          aria-label="Move block down"
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          onClick={() => removeBlock(block.id)}
-                          aria-label="Remove block"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="app-course-editor-block-body">
-                    {block.type === "module" ? (
-                      <>
-                        <FormField
-                          label="Module title"
-                          hint={inlineErrors.blocks[block.id]?.title}
-                          hintTone={inlineErrors.blocks[block.id]?.title ? "error" : "muted"}
-                        >
-                          <Input
-                            value={block.title}
-                            onChange={(event) =>
-                              updateBlock<EditableModuleBlock>(block.id, (currentBlock) => ({
-                                ...currentBlock,
-                                title: event.target.value,
-                              }))
-                            }
-                            placeholder="Module 1: Diagnostic mindset"
-                          />
-                        </FormField>
-                        <FormField label="Module summary">
-                          <Textarea
-                            value={block.summary}
-                            onChange={(event) =>
-                              updateBlock<EditableModuleBlock>(block.id, (currentBlock) => ({
-                                ...currentBlock,
-                                summary: event.target.value,
-                              }))
-                            }
-                            placeholder="Optional context for the section that follows."
-                            className="min-h-[100px]"
-                          />
-                        </FormField>
-                        {inlineErrors.blocks[block.id]?.summary ? (
-                          <div className="rounded-[0.9rem] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                            {inlineErrors.blocks[block.id]?.summary}
-                            <div className="mt-2">
+
+                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                          <FormField
+                            label="Module title"
+                            hint={inlineErrors.blocks[entry.module.id]?.title}
+                            hintTone={inlineErrors.blocks[entry.module.id]?.title ? "error" : "muted"}
+                          >
+                            <Input
+                              value={entry.module.title}
+                              onChange={(event) =>
+                                updateBlock<EditableModuleBlock>(
+                                  entry.module.id,
+                                  (currentBlock) => ({
+                                    ...currentBlock,
+                                    title: event.target.value,
+                                  }),
+                                )
+                              }
+                              placeholder="Module 1: Diagnostic mindset"
+                            />
+                          </FormField>
+
+                          <FormField label="Module summary">
+                            <Textarea
+                              value={entry.module.summary}
+                              onChange={(event) =>
+                                updateBlock<EditableModuleBlock>(
+                                  entry.module.id,
+                                  (currentBlock) => ({
+                                    ...currentBlock,
+                                    summary: event.target.value,
+                                  }),
+                                )
+                              }
+                              placeholder="Optional context for the section that follows."
+                              className="min-h-[100px]"
+                            />
+                          </FormField>
+                        </div>
+
+                        {inlineErrors.blocks[entry.module.id]?.summary ? (
+                          <div className="app-course-editor-inline-warning">
+                            <div className="space-y-2">
+                              <p>{inlineErrors.blocks[entry.module.id]?.summary}</p>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => addLessonToModule(index, "text")}
+                                onClick={() => addLessonToModule(entry.moduleIndex, "text")}
                               >
                                 <Plus className="h-4 w-4" />
                                 Add lesson
@@ -2808,887 +4012,110 @@ export default function CourseEditorClient({
                             </div>
                           </div>
                         ) : null}
-                      </>
-                    ) : null}
-
-                    {block.type === "lesson" ? (
-                      <>
-                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                          <FormField
-                            label="Lesson title"
-                            hint={inlineErrors.blocks[block.id]?.title}
-                            hintTone={inlineErrors.blocks[block.id]?.title ? "error" : "muted"}
-                          >
-                            <Input
-                              value={block.title}
-                              onChange={(event) =>
-                                updateBlock<EditableLessonBlock>(block.id, (currentBlock) => ({
-                                  ...currentBlock,
-                                  title: event.target.value,
-                                }))
-                              }
-                              placeholder="Lesson 1: Diagnostic mindset"
-                            />
-                          </FormField>
-                          <FormField label="Estimated time (minutes)">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="600"
-                              step="1"
-                              value={block.estimatedMinutes}
-                              onChange={(event) =>
-                                updateBlock<EditableLessonBlock>(block.id, (currentBlock) => ({
-                                  ...currentBlock,
-                                  estimatedMinutes: event.target.value,
-                                }))
-                              }
-                              placeholder="15"
-                            />
-                          </FormField>
-                        </div>
-                        <FormField label="Lesson summary">
-                          <Textarea
-                            value={block.summary}
-                            onChange={(event) =>
-                              updateBlock<EditableLessonBlock>(block.id, (currentBlock) => ({
-                                ...currentBlock,
-                                summary: event.target.value,
-                              }))
-                            }
-                            placeholder="Optional context for this lesson."
-                            className="min-h-[96px]"
-                          />
-                        </FormField>
-                        {inlineErrors.blocks[block.id]?.summary ? (
-                          <p className="text-xs text-rose-600">
-                            {inlineErrors.blocks[block.id]?.summary}
-                          </p>
-                        ) : null}
 
                         <div className="space-y-4">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-foreground">Lesson content</p>
-                            <div className="app-course-chip-cloud app-editor-action-cloud">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => addLessonItem(block.id, "text")}
-                              >
-                                <Plus className="h-4 w-4" />
-                                Text
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => addLessonItem(block.id, "image")}
-                              >
-                                <Plus className="h-4 w-4" />
-                                Image
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => addLessonItem(block.id, "youtube")}
-                              >
-                                <Plus className="h-4 w-4" />
-                                YouTube
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  addLessonItem(block.id, "resource", {
-                                    title: "Video",
-                                  })
-                                }
-                              >
-                                <Plus className="h-4 w-4" />
-                                Video file
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => addLessonItem(block.id, "resource")}
-                              >
-                                <Plus className="h-4 w-4" />
-                                Resource
-                              </Button>
-                            </div>
-                          </div>
-
-                          {block.items.length === 0 ? (
-                            <div className="rounded-[1.1rem] border border-dashed border-border/70 bg-muted/10 p-4 text-sm text-muted-foreground">
-                              Add the first lesson item to start building this lesson.
+                          {entry.children.length === 0 ? (
+                            <div className="app-course-editor-empty-state">
+                              This module is ready for lessons. Add the first lesson to continue.
                             </div>
                           ) : null}
-                          {inlineErrors.blocks[block.id]?.items ? (
-                            <p className="text-xs text-rose-600">
-                              {inlineErrors.blocks[block.id]?.items}
-                            </p>
-                          ) : null}
 
-                          {block.items.map((item, itemIndex) => (
-                            <div key={item.id} className="app-course-editor-item-card space-y-4">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="secondary">
-                                    {item.type === "text"
-                                      ? "Text"
-                                      : item.type === "image"
-                                        ? "Image"
-                                        : item.type === "youtube"
-                                          ? "YouTube"
-                                          : "File"}
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground">
-                                    Item {itemIndex + 1}
-                                  </span>
-                                </div>
-                                <Button
-                                  variant="outline"
-                                  size="icon-sm"
-                                  onClick={() => removeLessonItem(block.id, item.id)}
-                                  aria-label="Remove lesson item"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-
-                              {item.type === "text" ? (
-                                <FormField
-                                  label="Text content"
-                                  hint={inlineErrors.blocks[block.id]?.itemErrors?.[item.id]}
-                                  hintTone={
-                                    inlineErrors.blocks[block.id]?.itemErrors?.[item.id]
-                                      ? "error"
-                                      : "muted"
-                                  }
-                                >
-                                  <RichTextEditor
-                                    initialContent={item.contentHtml}
-                                    onChange={(html) =>
-                                      updateLessonItem<EditableLessonTextItem>(
-                                        block.id,
-                                        item.id,
-                                        (currentItem) => ({
-                                          ...currentItem,
-                                          contentHtml: html,
-                                        }),
-                                      )
-                                    }
-                                    editorKey={`${block.id}-${item.id}`}
-                                    imageUploadEndpoint="/api/courses/images"
-                                  />
-                                </FormField>
-                              ) : null}
-
-                              {item.type === "image" ? (
-                                <>
-                                  <FormField
-                                    label="Upload or paste an image URL"
-                                    hint={inlineErrors.blocks[block.id]?.itemErrors?.[item.id]}
-                                    hintTone={
-                                      inlineErrors.blocks[block.id]?.itemErrors?.[item.id]
-                                        ? "error"
-                                        : "muted"
-                                    }
-                                  >
-                                    <div className="space-y-3">
-                                      <Input
-                                        value={item.imageUrl}
-                                        onChange={(event) =>
-                                          updateLessonItem<EditableLessonImageItem>(
-                                            block.id,
-                                            item.id,
-                                            (currentItem) => ({
-                                              ...currentItem,
-                                              imageUrl: event.target.value,
-                                            }),
-                                          )
-                                        }
-                                        placeholder="https://example.com/lesson-image.webp"
-                                      />
-                                      <FilePickerField
-                                        id={`lesson-image-${item.id}`}
-                                        label="Image upload"
-                                        hideLabel
-                                        buttonLabel="Upload image"
-                                        accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml"
-                                        placeholder="No image selected"
-                                        selectedFileName={
-                                          uploadingImageTarget === item.id
-                                            ? "Uploading..."
-                                            : null
-                                        }
-                                        onChange={(event) => {
-                                          const file = event.target.files?.[0] || null;
-                                          event.target.value = "";
-                                          void handleLessonItemImageUpload(
-                                            block.id,
-                                            item.id,
-                                            file,
-                                          );
-                                        }}
-                                      />
-                                      {uploadingImageTarget === item.id ? (
-                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                          <Spinner />
-                                          Uploading image...
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </FormField>
-                                  <div className="grid gap-4 lg:grid-cols-2">
-                                    <FormField label="Alt text">
-                                      <Input
-                                        value={item.altText}
-                                        onChange={(event) =>
-                                          updateLessonItem<EditableLessonImageItem>(
-                                            block.id,
-                                            item.id,
-                                            (currentItem) => ({
-                                              ...currentItem,
-                                              altText: event.target.value,
-                                            }),
-                                          )
-                                        }
-                                        placeholder="Describe the image for accessibility"
-                                      />
-                                    </FormField>
-                                    <FormField label="Caption">
-                                      <Input
-                                        value={item.caption}
-                                        onChange={(event) =>
-                                          updateLessonItem<EditableLessonImageItem>(
-                                            block.id,
-                                            item.id,
-                                            (currentItem) => ({
-                                              ...currentItem,
-                                              caption: event.target.value,
-                                            }),
-                                          )
-                                        }
-                                        placeholder="Optional caption"
-                                      />
-                                    </FormField>
-                                  </div>
-                                  <div className="grid gap-4 lg:grid-cols-3">
-                                    <FormField label="Image fit">
-                                      <Select
-                                        value={item.imageFit}
-                                        onValueChange={(value) =>
-                                          updateLessonItem<EditableLessonImageItem>(
-                                            block.id,
-                                            item.id,
-                                            (currentItem) => ({
-                                              ...currentItem,
-                                              imageFit: value as EditableLessonImageItem["imageFit"],
-                                            }),
-                                          )
-                                        }
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select fit" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {COURSE_IMAGE_FIT_OPTIONS.map((option) => (
-                                            <SelectItem key={option.value} value={option.value}>
-                                              {option.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </FormField>
-                                    <FormField label="Image width">
-                                      <Select
-                                        value={item.imageWidth}
-                                        onValueChange={(value) =>
-                                          updateLessonItem<EditableLessonImageItem>(
-                                            block.id,
-                                            item.id,
-                                            (currentItem) => ({
-                                              ...currentItem,
-                                              imageWidth: value as EditableLessonImageItem["imageWidth"],
-                                            }),
-                                          )
-                                        }
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select width" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {COURSE_IMAGE_WIDTH_OPTIONS.map((option) => (
-                                            <SelectItem key={option.value} value={option.value}>
-                                              {option.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </FormField>
-                                    <FormField label="Frame height">
-                                      <Select
-                                        value={item.imageHeight}
-                                        onValueChange={(value) =>
-                                          updateLessonItem<EditableLessonImageItem>(
-                                            block.id,
-                                            item.id,
-                                            (currentItem) => ({
-                                              ...currentItem,
-                                              imageHeight: value as EditableLessonImageItem["imageHeight"],
-                                            }),
-                                          )
-                                        }
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select height" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {COURSE_IMAGE_HEIGHT_OPTIONS.map((option) => (
-                                            <SelectItem key={option.value} value={option.value}>
-                                              {option.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </FormField>
-                                  </div>
-                                  {item.imageUrl ? (
-                                    <div
-                                      className={
-                                        getCourseImageDisplayClasses(item).wrapperClassName
-                                      }
-                                    >
-                                      <div
-                                        className={
-                                          getCourseImageDisplayClasses(item).frameClassName
-                                        }
-                                      >
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img
-                                          src={item.imageUrl}
-                                          alt={item.altText || "Lesson image preview"}
-                                          className={
-                                            getCourseImageDisplayClasses(item).imageClassName
-                                          }
-                                        />
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                </>
-                              ) : null}
-
-                              {item.type === "youtube" ? (
-                                <>
-                                  <FormField
-                                    label="YouTube link"
-                                    hint={inlineErrors.blocks[block.id]?.itemErrors?.[item.id]}
-                                    hintTone={
-                                      inlineErrors.blocks[block.id]?.itemErrors?.[item.id]
-                                        ? "error"
-                                        : "muted"
-                                    }
-                                  >
-                                    <Input
-                                      value={item.urlInput}
-                                      onChange={(event) =>
-                                        updateLessonItem<EditableLessonYoutubeItem>(
-                                          block.id,
-                                          item.id,
-                                          (currentItem) => ({
-                                            ...currentItem,
-                                            urlInput: event.target.value,
-                                            videoId:
-                                              resolveYouTubeVideoId(event.target.value) ||
-                                              currentItem.videoId,
-                                          }),
-                                        )
-                                      }
-                                      placeholder="https://www.youtube.com/watch?v=..."
-                                    />
-                                  </FormField>
-                                  <FormField label="Caption">
-                                    <Textarea
-                                      value={item.caption}
-                                      onChange={(event) =>
-                                        updateLessonItem<EditableLessonYoutubeItem>(
-                                          block.id,
-                                          item.id,
-                                          (currentItem) => ({
-                                            ...currentItem,
-                                            caption: event.target.value,
-                                          }),
-                                        )
-                                      }
-                                      className="min-h-[96px]"
-                                      placeholder="Optional context or instructions for the video."
-                                    />
-                                  </FormField>
-                                  {resolveYouTubeVideoId(item.urlInput) ? (
-                                    <div className="app-course-media-frame">
-                                      <div className="aspect-video w-full">
-                                        <iframe
-                                          title="YouTube preview"
-                                          src={buildYouTubeEmbedUrl(
-                                            resolveYouTubeVideoId(item.urlInput) || "",
-                                          )}
-                                          className="h-full w-full"
-                                          referrerPolicy="strict-origin-when-cross-origin"
-                                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                          allowFullScreen
-                                        />
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                </>
-                              ) : null}
-
-                              {item.type === "resource" ? (
-                                <>
-                                  <div className="grid gap-4 lg:grid-cols-2">
-                                    <FormField
-                                      label="Resource title"
-                                      hint={
-                                        inlineErrors.blocks[block.id]?.itemErrors?.[item.id] &&
-                                        inlineErrors.blocks[block.id]?.itemErrors?.[item.id]?.includes("title")
-                                          ? inlineErrors.blocks[block.id]?.itemErrors?.[item.id]
-                                          : undefined
-                                      }
-                                      hintTone={
-                                        inlineErrors.blocks[block.id]?.itemErrors?.[item.id] &&
-                                        inlineErrors.blocks[block.id]?.itemErrors?.[item.id]?.includes("title")
-                                          ? "error"
-                                          : "muted"
-                                      }
-                                    >
-                                      <Input
-                                        value={item.title}
-                                        onChange={(event) =>
-                                          updateLessonItem<EditableLessonResourceItem>(
-                                            block.id,
-                                            item.id,
-                                            (currentItem) => ({
-                                              ...currentItem,
-                                              title: event.target.value,
-                                            }),
-                                          )
-                                        }
-                                        placeholder="Formula sheet"
-                                      />
-                                    </FormField>
-                                    <FormField label="Caption">
-                                      <Input
-                                        value={item.caption}
-                                        onChange={(event) =>
-                                          updateLessonItem<EditableLessonResourceItem>(
-                                            block.id,
-                                            item.id,
-                                            (currentItem) => ({
-                                              ...currentItem,
-                                              caption: event.target.value,
-                                            }),
-                                          )
-                                        }
-                                        placeholder="Optional context for the download"
-                                      />
-                                    </FormField>
-                                  </div>
-                                  <FormField
-                                    label="Resource or video file"
-                                    hint={
-                                      inlineErrors.blocks[block.id]?.itemErrors?.[item.id] &&
-                                      inlineErrors.blocks[block.id]?.itemErrors?.[item.id]?.includes("Upload")
-                                        ? inlineErrors.blocks[block.id]?.itemErrors?.[item.id]
-                                        : "PDF, DOCX, or video files are supported."
-                                    }
-                                    hintTone={
-                                      inlineErrors.blocks[block.id]?.itemErrors?.[item.id] &&
-                                      inlineErrors.blocks[block.id]?.itemErrors?.[item.id]?.includes("Upload")
-                                        ? "error"
-                                        : "muted"
-                                    }
-                                  >
-                                    <FilePickerField
-                                      id={`lesson-resource-${item.id}`}
-                                      label="Upload resource file"
-                                      hideLabel
-                                      buttonLabel="Upload file"
-                                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.mp4,.mov,.webm,.m4v,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip,video/mp4,video/webm,video/quicktime,video/x-m4v"
-                                      placeholder="No file selected"
-                                      selectedFileName={
-                                        uploadingFileBlockId === item.id
-                                          ? "Uploading..."
-                                          : item.fileName || null
-                                      }
-                                      onChange={(event) => {
-                                        const file = event.target.files?.[0] || null;
-                                        event.target.value = "";
-                                        void handleLessonItemResourceUpload(
-                                          block.id,
-                                          item.id,
-                                          file,
-                                        );
-                                      }}
-                                    />
-                                  </FormField>
-                                  {uploadingFileBlockId === item.id ? (
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                      <Spinner />
-                                      Uploading resource...
-                                    </div>
-                                  ) : null}
-                                  {item.fileUrl ? (
-                                    <CourseResourcePreview
-                                      title={item.title}
-                                      fileUrl={item.fileUrl}
-                                      fileName={item.fileName}
-                                      caption={item.caption}
-                                      showPreviewButton
-                                    />
-                                  ) : null}
-                                </>
-                              ) : null}
-                            </div>
-                          ))}
+                          {entry.children.map((child) =>
+                            child.kind === "lesson"
+                              ? renderLessonPanel(
+                                  child.block,
+                                  child.blockIndex,
+                                  entry.module.title || "Untitled module",
+                                )
+                              : renderSpecialBlockPanel(
+                                  child.block,
+                                  child.blockIndex,
+                                  entry.module.title || "Untitled module",
+                                ),
+                          )}
                         </div>
-                      </>
-                    ) : null}
+                      </section>
+                    );
+                  }
 
-                    {block.type === "announcement" ? (
-                      <>
-                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-                          <FormField
-                            label="Announcement title"
-                            hint={inlineErrors.blocks[block.id]?.title}
-                            hintTone={inlineErrors.blocks[block.id]?.title ? "error" : "muted"}
-                          >
-                            <Input
-                              value={block.title}
-                              onChange={(event) =>
-                                updateBlock<EditableAnnouncementBlock>(
-                                  block.id,
-                                  (currentBlock) => ({
-                                    ...currentBlock,
-                                    title: event.target.value,
-                                  }),
-                                )
-                              }
-                              placeholder="Before you start the baseline test"
-                            />
-                          </FormField>
-                          <FormField label="Tone">
-                            <Select
-                              value={block.tone}
-                              onValueChange={(value) =>
-                                updateBlock<EditableAnnouncementBlock>(
-                                  block.id,
-                                  (currentBlock) => ({
-                                    ...currentBlock,
-                                    tone: value as CourseAnnouncementTone,
-                                  }),
-                                )
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select tone" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="info">Info</SelectItem>
-                                <SelectItem value="success">Success</SelectItem>
-                                <SelectItem value="warning">Warning</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </FormField>
-                        </div>
-                        <FormField
-                          label="Announcement content"
-                          hint={inlineErrors.blocks[block.id]?.title}
-                          hintTone={inlineErrors.blocks[block.id]?.title ? "error" : "muted"}
-                        >
-                          <RichTextEditor
-                            initialContent={block.contentHtml}
-                            onChange={(html) =>
-                              updateBlock<EditableAnnouncementBlock>(
-                                block.id,
-                                (currentBlock) => ({
-                                  ...currentBlock,
-                                  contentHtml: html,
-                                }),
-                              )
-                            }
-                            editorKey={`${block.id}-announcement`}
-                            imageUploadEndpoint="/api/courses/images"
-                          />
-                        </FormField>
-                      </>
-                    ) : null}
+                  if (entry.kind === "special") {
+                    return renderSpecialBlockPanel(entry.block, entry.blockIndex);
+                  }
 
-                    {block.type === "assessment" ? (
-                      <>
-                        <FormField
-                          label="Linked question paper"
-                          hint={inlineErrors.blocks[block.id]?.assessment}
-                          hintTone={inlineErrors.blocks[block.id]?.assessment ? "error" : "muted"}
-                        >
-                          <SearchableCommandSelect
-                            value={block.questionPaperId}
-                            options={paperOptions}
-                            onValueChange={(value) =>
-                              updateBlock<EditableAssessmentBlock>(
-                                block.id,
-                                (currentBlock) => ({
-                                  ...currentBlock,
-                                  questionPaperId: value,
-                                }),
-                              )
-                            }
-                            placeholder="Select question paper"
-                            searchPlaceholder="Search papers..."
-                            emptyText="No matching papers found."
-                            clearLabel="Clear"
-                            onClear={() =>
-                              updateBlock<EditableAssessmentBlock>(
-                                block.id,
-                                (currentBlock) => ({
-                                  ...currentBlock,
-                                  questionPaperId: "",
-                                }),
-                              )
-                            }
-                            showCloseAction
-                          />
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <Button asChild variant="outline" size="sm">
-                              <AppPrefetchLink
-                                href={buildHrefWithReturnTo(
-                                  "/workspace/question-papers/create",
-                                  `${currentEditorPath}${
-                                    currentEditorPath.includes("?") ? "&" : "?"
-                                  }linkAssessmentId=${encodeURIComponent(block.id)}`,
-                                )}
-                              >
-                                Create question paper
-                              </AppPrefetchLink>
-                            </Button>
-                            {block.questionPaperId ? (
-                              <Button asChild variant="outline" size="sm">
-                                <AppPrefetchLink
-                                  href={buildHrefWithReturnTo(
-                                    `/workspace/question-papers/edit/${block.questionPaperId}`,
-                                    currentEditorPath,
-                                  )}
-                                >
-                                  Edit selected paper
-                                </AppPrefetchLink>
-                              </Button>
-                            ) : null}
-                          </div>
-                        </FormField>
-                        {firstAssessmentIndex === index ? (
-                          <p className="text-xs text-muted-foreground">
-                            This assessment will also appear in the student tests list.
-                          </p>
-                        ) : null}
-                        <div className="grid gap-4 lg:grid-cols-3">
-                          <FormField label="Title override">
-                            <Input
-                              value={block.titleOverride}
-                              onChange={(event) =>
-                                updateBlock<EditableAssessmentBlock>(
-                                  block.id,
-                                  (currentBlock) => ({
-                                    ...currentBlock,
-                                    titleOverride: event.target.value,
-                                  }),
-                                )
-                              }
-                              placeholder="Baseline Test"
-                            />
-                          </FormField>
-                          <FormField
-                            label="Minimum score %"
-                            hint={inlineErrors.blocks[block.id]?.minimumScore}
-                            hintTone={inlineErrors.blocks[block.id]?.minimumScore ? "error" : "muted"}
-                          >
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="1"
-                              value={block.minimumScorePct}
-                              onChange={(event) =>
-                                updateBlock<EditableAssessmentBlock>(
-                                  block.id,
-                                  (currentBlock) => ({
-                                    ...currentBlock,
-                                    minimumScorePct: event.target.value,
-                                  }),
-                                )
-                              }
-                              placeholder="70"
-                            />
-                          </FormField>
-                          <FormField label="Requirement">
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                variant={block.required ? "primary" : "outline"}
-                                onClick={() =>
-                                  updateBlock<EditableAssessmentBlock>(
-                                    block.id,
-                                    (currentBlock) => ({
-                                      ...currentBlock,
-                                      required: true,
-                                    }),
-                                  )
-                                }
-                                className="flex-1"
-                              >
-                                Required
-                              </Button>
-                              <Button
-                                variant={!block.required ? "primary" : "outline"}
-                                onClick={() =>
-                                  updateBlock<EditableAssessmentBlock>(
-                                    block.id,
-                                    (currentBlock) => ({
-                                      ...currentBlock,
-                                      required: false,
-                                    }),
-                                  )
-                                }
-                                className="flex-1"
-                              >
-                                Optional
-                              </Button>
-                            </div>
-                          </FormField>
-                        </div>
-                        {block.questionPaperId ? (
-                          <div className="app-course-panel">
-                            {paperOptionsById.get(block.questionPaperId) ? (
-                              <div className="space-y-2">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant="secondary">
-                                    {paperOptionsById.get(block.questionPaperId)?.onlineEnabled
-                                      ? "Online ready"
-                                      : "Unavailable"}
-                                  </Badge>
-                                  {paperOptionsById
-                                    .get(block.questionPaperId)
-                                    ?.subjects.map((subject) => (
-                                      <Badge key={subject._id} variant="outline">
-                                        {subject.name}
-                                      </Badge>
-                                    ))}
-                                </div>
-                                <p className="text-sm font-semibold text-foreground">
-                                  {paperOptionsById.get(block.questionPaperId)?.title}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  {paperOptionsById.get(block.questionPaperId)?.duration} min •{" "}
-                                  {paperOptionsById.get(block.questionPaperId)?.totalMarks} marks
-                                </p>
-                              </div>
-                            ) : (
-                              <p className="text-sm text-amber-700 dark:text-amber-300">
-                                This linked paper is not compatible with the current class, subject, or section scope. Choose another assessment before saving.
-                              </p>
-                            )}
-                          </div>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </CardContent>
-                </Card>
-                );
-              })}
-
-            {!previewMode ? (
-              <div className="flex flex-wrap items-center gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => scrollToSection("course-publish")}
-                  disabled={!buildComplete}
-                >
-                  Continue to Assign & Publish
-                </Button>
-                {!buildComplete ? (
-                  <span className="text-xs text-muted-foreground">
-                    Add a module and at least one lesson to continue.
-                  </span>
-                ) : null}
+                  return renderLessonPanel(entry.block, entry.blockIndex, undefined, true);
+                })}
               </div>
-            ) : null}
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => scrollToSection("course-publish")}
+                disabled={!buildComplete}
+              >
+                Continue to Save & Publish
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {buildComplete
+                  ? "Curriculum is ready. Review scope, preview, and publish."
+                  : "Add at least one module and one lesson to continue."}
+              </span>
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="app-course-editor-sidebar">
-        <Accordion type="single" collapsible className="lg:hidden">
-          <AccordionItem value="preview" className="border-none">
-            <AccordionTrigger className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-3 text-sm font-semibold text-foreground hover:no-underline data-[state=open]:bg-muted/40">
-              Live Preview
-            </AccordionTrigger>
-            <AccordionContent className="mt-3 rounded-2xl border border-border/50 bg-[hsl(var(--app-surface-1)/0.96)] p-4">
-              <CoursePreview blocks={blocks} paperOptionsById={paperOptionsById} />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-
-        <Card className="app-course-editor-card hidden lg:block">
-          <CardHeader className="app-section-header">
-            <CardTitle>Live Preview</CardTitle>
-          </CardHeader>
-          <CardContent className="app-section-body">
-            <div className="app-course-preview-panel">
-              <CoursePreview blocks={blocks} paperOptionsById={paperOptionsById} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="app-course-editor-card">
-          <CardHeader className="app-section-header">
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle>Save Course</CardTitle>
-              <Badge variant="outline">
-                {canAutosave
-                  ? autosaveStatus === "saving"
-                    ? "Saving..."
-                    : autosaveStatus === "saved"
-                      ? "Saved"
-                      : "Auto-save"
-                  : "Draft"}
-              </Badge>
+        <Card
+          className="app-course-editor-card app-course-editor-section-card app-course-save-rail"
+        >
+          <CardHeader
+            className="app-section-header app-course-editor-section-header"
+            data-course-section="publish"
+          >
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={publishReady ? "success" : "warning"}>
+                  {publishReady ? "Ready to publish" : "Review before publish"}
+                </Badge>
+                <Badge variant="outline">
+                  {canAutosave
+                    ? autosaveStatus === "saving"
+                      ? "Saving..."
+                      : autosaveStatus === "saved"
+                        ? "Saved"
+                        : "Auto-save"
+                    : "Draft"}
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                <CardTitle>Save & Publish</CardTitle>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Keep the scope visible, preview only when needed, and finish with clear
+                  publish actions.
+                </p>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="app-section-body space-y-4" id="course-publish">
             <div className="app-course-metric-grid">
               <div className="app-course-metric-card">
-                <p className="app-course-metric-label">
-                  Blocks
-                </p>
-                <p className="app-course-metric-value">{blocks.length}</p>
+                <p className="app-course-metric-label">Modules</p>
+                <p className="app-course-metric-value">{moduleCount}</p>
               </div>
               <div className="app-course-metric-card">
-                <p className="app-course-metric-label">
-                  Assessments
-                </p>
+                <p className="app-course-metric-label">Lessons</p>
+                <p className="app-course-metric-value">{lessonCount}</p>
+              </div>
+              <div className="app-course-metric-card">
+                <p className="app-course-metric-label">Assessments</p>
                 <p className="app-course-metric-value">
                   {blocks.filter((block) => block.type === "assessment").length}
                 </p>
               </div>
               <div className="app-course-metric-card">
-                <p className="app-course-metric-label">
-                  Subjects
-                </p>
-                <p className="app-course-metric-value">{selectedSubjectNames.length}</p>
-              </div>
-              <div className="app-course-metric-card">
-                <p className="app-course-metric-label">
-                  Sections
-                </p>
+                <p className="app-course-metric-label">Sections</p>
                 <p className="app-course-metric-value">
                   {assignedSectionIds.length > 0 ? assignedSectionIds.length : "All"}
                 </p>
@@ -3720,7 +4147,7 @@ export default function CourseEditorClient({
             </div>
 
             <div className="app-editor-chip-section">
-              <p className="text-sm font-semibold text-foreground">Block mix</p>
+              <p className="app-editor-chip-section-title">Block mix</p>
               <div className="app-course-chip-cloud">
                 {Object.entries(blockCounts)
                   .filter(([, count]) => count > 0)
@@ -3733,7 +4160,7 @@ export default function CourseEditorClient({
             </div>
 
             <div className="app-editor-chip-section">
-              <p className="text-sm font-semibold text-foreground">Subject scope</p>
+              <p className="app-editor-chip-section-title">Subject scope</p>
               <div className="app-course-chip-cloud">
                 {selectedSubjectNames.length > 0 ? (
                   selectedSubjectNames.map((subjectName) => (
@@ -3748,7 +4175,7 @@ export default function CourseEditorClient({
             </div>
 
             <div className="app-editor-chip-section">
-              <p className="text-sm font-semibold text-foreground">Student tools</p>
+              <p className="app-editor-chip-section-title">Student tools</p>
               <div className="app-course-chip-cloud">
                 <Badge variant="outline">
                   {requiredAssessmentCount} required assessment
@@ -3780,7 +4207,7 @@ export default function CourseEditorClient({
               <p className="text-sm font-semibold text-foreground">Autosave</p>
               <p
                 className={[
-                  "text-xs",
+                  "text-xs leading-5",
                   autosaveStatus === "error" ? "text-rose-600" : "text-muted-foreground",
                 ].join(" ")}
               >
@@ -3792,6 +4219,31 @@ export default function CourseEditorClient({
                   : "Add a title, class, and subject to enable autosave."}
               </p>
             </div>
+
+            <Accordion
+              type="single"
+              collapsible
+              value={previewPanelValue}
+              onValueChange={setPreviewPanelValue}
+            >
+              <AccordionItem value="preview" className="border-none">
+                <AccordionTrigger className="app-course-inline-accordion-trigger app-course-settings-trigger">
+                  <div className="space-y-1 text-left">
+                    <span className="block text-sm font-semibold text-foreground">
+                      Preview course
+                    </span>
+                    <span className="block text-xs leading-5 text-muted-foreground">
+                      {previewSummary}
+                    </span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="app-course-inline-accordion-content">
+                  <div className="app-course-preview-panel">
+                    <CoursePreview blocks={blocks} paperOptionsById={paperOptionsById} />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
 
             <div className="app-course-save-actions">
               <Button

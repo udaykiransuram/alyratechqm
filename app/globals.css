@@ -4320,6 +4320,214 @@
     @apply app-surface overflow-hidden;
   }
 
+  .app-course-editor-section-card {
+    overflow: hidden;
+  }
+
+  .app-course-editor-section-header {
+    @apply border-b px-4 py-4 sm:px-5 sm:py-5;
+    border-color: hsl(var(--border) / 0.64);
+  }
+
+  .app-course-editor-section-header[data-course-section="setup"] {
+    background:
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.12) 0%, transparent 16rem),
+      linear-gradient(
+        135deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--primary) / 0.05) 100%
+      );
+  }
+
+  .app-course-editor-section-header[data-course-section="curriculum"] {
+    background:
+      radial-gradient(circle at top right, hsl(var(--accent-blue) / 0.16) 0%, transparent 18rem),
+      linear-gradient(
+        135deg,
+        hsl(var(--app-surface-1) / 0.985) 0%,
+        hsl(var(--accent-blue) / 0.06) 100%
+      );
+  }
+
+  .app-course-editor-section-header[data-course-section="publish"] {
+    background:
+      radial-gradient(circle at top right, hsl(var(--app-warning) / 0.14) 0%, transparent 18rem),
+      linear-gradient(
+        135deg,
+        hsl(var(--app-surface-1) / 0.985) 0%,
+        hsl(var(--app-warning) / 0.055) 100%
+      );
+  }
+
+  .app-course-inline-accordion-trigger {
+    @apply rounded-[1rem] border px-4 py-3 text-sm font-semibold text-foreground hover:no-underline;
+    border-color: hsl(var(--border) / 0.72);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.72) 100%
+      );
+    box-shadow:
+      0 12px 22px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-course-settings-trigger {
+    border-color: hsl(var(--border) / 0.68);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-tint) / 0.48) 100%
+      );
+  }
+
+  .app-course-inline-accordion-content {
+    @apply mt-3 rounded-[1rem] border px-4 py-4;
+    border-color: hsl(var(--border) / 0.66);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.78) 100%
+      );
+    box-shadow:
+      0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-course-editor-empty-state {
+    @apply rounded-[1.15rem] border border-dashed px-5 py-5 text-sm leading-6 text-muted-foreground;
+    border-color: hsl(var(--border) / 0.72);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.9) 0%,
+        hsl(var(--app-surface-2) / 0.58) 100%
+      );
+  }
+
+  .app-course-editor-inline-warning,
+  .app-course-editor-inline-error {
+    @apply rounded-[1rem] border px-3.5 py-3 text-xs leading-5;
+  }
+
+  .app-course-editor-inline-warning {
+    border-color: hsl(var(--app-warning) / 0.28);
+    background: hsl(var(--app-warning) / 0.08);
+    color: hsl(var(--foreground));
+  }
+
+  .app-course-editor-inline-error {
+    border-color: hsl(var(--destructive) / 0.22);
+    background: hsl(var(--destructive) / 0.08);
+    color: hsl(var(--destructive));
+  }
+
+  .app-course-module-shell {
+    @apply space-y-4 rounded-[1.3rem] border px-4 py-4 sm:px-5;
+    border-color: hsl(var(--border) / 0.72);
+    background:
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.08) 0%, transparent 18rem),
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-2) / 0.78) 100%
+      );
+    box-shadow:
+      0 18px 34px -32px hsl(var(--app-shadow-deep) / 0.1),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.84);
+  }
+
+  .app-course-module-header {
+    @apply flex flex-col gap-3 border-b pb-4 lg:flex-row lg:items-start lg:justify-between;
+    border-color: hsl(var(--border) / 0.58);
+  }
+
+  .app-course-lesson-panel {
+    @apply space-y-4 rounded-[1.15rem] border px-4 py-4;
+    border-color: hsl(var(--border) / 0.68);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.66) 100%
+      );
+    box-shadow:
+      0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-course-lesson-panel-orphaned {
+    border-color: hsl(var(--destructive) / 0.34);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--destructive) / 0.05) 100%
+      );
+  }
+
+  .app-course-lesson-toolbar {
+    @apply flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between;
+    border-color: hsl(var(--border) / 0.56);
+  }
+
+  .app-course-lesson-item-shell {
+    @apply overflow-hidden rounded-[1rem] border;
+    border-color: hsl(var(--border) / 0.66);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-2) / 0.64) 100%
+      );
+  }
+
+  .app-course-lesson-item-trigger {
+    @apply min-h-0 flex-1 px-4 py-3 text-left hover:no-underline;
+  }
+
+  .app-course-lesson-item-content {
+    @apply border-t px-4 pb-4 pt-4;
+    border-color: hsl(var(--border) / 0.56);
+  }
+
+  .app-course-lesson-item-icon {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.95rem] border;
+    border-color: hsl(var(--border) / 0.72);
+    background: hsl(var(--app-surface-1) / 0.9);
+    color: hsl(var(--muted-foreground));
+  }
+
+  .app-course-special-block {
+    @apply rounded-[1.1rem] border;
+    border-color: hsl(var(--border) / 0.68);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.995) 0%,
+        hsl(var(--app-surface-2) / 0.66) 100%
+      );
+    box-shadow:
+      0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+  }
+
+  .app-course-special-trigger {
+    @apply px-4 py-3.5 text-left hover:no-underline;
+  }
+
+  .app-course-special-content {
+    @apply border-t px-4 pb-4 pt-4;
+    border-color: hsl(var(--border) / 0.56);
+  }
+
+  .app-course-save-rail {
+    @apply overflow-hidden;
+  }
+
   .app-course-editor-block-card {
     @apply overflow-hidden border shadow-none;
     border-color: hsl(var(--border) / 0.72);
