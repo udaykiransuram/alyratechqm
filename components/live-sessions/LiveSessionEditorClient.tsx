@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { SearchableCommandSelect } from "@/components/ui/searchable-command-select";
@@ -119,41 +119,68 @@ export default function LiveSessionEditorClient({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const classOptions = supportData.classes.map((item) => ({
-    value: item._id,
-    label: item.name,
-  }));
-  const subjectOptions = supportData.subjects.map((item) => ({
-    value: item._id,
-    label: item.name,
-  }));
-  const sectionOptions = supportData.sections
-    .filter((section) => !classId || resolveSectionClassId(section) === classId)
-    .map((section) => ({
-      value: section._id,
-      label: section.name,
-      description:
-        typeof section.class === "string"
-          ? undefined
-          : section.class?.name || undefined,
-    }));
-  const eligibleTeachers = filterEligibleLiveSessionTeachers({
-    teachers: supportData.teachers,
-    classId,
-    subjectId,
-    assignedAcademicSectionIds,
-  });
-  const teacherOptions = eligibleTeachers.map((teacher) => ({
-    value: teacher._id,
-    label: teacher.name,
-  }));
+  const classOptions = useMemo(
+    () =>
+      supportData.classes.map((item) => ({
+        value: item._id,
+        label: item.name,
+      })),
+    [supportData.classes],
+  );
+  const subjectOptions = useMemo(
+    () =>
+      supportData.subjects.map((item) => ({
+        value: item._id,
+        label: item.name,
+      })),
+    [supportData.subjects],
+  );
+  const sectionOptions = useMemo(
+    () =>
+      supportData.sections
+        .filter((section) => !classId || resolveSectionClassId(section) === classId)
+        .map((section) => ({
+          value: section._id,
+          label: section.name,
+          description:
+            typeof section.class === "string"
+              ? undefined
+              : section.class?.name || undefined,
+        })),
+    [classId, supportData.sections],
+  );
+  const eligibleTeachers = useMemo(
+    () =>
+      filterEligibleLiveSessionTeachers({
+        teachers: supportData.teachers,
+        classId,
+        subjectId,
+        assignedAcademicSectionIds,
+      }),
+    [
+      assignedAcademicSectionIds,
+      classId,
+      subjectId,
+      supportData.teachers,
+    ],
+  );
+  const teacherOptions = useMemo(
+    () =>
+      eligibleTeachers.map((teacher) => ({
+        value: teacher._id,
+        label: teacher.name,
+      })),
+    [eligibleTeachers],
+  );
 
   useEffect(() => {
     const validSectionIds = new Set(sectionOptions.map((option) => option.value));
     setAssignedAcademicSectionIds((current) =>
-      current.filter((sectionId) => validSectionIds.has(sectionId)),
+      current.every((sectionId) => validSectionIds.has(sectionId))
+        ? current
+        : current.filter((sectionId) => validSectionIds.has(sectionId)),
     );
-  }, [classId, sectionOptions]);
+  }, [sectionOptions]);
 
   useEffect(() => {
     if (
@@ -167,7 +194,10 @@ export default function LiveSessionEditorClient({
 
   useEffect(() => {
     if (teacherOptions.length === 0) {
-      if (supportData.defaultHostTeacherId) {
+      if (
+        supportData.defaultHostTeacherId &&
+        supportData.defaultHostTeacherId !== hostTeacherId
+      ) {
         setHostTeacherId(supportData.defaultHostTeacherId);
       }
       return;

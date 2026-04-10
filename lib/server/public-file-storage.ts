@@ -163,13 +163,8 @@ function shouldUseBlobStorage() {
 }
 
 async function loadBlobModule() {
-  const dynamicImport = new Function(
-    "specifier",
-    "return import(specifier)",
-  ) as (specifier: string) => Promise<VercelBlobModule>;
-
   try {
-    const blobModule = await dynamicImport("@vercel/blob");
+    const blobModule = (await import("@vercel/blob")) as VercelBlobModule;
     if (typeof blobModule?.put !== "function") {
       throw new Error("Missing Vercel Blob put() export.");
     }
