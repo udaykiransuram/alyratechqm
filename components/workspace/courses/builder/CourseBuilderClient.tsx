@@ -538,9 +538,8 @@ function CourseBuilderStepper({
               >
                 {complete ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
               </span>
-              <span className="min-w-0 space-y-1">
+              <span className="min-w-0">
                 <span className="block text-sm font-semibold text-foreground">{step.label}</span>
-                <span className="block text-xs leading-5 text-muted-foreground">{step.note}</span>
               </span>
             </button>
           );
@@ -746,182 +745,113 @@ function CourseScopeStep(props: {
   ];
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_19rem]">
-      <Card className="app-surface overflow-hidden">
-        <CardHeader className="app-section-header">
+    <Card className="app-surface overflow-hidden">
+      <CardHeader className="app-section-header">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
             <CardTitle>Scope</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Start with the essentials only. Advanced settings stay tucked away until you need them.
+              Fill the essentials first. Everything else stays out of the way.
             </p>
           </div>
-        </CardHeader>
-        <CardContent className="app-section-body space-y-6">
+          <Button variant="outline" onClick={props.onOpenSettings}>
+            <Settings2 className="h-4 w-4" />
+            Course settings
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="app-section-body space-y-6">
+        <FormField
+          label="Course title"
+          hint={props.inlineErrors.title || undefined}
+          hintTone={props.inlineErrors.title ? "error" : "muted"}
+        >
+          <Input
+            value={props.title}
+            onChange={(event) => props.setTitle(event.target.value)}
+            placeholder="Diagnostic Foundations"
+            aria-label="Course title"
+          />
+        </FormField>
+
+        <FormField label="Course summary">
+          <Textarea
+            value={props.summary}
+            onChange={(event) => props.setSummary(event.target.value)}
+            placeholder="What students will learn in this course."
+            className="min-h-[128px]"
+            aria-label="Course summary"
+          />
+        </FormField>
+
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
           <FormField
-            label="Course title"
-            hint={props.inlineErrors.title || undefined}
-            hintTone={props.inlineErrors.title ? "error" : "muted"}
+            label="Class"
+            hint={props.inlineErrors.classId || undefined}
+            hintTone={props.inlineErrors.classId ? "error" : "muted"}
           >
-            <Input
-              value={props.title}
-              onChange={(event) => props.setTitle(event.target.value)}
-              placeholder="Diagnostic Foundations"
-              aria-label="Course title"
+            <SearchableCommandSelect
+              value={props.classId}
+              options={props.classOptions}
+              onValueChange={props.onScopeClassChange}
+              placeholder="Select class"
+              searchPlaceholder="Search classes..."
+              emptyText="No classes found."
+              clearLabel="Clear"
+              onClear={props.onScopeClassClear}
+              showCloseAction
             />
           </FormField>
-
-          <FormField label="Course summary">
-            <Textarea
-              value={props.summary}
-              onChange={(event) => props.setSummary(event.target.value)}
-              placeholder="What students will learn in this course."
-              className="min-h-[128px]"
-              aria-label="Course summary"
-            />
-          </FormField>
-
-          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-            <FormField
-              label="Class"
-              hint={props.inlineErrors.classId || undefined}
-              hintTone={props.inlineErrors.classId ? "error" : "muted"}
-            >
-              <SearchableCommandSelect
-                value={props.classId}
-                options={props.classOptions}
-                onValueChange={props.onScopeClassChange}
-                placeholder="Select class"
-                searchPlaceholder="Search classes..."
-                emptyText="No classes found."
-                clearLabel="Clear"
-                onClear={props.onScopeClassClear}
-                showCloseAction
-              />
-            </FormField>
-            <FormField label="Assigned sections">
-              <SearchableMultiSelectPopover
-                selectedValues={props.assignedSectionIds}
-                options={props.sectionOptions}
-                onSelectedValuesChange={props.setAssignedSectionIds}
-                placeholder="Whole class or selected sections"
-                noOptionsText={
-                  props.sectionsDisabled
-                    ? "Select a class first."
-                    : "No sections available for this class."
-                }
-                disabled={props.sectionsDisabled}
-              />
-            </FormField>
-          </div>
-
-          <FormField
-            label="Subjects"
-            hint={props.inlineErrors.subjects || undefined}
-            hintTone={props.inlineErrors.subjects ? "error" : "muted"}
-          >
+          <FormField label="Assigned sections">
             <SearchableMultiSelectPopover
-              selectedValues={props.selectedSubjectIds}
-              options={props.subjectOptions}
-              onSelectedValuesChange={props.setSelectedSubjectIds}
-              placeholder="Select subjects"
-              noOptionsText="No subjects available."
+              selectedValues={props.assignedSectionIds}
+              options={props.sectionOptions}
+              onSelectedValuesChange={props.setAssignedSectionIds}
+              placeholder="Whole class or selected sections"
+              noOptionsText={
+                props.sectionsDisabled
+                  ? "Select a class first."
+                  : "No sections available for this class."
+              }
+              disabled={props.sectionsDisabled}
             />
           </FormField>
+        </div>
 
-          <div className="rounded-[1.15rem] border border-border/65 bg-[hsl(var(--app-surface-2)/0.56)] p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">Advanced course settings</p>
-                <p className="text-sm text-muted-foreground">
-                  Cover image, schedule, template mode, notes, bookmarks, and progression rules.
-                </p>
-              </div>
-              <Button variant="outline" onClick={props.onOpenSettings}>
-                <Settings2 className="h-4 w-4" />
-                Open settings
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        <FormField
+          label="Subjects"
+          hint={props.inlineErrors.subjects || undefined}
+          hintTone={props.inlineErrors.subjects ? "error" : "muted"}
+        >
+          <SearchableMultiSelectPopover
+            selectedValues={props.selectedSubjectIds}
+            options={props.subjectOptions}
+            onSelectedValuesChange={props.setSelectedSubjectIds}
+            placeholder="Select subjects"
+            noOptionsText="No subjects available."
+          />
+        </FormField>
 
-      <div className="space-y-4">
-        <Card className="app-surface overflow-hidden">
-          <CardHeader className="app-section-header">
-            <CardTitle>Readiness</CardTitle>
-          </CardHeader>
-          <CardContent className="app-section-body space-y-3">
+        <div className="rounded-[1rem] border border-border/60 bg-background/70 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
             {readyItems.map((item) => (
-              <div
-                key={item.label}
-                className="flex items-start gap-3 rounded-[1rem] border border-border/60 bg-background/70 px-3.5 py-3"
-              >
-                <span
-                  className={cn(
-                    "mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
-                    item.complete
-                      ? "border-primary/30 bg-primary text-primary-foreground"
-                      : "border-border/70 bg-background text-muted-foreground",
-                  )}
-                >
-                  {item.complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-                </span>
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">{item.label}</p>
-                  <p className="text-xs leading-5 text-muted-foreground">{item.note}</p>
-                </div>
-              </div>
+              <Badge key={item.label} variant={item.complete ? "secondary" : "outline"}>
+                {item.complete ? `${item.label} ready` : `${item.label} needed`}
+              </Badge>
             ))}
-          </CardContent>
-        </Card>
-
-        <Card className="app-surface overflow-hidden">
-          <CardHeader className="app-section-header">
-            <CardTitle>Scope snapshot</CardTitle>
-          </CardHeader>
-          <CardContent className="app-section-body space-y-3">
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Class
-              </p>
-              <p className="text-sm font-semibold text-foreground">{props.selectedClassName}</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Subjects
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {props.selectedSubjectNames.length > 0 ? (
-                  props.selectedSubjectNames.map((subjectName) => (
-                    <Badge key={subjectName} variant="outline">
-                      {subjectName}
-                    </Badge>
-                  ))
-                ) : (
-                  <Badge variant="outline">No subjects selected</Badge>
-                )}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Sections
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {props.selectedSectionNames.length > 0 ? (
-                  props.selectedSectionNames.map((sectionName) => (
-                    <Badge key={sectionName} variant="outline">
-                      {sectionName}
-                    </Badge>
-                  ))
-                ) : (
-                  <Badge variant="outline">All sections</Badge>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {props.classId ? props.selectedClassName : "Select class"} •{" "}
+            {props.selectedSubjectNames.length > 0
+              ? props.selectedSubjectNames.join(", ")
+              : "Choose subject"} •{" "}
+            {props.selectedSectionNames.length > 0
+              ? props.selectedSectionNames.join(", ")
+              : "All sections"}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -952,7 +882,7 @@ function CourseBuilderInspector(props: {
   if (!props.block) {
     return (
       <div className="space-y-3">
-        <p className="text-sm font-semibold text-foreground">Inspector</p>
+        <p className="text-sm font-semibold text-foreground">Block settings</p>
         <p className="text-sm text-muted-foreground">
           Select a module, lesson, or special block to manage advanced settings.
         </p>
@@ -965,9 +895,9 @@ function CourseBuilderInspector(props: {
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Inspector</p>
+        <p className="text-sm font-semibold text-foreground">Block settings</p>
         <p className="text-sm text-muted-foreground">
-          Advanced controls stay here so the main canvas can stay focused.
+          Advanced controls stay here so the main canvas stays simple.
         </p>
       </div>
 
@@ -1337,84 +1267,13 @@ function CourseReviewStep(props: {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="app-surface overflow-hidden">
-          <CardHeader className="app-section-header">
-            <CardTitle>Scope summary</CardTitle>
-          </CardHeader>
-          <CardContent className="app-section-body space-y-3">
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Class
-              </p>
-              <p className="text-sm font-semibold text-foreground">{props.selectedClassName}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Sections
-              </p>
-              <p className="text-sm text-foreground">{props.selectedSectionSummary}</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Subjects
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {props.selectedSubjectNames.map((subjectName) => (
-                  <Badge key={subjectName} variant="outline">
-                    {subjectName}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="app-surface overflow-hidden">
-          <CardHeader className="app-section-header">
-            <CardTitle>Curriculum mix</CardTitle>
-          </CardHeader>
-          <CardContent className="app-section-body space-y-3">
-            <div className="app-course-metric-grid">
-              <div className="app-course-metric-card">
-                <p className="app-course-metric-label">Blocks</p>
-                <p className="app-course-metric-value">{props.blocks.length}</p>
-              </div>
-              <div className="app-course-metric-card">
-                <p className="app-course-metric-label">Required assessments</p>
-                <p className="app-course-metric-value">{props.requiredAssessmentCount}</p>
-              </div>
-              <div className="app-course-metric-card">
-                <p className="app-course-metric-label">Window</p>
-                <p className="app-course-metric-value">
-                  {props.startsAt ? "Scheduled" : "Immediate"}
-                </p>
-              </div>
-              <div className="app-course-metric-card">
-                <p className="app-course-metric-label">Student tools</p>
-                <p className="app-course-metric-value">
-                  {[props.allowNotes, props.allowBookmarks].filter(Boolean).length}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(props.blockCounts)
-                .filter(([, count]) => count > 0)
-                .map(([type, count]) => (
-                  <Badge key={type} variant="outline">
-                    {count} {type}
-                  </Badge>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="app-surface overflow-hidden">
-          <CardHeader className="app-section-header">
-            <CardTitle>Publish readiness</CardTitle>
-          </CardHeader>
-          <CardContent className="app-section-body space-y-3">
+    <div className="grid gap-4 xl:grid-cols-[21rem_minmax(0,1fr)]">
+      <Card className="app-surface overflow-hidden">
+        <CardHeader className="app-section-header">
+          <CardTitle>Review</CardTitle>
+        </CardHeader>
+        <CardContent className="app-section-body space-y-4">
+          <div className="space-y-3">
             {validationRows.map((row) => (
               <div
                 key={row.label}
@@ -1440,8 +1299,30 @@ function CourseReviewStep(props: {
                 </div>
               </div>
             ))}
+          </div>
 
-            <div className="flex flex-wrap gap-2">
+          <div className="rounded-[1rem] border border-border/60 bg-background/70 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Scope
+            </p>
+            <p className="mt-1 text-sm font-semibold text-foreground">{props.selectedClassName}</p>
+            <p className="text-sm text-muted-foreground">{props.selectedSectionSummary}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {props.selectedSubjectNames.map((subjectName) => (
+                <Badge key={subjectName} variant="outline">
+                  {subjectName}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[1rem] border border-border/60 bg-background/70 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Course summary
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Badge variant="outline">{props.blocks.length} blocks</Badge>
+              <Badge variant="outline">{props.requiredAssessmentCount} required assessments</Badge>
               {props.enforceSequentialProgress ? (
                 <Badge variant="outline">Sequential flow</Badge>
               ) : null}
@@ -1458,18 +1339,22 @@ function CourseReviewStep(props: {
                 {props.dueAt ? `Due ${props.dueAt.replace("T", " ")}` : "No due date"}
               </Badge>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {Object.entries(props.blockCounts)
+                .filter(([, count]) => count > 0)
+                .map(([type, count]) => (
+                  <Badge key={type} variant="secondary">
+                    {count} {type}
+                  </Badge>
+                ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
-          <div className="space-y-1">
-            <CardTitle>Student preview</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Preview lives here so authoring stays focused while you build.
-            </p>
-          </div>
+          <CardTitle>Preview</CardTitle>
         </CardHeader>
         <CardContent className="app-section-body">
           <CoursePreview blocks={props.blocks} paperOptionsById={props.paperOptionsById} />
@@ -2819,14 +2704,19 @@ export default function CourseBuilderClient({
       <div className="space-y-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Professional Course Builder
-            </p>
-            <h2 className="text-[1.28rem] font-semibold tracking-[-0.03em] text-foreground">
-              Build quickly, then expand only where needed
+            <h2 className="text-[1.12rem] font-semibold tracking-[-0.025em] text-foreground">
+              {activeStep === "scope"
+                ? "Start with scope"
+                : activeStep === "curriculum"
+                  ? "Build the curriculum"
+                  : "Review before publishing"}
             </h2>
-            <p className="text-sm leading-6 text-muted-foreground">
-              The builder keeps the default authoring flow focused, with advanced options moved into secondary panels.
+            <p className="text-sm text-muted-foreground">
+              {activeStep === "scope"
+                ? "Only the essentials are visible here."
+                : activeStep === "curriculum"
+                  ? "Keep one block in focus at a time."
+                  : "Check the summary and preview, then publish."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2884,16 +2774,11 @@ export default function CourseBuilderClient({
         ) : null}
 
         {activeStep === "curriculum" ? (
-          <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)_19rem]">
+          <div className="grid gap-4 xl:grid-cols-[17rem_minmax(0,1fr)]">
             <Card className="app-surface hidden overflow-hidden xl:block">
               <CardHeader className="app-section-header">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <CardTitle>Outline</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Reorder from the rail and keep the main canvas focused on one thing.
-                    </p>
-                  </div>
+                  <CardTitle>Outline</CardTitle>
                   <Button variant="outline" size="sm" onClick={addModule}>
                     <Plus className="h-4 w-4" />
                     Module
@@ -3108,22 +2993,27 @@ export default function CourseBuilderClient({
               <Card className="app-surface overflow-hidden">
                 <CardHeader className="app-section-header">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="space-y-1">
-                      <CardTitle>
-                        {selectedBlock
-                          ? `${getBlockTypeLabel(selectedBlock)} canvas`
-                          : "Curriculum canvas"}
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Focus on one block at a time instead of editing every card at once.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 xl:hidden">
-                      <Button variant="outline" size="sm" onClick={() => setMobileOutlineOpen(true)}>
+                    <CardTitle>
+                      {selectedBlock
+                        ? `${getBlockTypeLabel(selectedBlock)}`
+                        : "Curriculum"}
+                    </CardTitle>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="xl:hidden"
+                        onClick={() => setMobileOutlineOpen(true)}
+                      >
                         Outline
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => setMobileInspectorOpen(true)}>
-                        Inspector
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setMobileInspectorOpen(true)}
+                        disabled={!selectedBlock}
+                      >
+                        Block settings
                       </Button>
                     </div>
                   </div>
@@ -3137,13 +3027,6 @@ export default function CourseBuilderClient({
 
                   {selectedBlock?.type === "module" ? (
                     <div className="space-y-5">
-                      <div className="rounded-[1.1rem] border border-border/65 bg-[hsl(var(--app-surface-2)/0.52)] p-4">
-                        <p className="text-sm font-semibold text-foreground">Section container</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Modules stay intentionally light here. Use them to frame the lessons that follow.
-                        </p>
-                      </div>
-
                       <FormField
                         label="Module title"
                         hint={selectedBlockError?.title}
@@ -3195,15 +3078,10 @@ export default function CourseBuilderClient({
 
                   {selectedBlock?.type === "lesson" ? (
                     <div className="space-y-5">
-                      <div className="flex flex-col gap-3 rounded-[1.1rem] border border-border/65 bg-[hsl(var(--app-surface-2)/0.52)] p-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="space-y-1">
-                          <p className="text-sm font-semibold text-foreground">
-                            Lesson authoring
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Keep the main lesson flow to title, summary, and content. Advanced settings live in the inspector.
-                          </p>
-                        </div>
+                      <div className="flex flex-col gap-3 rounded-[1.05rem] border border-border/65 bg-background/70 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          Lesson stays focused here. Open block settings only when needed.
+                        </p>
                         {getModuleContextForLesson(blocks, selectedBlock.id) ? (
                           <Badge variant="outline">
                             In {getModuleContextForLesson(blocks, selectedBlock.id)?.title || "Untitled module"}
@@ -3213,33 +3091,23 @@ export default function CourseBuilderClient({
                         )}
                       </div>
 
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
-                        <FormField
-                          label="Lesson title"
-                          hint={selectedBlockError?.title}
-                          hintTone={selectedBlockError?.title ? "error" : "muted"}
-                        >
-                          <Input
-                            value={selectedBlock.title}
-                            onChange={(event) =>
-                              updateBlock<EditableLessonBlock>(selectedBlock.id, (block) => ({
-                                ...block,
-                                title: event.target.value,
-                              }))
-                            }
-                            placeholder="Lesson 1"
-                            aria-label="Lesson title"
-                          />
-                        </FormField>
-                        <div className="rounded-[1rem] border border-border/65 bg-background/70 px-4 py-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            Content items
-                          </p>
-                          <p className="mt-1 text-sm font-semibold text-foreground">
-                            {selectedBlock.items.length}
-                          </p>
-                        </div>
-                      </div>
+                      <FormField
+                        label="Lesson title"
+                        hint={selectedBlockError?.title}
+                        hintTone={selectedBlockError?.title ? "error" : "muted"}
+                      >
+                        <Input
+                          value={selectedBlock.title}
+                          onChange={(event) =>
+                            updateBlock<EditableLessonBlock>(selectedBlock.id, (block) => ({
+                              ...block,
+                              title: event.target.value,
+                            }))
+                          }
+                          placeholder="Lesson 1"
+                          aria-label="Lesson title"
+                        />
+                      </FormField>
 
                       <FormField
                         label="Lesson summary"
@@ -3263,24 +3131,54 @@ export default function CourseBuilderClient({
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <p className="text-sm font-semibold text-foreground">Lesson content</p>
-                          <div className="flex flex-wrap gap-2">
-                            <Button variant="outline" size="sm" onClick={() => addLessonItem(selectedBlock.id, "text")}>
-                              <Plus className="h-4 w-4" />
-                              Text
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => addLessonItem(selectedBlock.id, "image")}>
-                              <ImageIcon className="h-4 w-4" />
-                              Image
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => addLessonItem(selectedBlock.id, "youtube")}>
-                              <Video className="h-4 w-4" />
-                              YouTube
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => addLessonItem(selectedBlock.id, "resource")}>
-                              <Link2 className="h-4 w-4" />
-                              Resource
-                            </Button>
-                          </div>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <Plus className="h-4 w-4" />
+                                Add item
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-52 p-2">
+                              <div className="grid gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="justify-start"
+                                  onClick={() => addLessonItem(selectedBlock.id, "text")}
+                                >
+                                  <FileText className="h-4 w-4" />
+                                  Text
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="justify-start"
+                                  onClick={() => addLessonItem(selectedBlock.id, "image")}
+                                >
+                                  <ImageIcon className="h-4 w-4" />
+                                  Image
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="justify-start"
+                                  onClick={() => addLessonItem(selectedBlock.id, "youtube")}
+                                >
+                                  <Video className="h-4 w-4" />
+                                  YouTube
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="justify-start"
+                                  onClick={() => addLessonItem(selectedBlock.id, "resource")}
+                                >
+                                  <Link2 className="h-4 w-4" />
+                                  Resource
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
 
                         {selectedBlockError?.items ? (
@@ -3310,9 +3208,6 @@ export default function CourseBuilderClient({
                                         : "Resource"}
                                 </Badge>
                                 <span className="text-xs text-muted-foreground">Item {itemIndex + 1}</span>
-                                {selectedItemId === item.id ? (
-                                  <Badge variant="outline">Selected for inspector</Badge>
-                                ) : null}
                               </div>
                               <Button
                                 variant="outline"
@@ -3584,13 +3479,6 @@ export default function CourseBuilderClient({
 
                   {selectedBlock?.type === "announcement" ? (
                     <div className="space-y-5">
-                      <div className="rounded-[1.1rem] border border-border/65 bg-[hsl(var(--app-surface-2)/0.52)] p-4">
-                        <p className="text-sm font-semibold text-foreground">Announcement block</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Use this for timing notes, reminders, or context that students need before a lesson or assessment.
-                        </p>
-                      </div>
-
                       <FormField
                         label="Announcement title"
                         hint={selectedBlockError?.title}
@@ -3631,13 +3519,6 @@ export default function CourseBuilderClient({
 
                   {selectedBlock?.type === "assessment" ? (
                     <div className="space-y-5">
-                      <div className="rounded-[1.1rem] border border-border/65 bg-[hsl(var(--app-surface-2)/0.52)] p-4">
-                        <p className="text-sm font-semibold text-foreground">Assessment block</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Keep the canvas lean here. Pick the linked paper and scoring rules from the inspector.
-                        </p>
-                      </div>
-
                       <FormField label="Assessment title override">
                         <Input
                           value={selectedBlock.titleOverride}
@@ -3692,53 +3573,6 @@ export default function CourseBuilderClient({
                 </CardContent>
               </Card>
             </div>
-
-            <Card className="app-surface hidden overflow-hidden xl:block">
-              <CardHeader className="app-section-header">
-                <CardTitle>Block inspector</CardTitle>
-              </CardHeader>
-              <CardContent className="app-section-body">
-                <CourseBuilderInspector
-                  block={selectedBlock}
-                  selectedItem={selectedItem}
-                  selectedBlockError={selectedBlockError}
-                  paperOptions={paperOptions}
-                  paperOptionsById={paperOptionsById}
-                  currentEditorPath={currentEditorPath}
-                  onUpdateBlock={updateBlock}
-                  onUpdateLessonItem={updateLessonItem}
-                  onDeleteSelectedBlock={deleteSelectedBlock}
-                  onDuplicateLesson={handleDuplicateLesson}
-                  onMoveLessonToPrevModule={() =>
-                    selectedBlock?.type === "lesson"
-                      ? setBlocks((currentBlocks) =>
-                          moveCourseBuilderLessonToAdjacentModule(
-                            currentBlocks,
-                            selectedBlock.id,
-                            "prev",
-                          ),
-                        )
-                      : undefined
-                  }
-                  onMoveLessonToNextModule={() =>
-                    selectedBlock?.type === "lesson"
-                      ? setBlocks((currentBlocks) =>
-                          moveCourseBuilderLessonToAdjacentModule(
-                            currentBlocks,
-                            selectedBlock.id,
-                            "next",
-                          ),
-                        )
-                      : undefined
-                  }
-                  canMoveLessonToPrevModule={canMoveSelectedLessonToPrevModule}
-                  canMoveLessonToNextModule={canMoveSelectedLessonToNextModule}
-                  firstAssessment={
-                    selectedBlock ? blocks[firstAssessmentIndex]?.id === selectedBlock.id : false
-                  }
-                />
-              </CardContent>
-            </Card>
           </div>
         ) : null}
 
@@ -3870,9 +3704,9 @@ export default function CourseBuilderClient({
       </Dialog>
 
       <Dialog open={mobileInspectorOpen} onOpenChange={setMobileInspectorOpen}>
-        <DialogContent className="sm:max-w-xl xl:hidden">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Block inspector</DialogTitle>
+            <DialogTitle>Block settings</DialogTitle>
             <DialogDescription>
               Advanced block settings stay here so the main editor can stay simple.
             </DialogDescription>
