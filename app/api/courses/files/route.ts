@@ -30,15 +30,6 @@ export async function POST(req: NextRequest) {
   }
 
   const mimeType = String(file.type || "").toLowerCase();
-  if (!mimeType) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: `Unsupported file format. Upload ${SUPPORTED_FILE_FORMATS_LABEL} only.`,
-      },
-      { status: 400 },
-    );
-  }
 
   if (file.size <= 0) {
     return NextResponse.json(
@@ -67,7 +58,7 @@ export async function POST(req: NextRequest) {
       buffer,
       schoolKey: auth.schoolKey,
       fileName: file.name,
-      mimeType,
+      mimeType: mimeType || null,
       relativeFolder: "course-files",
     });
 
@@ -78,13 +69,19 @@ export async function POST(req: NextRequest) {
       mimeType: storedFile.mimeType,
       size: storedFile.size,
     });
-  } catch {
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.trim()
+        ? error.message
+        : `Unsupported file format. Upload ${SUPPORTED_FILE_FORMATS_LABEL} only.`;
+    const isValidationError = message.toLowerCase().includes("unsupported");
+
     return NextResponse.json(
       {
         success: false,
-        message: `Unsupported file format. Upload ${SUPPORTED_FILE_FORMATS_LABEL} only.`,
+        message,
       },
-      { status: 400 },
+      { status: isValidationError ? 400 : 500 },
     );
   }
 }

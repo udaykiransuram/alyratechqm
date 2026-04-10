@@ -1,0 +1,68 @@
+export const dynamic = "force-dynamic";
+
+import { NextRequest, NextResponse } from "next/server";
+
+import { requireTenantSession } from "@/lib/api-auth";
+import {
+  getLiveSessionErrorStatus,
+  updateWorkspaceLiveSessionAttendance,
+} from "@/lib/server/live-sessions";
+
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+export async function PATCH(req: NextRequest, { params }: RouteContext) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  try {
+    const body = (await req.json().catch(() => ({}))) as {
+      attendance?: Array<{ studentId?: string; status?: string }>;
+    };
+    const { id } = await params;
+    const liveSession = await updateWorkspaceLiveSessionAttendance({
+      schoolKey: auth.schoolKey,
+      viewerRole: auth.session.user.role as "admin" | "teacher",
+      viewerId: String(auth.session.user.id || "").trim(),
+      liveSessionId: id,
+      attendance: Array.isArray(body?.attendance)
+        ? body.attendance.map((item) => ({
+            studentId: String(item?.studentId || "").trim(),
+            status: String(item?.status || "").trim() as
+              | "invited"
+              | "joined"
+              | "present"
+              | "absent",
+          }))
+        : [],
+    });
+
+    if (!liveSession) {
+      return NextResponse.json(
+        { success: false, message: "Live class not found." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      liveSession,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to update live-class attendance.",
+      },
+      { status: getLiveSessionErrorStatus(error) },
+    );
+  }
+}

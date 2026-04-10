@@ -353,6 +353,7 @@ export async function runStudentNotificationWorker({
         message: job.message,
         linkUrl: String(job.linkUrl || ""),
         entityId: job.entityId,
+        dedupeKey: String(job.dedupeKey || "").trim(),
         entityType: job.entityType,
       });
 

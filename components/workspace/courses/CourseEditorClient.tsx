@@ -32,12 +32,14 @@ import {
   type SearchableCommandOption,
 } from "@/components/ui/searchable-command-select";
 import { SearchableMultiSelectPopover } from "@/components/ui/searchable-multi-select-popover";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import FeedbackNotice from "@/components/ui/feedback-notice";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
@@ -949,6 +951,77 @@ export default function CourseEditorClient({
     [filteredSections],
   );
 
+  const syncAssessmentBlocksForScope = useCallback(
+    (
+      nextClassId: string,
+      nextAssignedSectionIds: string[],
+      nextSubjectIds: string[],
+    ) => {
+      setBlocks((currentBlocks) =>
+        currentBlocks.map((block) => {
+          if (block.type !== "assessment" || !block.questionPaperId) {
+            return block;
+          }
+
+          const linkedPaper = papers.find(
+            (paper) => paper._id === block.questionPaperId,
+          );
+          if (
+            linkedPaper &&
+            isPaperCompatibleWithCourseScope(
+              linkedPaper,
+              nextClassId,
+              nextAssignedSectionIds,
+              nextSubjectIds,
+            )
+          ) {
+            return block;
+          }
+
+          return {
+            ...block,
+            questionPaperId: "",
+          };
+        }),
+      );
+    },
+    [papers],
+  );
+
+  useEffect(() => {
+    if (classId || classes.length !== 1) {
+      return;
+    }
+
+    const nextClassId = classes[0]?._id || "";
+    if (!nextClassId) {
+      return;
+    }
+
+    const nextAssignedSectionIds = assignedSectionIds.filter((sectionId) =>
+      sections.some((section) => {
+        const sectionClassId =
+          typeof section.class === "string" ? section.class : section.class?._id || "";
+
+        return (
+          section._id === sectionId &&
+          (!nextClassId || !sectionClassId || sectionClassId === nextClassId)
+        );
+      }),
+    );
+
+    setClassId(nextClassId);
+    setAssignedSectionIds(nextAssignedSectionIds);
+    syncAssessmentBlocksForScope(nextClassId, nextAssignedSectionIds, selectedSubjectIds);
+  }, [
+    assignedSectionIds,
+    classId,
+    classes,
+    sections,
+    selectedSubjectIds,
+    syncAssessmentBlocksForScope,
+  ]);
+
   const subjectOptions = useMemo<SearchableCommandOption[]>(
     () =>
       subjects.map((subject) => ({
@@ -977,7 +1050,9 @@ export default function CourseEditorClient({
       filteredPapers.map((paper) => ({
         value: paper._id,
         label: formatPaperOptionLabel(paper),
-        description: `${paper.duration} min • ${paper.totalMarks} marks`,
+        description: `${paper.duration} min • ${paper.totalMarks} marks • ${paper.subjects
+          .map((subject) => subject.name)
+          .join(", ")}${paper.onlineEnabled ? " • Online" : " • Offline"}`,
         keywords: paper.subjects.map((subject) => subject.name),
       })),
     [filteredPapers],
@@ -1004,38 +1079,6 @@ export default function CourseEditorClient({
             : ""
         }`
       : "All sections in this class";
-
-  const syncAssessmentBlocksForScope = (
-    nextClassId: string,
-    nextAssignedSectionIds: string[],
-    nextSubjectIds: string[],
-  ) => {
-    setBlocks((currentBlocks) =>
-      currentBlocks.map((block) => {
-        if (block.type !== "assessment" || !block.questionPaperId) {
-          return block;
-        }
-
-        const linkedPaper = papers.find((paper) => paper._id === block.questionPaperId);
-        if (
-          linkedPaper &&
-          isPaperCompatibleWithCourseScope(
-            linkedPaper,
-            nextClassId,
-            nextAssignedSectionIds,
-            nextSubjectIds,
-          )
-        ) {
-          return block;
-        }
-
-        return {
-          ...block,
-          questionPaperId: "",
-        };
-      }),
-    );
-  };
 
   const updateBlock = <T extends EditableCourseBlock>(
     blockId: string,
@@ -1146,6 +1189,35 @@ export default function CourseEditorClient({
 
       if (currentIndex < 0 || nextIndex < 0 || nextIndex >= currentBlocks.length) {
         return currentBlocks;
+      }
+
+      if (currentBlocks[currentIndex].type === "lesson") {
+        let moduleIndex = -1;
+        for (let i = currentIndex - 1; i >= 0; i -= 1) {
+          if (currentBlocks[i].type === "module") {
+            moduleIndex = i;
+            break;
+          }
+        }
+
+        if (moduleIndex === -1) {
+          return currentBlocks;
+        }
+
+        if (direction < 0 && nextIndex <= moduleIndex) {
+          return currentBlocks;
+        }
+
+        if (direction > 0) {
+          for (let i = currentIndex + 1; i < currentBlocks.length; i += 1) {
+            if (currentBlocks[i].type === "module") {
+              if (nextIndex >= i) {
+                return currentBlocks;
+              }
+              break;
+            }
+          }
+        }
       }
 
       const nextBlocks = [...currentBlocks];
@@ -1872,6 +1944,11 @@ export default function CourseEditorClient({
     (block) => block.type === "assessment" && block.required !== false,
   ).length;
 
+  const hasModule = useMemo(
+    () => blocks.some((block) => block.type === "module"),
+    [blocks],
+  );
+
   const inlineErrors = useMemo(() => {
     const blockErrors: Record<
       string,
@@ -1885,15 +1962,44 @@ export default function CourseEditorClient({
       }
     > = {};
 
-    blocks.forEach((block) => {
+    blocks.forEach((block, index) => {
       if (block.type === "module") {
+        const moduleIndex = blocks.findIndex((item) => item.id === block.id);
+        let hasLesson = false;
+        for (let index = moduleIndex + 1; index < blocks.length; index += 1) {
+          const nextBlock = blocks[index];
+          if (nextBlock.type === "module") break;
+          if (nextBlock.type === "lesson") {
+            hasLesson = true;
+            break;
+          }
+        }
         if (!block.title.trim()) {
           blockErrors[block.id] = { title: "Module title is required." };
+        }
+        if (!hasLesson) {
+          blockErrors[block.id] = {
+            ...(blockErrors[block.id] || {}),
+            summary: "Add at least one lesson to this module.",
+          };
         }
       }
 
       if (block.type === "lesson") {
         const itemErrors: Record<string, string> = {};
+        let hasModuleContext = false;
+        for (let i = index - 1; i >= 0; i -= 1) {
+          if (blocks[i].type === "module") {
+            hasModuleContext = true;
+            break;
+          }
+        }
+        if (!hasModuleContext) {
+          blockErrors[block.id] = {
+            ...(blockErrors[block.id] || {}),
+            summary: "Move this lesson under a module.",
+          };
+        }
         if (!block.title.trim()) {
           blockErrors[block.id] = {
             ...(blockErrors[block.id] || {}),
@@ -1979,6 +2085,168 @@ export default function CourseEditorClient({
     };
   }, [blocks, classId, selectedSubjectIds, title]);
 
+  const firstAssessmentIndex = useMemo(
+    () => blocks.findIndex((block) => block.type === "assessment"),
+    [blocks],
+  );
+
+  const setupComplete = Boolean(title.trim() && classId && selectedSubjectIds.length > 0);
+  const buildComplete = hasModule && blocks.some((block) => block.type === "lesson");
+  const publishReady = setupComplete && buildComplete;
+  const completedSteps = [
+    setupComplete,
+    buildComplete,
+    publishReady,
+  ].filter(Boolean).length;
+  const progressWidth = `${Math.round((completedSteps / 3) * 100)}%`;
+  const progressLabel = `${Math.min(completedSteps, 3)}/3`;
+
+  const addQuickLessonBlock = (type: EditableLessonItem["type"]) => {
+    if (!hasModule) {
+      toast({
+        title: "Create a module first",
+        description: "Lessons need to live inside a module.",
+      });
+      return;
+    }
+
+    const blockId = createClientBlockId();
+    const itemId = createClientItemId();
+    const item: EditableLessonItem =
+      type === "text"
+        ? { id: itemId, type: "text", contentHtml: "" }
+        : type === "image"
+          ? {
+              id: itemId,
+              type: "image",
+              imageUrl: "",
+              altText: "",
+              caption: "",
+              imageFit: "contain",
+              imageWidth: "standard",
+              imageHeight: "large",
+            }
+          : type === "youtube"
+            ? {
+                id: itemId,
+                type: "youtube",
+                videoId: "",
+                caption: "",
+                urlInput: "",
+              }
+            : {
+                id: itemId,
+                type: "resource",
+                title: "",
+                fileUrl: "",
+                fileName: "",
+                caption: "",
+              };
+
+    setBlocks((currentBlocks) => {
+      const lastModuleIndex = [...currentBlocks]
+        .map((block, index) => (block.type === "module" ? index : -1))
+        .filter((index) => index >= 0)
+        .pop();
+
+      if (typeof lastModuleIndex !== "number") {
+        return currentBlocks;
+      }
+
+      let insertIndex = lastModuleIndex + 1;
+      while (
+        insertIndex < currentBlocks.length &&
+        currentBlocks[insertIndex].type === "lesson"
+      ) {
+        insertIndex += 1;
+      }
+
+      const nextBlocks = [...currentBlocks];
+      nextBlocks.splice(insertIndex, 0, {
+        id: blockId,
+        type: "lesson",
+        title: "",
+        summary: "",
+        estimatedMinutes: "",
+        items: [item],
+      });
+
+      return nextBlocks;
+    });
+  };
+
+  const addLessonToModule = (
+    moduleIndex: number,
+    type: EditableLessonItem["type"] = "text",
+  ) => {
+    const blockId = createClientBlockId();
+    const itemId = createClientItemId();
+    const item: EditableLessonItem =
+      type === "text"
+        ? { id: itemId, type: "text", contentHtml: "" }
+        : type === "image"
+          ? {
+              id: itemId,
+              type: "image",
+              imageUrl: "",
+              altText: "",
+              caption: "",
+              imageFit: "contain",
+              imageWidth: "standard",
+              imageHeight: "large",
+            }
+          : type === "youtube"
+            ? {
+                id: itemId,
+                type: "youtube",
+                videoId: "",
+                caption: "",
+                urlInput: "",
+              }
+            : {
+                id: itemId,
+                type: "resource",
+                title: "",
+                fileUrl: "",
+                fileName: "",
+                caption: "",
+              };
+
+    setBlocks((currentBlocks) => {
+      if (!currentBlocks[moduleIndex] || currentBlocks[moduleIndex].type !== "module") {
+        return currentBlocks;
+      }
+
+      let insertIndex = moduleIndex + 1;
+      while (
+        insertIndex < currentBlocks.length &&
+        currentBlocks[insertIndex].type === "lesson"
+      ) {
+        insertIndex += 1;
+      }
+
+      const nextBlocks = [...currentBlocks];
+      nextBlocks.splice(insertIndex, 0, {
+        id: blockId,
+        type: "lesson",
+        title: "",
+        summary: "",
+        estimatedMinutes: "",
+        items: [item],
+      });
+
+      return nextBlocks;
+    });
+  };
+
+  const scrollToSection = (targetId: string) => {
+    if (typeof document === "undefined") return;
+    const target = document.getElementById(targetId);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
     <div className="app-course-editor-grid">
       <div className="app-course-editor-main">
@@ -1990,9 +2258,29 @@ export default function CourseEditorClient({
           </FeedbackNotice>
         ) : null}
 
-        <Card className="app-course-editor-card">
+        <Card className="app-course-editor-card" id="course-setup">
           <CardHeader className="app-section-header">
-            <CardTitle>Course Setup</CardTitle>
+            <div className="space-y-2">
+              <CardTitle>Course Setup</CardTitle>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-muted-foreground">
+                  <a className="hover:text-foreground" href="#course-setup">Setup</a>
+                  <span>→</span>
+                  <a className="hover:text-foreground" href="#course-blocks">Build</a>
+                  <span>→</span>
+                  <a className="hover:text-foreground" href="#course-publish">Assign & Publish</a>
+                  <span className="ml-1 rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground">
+                    {progressLabel}
+                  </span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: progressWidth }}
+                  />
+                </div>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="app-section-body space-y-5">
             <FormField
@@ -2015,107 +2303,6 @@ export default function CourseEditorClient({
                 className="min-h-[120px]"
               />
             </FormField>
-
-            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-              <FormField label="Cover image">
-                <div className="space-y-3">
-                  <Input
-                    value={coverImageUrl}
-                    onChange={(event) => setCoverImageUrl(event.target.value)}
-                    placeholder="https://example.com/course-cover.webp"
-                  />
-                  <FilePickerField
-                    id="course-cover-image"
-                    label="Course cover upload"
-                    hideLabel
-                    buttonLabel="Upload cover"
-                    accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml"
-                    placeholder="No cover selected"
-                    selectedFileName={
-                      uploadingImageTarget === "cover" ? "Uploading..." : null
-                    }
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] || null;
-                      event.target.value = "";
-                      void handleCoverImageUpload(file);
-                    }}
-                  />
-                  {uploadingImageTarget === "cover" ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Spinner />
-                      Uploading cover image...
-                    </div>
-                  ) : null}
-                </div>
-              </FormField>
-
-              <FormField label="Cover image alt text">
-                <Input
-                  value={coverImageAltText}
-                  onChange={(event) => setCoverImageAltText(event.target.value)}
-                  placeholder="Describe the cover image"
-                />
-              </FormField>
-            </div>
-
-            {coverImageUrl ? (
-              <div className="app-course-media-frame mx-auto w-full max-w-4xl">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={coverImageUrl}
-                  alt={coverImageAltText || "Course cover preview"}
-                  className="h-[220px] w-full object-cover"
-                />
-              </div>
-            ) : null}
-
-            <div className="grid gap-4 lg:grid-cols-3">
-              <FormField label="Starts at">
-                <Input
-                  type="datetime-local"
-                  value={startsAt}
-                  onChange={(event) => setStartsAt(event.target.value)}
-                />
-              </FormField>
-              <FormField label="Due at">
-                <Input
-                  type="datetime-local"
-                  value={dueAt}
-                  onChange={(event) => setDueAt(event.target.value)}
-                />
-              </FormField>
-              <FormField label="Completion badge">
-                <Input
-                  value={completionBadgeLabel}
-                  onChange={(event) => setCompletionBadgeLabel(event.target.value)}
-                  placeholder="Course complete"
-                />
-              </FormField>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <ToggleRow
-                checked={enforceSequentialProgress}
-                onCheckedChange={setEnforceSequentialProgress}
-                label="Sequential progression"
-              />
-              <ToggleRow
-                checked={templateToggleLocked ? true : isTemplate}
-                onCheckedChange={setIsTemplate}
-                label="Save as reusable template"
-                disabled={templateToggleLocked}
-              />
-              <ToggleRow
-                checked={allowNotes}
-                onCheckedChange={setAllowNotes}
-                label="Allow student notes"
-              />
-              <ToggleRow
-                checked={allowBookmarks}
-                onCheckedChange={setAllowBookmarks}
-                label="Allow student bookmarks"
-              />
-            </div>
 
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
               <FormField
@@ -2200,10 +2387,137 @@ export default function CourseEditorClient({
                 noOptionsText="No subjects available."
               />
             </FormField>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => scrollToSection("course-blocks")}
+                disabled={!setupComplete}
+              >
+                Continue to Build
+              </Button>
+              {!setupComplete ? (
+                <span className="text-xs text-muted-foreground">
+                  Add a title, class, and subjects to continue.
+                </span>
+              ) : null}
+            </div>
+
+            <Accordion type="single" collapsible className="pt-1">
+              <AccordionItem value="advanced" className="border-none">
+                <AccordionTrigger className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-3 text-sm font-semibold text-foreground hover:no-underline data-[state=open]:bg-muted/40">
+                  Advanced settings
+                </AccordionTrigger>
+                <AccordionContent className="mt-3 space-y-5 rounded-2xl border border-border/50 bg-[hsl(var(--app-surface-1)/0.96)] p-5">
+                  <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                    <FormField label="Cover image">
+                      <div className="space-y-3">
+                        <Input
+                          value={coverImageUrl}
+                          onChange={(event) => setCoverImageUrl(event.target.value)}
+                          placeholder="https://example.com/course-cover.webp"
+                        />
+                        <FilePickerField
+                          id="course-cover-image"
+                          label="Course cover upload"
+                          hideLabel
+                          buttonLabel="Upload cover"
+                          accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml"
+                          placeholder="No cover selected"
+                          selectedFileName={
+                            uploadingImageTarget === "cover" ? "Uploading..." : null
+                          }
+                          onChange={(event) => {
+                            const file = event.target.files?.[0] || null;
+                            event.target.value = "";
+                            void handleCoverImageUpload(file);
+                          }}
+                        />
+                        {uploadingImageTarget === "cover" ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Spinner />
+                            Uploading cover image...
+                          </div>
+                        ) : null}
+                      </div>
+                    </FormField>
+
+                    <FormField label="Cover image alt text">
+                      <Input
+                        value={coverImageAltText}
+                        onChange={(event) => setCoverImageAltText(event.target.value)}
+                        placeholder="Describe the cover image"
+                      />
+                    </FormField>
+                  </div>
+
+                  {coverImageUrl ? (
+                    <div className="app-course-media-frame mx-auto w-full max-w-4xl">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={coverImageUrl}
+                        alt={coverImageAltText || "Course cover preview"}
+                        className="h-[220px] w-full object-cover"
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    <FormField label="Starts at">
+                      <Input
+                        type="datetime-local"
+                        value={startsAt}
+                        onChange={(event) => setStartsAt(event.target.value)}
+                      />
+                    </FormField>
+                    <FormField label="Due at">
+                      <Input
+                        type="datetime-local"
+                        value={dueAt}
+                        onChange={(event) => setDueAt(event.target.value)}
+                      />
+                    </FormField>
+                    <FormField label="Completion badge">
+                      <Input
+                        value={completionBadgeLabel}
+                        onChange={(event) => setCompletionBadgeLabel(event.target.value)}
+                        placeholder="Course complete"
+                      />
+                    </FormField>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <ToggleRow
+                      checked={enforceSequentialProgress}
+                      onCheckedChange={setEnforceSequentialProgress}
+                      label="Sequential progression"
+                    />
+                    <ToggleRow
+                      checked={templateToggleLocked ? true : isTemplate}
+                      onCheckedChange={setIsTemplate}
+                      label="Save as reusable template"
+                      disabled={templateToggleLocked}
+                    />
+                    <ToggleRow
+                      checked={allowNotes}
+                      onCheckedChange={setAllowNotes}
+                      label="Allow student notes"
+                    />
+                    <ToggleRow
+                      checked={allowBookmarks}
+                      onCheckedChange={setAllowBookmarks}
+                      label="Allow student bookmarks"
+                    />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </CardContent>
         </Card>
 
-        <Card className="app-course-editor-card">
+        <Card className="app-course-editor-card" id="course-blocks">
           <CardHeader className="app-section-header">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -2218,24 +2532,99 @@ export default function CourseEditorClient({
                   {previewMode ? "Editing view" : "Preview"}
                 </Button>
                 {!previewMode ? (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => addBlock("module")}>
-                      <Plus className="h-4 w-4" />
-                      Module
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => addBlock("lesson")}>
-                      <Plus className="h-4 w-4" />
-                      Lesson
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => addBlock("announcement")}>
-                      <Plus className="h-4 w-4" />
-                      Announcement
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => addBlock("assessment")}>
-                      <Plus className="h-4 w-4" />
-                      Assessment
-                    </Button>
-                  </>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Plus className="h-4 w-4" />
+                        Quick add
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-52 p-2">
+                      {!hasModule ? (
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            Create a module to add lessons.
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => addBlock("module")}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Create module
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="grid gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start"
+                            onClick={() => addQuickLessonBlock("text")}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Text
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start"
+                            onClick={() => addQuickLessonBlock("image")}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Image
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start"
+                            onClick={() => addQuickLessonBlock("youtube")}
+                          >
+                            <Plus className="h-4 w-4" />
+                            YouTube
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start"
+                            onClick={() => addBlock("assessment")}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Assessment
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start"
+                            onClick={() => addQuickLessonBlock("resource")}
+                          >
+                            <Plus className="h-4 w-4" />
+                            File
+                          </Button>
+                          <div className="my-1 h-px bg-border/60" />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start"
+                            onClick={() => addBlock("module")}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Module
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start"
+                            onClick={() => addBlock("announcement")}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Announcement
+                          </Button>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
                 ) : null}
               </div>
             </div>
@@ -2251,9 +2640,32 @@ export default function CourseEditorClient({
               </div>
             ) : null}
 
+            {!previewMode && !hasModule ? (
+              <div className="rounded-[1.25rem] border border-dashed border-border/70 bg-muted/15 p-6 text-sm text-muted-foreground">
+                <div className="space-y-3">
+                  <p>Create a module first. Lessons live inside modules.</p>
+                  <Button variant="outline" size="sm" onClick={() => addBlock("module")}>
+                    <Plus className="h-4 w-4" />
+                    Create module
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             {!previewMode &&
               blocks.map((block, index) => {
                 const Icon = getBlockIcon(block);
+                const moduleContext =
+                  block.type === "lesson"
+                    ? (() => {
+                        for (let i = index - 1; i >= 0; i -= 1) {
+                          if (blocks[i].type === "module") {
+                            return blocks[i] as EditableModuleBlock;
+                          }
+                        }
+                        return null;
+                      })()
+                    : null;
 
                 return (
                   <Card
@@ -2261,20 +2673,17 @@ export default function CourseEditorClient({
                     className={cn(
                       "app-course-editor-block-card",
                       draggingBlockId === block.id && "app-course-editor-block-card-dragging",
+                      block.type === "lesson" && moduleContext && "app-course-editor-lesson-nested",
+                      block.type === "lesson" && !moduleContext && "app-course-editor-lesson-orphan",
                     )}
-                    onDragOver={handleBlockDragOver(block.id)}
-                    onDrop={handleBlockDrop(block.id)}
                   >
                   <CardHeader className="app-course-editor-block-header">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex min-w-0 items-center gap-3">
                         <button
                           type="button"
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-background text-muted-foreground transition-colors hover:text-foreground"
-                          draggable
-                          onDragStart={handleBlockDragStart(block.id)}
-                          onDragEnd={handleBlockDragEnd}
-                          aria-label="Drag to reorder"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-background text-muted-foreground"
+                          aria-label="Use arrows to reorder"
                         >
                           <GripVertical className="h-4 w-4" />
                         </button>
@@ -2287,6 +2696,11 @@ export default function CourseEditorClient({
                             <span className="text-sm text-muted-foreground">
                               Block {index + 1}
                             </span>
+                            {block.type === "lesson" && moduleContext ? (
+                              <Badge variant="outline">
+                                Module: {moduleContext.title || "Untitled module"}
+                              </Badge>
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -2379,6 +2793,21 @@ export default function CourseEditorClient({
                             className="min-h-[100px]"
                           />
                         </FormField>
+                        {inlineErrors.blocks[block.id]?.summary ? (
+                          <div className="rounded-[0.9rem] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                            {inlineErrors.blocks[block.id]?.summary}
+                            <div className="mt-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => addLessonToModule(index, "text")}
+                              >
+                                <Plus className="h-4 w-4" />
+                                Add lesson
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
                       </>
                     ) : null}
 
@@ -2431,6 +2860,11 @@ export default function CourseEditorClient({
                             className="min-h-[96px]"
                           />
                         </FormField>
+                        {inlineErrors.blocks[block.id]?.summary ? (
+                          <p className="text-xs text-rose-600">
+                            {inlineErrors.blocks[block.id]?.summary}
+                          </p>
+                        ) : null}
 
                         <div className="space-y-4">
                           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -3050,6 +3484,11 @@ export default function CourseEditorClient({
                             ) : null}
                           </div>
                         </FormField>
+                        {firstAssessmentIndex === index ? (
+                          <p className="text-xs text-muted-foreground">
+                            This assessment will also appear in the student tests list.
+                          </p>
+                        ) : null}
                         <div className="grid gap-4 lg:grid-cols-3">
                           <FormField label="Title override">
                             <Input
@@ -3161,18 +3600,70 @@ export default function CourseEditorClient({
                     ) : null}
                   </CardContent>
                 </Card>
-              );
-            })}
+                );
+              })}
+
+            {!previewMode ? (
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => scrollToSection("course-publish")}
+                  disabled={!buildComplete}
+                >
+                  Continue to Assign & Publish
+                </Button>
+                {!buildComplete ? (
+                  <span className="text-xs text-muted-foreground">
+                    Add a module and at least one lesson to continue.
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>
 
       <div className="app-course-editor-sidebar">
+        <Accordion type="single" collapsible className="lg:hidden">
+          <AccordionItem value="preview" className="border-none">
+            <AccordionTrigger className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-3 text-sm font-semibold text-foreground hover:no-underline data-[state=open]:bg-muted/40">
+              Live Preview
+            </AccordionTrigger>
+            <AccordionContent className="mt-3 rounded-2xl border border-border/50 bg-[hsl(var(--app-surface-1)/0.96)] p-4">
+              <CoursePreview blocks={blocks} paperOptionsById={paperOptionsById} />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
+        <Card className="app-course-editor-card hidden lg:block">
+          <CardHeader className="app-section-header">
+            <CardTitle>Live Preview</CardTitle>
+          </CardHeader>
+          <CardContent className="app-section-body">
+            <div className="app-course-preview-panel">
+              <CoursePreview blocks={blocks} paperOptionsById={paperOptionsById} />
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="app-course-editor-card">
           <CardHeader className="app-section-header">
-            <CardTitle>Save Course</CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle>Save Course</CardTitle>
+              <Badge variant="outline">
+                {canAutosave
+                  ? autosaveStatus === "saving"
+                    ? "Saving..."
+                    : autosaveStatus === "saved"
+                      ? "Saved"
+                      : "Auto-save"
+                  : "Draft"}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent className="app-section-body space-y-4">
+          <CardContent className="app-section-body space-y-4" id="course-publish">
             <div className="app-course-metric-grid">
               <div className="app-course-metric-card">
                 <p className="app-course-metric-label">

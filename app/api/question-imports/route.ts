@@ -159,7 +159,8 @@ export async function POST(req: NextRequest) {
     const isStorageConfigurationError =
       normalizedMessage.includes("vercel blob") ||
       normalizedMessage.includes("blob_read_write_token") ||
-      normalizedMessage.includes("production image uploads");
+      normalizedMessage.includes("image uploads") ||
+      normalizedMessage.includes("file uploads");
 
     return NextResponse.json(
       {

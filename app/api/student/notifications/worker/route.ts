@@ -16,6 +16,10 @@ function getWorkerSecret() {
   return String(process.env.STUDENT_NOTIFICATION_WORKER_SECRET || "").trim();
 }
 
+function getCronSecret() {
+  return String(process.env.CRON_SECRET || "").trim();
+}
+
 function secureEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
@@ -31,10 +35,7 @@ function secureEqual(left: string, right: string) {
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-function isCronWorkerRequest(req: NextRequest) {
-  const configuredSecret = getWorkerSecret();
-  if (!configuredSecret) return false;
-
+function getScheduledWorkerProvidedSecret(req: NextRequest) {
   const authHeader = String(req.headers.get("authorization") || "").trim();
   const bearerToken = authHeader.startsWith("Bearer ")
     ? authHeader.slice("Bearer ".length).trim()
@@ -44,7 +45,56 @@ function isCronWorkerRequest(req: NextRequest) {
   ).trim();
   const providedSecret = headerSecret || bearerToken;
 
-  return secureEqual(configuredSecret, providedSecret);
+  return providedSecret;
+}
+
+function isCronWorkerRequest(req: NextRequest) {
+  const configuredSecrets = [getWorkerSecret(), getCronSecret()].filter(Boolean);
+  if (configuredSecrets.length === 0) return false;
+  const providedSecret = getScheduledWorkerProvidedSecret(req);
+
+  return configuredSecrets.some((configuredSecret) =>
+    secureEqual(configuredSecret, providedSecret),
+  );
+}
+
+async function runScheduledWorkerFromRequest(
+  req: NextRequest,
+  body?: Record<string, unknown>,
+) {
+  const schoolKey =
+    String(body?.schoolKey || req.nextUrl.searchParams.get("schoolKey") || "").trim() ||
+    undefined;
+  const limitPerSchool = normalizePositiveInteger(
+    body?.limitPerSchool ?? req.nextUrl.searchParams.get("limitPerSchool"),
+    25,
+    100,
+  );
+  const maxSchools = normalizePositiveInteger(
+    body?.maxSchools ?? req.nextUrl.searchParams.get("maxSchools"),
+    25,
+    100,
+  );
+  const jobIds: string[] = Array.from(
+    new Set(
+      (
+        Array.isArray(body?.jobIds)
+          ? body?.jobIds
+          : String(req.nextUrl.searchParams.get("jobIds") || "")
+              .split(",")
+              .map((value) => value.trim())
+      )
+        .map((jobId: any) => String(jobId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  return runScheduledNotificationWorker({
+    schoolKey,
+    limitPerSchool,
+    maxSchools,
+    jobIds,
+  });
 }
 
 function normalizePositiveInteger(
@@ -165,26 +215,7 @@ export async function POST(req: NextRequest) {
 
   if (isCronWorkerRequest(req)) {
     const body = await req.json().catch(() => ({}));
-    const schoolKey = String(body?.schoolKey || "").trim() || undefined;
-    const limitPerSchool = normalizePositiveInteger(
-      body?.limitPerSchool,
-      25,
-      100,
-    );
-    const maxSchools = normalizePositiveInteger(body?.maxSchools, 25, 100);
-    const jobIds: string[] = Array.from(
-      new Set(
-        (Array.isArray(body?.jobIds) ? body.jobIds : [])
-          .map((jobId: any) => String(jobId || "").trim())
-          .filter(Boolean),
-      ),
-    );
-    const result = await runScheduledNotificationWorker({
-      schoolKey,
-      limitPerSchool,
-      maxSchools,
-      jobIds,
-    });
+    const result = await runScheduledWorkerFromRequest(req, body);
 
     return NextResponse.json({ success: true, ...result });
   }
@@ -209,4 +240,21 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({ success: true, mode: "tenant", ...result });
+}
+
+export async function GET(req: NextRequest) {
+  await connectDB();
+
+  if (!isCronWorkerRequest(req)) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Unauthorized",
+      },
+      { status: 401 },
+    );
+  }
+
+  const result = await runScheduledWorkerFromRequest(req);
+  return NextResponse.json({ success: true, ...result });
 }

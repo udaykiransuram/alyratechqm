@@ -15,6 +15,7 @@ import {
   Upload,
   UserCog,
   Users,
+  Video,
 } from "lucide-react";
 
 import DeferredSiteHeaderMobileSidebar from "@/components/navigation/DeferredSiteHeaderMobileSidebar";
@@ -83,6 +84,14 @@ const schoolSidebarGroups: SidebarGroup[] = [
         children: [
           { href: "/workspace/diary", label: "All Diary Entries" },
           { href: "/workspace/diary/create", label: "Create Diary Entry" },
+        ],
+      },
+      {
+        label: "Live Classes",
+        icon: Video,
+        children: [
+          { href: "/workspace/live-classes", label: "All Live Classes" },
+          { href: "/workspace/live-classes/create", label: "Schedule Live Class" },
         ],
       },
     ],

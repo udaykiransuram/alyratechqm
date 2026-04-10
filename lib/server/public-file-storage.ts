@@ -38,6 +38,10 @@ const FILE_MIME_TYPES_BY_EXTENSION = new Map(
 
 const BLOB_CACHE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
+function hasBlobReadWriteToken() {
+  return Boolean(String(process.env.BLOB_READ_WRITE_TOKEN || "").trim());
+}
+
 function sanitizePathSegment(value: string) {
   return String(value || "")
     .trim()
@@ -137,6 +141,24 @@ type VercelBlobModule = {
 };
 
 function shouldUseBlobStorage() {
+  const explicitMode = String(
+    process.env.PUBLIC_UPLOADS_DRIVER || process.env.PUBLIC_FILE_STORAGE || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  if (explicitMode === "local") {
+    return false;
+  }
+
+  if (explicitMode === "blob") {
+    return true;
+  }
+
+  if (hasBlobReadWriteToken()) {
+    return true;
+  }
+
   return process.env.NODE_ENV === "production";
 }
 
@@ -159,7 +181,7 @@ async function loadBlobModule() {
         ? ` ${error.message.trim()}`
         : "";
     throw new Error(
-      `Vercel Blob SDK is unavailable for production file uploads.${reason}`,
+      `Vercel Blob SDK is unavailable for file uploads.${reason}`,
     );
   }
 }
@@ -207,9 +229,7 @@ async function storePublicFileInBlob({
   const token = String(process.env.BLOB_READ_WRITE_TOKEN || "").trim();
 
   if (!token) {
-    throw new Error(
-      "Vercel Blob is not configured. Set BLOB_READ_WRITE_TOKEN for production file uploads.",
-    );
+    throw new Error("BLOB_NOT_CONFIGURED");
   }
 
   const { put } = await loadBlobModule();
@@ -273,19 +293,41 @@ export async function storePublicFile({
     throw new Error("Unsupported file format.");
   }
 
-  return shouldUseBlobStorage()
-    ? storePublicFileInBlob({
-        buffer,
-        relativeDir: relativeDir.replace(/\\/g, "/"),
-        storedFileName,
-        displayFileName,
-        normalizedMimeType,
-      })
-    : storePublicFileLocally({
-        buffer,
-        relativeDir,
-        storedFileName,
-        displayFileName,
-        normalizedMimeType,
-      });
+  if (!shouldUseBlobStorage()) {
+    return storePublicFileLocally({
+      buffer,
+      relativeDir,
+      storedFileName,
+      displayFileName,
+      normalizedMimeType,
+    });
+  }
+
+  try {
+    return await storePublicFileInBlob({
+      buffer,
+      relativeDir: relativeDir.replace(/\\/g, "/"),
+      storedFileName,
+      displayFileName,
+      normalizedMimeType,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "BLOB_NOT_CONFIGURED") {
+      if (process.env.NODE_ENV !== "production") {
+        return storePublicFileLocally({
+          buffer,
+          relativeDir,
+          storedFileName,
+          displayFileName,
+          normalizedMimeType,
+        });
+      }
+
+      throw new Error(
+        "Vercel Blob is not configured. Set BLOB_READ_WRITE_TOKEN for file uploads.",
+      );
+    }
+
+    throw error;
+  }
 }

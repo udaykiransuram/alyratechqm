@@ -4,22 +4,31 @@ import { getModelRegistry } from "@/lib/mongoose-models";
 
 export interface IStudentNotificationJob extends Document {
   schoolKey: string;
-  type: "course_assigned" | "course_due_soon" | "test_assigned" | "diary_update";
+  type:
+    | "course_assigned"
+    | "course_due_soon"
+    | "test_assigned"
+    | "diary_update"
+    | "live_session_scheduled"
+    | "live_session_reminder"
+    | "live_session_cancelled";
   title: string;
   message: string;
   linkUrl?: string;
   entityId: string;
-  entityType: "course" | "test" | "diary";
+  dedupeKey?: string;
+  entityType: "course" | "test" | "diary" | "live_session";
   targetClassId?: Types.ObjectId;
   targetAcademicSectionIds?: Types.ObjectId[];
   targetStudentIds?: Types.ObjectId[];
-  status: "queued" | "processing" | "completed" | "failed";
+  status: "queued" | "processing" | "completed" | "failed" | "superseded";
   attempts: number;
   maxAttempts: number;
   nextRetryAt?: Date;
   lastAttemptAt?: Date;
   processingStartedAt?: Date;
   completedAt?: Date;
+  supersededAt?: Date;
   resolvedStudentCount: number;
   upsertedCount: number;
   error?: string;
@@ -38,6 +47,9 @@ const StudentNotificationJobSchema = new Schema<IStudentNotificationJob>(
         "course_due_soon",
         "test_assigned",
         "diary_update",
+        "live_session_scheduled",
+        "live_session_reminder",
+        "live_session_cancelled",
       ],
       index: true,
     },
@@ -45,10 +57,11 @@ const StudentNotificationJobSchema = new Schema<IStudentNotificationJob>(
     message: { type: String, required: true, trim: true },
     linkUrl: { type: String, default: "", trim: true },
     entityId: { type: String, required: true, trim: true, index: true },
+    dedupeKey: { type: String, default: "", trim: true, index: true },
     entityType: {
       type: String,
       required: true,
-      enum: ["course", "test", "diary"],
+      enum: ["course", "test", "diary", "live_session"],
       index: true,
     },
     targetClassId: {
@@ -69,7 +82,7 @@ const StudentNotificationJobSchema = new Schema<IStudentNotificationJob>(
     status: {
       type: String,
       required: true,
-      enum: ["queued", "processing", "completed", "failed"],
+      enum: ["queued", "processing", "completed", "failed", "superseded"],
       default: "queued",
       index: true,
     },
@@ -79,6 +92,7 @@ const StudentNotificationJobSchema = new Schema<IStudentNotificationJob>(
     lastAttemptAt: { type: Date },
     processingStartedAt: { type: Date },
     completedAt: { type: Date },
+    supersededAt: { type: Date },
     resolvedStudentCount: { type: Number, default: 0 },
     upsertedCount: { type: Number, default: 0 },
     error: { type: String },
@@ -117,7 +131,9 @@ if (
   (!existingStudentNotificationJobModel.schema.path("targetStudentIds") ||
     !existingStudentNotificationJobModel.schema.path("completedAt") ||
     !existingStudentNotificationJobModel.schema.path("resolvedStudentCount") ||
-    !existingStudentNotificationJobModel.schema.path("upsertedCount"))
+    !existingStudentNotificationJobModel.schema.path("upsertedCount") ||
+    !existingStudentNotificationJobModel.schema.path("dedupeKey") ||
+    !existingStudentNotificationJobModel.schema.path("supersededAt"))
 ) {
   delete modelRegistry.StudentNotificationJob;
 }

@@ -101,7 +101,10 @@ export default function CourseResourcePreview({
       try {
         setPdfThumbsLoading(true);
         const pdfjs = await import("pdfjs-dist/build/pdf");
-        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          "pdfjs-dist/build/pdf.worker.min.mjs",
+          import.meta.url,
+        ).toString();
         const task = pdfjs.getDocument(preview.normalizedFileUrl);
         const doc = await task.promise;
         if (cancelled) return;

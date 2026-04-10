@@ -1,5 +1,6 @@
 import { buildArchiveFilter } from "@/lib/archive";
 import { getTenantModels } from "@/lib/db-tenant";
+import { buildDefaultStudentNotificationDedupeKey } from "@/lib/live-sessions/shared";
 import { bumpStudentNotificationSignalVersion } from "@/lib/redis";
 import { invalidateStudentDashboardCacheForStudents } from "@/lib/server/student-dashboard-cache";
 import { broadcastStudentNotification } from "@/lib/server/student-notifications-stream";
@@ -16,6 +17,7 @@ export type StudentNotificationDeliveryInput = {
   message: string;
   linkUrl: string;
   entityId: string;
+  dedupeKey?: string;
   entityType: StudentNotificationEntityType;
   classId?: string;
   assignedSectionIds?: string[];
@@ -153,6 +155,12 @@ export async function deliverStudentNotifications(
     ["StudentNotification"],
   );
   const now = new Date();
+  const dedupeKey =
+    String(params.dedupeKey || "").trim() ||
+    buildDefaultStudentNotificationDedupeKey(
+      params.type,
+      String(params.entityId || "").trim(),
+    );
   let upsertedCount = 0;
 
   try {
@@ -161,8 +169,7 @@ export async function deliverStudentNotifications(
         updateOne: {
           filter: {
             studentId,
-            type: params.type,
-            entityId: params.entityId,
+            dedupeKey,
           },
           update: {
             $setOnInsert: {
@@ -172,6 +179,7 @@ export async function deliverStudentNotifications(
               message: params.message,
               linkUrl: params.linkUrl,
               entityId: params.entityId,
+              dedupeKey,
               entityType: params.entityType,
               readAt: null,
               createdAt: now,

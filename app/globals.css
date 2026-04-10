@@ -4001,10 +4001,12 @@
   .app-resource-fullscreen {
     position: fixed;
     inset: 0;
-    z-index: 1000;
+    z-index: 2200;
     background: hsl(var(--background));
     display: grid;
     grid-template-rows: auto 1fr;
+    width: 100vw;
+    height: 100vh;
   }
 
   .app-resource-fullscreen-bar {
@@ -4017,6 +4019,7 @@
 
   .app-resource-fullscreen-scroll {
     @apply h-full w-full overflow-y-auto bg-white;
+    padding: clamp(1rem, 2.6vw, 2.5rem);
   }
 
   .app-math-modal {
@@ -4295,7 +4298,7 @@
   }
 
   .app-course-editor-grid {
-    @apply grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_19rem];
+    @apply grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem];
   }
 
   .app-course-editor-main,
@@ -4305,6 +4308,12 @@
 
   .app-course-editor-sidebar {
     @apply lg:sticky lg:top-4 lg:self-start;
+  }
+
+  .app-course-preview-panel {
+    max-height: min(60vh, 42rem);
+    overflow: auto;
+    padding-right: 0.25rem;
   }
 
   .app-course-editor-card {
@@ -4321,6 +4330,21 @@
         hsl(var(--app-surface-1) / 0.985) 0%,
         hsl(var(--app-surface-2) / 0.78) 100%
       );
+  }
+
+  .app-course-editor-lesson-nested {
+    margin-left: 1.5rem;
+    border-left: 3px solid hsl(var(--primary) / 0.18);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.7) 100%
+      );
+  }
+
+  .app-course-editor-lesson-orphan {
+    border-color: hsl(var(--destructive) / 0.4);
   }
 
   .app-course-editor-block-card-dragging {

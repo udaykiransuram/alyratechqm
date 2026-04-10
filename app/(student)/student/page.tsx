@@ -1,3 +1,4 @@
+import { ExternalLink } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 
@@ -102,6 +103,23 @@ function formatNotificationDate(value?: string | null) {
   }).format(date);
 }
 
+function formatLiveClassMeta(item: {
+  status: string;
+  scheduledStartAt: string | null;
+  subjectName: string | null;
+  teacherName: string | null;
+}) {
+  if (item.status === "live") {
+    return item.teacherName
+      ? `Live now with ${item.teacherName}`
+      : "Live now";
+  }
+
+  const startLabel = formatDateLabel(item.scheduledStartAt);
+  const context = item.subjectName || item.teacherName || "Live class";
+  return startLabel ? `${context} • ${startLabel}` : context;
+}
+
 export default async function StudentHomePage() {
   const session = await getServerSession(authOptions);
 
@@ -159,6 +177,13 @@ export default async function StudentHomePage() {
             meta: "Ready to continue or start.",
           },
           {
+            label: "Live classes",
+            value: String(
+              dashboard.liveClasses.liveNow + dashboard.liveClasses.upcoming,
+            ),
+            meta: "Live now and upcoming.",
+          },
+          {
             label: "Courses",
             value: String(dashboard.courses.inProgress),
             meta: "Currently in progress.",
@@ -168,17 +193,69 @@ export default async function StudentHomePage() {
             value: String(dashboard.diary.remaining),
             meta: formatDiaryDateLabel(dashboard.diary.date) || dashboard.diary.date,
           },
-          {
-            label: "Unread",
-            value: String(dashboard.notifications.unreadCount),
-            meta: "Latest updates from teachers.",
-          },
         ]}
       >
         <StudentPortalNav />
       </PageHero>
 
       <div className="grid gap-5 xl:grid-cols-2">
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle>Upcoming Live Classes</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  The next meeting-linked sessions scheduled for your class.
+                </p>
+              </div>
+              <Badge variant="outline">
+                {dashboard.liveClasses.liveNow} live now
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="app-section-body space-y-3">
+            {dashboard.liveClasses.items.length === 0 ? (
+              <p className="text-sm leading-6 text-muted-foreground">
+                No live classes are scheduled right now.
+              </p>
+            ) : (
+              dashboard.liveClasses.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/70 p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatLiveClassMeta(item)}
+                      </p>
+                    </div>
+                    <Badge className="capitalize">{item.status}</Badge>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button asChild variant="outline" className="app-button-compact-primary">
+                      <AppPrefetchLink href={item.href} prefetchOnViewport={false}>
+                        Open details
+                      </AppPrefetchLink>
+                    </Button>
+                    {item.canJoin ? (
+                      <Button asChild className="app-button-compact-primary">
+                        <a href={item.joinHref}>
+                          <ExternalLink className="h-4 w-4" />
+                          Join
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
         <Card className="app-surface overflow-hidden">
           <CardHeader className="app-section-header gap-2">
             <div className="flex items-center justify-between gap-3">

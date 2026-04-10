@@ -908,6 +908,7 @@ export function useStudentTestRuntime({
 
     if (!auto && !isFullscreenActive()) {
       await requestFullscreenForExamInternal();
+    }
     if (
       typeof document === "undefined" ||
       !document.fullscreenElement ||
@@ -918,7 +919,6 @@ export function useStudentTestRuntime({
         "Please enter fullscreen to submit the test. Fullscreen is required for the entire test.",
       );
       return;
-    }
     }
 
     submitTriggeredRef.current = true;

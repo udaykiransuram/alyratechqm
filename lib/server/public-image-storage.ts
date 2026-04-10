@@ -9,6 +9,10 @@ import {
 
 const BLOB_CACHE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
+function hasBlobReadWriteToken() {
+  return Boolean(String(process.env.BLOB_READ_WRITE_TOKEN || "").trim());
+}
+
 function sanitizePathSegment(value: string) {
   return String(value || "")
     .trim()
@@ -68,6 +72,24 @@ type VercelBlobModule = {
 };
 
 function shouldUseBlobStorage() {
+  const explicitMode = String(
+    process.env.PUBLIC_UPLOADS_DRIVER || process.env.PUBLIC_FILE_STORAGE || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  if (explicitMode === "local") {
+    return false;
+  }
+
+  if (explicitMode === "blob") {
+    return true;
+  }
+
+  if (hasBlobReadWriteToken()) {
+    return true;
+  }
+
   return process.env.NODE_ENV === "production";
 }
 
@@ -90,7 +112,7 @@ async function loadBlobModule() {
         ? ` ${error.message.trim()}`
         : "";
     throw new Error(
-      `Vercel Blob SDK is unavailable for production image uploads.${reason}`,
+      `Vercel Blob SDK is unavailable for image uploads.${reason}`,
     );
   }
 }
@@ -134,7 +156,7 @@ async function storePublicImageInBlob({
 
   if (!token) {
     throw new Error(
-      "Vercel Blob is not configured. Set BLOB_READ_WRITE_TOKEN for production image uploads.",
+      "Vercel Blob is not configured. Set BLOB_READ_WRITE_TOKEN for image uploads.",
     );
   }
 

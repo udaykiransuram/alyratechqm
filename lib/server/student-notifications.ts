@@ -1,3 +1,9 @@
+import {
+  buildDefaultStudentNotificationDedupeKey,
+  buildLiveSessionNotificationEntityId,
+  buildLiveSessionNotificationDedupeKey,
+  resolveLiveSessionReminderAvailableAt,
+} from "@/lib/live-sessions/shared";
 import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
@@ -25,10 +31,12 @@ type QueueStudentNotificationJobInput = {
   message: string;
   linkUrl: string;
   entityId: string;
+  dedupeKey?: string;
   entityType: StudentNotificationEntityType;
   classId?: string;
   assignedAcademicSections?: unknown[];
   studentIds?: string[];
+  availableAt?: Date | number | string | null;
 };
 
 export type StudentNotificationSummaryItem = {
@@ -262,6 +270,12 @@ async function queueStudentNotificationJobs(
       message: String(input.message || "").trim(),
       linkUrl: String(input.linkUrl || "").trim(),
       entityId: String(input.entityId || "").trim(),
+      dedupeKey:
+        String(input.dedupeKey || "").trim() ||
+        buildDefaultStudentNotificationDedupeKey(
+          String(input.type || "").trim(),
+          String(input.entityId || "").trim(),
+        ),
       entityType: input.entityType,
       targetClassId: String(input.classId || "").trim() || undefined,
       targetAcademicSectionIds: normalizeIds(input.assignedAcademicSections),
@@ -275,31 +289,68 @@ async function queueStudentNotificationJobs(
       status: "queued",
       attempts: 0,
       maxAttempts: 4,
-      nextRetryAt: now,
+      nextRetryAt:
+        input.availableAt instanceof Date
+          ? input.availableAt
+          : typeof input.availableAt === "number"
+            ? new Date(input.availableAt)
+            : typeof input.availableAt === "string" && input.availableAt.trim()
+              ? new Date(input.availableAt)
+              : now,
     })),
     { ordered: true },
   );
 
   const jobIds = jobs.map((job) => String(job._id));
-  const schoolKeys = Array.from(
-    new Set(jobs.map((job) => String(job.schoolKey || "").trim()).filter(Boolean)),
-  );
+  const jobsBySchoolAndAvailability = new Map<
+    string,
+    Array<{
+      jobId: string;
+      availableAt: Date | null;
+    }>
+  >();
 
-  for (const schoolKey of schoolKeys) {
-    const schoolJobIds = jobs
-      .filter((job) => String(job.schoolKey || "").trim() === schoolKey)
-      .map((job) => String(job._id));
+  jobs.forEach((job) => {
+    const schoolKey = String(job.schoolKey || "").trim();
+    if (!schoolKey) {
+      return;
+    }
 
-    await enqueueRedisPartitionQueueItems({
-      queueName: STUDENT_NOTIFICATION_REDIS_QUEUE,
-      partitionKey: schoolKey,
-      itemIds: schoolJobIds,
-      availableAt: now,
-    }).catch(() => null);
+    if (!jobsBySchoolAndAvailability.has(schoolKey)) {
+      jobsBySchoolAndAvailability.set(schoolKey, []);
+    }
+
+    jobsBySchoolAndAvailability.get(schoolKey)?.push({
+      jobId: String(job._id),
+      availableAt: job.nextRetryAt ? new Date(job.nextRetryAt) : now,
+    });
+  });
+
+  for (const [schoolKey, schoolJobs] of jobsBySchoolAndAvailability.entries()) {
+    const jobsByAvailability = new Map<string, string[]>();
+
+    schoolJobs.forEach((job) => {
+      const availabilityKey = job.availableAt
+        ? new Date(job.availableAt).toISOString()
+        : now.toISOString();
+      if (!jobsByAvailability.has(availabilityKey)) {
+        jobsByAvailability.set(availabilityKey, []);
+      }
+      jobsByAvailability.get(availabilityKey)?.push(job.jobId);
+    });
+
+    for (const [availabilityKey, schoolJobIds] of jobsByAvailability.entries()) {
+      await enqueueRedisPartitionQueueItems({
+        queueName: STUDENT_NOTIFICATION_REDIS_QUEUE,
+        partitionKey: schoolKey,
+        itemIds: schoolJobIds,
+        availableAt: availabilityKey,
+      }).catch(() => null);
+    }
 
     scheduleStudentNotificationWorker({
       schoolKey,
-      jobIds: schoolJobIds,
+      jobIds: schoolJobs.map((job) => job.jobId),
     });
   }
 
@@ -502,4 +553,195 @@ export async function createCourseDueSoonNotificationsForSchool({
   }
 
   return queueStudentNotificationJobs(jobsToQueue);
+}
+
+export async function markStudentNotificationJobsSuperseded(params: {
+  schoolKey: string;
+  entityType: StudentNotificationEntityType;
+  entityId: string;
+  types?: StudentNotificationType[];
+  excludeDedupeKeys?: string[];
+}) {
+  const schoolKey = String(params.schoolKey || "").trim();
+  const entityId = String(params.entityId || "").trim();
+  const excludeDedupeKeys = Array.from(
+    new Set(
+      (Array.isArray(params.excludeDedupeKeys) ? params.excludeDedupeKeys : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const types = Array.from(
+    new Set(
+      (Array.isArray(params.types) ? params.types : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (!schoolKey || !entityId) {
+    return { modifiedCount: 0 };
+  }
+
+  await connectDB();
+
+  const query: Record<string, any> = {
+    schoolKey,
+    entityType: params.entityType,
+    status: { $in: ["queued", "processing"] },
+  };
+
+  if (params.entityType === "live_session") {
+    const escapedEntityId = entityId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    query.$or = [
+      { entityId },
+      { entityId: { $regex: `^${escapedEntityId}:` } },
+    ];
+  } else {
+    query.entityId = entityId;
+  }
+
+  if (types.length > 0) {
+    query.type = { $in: types };
+  }
+
+  if (excludeDedupeKeys.length > 0) {
+    query.dedupeKey = { $nin: excludeDedupeKeys };
+  }
+
+  const result = await StudentNotificationJob.updateMany(query, {
+    $set: {
+      status: "superseded",
+      supersededAt: new Date(),
+      completedAt: new Date(),
+      error: "Superseded by a newer notification revision.",
+    },
+  });
+
+  return {
+    modifiedCount: Number(result.modifiedCount || 0),
+  };
+}
+
+export async function createLiveSessionScheduledNotifications(params: {
+  schoolKey: string;
+  sessionId: string;
+  title: string;
+  classId: string;
+  assignedAcademicSections: unknown[];
+  notificationRevision: number;
+  scheduledStartAt: Date;
+  scheduledEndAt: Date;
+}) {
+  const sessionId = String(params.sessionId || "").trim();
+  const scheduledDedupeKey = buildLiveSessionNotificationDedupeKey({
+    type: "live_session_scheduled",
+    sessionId,
+    revision: params.notificationRevision,
+  });
+  const reminderDedupeKey = buildLiveSessionNotificationDedupeKey({
+    type: "live_session_reminder",
+    sessionId,
+    revision: params.notificationRevision,
+  });
+  const notificationEntityId = buildLiveSessionNotificationEntityId({
+    sessionId,
+    revision: params.notificationRevision,
+  });
+
+  await markStudentNotificationJobsSuperseded({
+    schoolKey: params.schoolKey,
+    entityType: "live_session",
+    entityId: sessionId,
+    types: ["live_session_scheduled", "live_session_reminder"],
+    excludeDedupeKeys: [scheduledDedupeKey, reminderDedupeKey],
+  }).catch(() => undefined);
+
+  const startLabel = params.scheduledStartAt.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const jobs: QueueStudentNotificationJobInput[] = [
+    {
+      schoolKey: params.schoolKey,
+      type: "live_session_scheduled",
+      title: "Live class scheduled",
+      message: `${params.title} starts on ${startLabel}.`,
+      linkUrl: `/student/live-classes/${sessionId}`,
+      entityId: notificationEntityId,
+      dedupeKey: scheduledDedupeKey,
+      entityType: "live_session",
+      classId: params.classId,
+      assignedAcademicSections: params.assignedAcademicSections,
+    },
+  ];
+
+  const reminderAvailableAt = resolveLiveSessionReminderAvailableAt({
+    scheduledStartAt: params.scheduledStartAt,
+  });
+
+  if (reminderAvailableAt) {
+    jobs.push({
+      schoolKey: params.schoolKey,
+      type: "live_session_reminder",
+      title: "Live class starts soon",
+      message: `${params.title} starts in 15 minutes.`,
+      linkUrl: `/student/live-classes/${sessionId}`,
+      entityId: notificationEntityId,
+      dedupeKey: reminderDedupeKey,
+      entityType: "live_session",
+      classId: params.classId,
+      assignedAcademicSections: params.assignedAcademicSections,
+      availableAt: reminderAvailableAt,
+    });
+  }
+
+  return queueStudentNotificationJobs(jobs);
+}
+
+export async function createLiveSessionCancelledNotifications(params: {
+  schoolKey: string;
+  sessionId: string;
+  title: string;
+  classId: string;
+  assignedAcademicSections: unknown[];
+  notificationRevision: number;
+}) {
+  const sessionId = String(params.sessionId || "").trim();
+  const cancelDedupeKey = buildLiveSessionNotificationDedupeKey({
+    type: "live_session_cancelled",
+    sessionId,
+    revision: params.notificationRevision,
+  });
+  const notificationEntityId = buildLiveSessionNotificationEntityId({
+    sessionId,
+    revision: params.notificationRevision,
+  });
+
+  await markStudentNotificationJobsSuperseded({
+    schoolKey: params.schoolKey,
+    entityType: "live_session",
+    entityId: sessionId,
+    types: ["live_session_scheduled", "live_session_reminder", "live_session_cancelled"],
+    excludeDedupeKeys: [cancelDedupeKey],
+  }).catch(() => undefined);
+
+  return queueStudentNotificationJobs([
+    {
+      schoolKey: params.schoolKey,
+      type: "live_session_cancelled",
+      title: "Live class cancelled",
+      message: `${params.title} has been cancelled.`,
+      linkUrl: `/student/live-classes/${sessionId}`,
+      entityId: notificationEntityId,
+      dedupeKey: cancelDedupeKey,
+      entityType: "live_session",
+      classId: params.classId,
+      assignedAcademicSections: params.assignedAcademicSections,
+    },
+  ]);
 }

@@ -8,9 +8,16 @@ export type StudentNotificationType =
   | "course_assigned"
   | "course_due_soon"
   | "test_assigned"
-  | "diary_update";
+  | "diary_update"
+  | "live_session_scheduled"
+  | "live_session_reminder"
+  | "live_session_cancelled";
 
-export type StudentNotificationEntityType = "course" | "test" | "diary";
+export type StudentNotificationEntityType =
+  | "course"
+  | "test"
+  | "diary"
+  | "live_session";
 
 export interface IStudentNotification extends Document {
   studentId: Types.ObjectId;
@@ -19,6 +26,7 @@ export interface IStudentNotification extends Document {
   message: string;
   linkUrl?: string;
   entityId?: string;
+  dedupeKey?: string;
   entityType?: StudentNotificationEntityType;
   readAt?: Date | null;
   createdAt: Date;
@@ -36,7 +44,15 @@ const StudentNotificationSchema = new Schema<IStudentNotification>(
     type: {
       type: String,
       required: true,
-      enum: ["course_assigned", "course_due_soon", "test_assigned", "diary_update"],
+      enum: [
+        "course_assigned",
+        "course_due_soon",
+        "test_assigned",
+        "diary_update",
+        "live_session_scheduled",
+        "live_session_reminder",
+        "live_session_cancelled",
+      ],
     },
     title: {
       type: String,
@@ -58,9 +74,15 @@ const StudentNotificationSchema = new Schema<IStudentNotification>(
       default: "",
       trim: true,
     },
+    dedupeKey: {
+      type: String,
+      default: "",
+      trim: true,
+      index: true,
+    },
     entityType: {
       type: String,
-      enum: ["course", "test", "diary"],
+      enum: ["course", "test", "diary", "live_session"],
       default: undefined,
     },
     readAt: {
@@ -76,11 +98,30 @@ const StudentNotificationSchema = new Schema<IStudentNotification>(
 StudentNotificationSchema.index({ studentId: 1, createdAt: -1 });
 StudentNotificationSchema.index({ studentId: 1, readAt: 1 });
 StudentNotificationSchema.index(
-  { studentId: 1, type: 1, entityId: 1 },
-  { unique: true, name: "student_notification_unique_1" },
+  { studentId: 1, dedupeKey: 1 },
+  {
+    unique: true,
+    name: "student_notification_unique_dedupe_1",
+    partialFilterExpression: {
+      dedupeKey: { $type: "string", $gt: "" },
+    },
+  },
 );
 
 const modelRegistry = getModelRegistry();
+
+const existingStudentNotificationModel = modelRegistry.StudentNotification as
+  | Model<IStudentNotification>
+  | undefined;
+
+if (
+  existingStudentNotificationModel &&
+  (!existingStudentNotificationModel.schema.path("dedupeKey") ||
+    !existingStudentNotificationModel.schema.path("entityType") ||
+    !existingStudentNotificationModel.schema.path("linkUrl"))
+) {
+  delete modelRegistry.StudentNotification;
+}
 
 const StudentNotification: Model<IStudentNotification> =
   (modelRegistry.StudentNotification as Model<IStudentNotification>) ||

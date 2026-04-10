@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { listStudentDiaryEntries } from "@/lib/server/diary";
 import { listStudentCourses } from "@/lib/server/student-courses";
 import { getCachedStudentDashboardData } from "@/lib/server/student-dashboard-cache";
+import { listStudentLiveSessions } from "@/lib/server/live-sessions";
 import { getStudentNotificationSnapshot } from "@/lib/server/student-notifications";
 import { listStudentTestsData } from "@/lib/server/student-tests";
 
@@ -22,6 +23,23 @@ export type StudentDashboardData = {
       onlineStartsAt: string | null;
       onlineEndsAt: string | null;
       remainingTimeMs: number | null;
+      href: string;
+    }>;
+  };
+  liveClasses: {
+    total: number;
+    liveNow: number;
+    upcoming: number;
+    joinable: number;
+    items: Array<{
+      id: string;
+      title: string;
+      status: string;
+      subjectName: string | null;
+      teacherName: string | null;
+      scheduledStartAt: string | null;
+      canJoin: boolean;
+      joinHref: string;
       href: string;
     }>;
   };
@@ -132,7 +150,7 @@ export async function getStudentDashboardData(params: {
       const now = new Date();
       const diaryDate = getTodayDiaryEntryDate();
       const studentPlacement = params.studentPlacement || {};
-      const [tests, courses, diaryEntries, notificationSnapshot] =
+      const [tests, liveClasses, courses, diaryEntries, notificationSnapshot] =
         await Promise.all([
           listStudentTestsData({
             schoolKey: params.schoolKey,
@@ -140,6 +158,11 @@ export async function getStudentDashboardData(params: {
             studentPlacement,
             autoSubmitExpiredAttempts: false,
             now,
+          }),
+          listStudentLiveSessions({
+            schoolKey: params.schoolKey,
+            studentId: params.studentId,
+            studentPlacement,
           }),
           listStudentCourses({
             schoolKey: params.schoolKey,
@@ -189,6 +212,33 @@ export async function getStudentDashboardData(params: {
                 : null,
             href: `/student/tests/${item?._id}`,
           })),
+        },
+        liveClasses: {
+          total: liveClasses.length,
+          liveNow: liveClasses.filter((item) => item.status === "live").length,
+          upcoming: liveClasses.filter((item) => item.status === "scheduled")
+            .length,
+          joinable: liveClasses.filter((item) => item.canJoin).length,
+          items: liveClasses
+            .filter(
+              (item) => item.status === "live" || item.status === "scheduled",
+            )
+            .slice(0, 4)
+            .map((item) => ({
+              id: String(item?._id || ""),
+              title: String(item?.title || "").trim(),
+              status: String(item?.status || "scheduled"),
+              subjectName: item?.subject?.name
+                ? String(item.subject.name)
+                : null,
+              teacherName: item?.hostTeacher?.name
+                ? String(item.hostTeacher.name)
+                : null,
+              scheduledStartAt: toIsoOrNull(item?.scheduledStartAt),
+              canJoin: Boolean(item?.canJoin),
+              joinHref: String(item?.joinHref || ""),
+              href: `/student/live-classes/${item?._id}`,
+            })),
         },
         courses: {
           total: courses.length,

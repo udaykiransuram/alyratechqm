@@ -5,6 +5,7 @@ import {
   House,
   NotebookText,
   UserRound,
+  Video,
 } from "lucide-react";
 
 export type StudentPortalNavItem = {
@@ -33,6 +34,12 @@ export const STUDENT_PORTAL_ITEMS: StudentPortalNavItem[] = [
     label: "Courses",
     description: "Continue lessons and linked learning paths.",
     icon: BookOpenText,
+  },
+  {
+    href: "/student/live-classes",
+    label: "Live Classes",
+    description: "Join scheduled sessions and review meeting details.",
+    icon: Video,
   },
   {
     href: "/student/diary",

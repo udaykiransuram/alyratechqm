@@ -20,6 +20,8 @@ import '@/models/Course';
 import '@/models/CourseProgress';
 import '@/models/DiaryEntry';
 import '@/models/DiaryStudentState';
+import '@/models/LiveSession';
+import '@/models/LiveSessionAttendance';
 import '@/models/StudentNotification';
 
 type TenantCoreModelMap = {
@@ -39,6 +41,8 @@ type TenantCoreModelMap = {
   CourseProgress: typeof import('@/models/CourseProgress').default;
   DiaryEntry: typeof import('@/models/DiaryEntry').default;
   DiaryStudentState: typeof import('@/models/DiaryStudentState').default;
+  LiveSession: typeof import('@/models/LiveSession').default;
+  LiveSessionAttendance: typeof import('@/models/LiveSessionAttendance').default;
   StudentNotification: typeof import('@/models/StudentNotification').default;
 };
 

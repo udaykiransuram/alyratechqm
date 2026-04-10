@@ -489,7 +489,7 @@ export default function SignInClient({
 
         <div className="app-field-group">
           <label className="app-field-label" htmlFor="identifier">
-            Username
+            Email / Roll No
           </label>
           <Input
             id="identifier"
