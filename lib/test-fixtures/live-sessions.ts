@@ -2,6 +2,7 @@ import {
   filterEligibleLiveSessionTeachers,
   isLiveSessionJoinable,
 } from "@/lib/live-sessions/shared";
+import { resolveYouTubeVideoId } from "@/lib/courses/youtube";
 import type {
   LiveSessionAttendanceStatus,
   LiveSessionItemResponsePage,
@@ -1062,6 +1063,10 @@ function serializeWorkspaceSummary(
 }
 
 function resolveStudentJoinUrlLabel(url: string) {
+  if (resolveYouTubeVideoId(url)) {
+    return "Watch on YouTube";
+  }
+
   try {
     const parsed = new URL(url);
     const hostname = parsed.hostname.replace(/^www\./i, "");
@@ -1568,6 +1573,7 @@ export function getMockStudentLiveSessionDetail(params: {
 
   return cloneForTransport({
     ...session,
+    studentJoinUrl: workspaceDetail.studentJoinUrl,
     studentJoinUrlLabel: resolveStudentJoinUrlLabel(workspaceDetail.studentJoinUrl),
     shareHref: workspaceDetail.shareHref,
     activeItem,

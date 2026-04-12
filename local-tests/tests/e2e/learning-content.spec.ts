@@ -42,9 +42,8 @@ test.describe("Learning content automation @desktop", () => {
     await expect(page.getByRole("heading", { name: "Create Course" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Course Setup" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Curriculum" })).toBeVisible();
-    await expect(page.getByDisplayValue("Module 1")).toBeVisible();
     await expect(page.getByDisplayValue("Lesson 1")).toBeVisible();
-    await page.getByRole("button", { name: "Add special block" }).click();
+    await page.getByRole("button", { name: "Add activity" }).click();
     await page.getByRole("button", { name: "Assessment" }).click();
     await expect(page.getByText("Link a question paper.")).toBeVisible();
 

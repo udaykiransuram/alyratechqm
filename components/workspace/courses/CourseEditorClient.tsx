@@ -318,7 +318,7 @@ function createLessonBlock(params?: {
 }
 
 function buildStarterCourseBlocks(): EditableCourseBlock[] {
-  return [createModuleBlock("Module 1"), createLessonBlock({ title: "Lesson 1" })];
+  return [createLessonBlock({ title: "Lesson 1" })];
 }
 
 function shouldSeedStarterCourseBlocks(params: {
@@ -809,7 +809,7 @@ function getSpecialBlockTitle(
 function getBlockTypeLabel(block: EditableCourseBlock) {
   switch (block.type) {
     case "module":
-      return "Module";
+      return "Chapter";
     case "lesson":
       return "Lesson";
     case "announcement":
@@ -924,7 +924,7 @@ function CoursePreview({
                 </div>
                 <CardTitle className="text-base">
                   {block.type === "module"
-                    ? block.title || "Module"
+                    ? block.title || "Chapter"
                     : block.type === "lesson"
                       ? block.title || "Lesson"
                       : block.type === "announcement"
@@ -944,7 +944,7 @@ function CoursePreview({
           <CardContent className="app-section-body space-y-3">
             {block.type === "module" ? (
               <p className="text-sm text-muted-foreground">
-                {block.summary || "Module summary goes here."}
+                {block.summary || "Chapter summary goes here."}
               </p>
             ) : null}
 
@@ -1534,7 +1534,7 @@ export default function CourseEditorClient({
       if (type === "module") {
         const nextModuleNumber =
           currentBlocks.filter((block) => block.type === "module").length + 1;
-        return [...currentBlocks, createModuleBlock(`Module ${nextModuleNumber}`)];
+        return [...currentBlocks, createModuleBlock(`Chapter ${nextModuleNumber}`)];
       }
 
       return [...currentBlocks, buildEmptyBlock(type)];
@@ -1863,7 +1863,7 @@ export default function CourseEditorClient({
 
     for (const block of blocks) {
       if (block.type === "module" && !block.title.trim()) {
-        return "Every module block needs a title.";
+        return "Every chapter block needs a title.";
       }
 
       if (block.type === "lesson") {
@@ -2224,11 +2224,6 @@ export default function CourseEditorClient({
     (block) => block.type === "assessment" && block.required !== false,
   ).length;
 
-  const hasModule = useMemo(
-    () => blocks.some((block) => block.type === "module"),
-    [blocks],
-  );
-
   const inlineErrors = useMemo(() => {
     const blockErrors: Record<
       string,
@@ -2242,7 +2237,7 @@ export default function CourseEditorClient({
       }
     > = {};
 
-    blocks.forEach((block, index) => {
+    blocks.forEach((block) => {
       if (block.type === "module") {
         const moduleIndex = blocks.findIndex((item) => item.id === block.id);
         let hasLesson = false;
@@ -2255,31 +2250,18 @@ export default function CourseEditorClient({
           }
         }
         if (!block.title.trim()) {
-          blockErrors[block.id] = { title: "Module title is required." };
+          blockErrors[block.id] = { title: "Chapter title is required." };
         }
         if (!hasLesson) {
           blockErrors[block.id] = {
             ...(blockErrors[block.id] || {}),
-            summary: "Add at least one lesson to this module.",
+            summary: "Add at least one lesson to this chapter.",
           };
         }
       }
 
       if (block.type === "lesson") {
         const itemErrors: Record<string, string> = {};
-        let hasModuleContext = false;
-        for (let i = index - 1; i >= 0; i -= 1) {
-          if (blocks[i].type === "module") {
-            hasModuleContext = true;
-            break;
-          }
-        }
-        if (!hasModuleContext) {
-          blockErrors[block.id] = {
-            ...(blockErrors[block.id] || {}),
-            summary: "Move this lesson under a module.",
-          };
-        }
         if (!block.title.trim()) {
           blockErrors[block.id] = {
             ...(blockErrors[block.id] || {}),
@@ -2377,7 +2359,7 @@ export default function CourseEditorClient({
   const moduleCount = blockCounts.module || 0;
   const lessonCount = blockCounts.lesson || 0;
   const setupComplete = Boolean(title.trim() && classId && selectedSubjectIds.length > 0);
-  const buildComplete = hasModule && blocks.some((block) => block.type === "lesson");
+  const buildComplete = lessonCount > 0;
   const publishReady = setupComplete && buildComplete;
   const configuredCourseSettingsCount = [
     Boolean(coverImageUrl),
@@ -2406,14 +2388,6 @@ export default function CourseEditorClient({
       : lesson.items.slice(0, 1).map((item) => item.id);
 
   const addQuickLessonBlock = (type: EditableLessonItem["type"]) => {
-    if (!hasModule) {
-      toast({
-        title: "Create a module first",
-        description: "Lessons need to live inside a module.",
-      });
-      return;
-    }
-
     const nextLessonNumber = lessonCount + 1;
     const nextLessonBlock = createLessonBlock({
       title: `Lesson ${nextLessonNumber}`,
@@ -2432,7 +2406,7 @@ export default function CourseEditorClient({
         .pop();
 
       if (typeof lastModuleIndex !== "number") {
-        return currentBlocks;
+        return [...currentBlocks, nextLessonBlock];
       }
 
       let insertIndex = lastModuleIndex + 1;
@@ -3192,21 +3166,13 @@ export default function CourseEditorClient({
     lessonBlock: EditableLessonBlock,
     blockIndex: number,
     moduleTitle?: string,
-    orphaned = false,
   ) => (
-    <div
-      key={lessonBlock.id}
-      className={cn(
-        "app-course-lesson-panel",
-        orphaned && "app-course-lesson-panel-orphaned",
-      )}
-    >
+    <div key={lessonBlock.id} className="app-course-lesson-panel">
       <div className="app-course-lesson-toolbar">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">Lesson</Badge>
             {moduleTitle ? <Badge variant="outline">{moduleTitle}</Badge> : null}
-            {orphaned ? <Badge variant="warning">Needs module</Badge> : null}
             <Badge variant="outline">
               {lessonBlock.items.length} item{lessonBlock.items.length === 1 ? "" : "s"}
             </Badge>
@@ -3244,7 +3210,7 @@ export default function CourseEditorClient({
                 onClick={() => moveLessonToModule(lessonBlock.id, "prev")}
                 disabled={!canMoveLessonToPrevModule(blockIndex)}
               >
-                Move to previous module
+                Move to previous chapter
               </Button>
               <Button
                 variant="ghost"
@@ -3253,7 +3219,7 @@ export default function CourseEditorClient({
                 onClick={() => moveLessonToModule(lessonBlock.id, "next")}
                 disabled={!canMoveLessonToNextModule(blockIndex)}
               >
-                Move to next module
+                Move to next chapter
               </Button>
               <Button
                 variant="ghost"
@@ -3782,31 +3748,71 @@ export default function CourseEditorClient({
                     {buildComplete ? "Curriculum ready" : "Build the flow"}
                   </Badge>
                   <Badge variant="outline">
-                    {moduleCount} module{moduleCount === 1 ? "" : "s"}
+                    {lessonCount} lesson{lessonCount === 1 ? "" : "s"}
                   </Badge>
                   <Badge variant="outline">
-                    {lessonCount} lesson{lessonCount === 1 ? "" : "s"}
+                    {moduleCount} chapter{moduleCount === 1 ? "" : "s"}
                   </Badge>
                 </div>
                 <div className="space-y-1">
                   <CardTitle>Curriculum</CardTitle>
                   <p className="text-sm leading-6 text-muted-foreground">
-                    Modules stay primary, lessons stay readable, and special blocks stay
-                    available without taking over the page.
+                    Lessons can stand on their own, chapters are optional for grouping,
+                    and announcements or assessments can be dropped anywhere in the flow.
                   </p>
                 </div>
               </div>
 
               <div className="app-course-chip-cloud">
-                <Button variant="outline" size="sm" onClick={() => addBlock("module")}>
-                  <Plus className="h-4 w-4" />
-                  Add module
-                </Button>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm">
                       <Plus className="h-4 w-4" />
-                      Add special block
+                      Add lesson
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-52 p-2">
+                    <div className="grid gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start"
+                        onClick={() => addQuickLessonBlock("text")}
+                      >
+                        Text lesson
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start"
+                        onClick={() => addQuickLessonBlock("image")}
+                      >
+                        Image lesson
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start"
+                        onClick={() => addQuickLessonBlock("youtube")}
+                      >
+                        Video lesson
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start"
+                        onClick={() => addQuickLessonBlock("resource")}
+                      >
+                        Resource lesson
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Plus className="h-4 w-4" />
+                      Add activity
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-56 p-2">
@@ -3830,52 +3836,10 @@ export default function CourseEditorClient({
                     </div>
                   </PopoverContent>
                 </Popover>
-                {hasModule ? (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Plus className="h-4 w-4" />
-                        Quick lesson
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" className="w-52 p-2">
-                      <div className="grid gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="justify-start"
-                          onClick={() => addQuickLessonBlock("text")}
-                        >
-                          Text lesson
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="justify-start"
-                          onClick={() => addQuickLessonBlock("image")}
-                        >
-                          Image lesson
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="justify-start"
-                          onClick={() => addQuickLessonBlock("youtube")}
-                        >
-                          Video lesson
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="justify-start"
-                          onClick={() => addQuickLessonBlock("resource")}
-                        >
-                          Resource lesson
-                        </Button>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                ) : null}
+                <Button variant="outline" size="sm" onClick={() => addBlock("module")}>
+                  <Plus className="h-4 w-4" />
+                  Add chapter
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -3883,10 +3847,10 @@ export default function CourseEditorClient({
             {curriculumEntries.length === 0 ? (
               <div className="app-course-editor-empty-state">
                 <div className="space-y-3">
-                  <p>Start with the first module and lesson to make the course feel real.</p>
+                  <p>Start with the first lesson. Add chapters later if you want grouped units.</p>
                   <Button variant="outline" size="sm" onClick={() => setBlocks(buildStarterCourseBlocks())}>
                     <Plus className="h-4 w-4" />
-                    Start with Module 1
+                    Start with Lesson 1
                   </Button>
                 </div>
               </div>
@@ -3906,19 +3870,18 @@ export default function CourseEditorClient({
                         <div className="app-course-module-header">
                           <div className="space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="info">Module</Badge>
+                              <Badge variant="info">Chapter</Badge>
                               <Badge variant="outline">
                                 {childLessonCount} lesson{childLessonCount === 1 ? "" : "s"}
                               </Badge>
                               {childSpecialCount > 0 ? (
                                 <Badge variant="outline">
-                                  {childSpecialCount} special block
-                                  {childSpecialCount === 1 ? "" : "s"}
+                                  {childSpecialCount} activit{childSpecialCount === 1 ? "y" : "ies"}
                                 </Badge>
                               ) : null}
                             </div>
                             <p className="text-sm leading-6 text-muted-foreground">
-                              Keep the module summary high level, then add the lessons below it.
+                              Keep the chapter summary high level, then add the lessons below it.
                             </p>
                           </div>
 
@@ -3962,7 +3925,7 @@ export default function CourseEditorClient({
 
                         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
                           <FormField
-                            label="Module title"
+                            label="Chapter title"
                             hint={inlineErrors.blocks[entry.module.id]?.title}
                             hintTone={inlineErrors.blocks[entry.module.id]?.title ? "error" : "muted"}
                           >
@@ -3977,11 +3940,11 @@ export default function CourseEditorClient({
                                   }),
                                 )
                               }
-                              placeholder="Module 1: Diagnostic mindset"
+                              placeholder="Chapter 1: Diagnostic mindset"
                             />
                           </FormField>
 
-                          <FormField label="Module summary">
+                          <FormField label="Chapter summary">
                             <Textarea
                               value={entry.module.summary}
                               onChange={(event) =>
@@ -3993,7 +3956,7 @@ export default function CourseEditorClient({
                                   }),
                                 )
                               }
-                              placeholder="Optional context for the section that follows."
+                              placeholder="Optional context for the chapter that follows."
                               className="min-h-[100px]"
                             />
                           </FormField>
@@ -4018,7 +3981,7 @@ export default function CourseEditorClient({
                         <div className="space-y-4">
                           {entry.children.length === 0 ? (
                             <div className="app-course-editor-empty-state">
-                              This module is ready for lessons. Add the first lesson to continue.
+                              This chapter is ready for lessons. Add the first lesson to continue.
                             </div>
                           ) : null}
 
@@ -4027,12 +3990,12 @@ export default function CourseEditorClient({
                               ? renderLessonPanel(
                                   child.block,
                                   child.blockIndex,
-                                  entry.module.title || "Untitled module",
+                                  entry.module.title || "Untitled chapter",
                                 )
                               : renderSpecialBlockPanel(
                                   child.block,
                                   child.blockIndex,
-                                  entry.module.title || "Untitled module",
+                                  entry.module.title || "Untitled chapter",
                                 ),
                           )}
                         </div>
@@ -4044,7 +4007,7 @@ export default function CourseEditorClient({
                     return renderSpecialBlockPanel(entry.block, entry.blockIndex);
                   }
 
-                  return renderLessonPanel(entry.block, entry.blockIndex, undefined, true);
+                  return renderLessonPanel(entry.block, entry.blockIndex);
                 })}
               </div>
             )}
@@ -4061,7 +4024,7 @@ export default function CourseEditorClient({
               <span className="text-xs text-muted-foreground">
                 {buildComplete
                   ? "Curriculum is ready. Review scope, preview, and publish."
-                  : "Add at least one module and one lesson to continue."}
+                  : "Add at least one lesson to continue."}
               </span>
             </div>
           </CardContent>
@@ -4103,7 +4066,7 @@ export default function CourseEditorClient({
           <CardContent className="app-section-body space-y-4" id="course-publish">
             <div className="app-course-metric-grid">
               <div className="app-course-metric-card">
-                <p className="app-course-metric-label">Modules</p>
+                <p className="app-course-metric-label">Chapters</p>
                 <p className="app-course-metric-value">{moduleCount}</p>
               </div>
               <div className="app-course-metric-card">
@@ -4155,7 +4118,12 @@ export default function CourseEditorClient({
                   .filter(([, count]) => count > 0)
                   .map(([type, count]) => (
                     <Badge key={type} variant="outline">
-                      {count} {type}
+                      {count}{" "}
+                      {type === "module"
+                        ? count === 1
+                          ? "chapter"
+                          : "chapters"
+                        : type}
                     </Badge>
                   ))}
               </div>

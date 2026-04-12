@@ -1,6 +1,7 @@
 import { buildArchiveFilter } from "@/lib/archive";
 import { recordTenantAudit } from "@/lib/audit";
 import { resolveTeacherCourseScope } from "@/lib/courses/access";
+import { resolveYouTubeVideoId } from "@/lib/courses/youtube";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import {
@@ -1021,6 +1022,10 @@ function serializeStudentSummary(
 }
 
 function resolveStudentJoinUrlLabel(url: string) {
+  if (resolveYouTubeVideoId(url)) {
+    return "Watch on YouTube";
+  }
+
   try {
     const parsed = new URL(url);
     const hostname = parsed.hostname.replace(/^www\./i, "");
@@ -3574,6 +3579,7 @@ export async function getStudentLiveSessionById(params: {
 
   return {
     ...session,
+    studentJoinUrl: workspaceDetail.studentJoinUrl,
     studentJoinUrlLabel,
     ...v2State,
   } satisfies StudentLiveSessionDetail;

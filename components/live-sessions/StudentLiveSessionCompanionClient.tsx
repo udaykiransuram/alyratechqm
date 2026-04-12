@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { ContentRenderer } from "@/components/ContentRenderer";
+import LiveSessionYouTubeEmbedPanel from "@/components/live-sessions/LiveSessionYouTubeEmbedPanel";
 import RichTextEditor from "@/components/RichTextEditor";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ import type {
   LiveSessionStudentItem,
   StudentLiveSessionDetail,
 } from "@/lib/live-sessions/types";
+import { resolveLiveSessionYouTubeStream } from "@/lib/live-sessions/youtube";
 import { hasMeaningfulRichTextContent } from "@/lib/security/html-sanitize";
 import { cn } from "@/lib/utils";
 
@@ -225,6 +227,10 @@ export default function StudentLiveSessionCompanionClient({
   }, [refreshLiveSession]);
 
   const activeItem = liveSession.activeItem;
+  const studentJoinStream = useMemo(
+    () => resolveLiveSessionYouTubeStream(liveSession.studentJoinUrl),
+    [liveSession.studentJoinUrl],
+  );
   const savedResponse =
     activeItem && liveSession.studentResponse?.itemId === activeItem._id
       ? liveSession.studentResponse
@@ -308,6 +314,31 @@ export default function StudentLiveSessionCompanionClient({
   return (
     <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
       <div className="space-y-5">
+        {studentJoinStream ? (
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header gap-2">
+              <div className="flex items-start gap-3">
+                <Video className="mt-0.5 h-5 w-5 text-primary" />
+                <div>
+                  <CardTitle>Live stream</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Watch the YouTube Live lesson here and keep the live prompts open in the same portal view.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="app-section-body">
+              <LiveSessionYouTubeEmbedPanel
+                stream={studentJoinStream}
+                title="Embedded YouTube Live"
+                description="Use the original join button if you want the full YouTube page, chat, or another tab."
+                iframeTitle={`${liveSession.title} live stream`}
+                actionLabel="Open in YouTube"
+              />
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card className="app-surface overflow-hidden">
           <CardHeader className="app-section-header gap-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -466,7 +497,9 @@ export default function StudentLiveSessionCompanionClient({
           <CardHeader className="app-section-header gap-2">
             <CardTitle>Class access</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Use the original join flow whenever you need to enter the meeting itself.
+              {studentJoinStream
+                ? "Use the original join flow whenever you need the full YouTube page, chat, or a separate tab."
+                : "Use the original join flow whenever you need to enter the meeting itself."}
             </p>
           </CardHeader>
           <CardContent className="app-section-body space-y-4">

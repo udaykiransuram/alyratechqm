@@ -198,6 +198,7 @@ export type StudentLiveSessionSummary = LiveSessionSummaryBase & {
 };
 
 export type StudentLiveSessionDetail = StudentLiveSessionSummary & {
+  studentJoinUrl: string;
   studentJoinUrlLabel: string;
   shareHref: string;
   activeItem: LiveSessionStudentItem | null;

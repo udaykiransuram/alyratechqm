@@ -52,7 +52,7 @@ function formatCourseDate(value?: string | null) {
 function renderBlockBadge(type: string) {
   switch (type) {
     case "module":
-      return "Module";
+      return "Chapter";
     case "lesson":
       return "Lesson";
     case "text":
@@ -381,7 +381,7 @@ export default async function WorkspaceCoursePage({
                           </div>
                           <CardTitle className="text-base">
                             {block.type === "module"
-                              ? block.title
+                              ? block.title || "Chapter"
                               : block.type === "lesson"
                                 ? block.title
                               : block.type === "resource"
@@ -414,7 +414,7 @@ export default async function WorkspaceCoursePage({
                           </p>
                         ) : (
                           <p className="text-sm text-muted-foreground">
-                            This module groups the next part of the learning flow.
+                            This chapter groups the next part of the learning flow.
                           </p>
                         )}
                       </div>

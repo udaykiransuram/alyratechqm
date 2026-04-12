@@ -391,9 +391,12 @@ export default function LiveSessionEditorClient({
                 id="live-session-student-link"
                 value={studentJoinUrl}
                 onChange={(event) => setStudentJoinUrl(event.target.value)}
-                placeholder="https://zoom.us/j/..."
+                placeholder="https://youtube.com/live/... or https://zoom.us/j/..."
                 disabled={isSaving}
               />
+              <p className="text-xs text-muted-foreground">
+                Zoom, Meet, and YouTube Live links are supported. YouTube Live links embed automatically on the teacher and student live-class pages.
+              </p>
             </div>
 
             <div className="space-y-2 md:col-span-2">
@@ -402,9 +405,12 @@ export default function LiveSessionEditorClient({
                 id="live-session-host-link"
                 value={hostJoinUrl}
                 onChange={(event) => setHostJoinUrl(event.target.value)}
-                placeholder="Optional separate teacher link"
+                placeholder="Optional separate teacher or control-room link"
                 disabled={isSaving}
               />
+              <p className="text-xs text-muted-foreground">
+                Leave this empty when the teacher and students should use the same stream or meeting link.
+              </p>
             </div>
 
             <div className="space-y-2">

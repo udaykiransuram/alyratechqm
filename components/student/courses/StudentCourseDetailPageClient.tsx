@@ -552,7 +552,7 @@ function getLockedMessage(course: StudentCourseDetail) {
       : "This course is not available yet.";
   }
 
-  return "Finish the earlier required blocks to unlock this section.";
+  return "Finish the earlier required blocks to unlock this chapter.";
 }
 
 function AssessmentActionButtons({
@@ -1103,7 +1103,7 @@ export default function StudentCourseDetailPageClient({
                 <div key={section.id} className="space-y-1.5">
                     <div className="app-course-outline-section-title">
                       <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Section {sectionIndex + 1}
+                        Chapter {sectionIndex + 1}
                       </span>
                       <p className="truncate text-sm font-semibold text-foreground">
                         {section.title}
@@ -1324,7 +1324,7 @@ export default function StudentCourseDetailPageClient({
                 <summary className="app-course-section-summary">
                   <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      Module {sectionIndex + 1}
+                      Chapter {sectionIndex + 1}
                     </p>
                     <p className="text-base font-semibold text-foreground">
                       {section.title}

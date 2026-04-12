@@ -5,6 +5,7 @@ import { Copy, FileText, Layers3, MessagesSquare, MoveUp, MoveDown } from "lucid
 import { useRouter } from "next/navigation";
 
 import { ContentRenderer } from "@/components/ContentRenderer";
+import LiveSessionYouTubeEmbedPanel from "@/components/live-sessions/LiveSessionYouTubeEmbedPanel";
 import LiveSessionItemEditorDialog from "@/components/live-sessions/LiveSessionItemEditorDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import type {
   LiveSessionTeacherItem,
   WorkspaceLiveSessionDetail,
 } from "@/lib/live-sessions/types";
+import { resolveLiveSessionYouTubeStream } from "@/lib/live-sessions/youtube";
 
 import RichTextEditor from "../RichTextEditor";
 
@@ -229,6 +231,17 @@ export default function WorkspaceLiveSessionDetailClient({
           return rightTime - leftTime;
         }),
     [liveSession.activeItem?._id, liveSession.items],
+  );
+  const studentJoinStream = useMemo(
+    () => resolveLiveSessionYouTubeStream(liveSession.studentJoinUrl),
+    [liveSession.studentJoinUrl],
+  );
+  const hostJoinStream = useMemo(
+    () => resolveLiveSessionYouTubeStream(liveSession.hostJoinUrl),
+    [liveSession.hostJoinUrl],
+  );
+  const showDistinctHostStream = Boolean(
+    hostJoinStream && hostJoinStream.videoId !== studentJoinStream?.videoId,
   );
 
   async function handleMutation(url: string, init?: RequestInit) {
@@ -599,6 +612,28 @@ export default function WorkspaceLiveSessionDetailClient({
                     {liveSession.meetingPasscode || "Not added"}
                   </p>
                 </div>
+                {studentJoinStream || showDistinctHostStream ? (
+                  <div className="mt-4 space-y-3">
+                    {studentJoinStream ? (
+                      <LiveSessionYouTubeEmbedPanel
+                        stream={studentJoinStream}
+                        title="Student stream preview"
+                        description="Students can watch the YouTube Live stream in the portal while keeping the companion page open for live prompts."
+                        iframeTitle={`${liveSession.title} student stream preview`}
+                        actionLabel="Open student stream"
+                      />
+                    ) : null}
+                    {showDistinctHostStream && hostJoinStream ? (
+                      <LiveSessionYouTubeEmbedPanel
+                        stream={hostJoinStream}
+                        title="Host stream preview"
+                        description="Quick preview of the separate host link. The existing start flow still opens the configured host URL in a new tab."
+                        iframeTitle={`${liveSession.title} host stream preview`}
+                        actionLabel="Open host stream"
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               <div className="rounded-2xl border border-border/60 bg-background/70 p-4 text-sm">
@@ -606,7 +641,7 @@ export default function WorkspaceLiveSessionDetailClient({
                   <div>
                     <p className="font-semibold text-foreground">Student companion link</p>
                     <p className="mt-1 text-muted-foreground">
-                      Paste this signed-in student page into Zoom chat so learners can answer live items.
+                      Paste this signed-in student page into class chat so learners can answer live items alongside the stream.
                     </p>
                   </div>
                   <Button
