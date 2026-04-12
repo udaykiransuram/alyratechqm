@@ -86,6 +86,277 @@ function flattenStatsRows(
   return rows;
 }
 
+function getConsolidatedStudentList(
+  questionIds: any[] | undefined,
+  key: "correctStudents" | "incorrectStudents" | "unattemptedStudents",
+) {
+  if (!Array.isArray(questionIds) || questionIds.length === 0) {
+    return "";
+  }
+
+  const allStudents: { name: string; rollNumber: string }[] = [];
+  questionIds.forEach((question) => {
+    if (Array.isArray(question?.[key])) {
+      allStudents.push(...question[key]);
+    }
+  });
+
+  const consolidated = new Map<
+    string,
+    { name: string; rollNumber: string; count: number }
+  >();
+  allStudents.forEach((student) => {
+    const mapKey = `${student.rollNumber}|${student.name}`;
+    if (!consolidated.has(mapKey)) {
+      consolidated.set(mapKey, {
+        name: student.name,
+        rollNumber: student.rollNumber,
+        count: 1,
+      });
+      return;
+    }
+
+    consolidated.get(mapKey)!.count += 1;
+  });
+
+  return Array.from(consolidated.values())
+    .map(
+      (student) =>
+        `${student.name} (${student.rollNumber}) x${student.count}`,
+    )
+    .join("; ");
+}
+
+function collectWorkbookBreakdownRows(
+  stats: any,
+  groupBy: string[],
+  groupFields: GroupField[],
+) {
+  const groupHeaders = groupBy.map(
+    (value) =>
+      groupFields.find((field) => field.value === value)?.label || value,
+  );
+  const consolidatedRows: Record<string, any>[] = [];
+  const detailedRows: Record<string, any>[] = [];
+  const studentSummaryMap: Record<
+    string,
+    {
+      Name: string;
+      RollNumber: string;
+      Correct: number;
+      Incorrect: number;
+      Unattempted: number;
+      Attempted: number;
+      Total: number;
+    }
+  > = {};
+
+  const walk = (node: any, groupPath: string[] = []) => {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return;
+
+    if (
+      typeof node.correct === "number" &&
+      typeof node.incorrect === "number" &&
+      typeof node.unattempted === "number"
+    ) {
+      const totalQuestions = node.correct + node.incorrect + node.unattempted;
+      const groupRow = groupPath.reduce<Record<string, string>>(
+        (accumulator, value, index) => ({
+          ...accumulator,
+          [groupHeaders[index]]: value,
+        }),
+        {},
+      );
+
+      consolidatedRows.push({
+        ...groupRow,
+        Correct: node.correct,
+        Incorrect: node.incorrect,
+        Unattempted: node.unattempted,
+        "% Correct":
+          totalQuestions > 0
+            ? Number(((node.correct / totalQuestions) * 100).toFixed(2))
+            : 0,
+        "% Incorrect":
+          totalQuestions > 0
+            ? Number(((node.incorrect / totalQuestions) * 100).toFixed(2))
+            : 0,
+        "% Unattempted":
+          totalQuestions > 0
+            ? Number(((node.unattempted / totalQuestions) * 100).toFixed(2))
+            : 0,
+        CorrectStudents: getConsolidatedStudentList(
+          node.correctQuestionIds,
+          "correctStudents",
+        ),
+        IncorrectStudents: getConsolidatedStudentList(
+          node.incorrectQuestionIds,
+          "incorrectStudents",
+        ),
+        UnattemptedStudents: getConsolidatedStudentList(
+          node.unattemptedQuestionIds,
+          "unattemptedStudents",
+        ),
+      });
+
+      const statuses = [
+        {
+          key: "correctStudents" as const,
+          label: "Correct",
+          questionIds: node.correctQuestionIds,
+        },
+        {
+          key: "incorrectStudents" as const,
+          label: "Incorrect",
+          questionIds: node.incorrectQuestionIds,
+        },
+        {
+          key: "unattemptedStudents" as const,
+          label: "Unattempted",
+          questionIds: node.unattemptedQuestionIds,
+        },
+      ];
+
+      statuses.forEach(({ key, label, questionIds }) => {
+        const allStudents: { name: string; rollNumber: string }[] = [];
+        if (Array.isArray(questionIds)) {
+          questionIds.forEach((question: any) => {
+            if (Array.isArray(question?.[key])) {
+              allStudents.push(...question[key]);
+            }
+          });
+        }
+
+        const groupedStudents = new Map<
+          string,
+          { name: string; rollNumber: string; count: number }
+        >();
+
+        allStudents.forEach((student) => {
+          const mapKey = `${student.rollNumber}|${student.name}`;
+          if (!groupedStudents.has(mapKey)) {
+            groupedStudents.set(mapKey, {
+              ...student,
+              count: 1,
+            });
+            return;
+          }
+
+          groupedStudents.get(mapKey)!.count += 1;
+        });
+
+        Array.from(groupedStudents.values()).forEach((student) => {
+          detailedRows.push({
+            ...groupRow,
+            Status: label,
+            Name: student.name,
+            RollNumber: student.rollNumber,
+            Count: student.count,
+          });
+        });
+
+        allStudents.forEach((student) => {
+          const studentKey = `${student.rollNumber}|${student.name}`;
+          if (!studentSummaryMap[studentKey]) {
+            studentSummaryMap[studentKey] = {
+              Name: student.name,
+              RollNumber: student.rollNumber,
+              Correct: 0,
+              Incorrect: 0,
+              Unattempted: 0,
+              Attempted: 0,
+              Total: 0,
+            };
+          }
+
+          if (label === "Correct") {
+            studentSummaryMap[studentKey].Correct += 1;
+            studentSummaryMap[studentKey].Attempted += 1;
+          } else if (label === "Incorrect") {
+            studentSummaryMap[studentKey].Incorrect += 1;
+            studentSummaryMap[studentKey].Attempted += 1;
+          } else {
+            studentSummaryMap[studentKey].Unattempted += 1;
+          }
+
+          studentSummaryMap[studentKey].Total += 1;
+        });
+      });
+    }
+
+    Object.entries(node).forEach(([key, child]) => {
+      if (RESERVED_KEYS.has(key)) return;
+      if (child && typeof child === "object" && !Array.isArray(child)) {
+        walk(child, [...groupPath, key]);
+      }
+    });
+  };
+
+  walk(stats, []);
+
+  const studentSummaryRows = Object.values(studentSummaryMap).map((student) => {
+    const totalQuestions =
+      student.Correct + student.Incorrect + student.Unattempted;
+    return {
+      Name: student.Name,
+      RollNumber: student.RollNumber,
+      "Correct (%)":
+        totalQuestions > 0
+          ? Number(((student.Correct / totalQuestions) * 100).toFixed(2))
+          : 0,
+      "Incorrect (%)":
+        totalQuestions > 0
+          ? Number(((student.Incorrect / totalQuestions) * 100).toFixed(2))
+          : 0,
+      "Unattempted (%)":
+        totalQuestions > 0
+          ? Number(((student.Unattempted / totalQuestions) * 100).toFixed(2))
+          : 0,
+      "Total Questions": totalQuestions,
+      Attempted: student.Attempted,
+      Correct: student.Correct,
+      Incorrect: student.Incorrect,
+      Unattempted: student.Unattempted,
+    };
+  });
+
+  return {
+    groupHeaders,
+    consolidatedRows,
+    detailedRows,
+    studentSummaryRows,
+  };
+}
+
+function appendWorkbookSheet(
+  workbook: XLSX.WorkBook,
+  name: string,
+  rows: Record<string, any>[],
+  headers?: string[],
+  emptyMessage?: string,
+) {
+  const hasRows = Array.isArray(rows) && rows.length > 0;
+  const sheet = hasRows
+    ? XLSX.utils.json_to_sheet(rows, headers ? { header: headers } : undefined)
+    : XLSX.utils.json_to_sheet([
+        {
+          [name]:
+            emptyMessage || `No ${name.toLowerCase()} data is available.`,
+        },
+      ]);
+
+  if (hasRows && Array.isArray(headers) && headers.length > 0) {
+    sheet["!autofilter"] = {
+      ref: XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: 0, c: headers.length - 1 },
+      }),
+    };
+  }
+
+  XLSX.utils.book_append_sheet(workbook, sheet, name);
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ paperId: string }> },
@@ -201,6 +472,7 @@ export async function GET(
     if (subjectId) {
       analyticsUrl.searchParams.set("subjectId", subjectId);
     }
+    requestedTags.forEach((tag) => analyticsUrl.searchParams.append("tag", tag));
 
     const benchmarkUrl = new URL(
       `/api/analytics/benchmark-report/${encodeURIComponent(paperId)}`,
@@ -273,6 +545,16 @@ export async function GET(
       selectedGroupBy,
       allGroupFields,
     );
+    const {
+      groupHeaders,
+      consolidatedRows,
+      detailedRows,
+      studentSummaryRows,
+    } = collectWorkbookBreakdownRows(
+      analyticsData?.stats || {},
+      selectedGroupBy,
+      allGroupFields,
+    );
     const students = Array.isArray(analyticsData?.students)
       ? analyticsData.students
       : [];
@@ -286,6 +568,52 @@ export async function GET(
     }));
 
     const workbook = XLSX.utils.book_new();
+
+    appendWorkbookSheet(
+      workbook,
+      "Consolidated",
+      consolidatedRows,
+      [
+        ...groupHeaders,
+        "Correct",
+        "Incorrect",
+        "Unattempted",
+        "% Correct",
+        "% Incorrect",
+        "% Unattempted",
+        "CorrectStudents",
+        "IncorrectStudents",
+        "UnattemptedStudents",
+      ],
+      "No grouped analytics breakdown is available for the selected filters.",
+    );
+
+    appendWorkbookSheet(
+      workbook,
+      "Detailed",
+      detailedRows,
+      [...groupHeaders, "Status", "Name", "RollNumber", "Count"],
+      "No student-level grouped rows are available for the selected filters.",
+    );
+
+    appendWorkbookSheet(
+      workbook,
+      "Student Summary",
+      studentSummaryRows,
+      [
+        "Name",
+        "RollNumber",
+        "Correct (%)",
+        "Incorrect (%)",
+        "Unattempted (%)",
+        "Total Questions",
+        "Attempted",
+        "Correct",
+        "Incorrect",
+        "Unattempted",
+      ],
+      "No student summary is available for the selected filters.",
+    );
 
     XLSX.utils.book_append_sheet(
       workbook,
@@ -306,7 +634,7 @@ export async function GET(
               .join(" • ") || "Overall",
         },
         {
-          Field: "Benchmark Tag Filters",
+          Field: "Applied Tag Filters",
           Value:
             requestedTags.length > 0 ? requestedTags.join(" • ") : "None",
         },
@@ -316,28 +644,29 @@ export async function GET(
       "Overview",
     );
 
-    XLSX.utils.book_append_sheet(
+    appendWorkbookSheet(
       workbook,
-      XLSX.utils.json_to_sheet(
-        summaryRows.length > 0
-          ? summaryRows
-          : [
-              {
-                Summary: "No analytics data available for the selected paper scope.",
-              },
-            ],
-      ),
       "Summary",
+      summaryRows,
+      [
+        ...groupHeaders,
+        "Correct",
+        "Incorrect",
+        "Unattempted",
+        "Total",
+        "% Correct",
+        "% Incorrect",
+        "% Unattempted",
+      ],
+      "No analytics data is available for the selected paper scope.",
     );
 
-    XLSX.utils.book_append_sheet(
+    appendWorkbookSheet(
       workbook,
-      XLSX.utils.json_to_sheet(
-        studentRows.length > 0
-          ? studentRows
-          : [{ Students: "No students found for this paper scope." }],
-      ),
       "Students",
+      studentRows,
+      ["Name", "Roll Number", "Section"],
+      "No students found for this paper scope.",
     );
 
     appendBenchmarkSheetsToWorkbook(workbook, benchmarkData, {

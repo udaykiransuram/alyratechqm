@@ -1,5 +1,6 @@
 /// <reference types="@playwright/test" />
 import { expect, test } from "@playwright/test";
+import mongoose from "mongoose";
 
 import {
   buildLiveSessionNotificationDedupeKey,
@@ -15,6 +16,9 @@ import {
   createMockLiveSession,
   deleteMockLiveSession,
 } from "../../../lib/test-fixtures/live-sessions";
+import LiveSessionItem from "../../../models/LiveSessionItem";
+import LiveSessionResponse from "../../../models/LiveSessionResponse";
+import LiveSessionTranscript from "../../../models/LiveSessionTranscript";
 import {
   MOCK_CLASS_ID,
   MOCK_SECTION_ID,
@@ -50,6 +54,98 @@ function buildValidLiveSessionInput() {
 }
 
 test.describe("Live sessions helper coverage @desktop", () => {
+  test("validates live-item schemas and exposes unique response/transcript indexes", async () => {
+    const liveSessionId = new mongoose.Types.ObjectId();
+    const itemId = new mongoose.Types.ObjectId();
+    const userId = new mongoose.Types.ObjectId();
+
+    const validSingleItem = new LiveSessionItem({
+      liveSession: liveSessionId,
+      type: "single",
+      promptHtml: "<p>Which result is correct?</p>",
+      options: [{ contentHtml: "<p>3</p>" }, { contentHtml: "<p>4</p>" }],
+      answerIndexes: [1],
+      explanationHtml: "<p>4 is the expected value.</p>",
+      status: "draft",
+      order: 0,
+      createdBy: userId,
+      updatedBy: userId,
+    });
+
+    await validSingleItem.validate();
+
+    const invalidShortTextItem = new LiveSessionItem({
+      liveSession: liveSessionId,
+      type: "short-text",
+      promptHtml: "<p>Describe your reasoning.</p>",
+      options: [{ contentHtml: "<p>Should not be here</p>" }],
+      answerIndexes: [0],
+      explanationHtml: "",
+      status: "draft",
+      order: 1,
+      createdBy: userId,
+      updatedBy: userId,
+    });
+    const invalidShortTextItemError = (await invalidShortTextItem
+      .validate()
+      .then(() => null)
+      .catch((error) => error)) as
+      | {
+          errors?: Record<string, { message: string }>;
+        }
+      | null;
+    const invalidShortTextItemMessages = Object.values(
+      invalidShortTextItemError?.errors || {},
+    ).map((error) => error.message);
+
+    expect(invalidShortTextItemMessages.join(" | ")).toMatch(
+      /cannot include answer options/i,
+    );
+    expect(invalidShortTextItemMessages.join(" | ")).toMatch(
+      /cannot include correct answer indexes/i,
+    );
+
+    const invalidShortTextResponse = new LiveSessionResponse({
+      liveSession: liveSessionId,
+      item: itemId,
+      student: userId,
+      itemType: "short-text",
+      selectedOptionIndexes: [],
+      answerHtml: "",
+      submittedAt: new Date("2026-04-15T09:00:00.000Z"),
+    });
+    const invalidShortTextResponseError = (await invalidShortTextResponse
+      .validate()
+      .then(() => null)
+      .catch((error) => error)) as
+      | {
+          errors?: Record<string, { message: string }>;
+        }
+      | null;
+
+    expect(invalidShortTextResponseError?.errors.answerHtml?.message).toMatch(
+      /cannot be empty/i,
+    );
+
+    const responseIndexes = LiveSessionResponse.schema.indexes();
+    const transcriptIndexes = LiveSessionTranscript.schema.indexes();
+
+    expect(
+      responseIndexes.some(
+        ([fields, options]) =>
+          fields.item === 1 &&
+          fields.student === 1 &&
+          Boolean(options?.unique),
+      ),
+    ).toBe(true);
+    expect(
+      transcriptIndexes.some(
+        ([fields, options]) =>
+          fields.liveSession === 1 && Boolean(options?.unique),
+      ),
+    ).toBe(true);
+  });
+
   test("normalizes write input and preserves revision-safe notification keys", async () => {
     const {
       normalizeLiveSessionWriteInput,
@@ -293,6 +389,270 @@ test.describe("Live sessions helper coverage @desktop", () => {
       expect(studentAttendance?.joinClicks).toBe(1);
       expect(studentAttendance?.status).toBe("present");
       expect(studentAttendance?.markedByName).toBe("Admin");
+    } finally {
+      deleteMockLiveSession(createdSession._id);
+    }
+  });
+
+  test("manages live-item lifecycle, transcript visibility, and student response upserts", async () => {
+    const {
+      activateWorkspaceLiveSessionItem,
+      closeWorkspaceLiveSessionItem,
+      createWorkspaceLiveSessionItem,
+      getStudentLiveSessionById,
+      getWorkspaceLiveSessionById,
+      getWorkspaceLiveSessionItemResponses,
+      normalizeLiveSessionItemWriteInput,
+      normalizeStudentLiveSessionResponseInput,
+      submitStudentLiveSessionResponse,
+      upsertWorkspaceLiveSessionTranscript,
+    } = await loadLiveSessionServer();
+    const createdSession = createMockLiveSession({
+      title: `Live Session V2 ${Date.now()}`,
+      description: "Rich-text item lifecycle coverage for the live-session helper spec.",
+      classId: MOCK_CLASS_ID,
+      subjectId: MOCK_SUBJECT_MATH_ID,
+      assignedAcademicSectionIds: [MOCK_SECTION_ID],
+      hostTeacherId: MOCK_LIVE_SESSION_TEACHER_ID,
+      createdBy: "school-admin-1",
+      updatedBy: "school-admin-1",
+      scheduledStartAt: "2026-04-22T09:00:00.000Z",
+      scheduledEndAt: "2026-04-22T10:00:00.000Z",
+      studentJoinUrl: "https://meet.example.com/student/live-v2-helper",
+      hostJoinUrl: "https://meet.example.com/host/live-v2-helper",
+      meetingCode: "LIVE-V2",
+      meetingPasscode: "HELPER",
+      joinInstructions: "Stay on the shared page while the teacher opens each item.",
+      status: "scheduled",
+      notificationRevision: 1,
+    });
+
+    try {
+      let teacherDetail = await createWorkspaceLiveSessionItem({
+        schoolKey: "demo-school",
+        viewerRole: "admin",
+        viewerId: "school-admin-1",
+        liveSessionId: createdSession._id,
+        input: normalizeLiveSessionItemWriteInput({
+          type: "multiple",
+          promptHtml:
+            '<p>Select the two revision habits that help most.</p><p><span data-type="math" data-latex="2+2" data-display-mode="false"></span> is only a formatting check.</p>',
+          options: [
+            { contentHtml: "<p>Mark the easy questions first.</p>" },
+            { contentHtml: "<p>Keep five minutes for review.</p>" },
+            { contentHtml: "<p>Leave the paper blank until the end.</p>" },
+          ],
+          answerIndexes: [0, 1],
+          explanationHtml: "<p>Start strong and leave time for checking.</p>",
+        }),
+      });
+
+      teacherDetail = await createWorkspaceLiveSessionItem({
+        schoolKey: "demo-school",
+        viewerRole: "admin",
+        viewerId: "school-admin-1",
+        liveSessionId: createdSession._id,
+        input: normalizeLiveSessionItemWriteInput({
+          type: "short-text",
+          promptHtml: "<p>Write one strategy you will use in the next test.</p>",
+          options: [],
+          answerIndexes: [],
+          explanationHtml: "",
+        }),
+      });
+
+      const multipleItem = teacherDetail?.items.find((item) => item.type === "multiple");
+      const shortTextItem = teacherDetail?.items.find(
+        (item) => item.type === "short-text",
+      );
+
+      expect(multipleItem?._id).toBeTruthy();
+      expect(shortTextItem?._id).toBeTruthy();
+      expect(teacherDetail?.shareHref).toBe(`/student/live-classes/${createdSession._id}`);
+
+      await expect(
+        upsertWorkspaceLiveSessionTranscript({
+          schoolKey: "demo-school",
+          viewerRole: "teacher",
+          viewerId: MOCK_LIVE_SESSION_TEACHER_TWO_ID,
+          liveSessionId: createdSession._id,
+          input: {
+            rawText: "This should be rejected for an out-of-scope teacher.",
+            summaryHtml: "<p>Out-of-scope update.</p>",
+            isPublished: true,
+          },
+        }),
+      ).rejects.toThrow(/do not have access/i);
+
+      const studentBeforePublish = await getStudentLiveSessionById({
+        schoolKey: "demo-school",
+        studentId: "student-1",
+        studentPlacement: {
+          classId: MOCK_CLASS_ID,
+          academicSectionId: MOCK_SECTION_ID,
+        },
+        liveSessionId: createdSession._id,
+      });
+      expect(studentBeforePublish?.publishedTranscriptSummary).toBeNull();
+
+      teacherDetail = await upsertWorkspaceLiveSessionTranscript({
+        schoolKey: "demo-school",
+        viewerRole: "admin",
+        viewerId: "school-admin-1",
+        liveSessionId: createdSession._id,
+        input: {
+          rawText: "Teacher reviewed pacing, neat work, and final review time.",
+          summaryHtml:
+            "<p><strong>Focus:</strong> finish your first pass, then use the last five minutes to check.</p>",
+          isPublished: true,
+        },
+      });
+
+      expect(teacherDetail?.transcript?.isPublished).toBe(true);
+
+      const studentAfterPublish = await getStudentLiveSessionById({
+        schoolKey: "demo-school",
+        studentId: "student-1",
+        studentPlacement: {
+          classId: MOCK_CLASS_ID,
+          academicSectionId: MOCK_SECTION_ID,
+        },
+        liveSessionId: createdSession._id,
+      });
+      expect(studentAfterPublish?.publishedTranscriptSummary?.summaryHtml).toContain(
+        "Focus",
+      );
+
+      teacherDetail = await activateWorkspaceLiveSessionItem({
+        schoolKey: "demo-school",
+        viewerRole: "admin",
+        viewerId: "school-admin-1",
+        liveSessionId: createdSession._id,
+        itemId: multipleItem!._id,
+      });
+      expect(teacherDetail?.activeItem?._id).toBe(multipleItem?._id);
+
+      await Promise.all([
+        submitStudentLiveSessionResponse({
+          schoolKey: "demo-school",
+          studentId: "student-1",
+          studentPlacement: {
+            classId: MOCK_CLASS_ID,
+            academicSectionId: MOCK_SECTION_ID,
+          },
+          liveSessionId: createdSession._id,
+          itemId: multipleItem!._id,
+          input: normalizeStudentLiveSessionResponseInput({
+            selectedOptionIndexes: [0, 1],
+          }),
+        }),
+        submitStudentLiveSessionResponse({
+          schoolKey: "demo-school",
+          studentId: "student-1",
+          studentPlacement: {
+            classId: MOCK_CLASS_ID,
+            academicSectionId: MOCK_SECTION_ID,
+          },
+          liveSessionId: createdSession._id,
+          itemId: multipleItem!._id,
+          input: normalizeStudentLiveSessionResponseInput({
+            selectedOptionIndexes: [0, 1],
+          }),
+        }),
+      ]);
+
+      teacherDetail = await getWorkspaceLiveSessionById({
+        schoolKey: "demo-school",
+        viewerRole: "admin",
+        viewerId: "school-admin-1",
+        liveSessionId: createdSession._id,
+      });
+
+      const multipleStats = teacherDetail?.items.find(
+        (item) => item._id === multipleItem?._id,
+      );
+      expect(multipleStats?.responseCount).toBe(1);
+      expect(multipleStats?.correctCount).toBe(1);
+      expect(multipleStats?.incorrectCount).toBe(0);
+
+      const multipleResponses = await getWorkspaceLiveSessionItemResponses({
+        schoolKey: "demo-school",
+        viewerRole: "admin",
+        viewerId: "school-admin-1",
+        liveSessionId: createdSession._id,
+        itemId: multipleItem!._id,
+        page: 1,
+        limit: 10,
+      });
+      expect(multipleResponses?.total).toBe(1);
+      expect(multipleResponses?.responses[0]?.isCorrect).toBe(true);
+
+      teacherDetail = await closeWorkspaceLiveSessionItem({
+        schoolKey: "demo-school",
+        viewerRole: "admin",
+        viewerId: "school-admin-1",
+        liveSessionId: createdSession._id,
+        itemId: multipleItem!._id,
+      });
+      expect(teacherDetail?.activeItem).toBeNull();
+
+      await expect(
+        submitStudentLiveSessionResponse({
+          schoolKey: "demo-school",
+          studentId: "student-1",
+          studentPlacement: {
+            classId: MOCK_CLASS_ID,
+            academicSectionId: MOCK_SECTION_ID,
+          },
+          liveSessionId: createdSession._id,
+          itemId: multipleItem!._id,
+          input: normalizeStudentLiveSessionResponseInput({
+            selectedOptionIndexes: [0],
+          }),
+        }),
+      ).rejects.toThrow(/no longer accepting responses/i);
+
+      teacherDetail = await activateWorkspaceLiveSessionItem({
+        schoolKey: "demo-school",
+        viewerRole: "admin",
+        viewerId: "school-admin-1",
+        liveSessionId: createdSession._id,
+        itemId: shortTextItem!._id,
+      });
+      expect(teacherDetail?.activeItem?._id).toBe(shortTextItem?._id);
+
+      const shortTextResult = await submitStudentLiveSessionResponse({
+        schoolKey: "demo-school",
+        studentId: "student-2",
+        studentPlacement: {
+          classId: MOCK_CLASS_ID,
+          academicSectionId: MOCK_SECTION_ID,
+        },
+        liveSessionId: createdSession._id,
+        itemId: shortTextItem!._id,
+        input: normalizeStudentLiveSessionResponseInput({
+          answerHtml:
+            "<p>I will use <strong>keywords</strong> and remove <script>alert(1)</script> distractions.</p>",
+        }),
+      });
+
+      expect(shortTextResult?.studentResponse?.answerHtml).toContain(
+        "<strong>keywords</strong>",
+      );
+      expect(shortTextResult?.studentResponse?.answerHtml).not.toContain("<script");
+
+      const shortTextResponses = await getWorkspaceLiveSessionItemResponses({
+        schoolKey: "demo-school",
+        viewerRole: "admin",
+        viewerId: "school-admin-1",
+        liveSessionId: createdSession._id,
+        itemId: shortTextItem!._id,
+        page: 1,
+        limit: 10,
+      });
+      expect(shortTextResponses?.total).toBe(1);
+      expect(shortTextResponses?.responses[0]?.answerHtml).toContain("keywords");
+      expect(shortTextResponses?.responses[0]?.isCorrect).toBeNull();
     } finally {
       deleteMockLiveSession(createdSession._id);
     }

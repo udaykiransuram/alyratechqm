@@ -2887,6 +2887,7 @@ export default function CourseEditorClient({
         type="single"
         collapsible
         className="app-course-special-block"
+        data-course-special-type={block.type}
       >
         <AccordionItem value={block.id} className="border-none">
           <AccordionTrigger className="app-course-special-trigger">
@@ -3429,7 +3430,7 @@ export default function CourseEditorClient({
                 value={item.id}
                 className="app-course-lesson-item-shell"
               >
-                <div className="flex items-start gap-2">
+                <div className="app-course-lesson-item-header">
                   <AccordionTrigger className="app-course-lesson-item-trigger">
                     <div className="flex min-w-0 items-start gap-3 text-left">
                       <div className="app-course-lesson-item-icon">
@@ -3453,6 +3454,7 @@ export default function CourseEditorClient({
                     size="icon-sm"
                     onClick={() => removeLessonItem(lessonBlock.id, item.id)}
                     aria-label="Remove lesson item"
+                    className="app-course-lesson-item-remove"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -4227,7 +4229,7 @@ export default function CourseEditorClient({
               onValueChange={setPreviewPanelValue}
             >
               <AccordionItem value="preview" className="border-none">
-                <AccordionTrigger className="app-course-inline-accordion-trigger app-course-settings-trigger">
+                <AccordionTrigger className="app-course-inline-accordion-trigger app-course-preview-trigger">
                   <div className="space-y-1 text-left">
                     <span className="block text-sm font-semibold text-foreground">
                       Preview course

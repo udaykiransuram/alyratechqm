@@ -1,6 +1,8 @@
 import { resolveTeacherCourseScope } from "@/lib/courses/access";
 import type {
   LiveSessionAttendanceStatus,
+  LiveSessionItemStatus,
+  LiveSessionItemType,
   LiveSessionSupportTeacher,
   LiveSessionStatus,
 } from "@/lib/live-sessions/types";
@@ -19,6 +21,19 @@ export const LIVE_SESSION_ATTENDANCE_STATUSES = [
   "present",
   "absent",
 ] as const satisfies readonly LiveSessionAttendanceStatus[];
+
+export const LIVE_SESSION_ITEM_TYPES = [
+  "single",
+  "multiple",
+  "short-text",
+] as const satisfies readonly LiveSessionItemType[];
+
+export const LIVE_SESSION_ITEM_STATUSES = [
+  "draft",
+  "active",
+  "closed",
+  "archived",
+] as const satisfies readonly LiveSessionItemStatus[];
 
 export function toLiveSessionId(value: unknown) {
   if (!value) return "";

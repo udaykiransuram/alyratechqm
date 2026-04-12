@@ -25,6 +25,7 @@ import {
   buildAnalyticsTagLookup,
   resolveAnalyticsTags,
 } from "@/lib/analytics/tag-resolution";
+import { parseAnalyticsTagFilters } from "@/lib/analytics/tag-filters";
 import {
   filterResponsesByAcademicSection,
   hydrateResponsesWithStudents,
@@ -129,6 +130,9 @@ export async function GET(
   const rawAcademicSectionId =
     req.nextUrl.searchParams.get("academicSectionId")?.trim() || "";
   const rawSubjectId = req.nextUrl.searchParams.get("subjectId")?.trim() || "";
+  const requestedTagFilters = parseAnalyticsTagFilters(
+    req.nextUrl.searchParams.getAll("tag"),
+  );
   if (rawClassId && !mongoose.Types.ObjectId.isValid(rawClassId)) {
     return NextResponse.json(
       { success: false, message: "Invalid classId" },
@@ -165,6 +169,7 @@ export async function GET(
     classId: objectIdSchema.optional(),
     subjectId: objectIdSchema.optional(),
     academicSectionId: objectIdSchema.optional(),
+    tags: z.array(z.string()).optional(),
   });
   const qRes = parseOr400(querySchema, {
     paperId,
@@ -174,6 +179,7 @@ export async function GET(
     classId: rawClassId || undefined,
     subjectId: rawSubjectId || undefined,
     academicSectionId: filterAcademicSectionId || undefined,
+    tags: req.nextUrl.searchParams.getAll("tag"),
   });
   // Do not block on validation; proceed with best-effort to avoid hard failures in UI
   // If invalid, Mongoose will return null on findById which we handle with 404 below
@@ -601,6 +607,7 @@ export async function GET(
         subjectIds: paperScope.requiresSubjectIntersection
           ? paperScope.allowedSubjectIds
           : undefined,
+        tagFilters: requestedTagFilters,
         paperDefaultSubject: getLegacyPaperSubject(paperObj),
       },
       tagLookup,

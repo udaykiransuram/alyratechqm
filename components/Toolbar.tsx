@@ -14,9 +14,17 @@ type Props = {
   onAddImage: () => void;
   onUploadImage: () => void;
   onOpenMathModal: () => void;
+  allowImages?: boolean;
 };
 
-export function Toolbar({ editor, onSetLink, onAddImage, onUploadImage, onOpenMathModal }: Props) {
+export function Toolbar({
+  editor,
+  onSetLink,
+  onAddImage,
+  onUploadImage,
+  onOpenMathModal,
+  allowImages = true,
+}: Props) {
   if (!editor) {
     return null;
   }
@@ -103,20 +111,24 @@ export function Toolbar({ editor, onSetLink, onAddImage, onUploadImage, onOpenMa
       >
         <LinkIcon className="h-4 w-4" />
       </Toggle>
-      <Toggle
-        size="sm"
-        aria-label="Image URL"
-        onClick={onAddImage}
-      >
-        <ImageIcon className="h-4 w-4" />
-      </Toggle>
-      <Toggle
-        size="sm"
-        aria-label="Upload image"
-        onClick={onUploadImage}
-      >
-        <Upload className="h-4 w-4" />
-      </Toggle>
+      {allowImages ? (
+        <>
+          <Toggle
+            size="sm"
+            aria-label="Image URL"
+            onClick={onAddImage}
+          >
+            <ImageIcon className="h-4 w-4" />
+          </Toggle>
+          <Toggle
+            size="sm"
+            aria-label="Upload image"
+            onClick={onUploadImage}
+          >
+            <Upload className="h-4 w-4" />
+          </Toggle>
+        </>
+      ) : null}
       <Toggle
         size="sm"
         aria-label="Math"

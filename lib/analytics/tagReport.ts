@@ -7,6 +7,11 @@ import {
   type AnalyticsResolvedTag,
   type AnalyticsTagLookup,
 } from "@/lib/analytics/tag-resolution";
+import {
+  analyticsTagValuesMatchFilters,
+  buildAnalyticsTagValuesByType,
+  type AnalyticsTagFilter,
+} from "@/lib/analytics/tag-filters";
 
 export function buildTagReport({
   responses,
@@ -26,6 +31,7 @@ export function buildTagReport({
     classId?: string;
     subjectId?: string;
     subjectIds?: string[];
+    tagFilters?: AnalyticsTagFilter[];
     paperDefaultSubject?: {
       _id: string;
       name: string;
@@ -121,6 +127,12 @@ export function buildTagReport({
         const question = qWrap.question;
         if (!question || !question._id) continue;
         const questionTags = getQuestionTags(question);
+        const questionTagsByType = buildAnalyticsTagValuesByType(
+          questionTags.map((tag) => ({
+            type: tag.type?.name || "",
+            value: tag.name,
+          })),
+        );
 
         const questionClassId = getQuestionClassId(question);
         const questionSubjectId = getQuestionSubjectId(question);
@@ -132,6 +144,16 @@ export function buildTagReport({
           continue;
         }
         if (filters.subjectId && questionSubjectId !== filters.subjectId) continue;
+        if (
+          Array.isArray(filters.tagFilters) &&
+          filters.tagFilters.length > 0 &&
+          !analyticsTagValuesMatchFilters(
+            questionTagsByType,
+            filters.tagFilters,
+          )
+        ) {
+          continue;
+        }
 
         const ans = answerMap[sectionName]?.[String(question._id)];
         const questionIdStr = String(question._id);

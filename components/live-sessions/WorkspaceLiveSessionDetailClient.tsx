@@ -1,11 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
+import { Copy, FileText, Layers3, MessagesSquare, MoveUp, MoveDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { ContentRenderer } from "@/components/ContentRenderer";
+import LiveSessionItemEditorDialog from "@/components/live-sessions/LiveSessionItemEditorDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -14,7 +26,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { WorkspaceLiveSessionDetail } from "@/lib/live-sessions/types";
+import { Textarea } from "@/components/ui/textarea";
+import type {
+  LiveSessionItemResponsePage,
+  LiveSessionTeacherItem,
+  WorkspaceLiveSessionDetail,
+} from "@/lib/live-sessions/types";
+
+import RichTextEditor from "../RichTextEditor";
 
 type WorkspaceLiveSessionDetailClientProps = {
   liveSession: WorkspaceLiveSessionDetail;
@@ -39,8 +58,124 @@ function formatDateTime(value?: string | null) {
   }).format(date);
 }
 
-function formatAttendanceLabel(value: string) {
+function formatLabel(value: string) {
   return String(value || "").replace(/_/g, " ");
+}
+
+function getItemTypeLabel(type: LiveSessionTeacherItem["type"]) {
+  if (type === "single") {
+    return "Single choice";
+  }
+
+  if (type === "multiple") {
+    return "Multiple choice";
+  }
+
+  return "Short text";
+}
+
+function getAbsoluteShareLink(shareHref: string) {
+  if (typeof window === "undefined") {
+    return shareHref;
+  }
+
+  return new URL(shareHref, window.location.origin).toString();
+}
+
+function ItemStats({ item }: { item: LiveSessionTeacherItem }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Badge variant="outline">{item.responseCount} responses</Badge>
+      {item.correctCount !== null ? (
+        <>
+          <Badge variant="outline">{item.correctCount} correct</Badge>
+          <Badge variant="outline">{item.incorrectCount || 0} incorrect</Badge>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function ItemOptionStats({ item }: { item: LiveSessionTeacherItem }) {
+  if (item.type === "short-text" || item.options.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      {item.options.map((option) => {
+        const stat = item.optionStats.find(
+          (entry) => entry.optionIndex === option.index,
+        );
+        const isCorrect = item.answerIndexes.includes(option.index);
+
+        return (
+          <div
+            key={`${item._id}-option-${option.index}`}
+            className="rounded-[1rem] border border-border/60 bg-background/70 p-3"
+          >
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={isCorrect ? "default" : "outline"}>
+                  Option {option.index + 1}
+                </Badge>
+                {isCorrect ? <Badge variant="outline">Correct answer</Badge> : null}
+              </div>
+              <span className="text-xs font-medium text-muted-foreground">
+                {stat?.responseCount || 0} responses
+              </span>
+            </div>
+            <ContentRenderer htmlContent={option.contentHtml} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LiveItemCard({
+  item,
+  children,
+}: {
+  item: LiveSessionTeacherItem;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[1.35rem] border border-border/70 bg-[hsl(var(--app-surface-1)/0.74)] p-4 shadow-[0_16px_30px_-26px_hsl(var(--app-shadow-deep)/0.16)]">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">{getItemTypeLabel(item.type)}</Badge>
+            <Badge className="capitalize">{formatLabel(item.status)}</Badge>
+          </div>
+          <ItemStats item={item} />
+        </div>
+        <div className="text-right text-xs text-muted-foreground">
+          <p>Opened {formatDateTime(item.openedAt)}</p>
+          <p>Updated {formatDateTime(item.updatedAt)}</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="rounded-[1rem] border border-border/60 bg-background/72 p-3">
+          <ContentRenderer htmlContent={item.promptHtml} />
+        </div>
+
+        <ItemOptionStats item={item} />
+
+        {item.explanationHtml ? (
+          <div className="rounded-[1rem] border border-border/60 bg-background/72 p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Explanation
+            </p>
+            <ContentRenderer htmlContent={item.explanationHtml} />
+          </div>
+        ) : null}
+
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export default function WorkspaceLiveSessionDetailClient({
@@ -50,18 +185,62 @@ export default function WorkspaceLiveSessionDetailClient({
   const [error, setError] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
+  const [isItemEditorOpen, setIsItemEditorOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<LiveSessionTeacherItem | null>(null);
+  const [responseViewerItem, setResponseViewerItem] =
+    useState<LiveSessionTeacherItem | null>(null);
+  const [responsePage, setResponsePage] = useState<LiveSessionItemResponsePage | null>(
+    null,
+  );
+  const [isLoadingResponses, setIsLoadingResponses] = useState(false);
+  const [rawTranscript, setRawTranscript] = useState(liveSession.transcript?.rawText || "");
+  const [summaryHtml, setSummaryHtml] = useState(
+    liveSession.transcript?.summaryHtml || "",
+  );
+  const [isTranscriptPublished, setIsTranscriptPublished] = useState(
+    Boolean(liveSession.transcript?.isPublished),
+  );
+  const [isSavingTranscript, setIsSavingTranscript] = useState(false);
 
-  async function handleRequest(url: string, options?: RequestInit) {
+  useEffect(() => {
+    setRawTranscript(liveSession.transcript?.rawText || "");
+    setSummaryHtml(liveSession.transcript?.summaryHtml || "");
+    setIsTranscriptPublished(Boolean(liveSession.transcript?.isPublished));
+  }, [
+    liveSession.transcript?.isPublished,
+    liveSession.transcript?.rawText,
+    liveSession.transcript?.summaryHtml,
+  ]);
+
+  const draftItems = useMemo(
+    () =>
+      liveSession.items
+        .filter((item) => item.status === "draft")
+        .sort((left, right) => left.order - right.order),
+    [liveSession.items],
+  );
+  const historyItems = useMemo(
+    () =>
+      liveSession.items
+        .filter((item) => item.status !== "draft" && item._id !== liveSession.activeItem?._id)
+        .sort((left, right) => {
+          const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
+          const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
+          return rightTime - leftTime;
+        }),
+    [liveSession.activeItem?._id, liveSession.items],
+  );
+
+  async function handleMutation(url: string, init?: RequestInit) {
     setError(null);
     setIsWorking(true);
 
     try {
       const response = await fetch(url, {
-        method: "POST",
-        ...options,
+        ...init,
         headers: {
           "Content-Type": "application/json",
-          ...(options?.headers || {}),
+          ...(init?.headers || {}),
         },
       });
       const payload = await response.json().catch(() => ({}));
@@ -69,17 +248,17 @@ export default function WorkspaceLiveSessionDetailClient({
       if (!response.ok || !payload?.success) {
         setError(String(payload?.message || "Action failed.").trim());
         setIsWorking(false);
-        return payload;
+        return null;
       }
 
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
       setIsWorking(false);
       return payload;
     } catch (requestError) {
       setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Action failed.",
+        requestError instanceof Error ? requestError.message : "Action failed.",
       );
       setIsWorking(false);
       return null;
@@ -87,9 +266,9 @@ export default function WorkspaceLiveSessionDetailClient({
   }
 
   async function handleStart() {
-    const payload = await handleRequest(
-      `/api/live-sessions/${liveSession._id}/start`,
-    );
+    const payload = await handleMutation(`/api/live-sessions/${liveSession._id}/start`, {
+      method: "POST",
+    });
     const joinUrl = String(payload?.joinUrl || "").trim();
     if (joinUrl) {
       window.open(joinUrl, "_blank", "noopener,noreferrer");
@@ -97,7 +276,9 @@ export default function WorkspaceLiveSessionDetailClient({
   }
 
   async function handleEnd() {
-    await handleRequest(`/api/live-sessions/${liveSession._id}/end`);
+    await handleMutation(`/api/live-sessions/${liveSession._id}/end`, {
+      method: "POST",
+    });
   }
 
   async function handleCancel() {
@@ -107,7 +288,8 @@ export default function WorkspaceLiveSessionDetailClient({
         liveSession.cancelReason || "",
       ) || "";
 
-    await handleRequest(`/api/live-sessions/${liveSession._id}/cancel`, {
+    await handleMutation(`/api/live-sessions/${liveSession._id}/cancel`, {
+      method: "POST",
       body: JSON.stringify({
         cancelReason,
       }),
@@ -135,13 +317,14 @@ export default function WorkspaceLiveSessionDetailClient({
       }
 
       router.push("/workspace/live-classes");
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
     } catch (deleteError) {
       setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "Delete failed.",
+        deleteError instanceof Error ? deleteError.message : "Delete failed.",
       );
+    } finally {
       setIsWorking(false);
     }
   }
@@ -154,29 +337,26 @@ export default function WorkspaceLiveSessionDetailClient({
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/live-sessions/${liveSession._id}/attendance`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            attendance: [{ studentId, status }],
-          }),
+      const response = await fetch(`/api/live-sessions/${liveSession._id}/attendance`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          attendance: [{ studentId, status }],
+        }),
+      });
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok || !payload?.success) {
-        setError(
-          String(payload?.message || "Attendance update failed.").trim(),
-        );
+        setError(String(payload?.message || "Attendance update failed.").trim());
         setActiveStudentId(null);
         return;
       }
 
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
     } catch (attendanceError) {
       setError(
         attendanceError instanceof Error
@@ -188,244 +368,790 @@ export default function WorkspaceLiveSessionDetailClient({
     }
   }
 
-  return (
-    <div className="space-y-5">
-      <Card className="app-surface overflow-hidden">
-        <CardHeader className="app-section-header gap-2">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle>Session Operations</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Run the host flow, manage schedule changes, and keep attendance updated.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge className="capitalize">
-                {formatAttendanceLabel(liveSession.status)}
-              </Badge>
-              {liveSession.hostTeacher?.name ? (
-                <Badge variant="outline">{liveSession.hostTeacher.name}</Badge>
-              ) : null}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="app-section-body space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                Start
-              </p>
-              <p className="mt-2 text-sm font-semibold text-foreground">
-                {formatDateTime(liveSession.scheduledStartAt)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                End
-              </p>
-              <p className="mt-2 text-sm font-semibold text-foreground">
-                {formatDateTime(liveSession.scheduledEndAt)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                Audience
-              </p>
-              <p className="mt-2 text-sm font-semibold text-foreground">
-                {liveSession.audienceCount} students
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                Joined
-              </p>
-              <p className="mt-2 text-sm font-semibold text-foreground">
-                {liveSession.joinedCount} joined
-              </p>
-            </div>
-          </div>
+  async function handleCopyShareLink() {
+    try {
+      await navigator.clipboard.writeText(getAbsoluteShareLink(liveSession.shareHref));
+      setError(null);
+    } catch {
+      setError("Could not copy the student share link.");
+    }
+  }
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4 text-sm">
-              <p className="font-semibold text-foreground">Meeting details</p>
-              <div className="mt-3 space-y-2 text-muted-foreground">
-                <p>
-                  <span className="font-medium text-foreground">Student link:</span>{" "}
-                  {liveSession.studentJoinUrl || "Not added"}
+  function openCreateItemDialog() {
+    setEditingItem(null);
+    setIsItemEditorOpen(true);
+  }
+
+  function openEditItemDialog(item: LiveSessionTeacherItem) {
+    setEditingItem(item);
+    setIsItemEditorOpen(true);
+  }
+
+  async function handleDraftReorder(itemId: string, direction: -1 | 1) {
+    const currentIndex = draftItems.findIndex((item) => item._id === itemId);
+    const targetIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= draftItems.length) {
+      return;
+    }
+
+    const nextOrder = [...draftItems.map((item) => item._id)];
+    [nextOrder[currentIndex], nextOrder[targetIndex]] = [
+      nextOrder[targetIndex],
+      nextOrder[currentIndex],
+    ];
+
+    await handleMutation(`/api/live-sessions/${liveSession._id}/items/reorder`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        orderedItemIds: nextOrder,
+      }),
+    });
+  }
+
+  async function handleActivateItem(itemId: string) {
+    await handleMutation(`/api/live-sessions/${liveSession._id}/items/${itemId}/activate`, {
+      method: "POST",
+    });
+  }
+
+  async function handleCloseItem(itemId: string) {
+    await handleMutation(`/api/live-sessions/${liveSession._id}/items/${itemId}/close`, {
+      method: "POST",
+    });
+  }
+
+  async function handleArchiveItem(itemId: string) {
+    await handleMutation(`/api/live-sessions/${liveSession._id}/items/${itemId}/archive`, {
+      method: "POST",
+    });
+  }
+
+  async function handleDeleteItem(itemId: string) {
+    if (!window.confirm("Delete this draft live item?")) {
+      return;
+    }
+
+    await handleMutation(`/api/live-sessions/${liveSession._id}/items/${itemId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async function loadResponses(item: LiveSessionTeacherItem, page = 1) {
+    setError(null);
+    setIsLoadingResponses(true);
+    setResponseViewerItem(item);
+
+    try {
+      const response = await fetch(
+        `/api/live-sessions/${liveSession._id}/items/${item._id}/responses?page=${page}&limit=8`,
+      );
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.success || !payload?.responsePage) {
+        setError(String(payload?.message || "Failed to load responses.").trim());
+        setIsLoadingResponses(false);
+        return;
+      }
+
+      setResponsePage(payload.responsePage as LiveSessionItemResponsePage);
+    } catch (responseError) {
+      setError(
+        responseError instanceof Error
+          ? responseError.message
+          : "Failed to load responses.",
+      );
+    } finally {
+      setIsLoadingResponses(false);
+    }
+  }
+
+  async function handleTranscriptSave() {
+    setError(null);
+    setIsSavingTranscript(true);
+
+    try {
+      const response = await fetch(`/api/live-sessions/${liveSession._id}/transcript`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rawText: rawTranscript,
+          summaryHtml,
+          isPublished: isTranscriptPublished,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.success) {
+        setError(String(payload?.message || "Failed to save the transcript.").trim());
+        setIsSavingTranscript(false);
+        return;
+      }
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch (transcriptError) {
+      setError(
+        transcriptError instanceof Error
+          ? transcriptError.message
+          : "Failed to save the transcript.",
+      );
+    } finally {
+      setIsSavingTranscript(false);
+    }
+  }
+
+  async function handleTranscriptFileChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      setRawTranscript(text);
+    } catch {
+      setError("Could not read the transcript file.");
+    }
+  }
+
+  return (
+    <>
+      <div className="space-y-5">
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header gap-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle>Session Operations</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Run the host flow, share the student companion link, and keep attendance updated.
                 </p>
-                <p>
-                  <span className="font-medium text-foreground">Host link:</span>{" "}
-                  {liveSession.hostJoinUrl || "Uses student link"}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge className="capitalize">{formatLabel(liveSession.status)}</Badge>
+                {liveSession.hostTeacher?.name ? (
+                  <Badge variant="outline">{liveSession.hostTeacher.name}</Badge>
+                ) : null}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="app-section-body space-y-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+                  Start
                 </p>
-                <p>
-                  <span className="font-medium text-foreground">Meeting code:</span>{" "}
-                  {liveSession.meetingCode || "Not added"}
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {formatDateTime(liveSession.scheduledStartAt)}
                 </p>
-                <p>
-                  <span className="font-medium text-foreground">Passcode:</span>{" "}
-                  {liveSession.meetingPasscode || "Not added"}
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+                  End
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {formatDateTime(liveSession.scheduledEndAt)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+                  Audience
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {liveSession.audienceCount} students
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+                  Active item
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {liveSession.activeItem ? getItemTypeLabel(liveSession.activeItem.type) : "None live"}
                 </p>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4 text-sm">
-              <p className="font-semibold text-foreground">Join instructions</p>
-              <p className="mt-3 leading-6 text-muted-foreground">
-                {liveSession.joinInstructions ||
-                  "No extra instructions were added for students yet."}
-              </p>
+            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-4 text-sm">
+                <p className="font-semibold text-foreground">Meeting details</p>
+                <div className="mt-3 space-y-2 text-muted-foreground">
+                  <p>
+                    <span className="font-medium text-foreground">Student link:</span>{" "}
+                    {liveSession.studentJoinUrl || "Not added"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Host link:</span>{" "}
+                    {liveSession.hostJoinUrl || "Uses student link"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Meeting code:</span>{" "}
+                    {liveSession.meetingCode || "Not added"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Passcode:</span>{" "}
+                    {liveSession.meetingPasscode || "Not added"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-4 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-foreground">Student companion link</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Paste this signed-in student page into Zoom chat so learners can answer live items.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyShareLink}
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy link
+                  </Button>
+                </div>
+                <p className="mt-3 break-all rounded-[0.9rem] border border-dashed border-border/60 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+                  {getAbsoluteShareLink(liveSession.shareHref)}
+                </p>
+                <p className="mt-3 leading-6 text-muted-foreground">
+                  {liveSession.joinInstructions ||
+                    "No extra join instructions were added for students yet."}
+                </p>
+              </div>
             </div>
-          </div>
 
-          {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+            {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
 
-          <div className="flex flex-wrap gap-2">
-            {liveSession.status === "scheduled" ? (
-              <Button
-                type="button"
-                className="app-button-page"
-                onClick={handleStart}
-                disabled={isWorking}
-              >
-                Start live class
-              </Button>
-            ) : null}
-
-            {liveSession.status === "live" ? (
-              <Button
-                type="button"
-                className="app-button-page"
-                onClick={handleEnd}
-                disabled={isWorking}
-              >
-                End live class
-              </Button>
-            ) : null}
-
-            {liveSession.status === "draft" ? (
-              <Button
-                type="button"
-                variant="destructive"
-                className="app-button-page"
-                onClick={handleDelete}
-                disabled={isWorking}
-              >
-                Delete draft
-              </Button>
-            ) : null}
-
-            {liveSession.status !== "completed" && liveSession.status !== "cancelled" ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="app-button-page"
-                onClick={handleCancel}
-                disabled={isWorking}
-              >
-                Cancel session
-              </Button>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="app-surface overflow-hidden">
-        <CardHeader className="app-section-header gap-2">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle>Attendance</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Join clicks are logged automatically. Mark final attendance when the session ends.
-              </p>
-            </div>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">{liveSession.presentCount} present</Badge>
-              <Badge variant="outline">{liveSession.absentCount} absent</Badge>
+              {liveSession.status === "scheduled" ? (
+                <Button
+                  type="button"
+                  className="app-button-page"
+                  onClick={handleStart}
+                  disabled={isWorking}
+                >
+                  Start live class
+                </Button>
+              ) : null}
+
+              {liveSession.status === "live" ? (
+                <Button
+                  type="button"
+                  className="app-button-page"
+                  onClick={handleEnd}
+                  disabled={isWorking}
+                >
+                  End live class
+                </Button>
+              ) : null}
+
+              {liveSession.status === "draft" ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="app-button-page"
+                  onClick={handleDelete}
+                  disabled={isWorking}
+                >
+                  Delete draft
+                </Button>
+              ) : null}
+
+              {liveSession.status !== "completed" && liveSession.status !== "cancelled" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="app-button-page"
+                  onClick={handleCancel}
+                  disabled={isWorking}
+                >
+                  Cancel session
+                </Button>
+              ) : null}
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="app-section-body">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Join clicks</TableHead>
-                <TableHead>First join</TableHead>
-                <TableHead>Marked by</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {liveSession.attendance.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-sm text-muted-foreground">
-                    No students are targeted by this live class yet.
-                  </TableCell>
-                </TableRow>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header gap-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>Live Items</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Queue draft items, activate them one at a time, and review live participation.
+                  </p>
+                </div>
+                <Button type="button" onClick={openCreateItemDialog}>
+                  <Layers3 className="h-4 w-4" />
+                  Create live item
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="app-section-body space-y-5">
+              {liveSession.activeItem ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Live now</p>
+                      <p className="text-xs text-muted-foreground">
+                        Students opening the share link will see this item immediately.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCloseItem(liveSession.activeItem!._id)}
+                      disabled={isWorking}
+                    >
+                      Close item
+                    </Button>
+                  </div>
+                  <LiveItemCard item={liveSession.activeItem}>
+                    <div className="flex flex-wrap gap-2">
+                      {liveSession.activeItem.responseCount > 0 ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void loadResponses(liveSession.activeItem!, 1)}
+                          disabled={isLoadingResponses}
+                        >
+                          <MessagesSquare className="h-4 w-4" />
+                          View responses
+                        </Button>
+                      ) : null}
+                    </div>
+                  </LiveItemCard>
+                </div>
               ) : (
-                liveSession.attendance.map((item) => (
-                  <TableRow key={item.studentId}>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <p className="font-medium text-foreground">
-                          {item.studentName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.rollNumber ? `Roll ${item.rollNumber}` : "No roll number"}
-                          {item.academicSectionName
-                            ? ` • ${item.academicSectionName}`
-                            : ""}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className="capitalize">
-                        {formatAttendanceLabel(item.status)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{item.joinClicks}</TableCell>
-                    <TableCell>{formatDateTime(item.firstJoinedAt)}</TableCell>
-                    <TableCell>
-                      {item.markedByName
-                        ? `${item.markedByName} • ${formatDateTime(item.markedAt)}`
-                        : "Not marked"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={item.status === "present" ? "default" : "outline"}
-                          className="app-button-compact"
-                          disabled={activeStudentId === item.studentId}
-                          onClick={() =>
-                            handleAttendanceUpdate(item.studentId, "present")
-                          }
-                        >
-                          Present
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={item.status === "absent" ? "default" : "outline"}
-                          className="app-button-compact"
-                          disabled={activeStudentId === item.studentId}
-                          onClick={() =>
-                            handleAttendanceUpdate(item.studentId, "absent")
-                          }
-                        >
-                          Absent
-                        </Button>
-                      </div>
+                <div className="rounded-[1.2rem] border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
+                  No live item is active yet. Activate a draft item when you want students to answer it.
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Draft queue</p>
+                  <p className="text-xs text-muted-foreground">
+                    Only draft items can be edited, reordered, activated, or deleted.
+                  </p>
+                </div>
+
+                {draftItems.length === 0 ? (
+                  <div className="rounded-[1.2rem] border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
+                    No draft live items yet.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {draftItems.map((item, index) => (
+                      <LiveItemCard key={item._id} item={item}>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEditItemDialog(item)}
+                            disabled={isWorking}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => handleActivateItem(item._id)}
+                            disabled={isWorking}
+                          >
+                            Activate
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDraftReorder(item._id, -1)}
+                            disabled={isWorking || index === 0}
+                          >
+                            <MoveUp className="h-4 w-4" />
+                            Move up
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDraftReorder(item._id, 1)}
+                            disabled={isWorking || index === draftItems.length - 1}
+                          >
+                            <MoveDown className="h-4 w-4" />
+                            Move down
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteItem(item._id)}
+                            disabled={isWorking}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </LiveItemCard>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">History</p>
+                  <p className="text-xs text-muted-foreground">
+                    Closed items remain immutable. Archive them if you no longer want them visible here.
+                  </p>
+                </div>
+
+                {historyItems.length === 0 ? (
+                  <div className="rounded-[1.2rem] border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
+                    No live-item history yet.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {historyItems.map((item) => (
+                      <LiveItemCard key={item._id} item={item}>
+                        <div className="flex flex-wrap gap-2">
+                          {item.responseCount > 0 ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void loadResponses(item, 1)}
+                              disabled={isLoadingResponses}
+                            >
+                              <MessagesSquare className="h-4 w-4" />
+                              View responses
+                            </Button>
+                          ) : null}
+                          {item.status !== "archived" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleArchiveItem(item._id)}
+                              disabled={isWorking}
+                            >
+                              Archive
+                            </Button>
+                          ) : null}
+                        </div>
+                      </LiveItemCard>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header gap-2">
+              <div className="flex items-start gap-3">
+                <FileText className="mt-0.5 h-5 w-5 text-primary" />
+                <div>
+                  <CardTitle>Transcript and Summary</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Paste or import transcript text, then publish a cleaned student-facing summary when you are ready.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="app-section-body space-y-4">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Label htmlFor="live-session-transcript">Raw transcript</Label>
+                  <label className="inline-flex cursor-pointer items-center rounded-[var(--app-radius-sm)] border border-border/70 px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent/50">
+                    Import text file
+                    <input
+                      type="file"
+                      accept=".txt,.md,.text"
+                      className="sr-only"
+                      onChange={handleTranscriptFileChange}
+                    />
+                  </label>
+                </div>
+                <Textarea
+                  id="live-session-transcript"
+                  value={rawTranscript}
+                  onChange={(event) => setRawTranscript(event.target.value)}
+                  rows={10}
+                  placeholder="Paste the raw meeting transcript or notes here."
+                  disabled={isSavingTranscript}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Student summary</Label>
+                <RichTextEditor
+                  initialContent={summaryHtml}
+                  onChange={setSummaryHtml}
+                  editorKey={`transcript-summary-${liveSession._id}-${liveSession.transcript?.updatedAt || "draft"}`}
+                  compact
+                  imageUploadEndpoint="/api/live-sessions/images"
+                />
+              </div>
+
+              <label className="flex items-center gap-3 rounded-[1rem] border border-border/60 bg-background/70 px-3 py-3 text-sm">
+                <Checkbox
+                  checked={isTranscriptPublished}
+                  onCheckedChange={(checked) => setIsTranscriptPublished(Boolean(checked))}
+                  disabled={isSavingTranscript}
+                />
+                Publish this summary to the student companion page
+              </label>
+
+              <Button
+                type="button"
+                className="w-full"
+                onClick={handleTranscriptSave}
+                disabled={isSavingTranscript}
+              >
+                {isSavingTranscript ? "Saving transcript..." : "Save transcript"}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="app-surface overflow-hidden">
+          <CardHeader className="app-section-header gap-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle>Attendance</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Join clicks are logged automatically. Mark final attendance when the session ends.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">{liveSession.presentCount} present</Badge>
+                <Badge variant="outline">{liveSession.absentCount} absent</Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="app-section-body">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Join clicks</TableHead>
+                  <TableHead>First join</TableHead>
+                  <TableHead>Marked by</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {liveSession.attendance.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-sm text-muted-foreground">
+                      No students are targeted by this live class yet.
                     </TableCell>
                   </TableRow>
-                ))
+                ) : (
+                  liveSession.attendance.map((item) => (
+                    <TableRow key={item.studentId}>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <p className="font-medium text-foreground">{item.studentName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.rollNumber ? `Roll ${item.rollNumber}` : "No roll number"}
+                            {item.academicSectionName ? ` • ${item.academicSectionName}` : ""}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="capitalize">{formatLabel(item.status)}</Badge>
+                      </TableCell>
+                      <TableCell>{item.joinClicks}</TableCell>
+                      <TableCell>{formatDateTime(item.firstJoinedAt)}</TableCell>
+                      <TableCell>
+                        {item.markedByName
+                          ? `${item.markedByName} • ${formatDateTime(item.markedAt)}`
+                          : "Not marked"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={item.status === "present" ? "default" : "outline"}
+                            className="app-button-compact"
+                            disabled={activeStudentId === item.studentId}
+                            onClick={() =>
+                              handleAttendanceUpdate(item.studentId, "present")
+                            }
+                          >
+                            Present
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={item.status === "absent" ? "default" : "outline"}
+                            className="app-button-compact"
+                            disabled={activeStudentId === item.studentId}
+                            onClick={() =>
+                              handleAttendanceUpdate(item.studentId, "absent")
+                            }
+                          >
+                            Absent
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+
+      <LiveSessionItemEditorDialog
+        liveSessionId={liveSession._id}
+        open={isItemEditorOpen}
+        onOpenChange={setIsItemEditorOpen}
+        item={editingItem}
+        onSaved={() => {
+          startTransition(() => {
+            router.refresh();
+          });
+        }}
+      />
+
+      <Dialog
+        open={Boolean(responseViewerItem)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setResponseViewerItem(null);
+            setResponsePage(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-[min(92vw,64rem)]">
+          <DialogHeader>
+            <DialogTitle>Live responses</DialogTitle>
+            <DialogDescription>
+              Review submitted responses for the selected live item.
+            </DialogDescription>
+          </DialogHeader>
+
+          {responseViewerItem ? (
+            <div className="space-y-4">
+              <div className="rounded-[1rem] border border-border/60 bg-background/72 p-3">
+                <ContentRenderer htmlContent={responseViewerItem.promptHtml} />
+              </div>
+
+              {isLoadingResponses ? (
+                <div className="rounded-[1rem] border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
+                  Loading responses...
+                </div>
+              ) : responsePage?.responses.length ? (
+                <div className="space-y-3">
+                  {responsePage.responses.map((response) => (
+                    <div
+                      key={`${response.studentId}-${response.updatedAt || "response"}`}
+                      className="rounded-[1rem] border border-border/60 bg-background/70 p-3"
+                    >
+                      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-foreground">{response.studentName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {response.rollNumber ? `Roll ${response.rollNumber}` : "No roll number"}
+                            {response.academicSectionName
+                              ? ` • ${response.academicSectionName}`
+                              : ""}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant="outline">
+                            Submitted {formatDateTime(response.submittedAt)}
+                          </Badge>
+                          {response.isCorrect !== null ? (
+                            <Badge variant={response.isCorrect ? "default" : "outline"}>
+                              {response.isCorrect ? "Correct" : "Needs review"}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {responseViewerItem.type === "short-text" ? (
+                        response.answerHtml ? (
+                          <div className="rounded-[0.9rem] border border-border/60 bg-background/72 p-3">
+                            <ContentRenderer htmlContent={response.answerHtml} />
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No answer submitted.</p>
+                        )
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Selected options:{" "}
+                          {response.selectedOptionIndexes.length > 0
+                            ? response.selectedOptionIndexes
+                                .map((value) => `Option ${value + 1}`)
+                                .join(", ")
+                            : "No option selected"}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+
+                  {responsePage.pages > 1 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm text-muted-foreground">
+                        Page {responsePage.page} of {responsePage.pages}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void loadResponses(responseViewerItem, responsePage.page - 1)
+                          }
+                          disabled={responsePage.page <= 1 || isLoadingResponses}
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void loadResponses(responseViewerItem, responsePage.page + 1)
+                          }
+                          disabled={
+                            responsePage.page >= responsePage.pages || isLoadingResponses
+                          }
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="rounded-[1rem] border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
+                  No responses have been submitted for this live item yet.
+                </div>
               )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

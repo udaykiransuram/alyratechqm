@@ -109,6 +109,160 @@ function wrapLatex(value: string) {
   return trimmed ? `{${trimmed}}` : "{}";
 }
 
+function stripOuterMathDelimiters(value: string) {
+  let current = String(value || "").trim();
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    if (current.startsWith("$$") && current.endsWith("$$")) {
+      current = current.slice(2, -2).trim();
+      changed = true;
+      continue;
+    }
+
+    if (current.startsWith("\\[") && current.endsWith("\\]")) {
+      current = current.slice(2, -2).trim();
+      changed = true;
+      continue;
+    }
+
+    if (current.startsWith("\\(") && current.endsWith("\\)")) {
+      current = current.slice(2, -2).trim();
+      changed = true;
+    }
+  }
+
+  return current;
+}
+
+function hasSingleOuterBracePair(value: string) {
+  if (!value.startsWith("{") || !value.endsWith("}")) {
+    return false;
+  }
+
+  let depth = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    const previousCharacter = index > 0 ? value[index - 1] : "";
+
+    if (previousCharacter === "\\") {
+      continue;
+    }
+
+    if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0 && index < value.length - 1) {
+        return false;
+      }
+    }
+  }
+
+  return depth === 0;
+}
+
+function stripOuterBracePairs(value: string) {
+  let current = String(value || "").trim();
+
+  while (hasSingleOuterBracePair(current)) {
+    current = current.slice(1, -1).trim();
+  }
+
+  return current;
+}
+
+function unwrapOuterLatexCommand(value: string, command: string) {
+  const source = String(value || "").trim();
+  const prefix = `\\${command}{`;
+
+  if (!source.startsWith(prefix) || !source.endsWith("}")) {
+    return source;
+  }
+
+  let depth = 1;
+  for (let index = prefix.length; index < source.length; index += 1) {
+    const character = source[index];
+    const previousCharacter = index > 0 ? source[index - 1] : "";
+
+    if (previousCharacter === "\\") {
+      continue;
+    }
+
+    if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return index === source.length - 1
+          ? source.slice(prefix.length, index).trim()
+          : source;
+      }
+    }
+  }
+
+  return source;
+}
+
+function normalizeMathpixArrayWrapper(value: string) {
+  const match = String(value || "")
+    .trim()
+    .match(/^\\begin\{array\}\s*\{[^}]*\}([\s\S]*?)\\end\{array\}$/);
+
+  if (!match) {
+    return String(value || "").trim();
+  }
+
+  const body = String(match[1] || "")
+    .replace(/\\\\\s*$/, "")
+    .trim();
+  const rows = body
+    .split(/\\\\/)
+    .map((row) => row.trim())
+    .filter(Boolean);
+
+  if (rows.length === 1 && !rows[0].includes("&")) {
+    return rows[0];
+  }
+
+  return `\\begin{aligned}${rows.join(" \\\\ ")}\\end{aligned}`;
+}
+
+function normalizeOuterFormattingWrappers(value: string) {
+  let current = stripOuterBracePairs(String(value || "").trim());
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    const withoutFontCommand = current
+      .replace(/^\\(?:sf|rm|bf|it)\b\s*~?/u, "")
+      .trim();
+    if (withoutFontCommand !== current) {
+      current = stripOuterBracePairs(withoutFontCommand);
+      changed = true;
+      continue;
+    }
+
+    for (const command of ["mathrm", "mathsf", "text", "textrm"]) {
+      const unwrapped = unwrapOuterLatexCommand(current, command);
+      if (unwrapped === current) {
+        continue;
+      }
+
+      if (/[()~]/.test(unwrapped)) {
+        current = stripOuterBracePairs(unwrapped);
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return current;
+}
+
 function normalizeUnicodeMathCharacters(value: string) {
   return Array.from(String(value || ""))
     .map((character) => UNICODE_OPERATOR_MAP[character] || character)
@@ -117,11 +271,21 @@ function normalizeUnicodeMathCharacters(value: string) {
 
 export function normalizeLatexInput(source: string) {
   let normalized = normalizeUnicodeMathCharacters(String(source || "").trim());
+  normalized = stripOuterMathDelimiters(normalized);
+  normalized = normalizeMathpixArrayWrapper(normalized);
+  normalized = normalizeOuterFormattingWrappers(normalized);
   LATEX_REPLACEMENTS.forEach(([pattern, replacement]) => {
     normalized = normalized.replace(pattern, replacement);
   });
 
   normalized = normalized
+    .replace(/~/g, " ")
+    .replace(/\\:/g, " ")
+    .replace(/([A-Za-z0-9])\s+\(/g, "$1(")
+    .replace(/\bd\s+([A-Za-z])\b/g, "d$1")
+    .replace(/([A-Za-z0-9\)])\s*([=+\-])\s*([A-Za-z0-9\\(])/g, "$1 $2 $3")
+    .replace(/([_^])\s+/g, "$1")
+    .replace(/\s+([_^])/g, "$1")
     .replace(/\s+/g, " ")
     .replace(/\s+([)}\]])/g, "$1")
     .replace(/([({\[])\s+/g, "$1")
@@ -180,6 +344,103 @@ function extractMathMarkers(source: string) {
   }
 
   return markers;
+}
+
+function looksLikeStandaloneLatexMath(source: string) {
+  const trimmed = stripOuterMathDelimiters(source);
+  if (!trimmed) {
+    return false;
+  }
+
+  if (
+    /^\\begin\{(?:array|aligned|matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|cases|gathered|split)\}/.test(
+      trimmed,
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /^\\(?:frac|dfrac|tfrac|sqrt|sum|prod|int|oint|lim|sin|cos|tan|log|ln|mathrm|mathsf|text|left|displaystyle|alpha|beta|gamma|delta|theta|pi|infty|le|ge|neq|times|div|cdot)\b/.test(
+      trimmed,
+    )
+  ) {
+    return true;
+  }
+
+  return /[_^]/.test(trimmed);
+}
+
+function inferStandaloneMathDisplayMode(source: string) {
+  const trimmed = String(source || "").trim();
+  return /\\begin\{|\\\\|\n|\\int\b|\\sum\b|\\prod\b|\\lim\b/.test(trimmed);
+}
+
+function renderPastedTextParagraphsWithMath(source: string) {
+  const text = String(source || "").replace(/\r\n?/g, "\n");
+  const paragraphs = text.split(/\n{2,}/);
+  const renderedParagraphs = paragraphs
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => {
+      const rendered = renderPlainTextWithMathNodes(
+        paragraph,
+        (fragment) =>
+          createMathNodeHtml(fragment.normalizedLatex, fragment.displayMode),
+      ).replace(/\n/g, "<br>");
+
+      return `<p>${rendered || "<br>"}</p>`;
+    });
+
+  if (renderedParagraphs.length === 0) {
+    return null;
+  }
+
+  return renderedParagraphs.join("");
+}
+
+export function getPastedMathNodeHtml(source: string) {
+  const text = String(source || "").trim();
+  if (!text) {
+    return null;
+  }
+
+  const markers = extractMathMarkers(text);
+  if (markers.length > 0) {
+    if (
+      markers.length === 1 &&
+      markers[0].start === 0 &&
+      markers[0].end === text.length
+    ) {
+      return createMathNodeHtml(markers[0].latex, markers[0].displayMode);
+    }
+
+    return null;
+  }
+
+  if (!looksLikeStandaloneLatexMath(text)) {
+    return null;
+  }
+
+  return createMathNodeHtml(text, inferStandaloneMathDisplayMode(text));
+}
+
+export function getPastedContentWithMathNodeHtml(source: string) {
+  const text = String(source || "");
+  if (!text.trim()) {
+    return null;
+  }
+
+  const standaloneMathHtml = getPastedMathNodeHtml(text);
+  if (standaloneMathHtml) {
+    return standaloneMathHtml;
+  }
+
+  if (extractMathMarkers(text).length === 0) {
+    return null;
+  }
+
+  return renderPastedTextParagraphsWithMath(text);
 }
 
 export function renderPlainTextWithMathNodes(

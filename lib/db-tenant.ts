@@ -22,6 +22,9 @@ import '@/models/DiaryEntry';
 import '@/models/DiaryStudentState';
 import '@/models/LiveSession';
 import '@/models/LiveSessionAttendance';
+import '@/models/LiveSessionItem';
+import '@/models/LiveSessionResponse';
+import '@/models/LiveSessionTranscript';
 import '@/models/StudentNotification';
 
 type TenantCoreModelMap = {
@@ -43,6 +46,9 @@ type TenantCoreModelMap = {
   DiaryStudentState: typeof import('@/models/DiaryStudentState').default;
   LiveSession: typeof import('@/models/LiveSession').default;
   LiveSessionAttendance: typeof import('@/models/LiveSessionAttendance').default;
+  LiveSessionItem: typeof import('@/models/LiveSessionItem').default;
+  LiveSessionResponse: typeof import('@/models/LiveSessionResponse').default;
+  LiveSessionTranscript: typeof import('@/models/LiveSessionTranscript').default;
   StudentNotification: typeof import('@/models/StudentNotification').default;
 };
 

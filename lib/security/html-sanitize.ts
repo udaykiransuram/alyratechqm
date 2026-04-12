@@ -362,6 +362,22 @@ export function sanitizeRichTextToPlainText(value: unknown) {
     .trim();
 }
 
+export function hasMeaningfulRichTextContent(value: unknown) {
+  const sanitizedHtml = trimTrailingBlankRichTextBlocks(
+    sanitizeRichTextHtml(value),
+  );
+
+  if (!sanitizedHtml) {
+    return false;
+  }
+
+  if (sanitizeRichTextToPlainText(sanitizedHtml).trim()) {
+    return true;
+  }
+
+  return /<img\b|data-type="math"/i.test(sanitizedHtml);
+}
+
 export function sanitizeQuestionOptions(options: unknown) {
   if (!Array.isArray(options)) {
     return [];

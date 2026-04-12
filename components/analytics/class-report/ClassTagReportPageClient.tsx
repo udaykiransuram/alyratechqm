@@ -642,6 +642,7 @@ export default function ClassTagReportPageClient({
       academicSectionId?: string;
       subjectId?: string;
       groupBy?: string[];
+      tags?: SelectedTag[];
     }) => {
       setLoading(true);
       setError(null);
@@ -650,6 +651,7 @@ export default function ClassTagReportPageClient({
         overrides?.academicSectionId ?? selectedAcademicSectionId;
       const resolvedSubjectId = overrides?.subjectId ?? selectedSubjectId;
       const resolvedGroupBy = overrides?.groupBy ?? groupBy;
+      const resolvedTags = overrides?.tags ?? selectedTags;
       const normalizedGroupBy = reconcileGroupBy(resolvedGroupBy, groupFields, {
         requiredFieldValues:
           resolvedSubjectId === "all" && subjectOptions.length > 1
@@ -670,6 +672,9 @@ export default function ClassTagReportPageClient({
       if (resolvedSubjectId !== "all") {
         searchParams.set("subjectId", resolvedSubjectId);
       }
+      resolvedTags.forEach((tag) => {
+        searchParams.append("tag", `${tag.type}:${tag.value}`);
+      });
       const sk = schoolKey || resolveClientSchoolKey();
       if (!sk) {
         setLoading(false);
@@ -702,6 +707,7 @@ export default function ClassTagReportPageClient({
             classId: resolvedClassId,
             academicSectionId: resolvedAcademicSectionId,
             subjectId: resolvedSubjectId,
+            tags: resolvedTags,
             groupBy: normalizedGroupBy,
           });
         }
@@ -720,6 +726,7 @@ export default function ClassTagReportPageClient({
       selectedClassId,
       selectedAcademicSectionId,
       selectedSubjectId,
+      selectedTags,
       subjectOptions.length,
       view,
     ],
@@ -764,8 +771,8 @@ export default function ClassTagReportPageClient({
   const handleTagToggle = (tag: SelectedTag) => {
     const nextTags = toggleSelectedTagList(selectedTags, tag);
     setSelectedTags(nextTags);
-    if (hasFetchedOnce && view === "benchmark") {
-      void fetchBenchmark({ tags: nextTags });
+    if (hasFetchedOnce) {
+      void fetchAnalytics({ tags: nextTags });
     }
   };
 
@@ -774,16 +781,16 @@ export default function ClassTagReportPageClient({
       (tag) => !isSameSelectedTag(tag, tagToRemove),
     );
     setSelectedTags(nextTags);
-    if (hasFetchedOnce && view === "benchmark") {
-      void fetchBenchmark({ tags: nextTags });
+    if (hasFetchedOnce) {
+      void fetchAnalytics({ tags: nextTags });
     }
   };
 
   const handleClearSelectedTags = () => {
     if (selectedTags.length === 0) return;
     setSelectedTags([]);
-    if (hasFetchedOnce && view === "benchmark") {
-      void fetchBenchmark({ tags: [] });
+    if (hasFetchedOnce) {
+      void fetchAnalytics({ tags: [] });
     }
   };
 

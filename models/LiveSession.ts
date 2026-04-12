@@ -35,6 +35,7 @@ export interface ILiveSession extends Document {
   endedAt?: Date | null;
   cancelledAt?: Date | null;
   cancelReason?: string | null;
+  activeItemId?: Types.ObjectId | null;
   notificationRevision: number;
   createdAt: Date;
   updatedAt: Date;
@@ -144,6 +145,12 @@ const LiveSessionSchema = new Schema<ILiveSession>(
       default: null,
       trim: true,
     },
+    activeItemId: {
+      type: Schema.Types.ObjectId,
+      ref: "LiveSessionItem",
+      default: null,
+      index: true,
+    },
     notificationRevision: {
       type: Number,
       default: 0,
@@ -209,7 +216,8 @@ if (
   (!existingLiveSessionModel.schema.path("notificationRevision") ||
     !existingLiveSessionModel.schema.path("hostTeacher") ||
     !existingLiveSessionModel.schema.path("studentJoinUrl") ||
-    !existingLiveSessionModel.schema.path("scheduledEndAt"))
+    !existingLiveSessionModel.schema.path("scheduledEndAt") ||
+    !existingLiveSessionModel.schema.path("activeItemId"))
 ) {
   delete modelRegistry.LiveSession;
 }

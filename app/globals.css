@@ -4299,6 +4299,26 @@
 
   .app-course-editor-grid {
     @apply grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem];
+    --app-course-setup-band: hsl(var(--primary) / 0.22);
+    --app-course-setup-border: hsl(var(--primary) / 0.24);
+    --app-course-curriculum-band: hsl(var(--accent-blue) / 0.18);
+    --app-course-curriculum-border: hsl(var(--accent-blue) / 0.24);
+    --app-course-publish-band: hsl(var(--app-warning) / 0.2);
+    --app-course-publish-border: hsl(var(--app-warning) / 0.28);
+    --app-course-module-band: hsl(var(--primary) / 0.15);
+    --app-course-module-border: hsl(var(--primary) / 0.18);
+    --app-course-lesson-band: hsl(var(--accent-blue) / 0.13);
+    --app-course-lesson-border: hsl(var(--accent-blue) / 0.18);
+    --app-course-item-band: hsl(var(--accent-blue) / 0.12);
+    --app-course-item-border: hsl(var(--accent-blue) / 0.16);
+    --app-course-settings-band: hsl(var(--primary) / 0.14);
+    --app-course-settings-border: hsl(var(--primary) / 0.18);
+    --app-course-preview-band: hsl(var(--app-warning) / 0.16);
+    --app-course-preview-border: hsl(var(--app-warning) / 0.22);
+    --app-course-special-info-band: hsl(var(--accent-blue) / 0.14);
+    --app-course-special-info-border: hsl(var(--accent-blue) / 0.18);
+    --app-course-special-warning-band: hsl(var(--app-warning) / 0.16);
+    --app-course-special-warning-border: hsl(var(--app-warning) / 0.22);
   }
 
   .app-course-editor-main,
@@ -4327,60 +4347,39 @@
   .app-course-editor-section-header {
     @apply border-b px-4 py-4 sm:px-5 sm:py-5;
     border-color: hsl(var(--border) / 0.64);
+    background-color: hsl(var(--app-surface-1) / 0.98);
   }
 
   .app-course-editor-section-header[data-course-section="setup"] {
-    background:
-      radial-gradient(circle at top right, hsl(var(--primary) / 0.12) 0%, transparent 16rem),
-      linear-gradient(
-        135deg,
-        hsl(var(--app-surface-1) / 0.98) 0%,
-        hsl(var(--primary) / 0.05) 100%
-      );
+    border-color: var(--app-course-setup-border);
+    background-color: var(--app-course-setup-band);
   }
 
   .app-course-editor-section-header[data-course-section="curriculum"] {
-    background:
-      radial-gradient(circle at top right, hsl(var(--accent-blue) / 0.16) 0%, transparent 18rem),
-      linear-gradient(
-        135deg,
-        hsl(var(--app-surface-1) / 0.985) 0%,
-        hsl(var(--accent-blue) / 0.06) 100%
-      );
+    border-color: var(--app-course-curriculum-border);
+    background-color: var(--app-course-curriculum-band);
   }
 
   .app-course-editor-section-header[data-course-section="publish"] {
-    background:
-      radial-gradient(circle at top right, hsl(var(--app-warning) / 0.14) 0%, transparent 18rem),
-      linear-gradient(
-        135deg,
-        hsl(var(--app-surface-1) / 0.985) 0%,
-        hsl(var(--app-warning) / 0.055) 100%
-      );
+    border-color: var(--app-course-publish-border);
+    background-color: var(--app-course-publish-band);
   }
 
   .app-course-inline-accordion-trigger {
     @apply rounded-[1rem] border px-4 py-3 text-sm font-semibold text-foreground hover:no-underline;
-    border-color: hsl(var(--border) / 0.72);
-    background:
-      linear-gradient(
-        180deg,
-        hsl(var(--app-surface-1) / 0.99) 0%,
-        hsl(var(--app-surface-2) / 0.72) 100%
-      );
-    box-shadow:
-      0 12px 22px -28px hsl(var(--app-shadow-deep) / 0.08),
-      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+    border-color: var(--app-course-item-border);
+    background-color: var(--app-course-item-band);
+    box-shadow: none;
   }
 
   .app-course-settings-trigger {
-    border-color: hsl(var(--border) / 0.68);
-    background:
-      linear-gradient(
-        180deg,
-        hsl(var(--app-surface-1) / 0.995) 0%,
-        hsl(var(--app-surface-tint) / 0.48) 100%
-      );
+    border-color: var(--app-course-settings-border);
+    background-color: var(--app-course-settings-band);
+  }
+
+  .app-course-preview-trigger {
+    border-color: var(--app-course-preview-border);
+    background-color: var(--app-course-preview-band);
   }
 
   .app-course-inline-accordion-content {
@@ -4426,7 +4425,7 @@
   }
 
   .app-course-module-shell {
-    @apply space-y-4 rounded-[1.3rem] border px-4 py-4 sm:px-5;
+    @apply space-y-4 overflow-hidden rounded-[1.3rem] border px-4 py-4 sm:px-5;
     border-color: hsl(var(--border) / 0.72);
     background:
       radial-gradient(circle at top right, hsl(var(--primary) / 0.08) 0%, transparent 18rem),
@@ -4441,12 +4440,24 @@
   }
 
   .app-course-module-header {
-    @apply flex flex-col gap-3 border-b pb-4 lg:flex-row lg:items-start lg:justify-between;
-    border-color: hsl(var(--border) / 0.58);
+    @apply flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between;
+    margin: -1rem -1rem 0;
+    padding: 1rem 1rem 1rem;
+    border-bottom: 1px solid var(--app-course-module-border);
+    background-color: var(--app-course-module-band);
+  }
+
+  @media (min-width: 640px) {
+    .app-course-module-header {
+      margin-left: -1.25rem;
+      margin-right: -1.25rem;
+      padding-left: 1.25rem;
+      padding-right: 1.25rem;
+    }
   }
 
   .app-course-lesson-panel {
-    @apply space-y-4 rounded-[1.15rem] border px-4 py-4;
+    @apply space-y-4 overflow-hidden rounded-[1.15rem] border px-4 py-4;
     border-color: hsl(var(--border) / 0.68);
     background:
       linear-gradient(
@@ -4470,8 +4481,11 @@
   }
 
   .app-course-lesson-toolbar {
-    @apply flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between;
-    border-color: hsl(var(--border) / 0.56);
+    @apply flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between;
+    margin: -1rem -1rem 0;
+    padding: 1rem 1rem 1rem;
+    border-bottom: 1px solid var(--app-course-lesson-border);
+    background-color: var(--app-course-lesson-band);
   }
 
   .app-course-lesson-item-shell {
@@ -4485,8 +4499,19 @@
       );
   }
 
+  .app-course-lesson-item-header {
+    @apply flex items-start gap-2;
+    background-color: var(--app-course-item-band);
+  }
+
   .app-course-lesson-item-trigger {
     @apply min-h-0 flex-1 px-4 py-3 text-left hover:no-underline;
+  }
+
+  .app-course-lesson-item-remove {
+    @apply mr-3 self-center;
+    border-color: var(--app-course-item-border);
+    background-color: hsl(var(--app-surface-1) / 0.94);
   }
 
   .app-course-lesson-item-content {
@@ -4522,6 +4547,30 @@
   .app-course-special-content {
     @apply border-t px-4 pb-4 pt-4;
     border-color: hsl(var(--border) / 0.56);
+  }
+
+  .app-course-special-block[data-course-special-type="announcement"] {
+    border-color: var(--app-course-special-info-border);
+  }
+
+  .app-course-special-block[data-course-special-type="announcement"] .app-course-special-trigger {
+    background-color: var(--app-course-special-info-band);
+  }
+
+  .app-course-special-block[data-course-special-type="announcement"] .app-course-special-content {
+    border-color: var(--app-course-special-info-border);
+  }
+
+  .app-course-special-block[data-course-special-type="assessment"] {
+    border-color: var(--app-course-special-warning-border);
+  }
+
+  .app-course-special-block[data-course-special-type="assessment"] .app-course-special-trigger {
+    background-color: var(--app-course-special-warning-band);
+  }
+
+  .app-course-special-block[data-course-special-type="assessment"] .app-course-special-content {
+    border-color: var(--app-course-special-warning-border);
   }
 
   .app-course-save-rail {

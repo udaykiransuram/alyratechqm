@@ -12,6 +12,7 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Image from '@tiptap/extension-image';
 import MathExtension from '@/extensions/MathExtension';
+import { getPastedContentWithMathNodeHtml } from '@/lib/question-import/math';
 import { validatePublicImageFile } from '@/lib/uploads/public-image';
 
 import { Toolbar } from './Toolbar';
@@ -33,6 +34,7 @@ interface RichTextEditorProps {
   editorKey?: string | number;
   compact?: boolean;
   imageUploadEndpoint?: string;
+  allowImages?: boolean;
 }
 
 interface EditMathPayload {
@@ -106,6 +108,13 @@ function getErrorMessage(error: unknown) {
   return 'Something went wrong while uploading the image.';
 }
 
+function getClipboardMathHtml(
+  dataTransfer: DataTransfer | null | undefined,
+) {
+  const plainText = String(dataTransfer?.getData('text/plain') || '');
+  return getPastedContentWithMathNodeHtml(plainText);
+}
+
 // --- Component Props and Payloads ---
 
 // --- The Component ---
@@ -115,6 +124,7 @@ const RichTextEditor = ({
   editorKey,
   compact = false,
   imageUploadEndpoint = "/api/questions/images",
+  allowImages = true,
 }: RichTextEditorProps) => {
   const [isMathModalOpen, setIsMathModalOpen] = useState(false);
   // --- FIX: Add state to track the node being edited ---
@@ -223,9 +233,31 @@ const RichTextEditor = ({
         class: `prose dark:prose-invert max-w-none ${editorMinHeightClass} w-full rounded-b-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`,
       },
       handlePaste: (_view, event) => {
+        const currentEditor = editorRef.current;
+
+        if (!allowImages) {
+          const pastedMathHtml = getClipboardMathHtml(event.clipboardData);
+
+          if (!pastedMathHtml || !currentEditor) {
+            return false;
+          }
+
+          event.preventDefault();
+          currentEditor.chain().focus().insertContent(pastedMathHtml).run();
+          return true;
+        }
+
         const imageFiles = getClipboardImageFiles(event.clipboardData);
         if (!imageFiles.length) {
-          return false;
+          const pastedMathHtml = getClipboardMathHtml(event.clipboardData);
+
+          if (!pastedMathHtml || !currentEditor) {
+            return false;
+          }
+
+          event.preventDefault();
+          currentEditor.chain().focus().insertContent(pastedMathHtml).run();
+          return true;
         }
 
         event.preventDefault();
@@ -233,6 +265,10 @@ const RichTextEditor = ({
         return true;
       },
       handleDrop: (_view, event) => {
+        if (!allowImages) {
+          return false;
+        }
+
         const imageFiles = getDroppedImageFiles(event.dataTransfer);
         if (!imageFiles.length) {
           return false;
@@ -249,7 +285,7 @@ const RichTextEditor = ({
     },
     // FIX: Add these to prevent re-renders and SSR errors
     immediatelyRender: false,
-  }, [editorKey, editorMinHeightClass, uploadImagesToEditor]); // <-- ADD editorKey as dependency
+  }, [allowImages, editorKey, editorMinHeightClass, uploadImagesToEditor]); // <-- ADD editorKey as dependency
 
   useEffect(() => {
     editorRef.current = editor;
@@ -378,6 +414,7 @@ const RichTextEditor = ({
         onAddImage={handleAddImage}
         onUploadImage={handleUploadImage}
         onOpenMathModal={handleOpenMathModal}
+        allowImages={allowImages}
       />
       {uploadingImageCount > 0 ? (
         <p className="mt-2 text-xs text-muted-foreground">

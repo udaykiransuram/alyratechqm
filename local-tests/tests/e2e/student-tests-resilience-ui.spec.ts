@@ -127,7 +127,9 @@ function buildAttempt(overrides: Partial<StudentAttempt> = {}): StudentAttempt {
   };
 }
 
-function buildListResponse(paper: StudentPaper, attempt: StudentAttempt) {
+function buildListResponse(paper: StudentPaper, attempt: StudentAttempt | null) {
+  const attemptStatus = attempt?.status || "available";
+
   return {
     success: true,
     tests: [
@@ -148,14 +150,16 @@ function buildListResponse(paper: StudentPaper, attempt: StudentAttempt) {
           _id: "subject-sci",
           name: "Science",
         },
-        status: attempt.status === "in_progress" ? "in_progress" : attempt.status,
-        remainingTimeMs: attempt.status === "in_progress" ? 25 * 60 * 1000 : 0,
+        status: attemptStatus === "in_progress" ? "in_progress" : attemptStatus,
+        remainingTimeMs: attemptStatus === "in_progress" ? 25 * 60 * 1000 : null,
         requiresManualReview: false,
-        attempt: {
-          submittedAt: attempt.submittedAt,
-          status: attempt.status,
-          totalMarksAwarded: attempt.totalMarksAwarded,
-        },
+        attempt: attempt
+          ? {
+              submittedAt: attempt.submittedAt,
+              status: attempt.status,
+              totalMarksAwarded: attempt.totalMarksAwarded,
+            }
+          : null,
       },
     ],
   };
@@ -165,7 +169,8 @@ async function routeRunnerApis(
   page: Page,
   params: {
     paper: StudentPaper;
-    getAttempt: () => StudentAttempt;
+    getAttempt: () => StudentAttempt | null;
+    onStart?: (route: Route) => Promise<void>;
     onSave?: (route: Route, body: any) => Promise<void>;
     onSubmit?: (route: Route, body: any) => Promise<void>;
   },
@@ -187,14 +192,24 @@ async function routeRunnerApis(
           success: true,
           paper: params.paper,
           attempt,
-          status: attempt.status,
-          remainingTimeMs: attempt.status === "in_progress" ? 25 * 60 * 1000 : 0,
+          status: attempt?.status || "available",
+          remainingTimeMs:
+            attempt?.status === "in_progress" ? 25 * 60 * 1000 : null,
           deadlineAt:
-            attempt.status === "in_progress"
+            attempt?.status === "in_progress"
               ? isoFromNow(25)
-              : attempt.submittedAt,
+              : attempt?.submittedAt || null,
         }),
       );
+      return;
+    }
+
+    if (
+      pathname === `/api/student/tests/${params.paper._id}/attempt` &&
+      method === "POST" &&
+      params.onStart
+    ) {
+      await params.onStart(route);
       return;
     }
 
@@ -293,6 +308,61 @@ async function installFullscreenMock(
 }
 
 test.describe("Student test UI resilience (network mocked) @desktop", () => {
+  test("starts the test directly in fullscreen without showing the resume gate", async ({
+    page,
+  }) => {
+    await installFullscreenMock(page);
+    await setStudentSession(page);
+
+    const paper = buildPaper();
+    let attempt: StudentAttempt | null = null;
+
+    await routeRunnerApis(page, {
+      paper,
+      getAttempt: () => attempt,
+      onStart: async (route) => {
+        attempt = buildAttempt();
+        await route.fulfill(
+          json({
+            success: true,
+            attempt,
+            status: attempt.status,
+            remainingTimeMs: 25 * 60 * 1000,
+            deadlineAt: isoFromNow(25),
+          }),
+        );
+      },
+    });
+
+    await navigateToAppRoute(page, "/student/tests/paper-1");
+
+    await expect(
+      page.getByRole("button", { name: "Start Test" }),
+    ).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole("button", { name: "Start Test" }).click();
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          return (
+            (
+              window as Window & {
+                __examFullscreenMock?: { active: () => boolean };
+              }
+            ).__examFullscreenMock?.active() ?? false
+          );
+        }),
+      )
+      .toBe(true);
+    await expect(
+      page.getByRole("heading", { name: "Fullscreen required" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save" })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
   test("keeps a resumed attempt locked until fullscreen is restored", async ({ page }) => {
     await installFullscreenMock(page, { autoGrant: false });
     await setStudentSession(page);

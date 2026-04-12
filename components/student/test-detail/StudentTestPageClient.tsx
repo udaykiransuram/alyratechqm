@@ -109,31 +109,27 @@ export default function StudentTestPageClient({
     );
   }
 
-  if (!runtime.attemptStarted) {
-    return (
-      <StudentTestPreStartView
-        paper={runtime.paper}
-        paperSubjects={runtime.paperSubjects}
-        paperClassLabel={runtime.paperClassLabel}
-        paperSubjectLabel={runtime.paperSubjectLabel}
-        questionCount={runtime.questionList.length}
-        hasManualReviewQuestions={runtime.hasManualReviewQuestions}
-        testStatus={runtime.testStatus}
-        isStarting={runtime.isStarting}
-        actionError={runtime.actionError}
-        testsHref={testsHref}
-        backLabel={backLabel}
-        onStartAttempt={runtime.startAttempt}
-      />
-    );
-  }
-
   const shouldShowFullscreenGate =
-    runtime.isExamLocked || !runtime.isFullscreen;
+    runtime.attemptStarted && (runtime.isExamLocked || !runtime.isFullscreen);
 
   return (
     <div ref={runtime.examContainerRef} className="min-h-[100dvh]">
-      {shouldShowFullscreenGate ? (
+      {!runtime.attemptStarted ? (
+        <StudentTestPreStartView
+          paper={runtime.paper}
+          paperSubjects={runtime.paperSubjects}
+          paperClassLabel={runtime.paperClassLabel}
+          paperSubjectLabel={runtime.paperSubjectLabel}
+          questionCount={runtime.questionList.length}
+          hasManualReviewQuestions={runtime.hasManualReviewQuestions}
+          testStatus={runtime.testStatus}
+          isStarting={runtime.isStarting}
+          actionError={runtime.actionError}
+          testsHref={testsHref}
+          backLabel={backLabel}
+          onStartAttempt={runtime.startAttempt}
+        />
+      ) : shouldShowFullscreenGate ? (
         <StudentTestFullscreenGateView
           paperTitle={runtime.paper.title}
           testsHref={testsHref}

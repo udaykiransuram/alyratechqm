@@ -22,6 +22,14 @@ export type LiveSessionAttendanceStatus =
   | "present"
   | "absent";
 
+export type LiveSessionItemType = "single" | "multiple" | "short-text";
+
+export type LiveSessionItemStatus =
+  | "draft"
+  | "active"
+  | "closed"
+  | "archived";
+
 export type LiveSessionTeacherSummary = {
   _id: string;
   name: string;
@@ -77,6 +85,88 @@ export type LiveSessionAttendanceSummary = {
   markedAt: string | null;
 };
 
+export type LiveSessionItemOption = {
+  index: number;
+  contentHtml: string;
+};
+
+export type LiveSessionObjectiveOptionStat = {
+  optionIndex: number;
+  responseCount: number;
+};
+
+export type LiveSessionTeacherItem = {
+  _id: string;
+  type: LiveSessionItemType;
+  promptHtml: string;
+  options: LiveSessionItemOption[];
+  answerIndexes: number[];
+  explanationHtml: string;
+  status: LiveSessionItemStatus;
+  order: number;
+  openedAt: string | null;
+  closedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  responseCount: number;
+  correctCount: number | null;
+  incorrectCount: number | null;
+  optionStats: LiveSessionObjectiveOptionStat[];
+};
+
+export type LiveSessionStudentItem = {
+  _id: string;
+  type: LiveSessionItemType;
+  promptHtml: string;
+  options: LiveSessionItemOption[];
+  status: LiveSessionItemStatus;
+  order: number;
+  openedAt: string | null;
+  closedAt: string | null;
+};
+
+export type LiveSessionStudentResponse = {
+  itemId: string;
+  selectedOptionIndexes: number[];
+  answerHtml: string | null;
+  submittedAt: string | null;
+  updatedAt: string | null;
+};
+
+export type LiveSessionTeacherTranscript = {
+  rawText: string;
+  summaryHtml: string;
+  isPublished: boolean;
+  updatedAt: string | null;
+  updatedByName: string | null;
+};
+
+export type LiveSessionPublishedTranscript = {
+  summaryHtml: string;
+  updatedAt: string | null;
+};
+
+export type LiveSessionItemResponseSummary = {
+  studentId: string;
+  studentName: string;
+  rollNumber: string | null;
+  academicSectionName: string | null;
+  selectedOptionIndexes: number[];
+  answerHtml: string | null;
+  submittedAt: string | null;
+  updatedAt: string | null;
+  isCorrect: boolean | null;
+};
+
+export type LiveSessionItemResponsePage = {
+  itemId: string;
+  page: number;
+  pages: number;
+  total: number;
+  limit: number;
+  responses: LiveSessionItemResponseSummary[];
+};
+
 export type WorkspaceLiveSessionSummary = LiveSessionSummaryBase & {
   audienceCount: number;
   joinedCount: number;
@@ -90,6 +180,10 @@ export type WorkspaceLiveSessionDetail = WorkspaceLiveSessionSummary & {
   meetingCode: string | null;
   meetingPasscode: string | null;
   joinInstructions: string | null;
+  shareHref: string;
+  activeItem: LiveSessionTeacherItem | null;
+  items: LiveSessionTeacherItem[];
+  transcript: LiveSessionTeacherTranscript | null;
   attendance: LiveSessionAttendanceSummary[];
 };
 
@@ -105,4 +199,8 @@ export type StudentLiveSessionSummary = LiveSessionSummaryBase & {
 
 export type StudentLiveSessionDetail = StudentLiveSessionSummary & {
   studentJoinUrlLabel: string;
+  shareHref: string;
+  activeItem: LiveSessionStudentItem | null;
+  studentResponse: LiveSessionStudentResponse | null;
+  publishedTranscriptSummary: LiveSessionPublishedTranscript | null;
 };
