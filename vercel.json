@@ -1,12 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/student/notifications/worker",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/parent-updates/worker",
-      "schedule": "30 13 * * *"
-    }
-  ]
-}
+{}
