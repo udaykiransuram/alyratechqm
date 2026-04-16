@@ -138,12 +138,14 @@ export default function StudentLiveSessionCompanionClient({
   const [isFocusModeActive, setIsFocusModeActive] = useState(false);
   const [isFocusModeAvailable, setIsFocusModeAvailable] = useState(false);
   const [isFocusModePending, setIsFocusModePending] = useState(false);
+  const [isFocusFabVisible, setIsFocusFabVisible] = useState(true);
   const [hasStartedStream, setHasStartedStream] = useState(false);
   const [isStreamLoaded, setIsStreamLoaded] = useState(false);
   const [streamLoadTimedOut, setStreamLoadTimedOut] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date().toISOString());
   const refreshInFlightRef = useRef(false);
   const presenceInFlightRef = useRef(false);
+  const focusFabHideTimeoutRef = useRef<number | null>(null);
   const focusStageRef = useRef<HTMLDivElement | null>(null);
   const streamFrameRef = useRef<HTMLIFrameElement | null>(null);
   const pollIntervalMs = runtimeSignals.lowBandwidth
@@ -457,6 +459,43 @@ export default function StudentLiveSessionCompanionClient({
     setIsStreamLoaded(false);
     setStreamLoadTimedOut(false);
   }, [studentJoinStream?.embedUrl]);
+
+  const scheduleFocusFabHide = useCallback(() => {
+    if (focusFabHideTimeoutRef.current !== null) {
+      window.clearTimeout(focusFabHideTimeoutRef.current);
+    }
+
+    focusFabHideTimeoutRef.current = window.setTimeout(() => {
+      setIsFocusFabVisible(false);
+    }, 2200);
+  }, []);
+
+  const showFocusFab = useCallback(() => {
+    setIsFocusFabVisible(true);
+    scheduleFocusFabHide();
+  }, [scheduleFocusFabHide]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (!isFocusModeActive) {
+      setIsFocusFabVisible(true);
+      if (focusFabHideTimeoutRef.current !== null) {
+        window.clearTimeout(focusFabHideTimeoutRef.current);
+        focusFabHideTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    showFocusFab();
+
+    return () => {
+      if (focusFabHideTimeoutRef.current !== null) {
+        window.clearTimeout(focusFabHideTimeoutRef.current);
+        focusFabHideTimeoutRef.current = null;
+      }
+    };
+  }, [isFocusModeActive, showFocusFab]);
 
   useEffect(() => {
     if (!hasStartedStream) {
@@ -1127,6 +1166,7 @@ export default function StudentLiveSessionCompanionClient({
                 ? "h-full w-screen overflow-auto rounded-none border-0 bg-background p-0 shadow-none"
                 : "overflow-hidden",
             )}
+            onPointerDown={isFocusModeActive ? showFocusFab : undefined}
           >
             <div
               className={cn(
@@ -1169,6 +1209,39 @@ export default function StudentLiveSessionCompanionClient({
                       : "Full screen"}
                 </Button>
               </div>
+            </div>
+
+            <div
+              className={cn(
+                "app-live-session-focus-fab",
+                !isFocusModeAvailable && "app-live-session-focus-fab-disabled",
+                isFocusModeActive &&
+                  !isFocusFabVisible &&
+                  "app-live-session-focus-fab-hidden",
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => void handleFocusModeToggle()}
+                disabled={isFocusModePending || !isFocusModeAvailable}
+                aria-label={
+                  isFocusModeActive
+                    ? "Exit full screen"
+                    : "Enter full screen"
+                }
+                title={
+                  isFocusModeActive
+                    ? "Exit full screen"
+                    : "Full screen"
+                }
+                className="app-live-session-focus-fab-button"
+              >
+                {isFocusModeActive ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
+              </button>
             </div>
 
             {focusModeError ? (

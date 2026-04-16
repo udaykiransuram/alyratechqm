@@ -2867,6 +2867,7 @@
     }
 
     .app-live-session-focus-bar {
+      display: none;
       padding: 0.55rem 0.75rem;
       gap: 0.5rem;
     }
@@ -2880,6 +2881,32 @@
       box-shadow:
         0 12px 24px -28px hsl(var(--app-shadow-deep) / 0.2),
         inset 0 1px 0 hsl(var(--app-surface-1) / 0.4);
+    }
+
+    .app-live-session-focus-fab {
+      position: fixed;
+      right: max(0.75rem, env(safe-area-inset-right));
+      bottom: calc(
+        var(--app-student-mobile-nav-height, 0px) + 1.25rem + env(safe-area-inset-bottom)
+      );
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    [data-live-focus=\"true\"] .app-live-session-focus-fab {
+      bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+
+    .app-live-session-focus-fab-button {
+      width: 2.35rem;
+      height: 2.35rem;
+    }
+
+    .app-live-session-focus-fab-button svg {
+      width: 1rem;
+      height: 1rem;
     }
   }
 
@@ -2919,6 +2946,47 @@
 
   .app-student-compact-actions {
     @apply flex flex-wrap items-center justify-end gap-2;
+  }
+
+  .app-live-session-focus-fab {
+    display: none;
+  }
+
+  .app-live-session-focus-fab-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    box-shadow: 0 12px 28px -18px hsl(var(--app-shadow-deep) / 0.35);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  .app-live-session-focus-fab-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 32px -20px hsl(var(--app-shadow-deep) / 0.4);
+    border-color: hsl(var(--border));
+  }
+
+  .app-live-session-focus-fab-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .app-live-session-focus-fab-disabled {
+    opacity: 0.7;
+  }
+
+  .app-live-session-focus-fab-hidden {
+    opacity: 0;
+    transform: translateY(6px);
+    pointer-events: none;
   }
 
   .app-student-page-shell .app-section-header {
