@@ -99,10 +99,10 @@ export default async function SummerCrashCourseLandingPage() {
               What students get
             </h2>
             <ul className="space-y-3 text-sm leading-6 text-muted-foreground">
-              <li>Separate Summer ID and a simple summer-only sign-in path.</li>
+              <li>Phone-first summer-only sign-in with no school picker.</li>
               <li>Free access to crash-course lessons matched to the selected class band.</li>
               <li>First login asks the student to create a new password once.</li>
-              <li>No dependency on the normal school login flow.</li>
+              <li>Backup Summer ID available only for help and support when needed.</li>
             </ul>
           </div>
 
@@ -119,7 +119,7 @@ export default async function SummerCrashCourseLandingPage() {
             </div>
             <div className="pt-2">
               <Link href={SUMMER_CRASH_HELP_PATH} className="public-flow-text-link">
-                Already registered? Find Summer ID
+                Already registered? Get sign-in help
               </Link>
             </div>
           </div>

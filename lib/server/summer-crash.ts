@@ -512,6 +512,12 @@ export async function lookupSummerCrashIdsByPhone(phone: string) {
     .sort({ studentName: 1, classBand: 1, createdAt: 1 })
     .lean();
 
+  if (!Array.isArray(matches) || matches.length === 0) {
+    throw new Error(
+      "We couldn't find any Summer Crash Course students for that phone number.",
+    );
+  }
+
   return {
     title: normalizeSummerCrashText(campaign.title) || SUMMER_CRASH_DISPLAY_NAME,
     supportContact:

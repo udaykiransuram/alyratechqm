@@ -136,7 +136,7 @@ export default function SummerCrashWelcomeClient({
             </p>
           </div>
           <div>
-            <p className="public-flow-label">Summer ID</p>
+            <p className="public-flow-label">Backup Summer ID</p>
             <p className="mt-2 text-2xl font-bold tracking-[0.08em] text-foreground">
               {summerId}
             </p>
@@ -160,7 +160,8 @@ export default function SummerCrashWelcomeClient({
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
             After the password is updated, the student goes directly into the
-            summer learning space.
+            summer learning space. Later sign-ins use the parent phone number
+            and password.
           </p>
           {supportContact ? (
             <p className="text-sm font-medium text-foreground">
@@ -218,4 +219,3 @@ export default function SummerCrashWelcomeClient({
     </div>
   );
 }
-

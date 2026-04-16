@@ -9,7 +9,7 @@ import { isSummerCrashSession } from "@/lib/summer-crash/shared";
 
 export const metadata: Metadata = {
   title: "Sign In | Summer Crash Course",
-  description: "Summer Crash Course student sign-in.",
+  description: "Phone-first Summer Crash Course student sign-in.",
 };
 
 type SummerCrashSignInPageProps = {
@@ -45,6 +45,7 @@ export default async function SummerCrashSignInPage({
     <div className="public-flow-page">
       <div className="public-flow-shell-narrow">
         <SummerCrashSignInClient
+          phone={getSearchParam(resolvedSearchParams?.phone)}
           summerId={getSearchParam(resolvedSearchParams?.summerId)}
           pageError={getSearchParam(resolvedSearchParams?.error)}
         />

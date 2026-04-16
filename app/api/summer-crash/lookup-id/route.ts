@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
             message:
               error instanceof Error
                 ? error.message
-                : "We couldn't find any Summer IDs for that phone number.",
+                : "We couldn't find any Summer Crash Course students for that phone number.",
           },
           { status: 400 },
         );

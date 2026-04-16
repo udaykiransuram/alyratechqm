@@ -2974,6 +2974,24 @@
     display: none;
   }
 
+  [data-live-focus="true"] .app-live-session-focus-bar {
+    display: none;
+  }
+
+  [data-live-completed="true"] .app-live-session-focus-bar {
+    display: none;
+  }
+
+  [data-live-focus="true"] .app-live-session-focus-fab {
+    position: fixed;
+    top: max(0.9rem, env(safe-area-inset-top));
+    right: max(0.9rem, env(safe-area-inset-right));
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .app-live-session-focus-fab-button {
     display: inline-flex;
     align-items: center;

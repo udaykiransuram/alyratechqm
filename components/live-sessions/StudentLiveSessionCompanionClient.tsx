@@ -487,7 +487,7 @@ export default function StudentLiveSessionCompanionClient({
       return;
     }
 
-    showFocusFab();
+    setIsFocusFabVisible(false);
 
     return () => {
       if (focusFabHideTimeoutRef.current !== null) {
@@ -1160,6 +1160,7 @@ export default function StudentLiveSessionCompanionClient({
           <div
             ref={focusStageRef}
             data-live-focus={isFocusModeActive ? "true" : "false"}
+            data-live-completed={isSessionOver ? "true" : "false"}
             className={cn(
               "app-live-session-focus-stage rounded-[1.75rem] border border-border/60 bg-background/76 p-4 shadow-[0_30px_80px_-44px_hsl(var(--app-shadow-deep)/0.22)]",
               isFocusModeActive

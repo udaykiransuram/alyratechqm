@@ -197,7 +197,7 @@ export default function SummerCrashRegistrationClient({
           {title}
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          Register once. The student gets a separate Summer ID and enters only
+          Register once. Later sign-ins use the parent phone number only inside
           the summer portal.
         </p>
       </div>
@@ -230,30 +230,36 @@ export default function SummerCrashRegistrationClient({
       {summerId ? (
         <div className="public-flow-card space-y-4">
           <div>
-            <p className="public-flow-label">Summer ID</p>
-            <p className="mt-2 text-2xl font-bold tracking-[0.08em] text-foreground">
+            <p className="public-flow-label">Sign-in phone</p>
+            <p className="mt-2 text-lg font-semibold text-foreground">
+              {form.phone}
+            </p>
+          </div>
+          <div className="rounded-[1.2rem] border border-border/70 bg-background/75 p-4">
+            <p className="public-flow-label">Backup Summer ID</p>
+            <p className="mt-2 text-base font-semibold tracking-[0.08em] text-foreground">
               {summerId}
             </p>
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
-            Keep this Summer ID safe. Use it on the summer sign-in page. The
-            first sign-in uses the phone digits once and then asks the student
-            to set a new password.
+            Use the parent phone number on the summer sign-in page. The first
+            sign-in uses the phone digits once and then asks the student to set
+            a new password. The Summer ID is now only a backup reference.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              href={`${SUMMER_CRASH_SIGNIN_PATH}?summerId=${encodeURIComponent(
-                summerId,
-              )}`}
+              href={`${SUMMER_CRASH_SIGNIN_PATH}?phone=${encodeURIComponent(
+                form.phone,
+              )}&summerId=${encodeURIComponent(summerId)}`}
               className="public-flow-button-primary w-full justify-center sm:flex-1"
             >
-              Go to Sign In
+              Continue to Sign In
             </Link>
             <Link
               href={SUMMER_CRASH_HELP_PATH}
               className="public-flow-button-secondary w-full justify-center sm:flex-1"
             >
-              Find Summer ID
+              Sign-in Help
             </Link>
           </div>
         </div>
@@ -478,11 +484,10 @@ export default function SummerCrashRegistrationClient({
             Go to Sign In
           </Link>
           <Link href={SUMMER_CRASH_HELP_PATH} className="public-flow-text-link">
-            Find my Summer ID
+            Need sign-in help?
           </Link>
         </div>
       </div>
     </div>
   );
 }
-

@@ -3,6 +3,22 @@ import {
   SUMMER_CRASH_SCHOOL_KEY,
 } from "@/lib/summer-crash/constants";
 
+export type SummerCrashLookupMatch = {
+  studentName?: string | null;
+  guardianName?: string | null;
+  classBand?: string | null;
+  summerId?: string | null;
+  maskedSummerId?: string | null;
+};
+
+export type NormalizedSummerCrashLookupMatch = {
+  studentName: string;
+  guardianName: string;
+  classBand: string;
+  summerId: string;
+  maskedSummerId: string;
+};
+
 export function normalizeSummerCrashText(value: unknown): string {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
@@ -43,6 +59,55 @@ export function resolveSummerCrashDestinationHref(
   }
 
   return homeHref;
+}
+
+export function normalizeSummerCrashLookupMatches(
+  matches: readonly SummerCrashLookupMatch[] | undefined | null,
+): NormalizedSummerCrashLookupMatch[] {
+  return (Array.isArray(matches) ? matches : [])
+    .map((match) => {
+      const studentName = normalizeSummerCrashText(match?.studentName);
+      const guardianName = normalizeSummerCrashText(match?.guardianName);
+      const classBand = normalizeSummerCrashText(match?.classBand);
+      const summerId = String(match?.summerId || "").trim().toUpperCase();
+      const maskedSummerId =
+        normalizeSummerCrashText(match?.maskedSummerId) ||
+        maskSummerCrashId(summerId);
+
+      return {
+        studentName,
+        guardianName,
+        classBand,
+        summerId,
+        maskedSummerId,
+      };
+    })
+    .filter((match) => match.studentName && match.summerId);
+}
+
+export function resolveSummerCrashSelectedSummerId(
+  matches: readonly SummerCrashLookupMatch[] | undefined | null,
+  preferredSummerId?: unknown,
+): string {
+  const normalizedMatches = normalizeSummerCrashLookupMatches(matches);
+  const normalizedPreferredSummerId = String(preferredSummerId || "")
+    .trim()
+    .toUpperCase();
+
+  if (
+    normalizedPreferredSummerId &&
+    normalizedMatches.some(
+      (match) => match.summerId === normalizedPreferredSummerId,
+    )
+  ) {
+    return normalizedPreferredSummerId;
+  }
+
+  if (normalizedMatches.length === 1) {
+    return normalizedMatches[0].summerId;
+  }
+
+  return "";
 }
 
 export function isSummerCrashSession(params: {

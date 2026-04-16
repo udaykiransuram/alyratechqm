@@ -6,8 +6,10 @@ import {
   isSummerCrashSession,
   maskSummerCrashId,
   normalizeSummerCrashClassBandKey,
+  normalizeSummerCrashLookupMatches,
   normalizeSummerCrashNameKey,
   normalizeSummerCrashPhone,
+  resolveSummerCrashSelectedSummerId,
 } from "../../../lib/summer-crash/shared";
 import {
   SUMMER_CRASH_DEFAULT_CLASS_BANDS,
@@ -26,6 +28,54 @@ test.describe("Summer crash course helpers @desktop", () => {
     expect(maskSummerCrashId("SC123456")).toBe("SC••56");
     expect(isHiddenPublicSchoolKey(SUMMER_CRASH_SCHOOL_KEY)).toBe(true);
     expect(isHiddenPublicSchoolKey("regular-school")).toBe(false);
+  });
+
+  test("normalizes summer lookup matches and resolves the selected student", async () => {
+    const matches = normalizeSummerCrashLookupMatches([
+      {
+        studentName: "  Ada Lovelace ",
+        guardianName: " Parent One ",
+        classBand: " Class 8 ",
+        summerId: "sc123456",
+      },
+      {
+        studentName: " Grace Hopper ",
+        guardianName: " Parent One ",
+        classBand: "Class 10",
+        summerId: "SC654321",
+        maskedSummerId: "SC••21",
+      },
+    ]);
+
+    expect(matches).toEqual([
+      {
+        studentName: "Ada Lovelace",
+        guardianName: "Parent One",
+        classBand: "Class 8",
+        summerId: "SC123456",
+        maskedSummerId: "SC••56",
+      },
+      {
+        studentName: "Grace Hopper",
+        guardianName: "Parent One",
+        classBand: "Class 10",
+        summerId: "SC654321",
+        maskedSummerId: "SC••21",
+      },
+    ]);
+
+    expect(resolveSummerCrashSelectedSummerId(matches, "sc654321")).toBe(
+      "SC654321",
+    );
+    expect(
+      resolveSummerCrashSelectedSummerId([
+        {
+          studentName: "Alan Turing",
+          classBand: "Class 9",
+          summerId: "sc111222",
+        },
+      ]),
+    ).toBe("SC111222");
   });
 
   test("keeps the summer session check scoped to the dedicated summer school", async () => {

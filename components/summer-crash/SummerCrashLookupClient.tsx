@@ -15,6 +15,11 @@ import {
   SUMMER_CRASH_REGISTER_PATH,
   SUMMER_CRASH_SIGNIN_PATH,
 } from "@/lib/summer-crash/constants";
+import {
+  normalizeSummerCrashLookupMatches,
+  type NormalizedSummerCrashLookupMatch,
+  type SummerCrashLookupMatch,
+} from "@/lib/summer-crash/shared";
 
 type SummerCrashLookupClientProps = {
   title: string;
@@ -24,13 +29,7 @@ type SummerCrashLookupClientProps = {
 type SummerCrashLookupResponse = {
   success?: boolean;
   message?: string;
-  matches?: Array<{
-    studentName?: string;
-    guardianName?: string;
-    classBand?: string;
-    summerId?: string;
-    maskedSummerId?: string;
-  }>;
+  matches?: SummerCrashLookupMatch[];
 };
 
 export default function SummerCrashLookupClient({
@@ -39,8 +38,9 @@ export default function SummerCrashLookupClient({
 }: SummerCrashLookupClientProps) {
   const [phone, setPhone] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [results, setResults] =
-    useState<NonNullable<SummerCrashLookupResponse["matches"]>>([]);
+  const [results, setResults] = useState<NormalizedSummerCrashLookupMatch[]>(
+    [],
+  );
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -69,24 +69,31 @@ export default function SummerCrashLookupClient({
               body: JSON.stringify({ phone }),
               includeSchoolQuery: false,
               fallbackMessage:
-                "We couldn't find any Summer IDs for that phone number.",
+                "We couldn't find any Summer Crash Course students for that phone number.",
             },
           );
 
           if (!response?.success) {
             throw new Error(
               response?.message ||
-                "We couldn't find any Summer IDs for that phone number.",
+                "We couldn't find any Summer Crash Course students for that phone number.",
             );
           }
 
-          setResults(Array.isArray(response.matches) ? response.matches : []);
+          const nextResults = normalizeSummerCrashLookupMatches(response.matches);
+          if (nextResults.length === 0) {
+            throw new Error(
+              "We couldn't find any Summer Crash Course students for that phone number.",
+            );
+          }
+
+          setResults(nextResults);
         } catch (error) {
           setResults([]);
           setErrorMessage(
             getClientRequestErrorMessage(
               error,
-              "We couldn't find any Summer IDs for that phone number.",
+              "We couldn't find any Summer Crash Course students for that phone number.",
             ),
           );
         }
@@ -97,12 +104,13 @@ export default function SummerCrashLookupClient({
   return (
     <div className="public-flow-surface space-y-6">
       <div className="space-y-2 text-center">
-        <div className="public-flow-badge mx-auto w-fit">Find Summer ID</div>
+        <div className="public-flow-badge mx-auto w-fit">Sign-in Help</div>
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
           {title}
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          Enter the parent phone number used during registration.
+          Enter the parent phone number used during registration. We will show
+          the linked summer student accounts.
         </p>
       </div>
 
@@ -120,6 +128,7 @@ export default function SummerCrashLookupClient({
             value={phone}
             onChange={(event) => {
               setPhone(event.target.value);
+              setResults([]);
               setErrorMessage("");
             }}
             className="public-flow-input"
@@ -133,7 +142,7 @@ export default function SummerCrashLookupClient({
           disabled={isPending}
           className="public-flow-button-primary w-full justify-center"
         >
-          {isPending ? "Finding..." : "Find Summer ID"}
+          {isPending ? "Finding..." : "Find Student"}
         </Button>
       </form>
 
@@ -156,8 +165,8 @@ export default function SummerCrashLookupClient({
                   ) : null}
                 </div>
                 <div className="sm:text-right">
-                  <p className="public-flow-label">Summer ID</p>
-                  <p className="mt-2 text-2xl font-bold tracking-[0.08em] text-foreground">
+                  <p className="public-flow-label">Backup Summer ID</p>
+                  <p className="mt-2 text-xl font-bold tracking-[0.08em] text-foreground">
                     {match.summerId}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -167,12 +176,12 @@ export default function SummerCrashLookupClient({
               </div>
               <div className="mt-4">
                 <Link
-                  href={`${SUMMER_CRASH_SIGNIN_PATH}?summerId=${encodeURIComponent(
-                    String(match.summerId || ""),
-                  )}`}
+                  href={`${SUMMER_CRASH_SIGNIN_PATH}?phone=${encodeURIComponent(
+                    phone,
+                  )}&summerId=${encodeURIComponent(String(match.summerId || ""))}`}
                   className="public-flow-button-secondary w-full justify-center sm:inline-flex sm:w-auto"
                 >
-                  Use this Summer ID
+                  Continue to Sign In
                 </Link>
               </div>
             </div>
@@ -183,7 +192,8 @@ export default function SummerCrashLookupClient({
       {results.length === 0 && !errorMessage ? (
         <div className="public-flow-card-soft space-y-2 text-center">
           <p className="text-sm leading-6 text-muted-foreground">
-            If you already registered, the Summer ID will appear here.
+            If you already registered, the linked summer student accounts will
+            appear here.
           </p>
           {supportContact ? (
             <p className="text-sm font-medium text-foreground">
@@ -203,4 +213,3 @@ export default function SummerCrashLookupClient({
     </div>
   );
 }
-

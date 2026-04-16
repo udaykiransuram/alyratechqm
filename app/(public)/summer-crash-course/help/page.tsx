@@ -9,8 +9,8 @@ import { SUMMER_CRASH_WELCOME_PATH } from "@/lib/summer-crash/constants";
 import { isSummerCrashSession } from "@/lib/summer-crash/shared";
 
 export const metadata: Metadata = {
-  title: "Find Summer ID | Summer Crash Course",
-  description: "Recover the Summer Crash Course student ID with the parent phone number.",
+  title: "Sign-in Help | Summer Crash Course",
+  description: "Find the linked Summer Crash Course student accounts with the parent phone number.",
 };
 
 export default async function SummerCrashHelpPage() {
