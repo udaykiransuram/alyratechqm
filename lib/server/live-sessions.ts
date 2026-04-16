@@ -173,7 +173,7 @@ function uniqueIds(value: unknown) {
   return Array.from(
     new Set(
       (Array.isArray(value) ? value : [])
-        .map((item) => String(item || "").trim())
+        .map((item) => toId(item))
         .filter(Boolean),
     ),
   );
@@ -1528,7 +1528,7 @@ async function assertViewerCanManageLiveSession(params: {
   }
 }
 
-function isLiveSessionVisibleToStudent(params: {
+export function isLiveSessionVisibleToStudent(params: {
   liveSession: any;
   studentPlacement?: {
     classId?: string | null;

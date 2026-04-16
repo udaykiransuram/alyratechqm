@@ -44,6 +44,14 @@ type LiveClassPracticeCandidate = {
   subjectId: string | null;
 };
 
+type BulkUpdateOperation = {
+  updateOne: {
+    filter: Record<string, unknown>;
+    update: Record<string, unknown>;
+    upsert?: boolean;
+  };
+};
+
 const TAG_WEAKNESS_ACCURACY_THRESHOLD = 60;
 const TAG_WEAKNESS_MIN_ATTEMPTS = 3;
 const TAG_RECOVERY_ACCURACY_THRESHOLD = 80;
@@ -122,6 +130,10 @@ function formatAccuracy(correct: number, total: number) {
 
 function formatNumber(value: number | null | undefined, fallback = 0) {
   return Number.isFinite(value) ? Number(value) : fallback;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
 }
 
 function normalizeIntegerIndexes(value: unknown) {
@@ -548,7 +560,7 @@ async function computeLiveClassStatsForDate(params: {
       student: { id: string; sectionId: string | null },
       tagIds: unknown[],
     ) => {
-      tagIds.forEach((tagId) => {
+      tagIds.forEach((tagId: unknown) => {
         const normalized = normalizeId(tagId);
         if (!normalized) return;
         const key = `${student.id}::${normalized}`;
@@ -815,10 +827,12 @@ async function rebuildTagPerformanceForSchool(params: {
         if (!question) return;
         const marks = formatNumber(question?.marks, 0);
         const awarded = formatNumber(answer?.marksAwarded, 0);
-        const tagIds = Array.isArray(question?.tags)
-          ? question.tags.map((tagId: any) => normalizeId(tagId)).filter(Boolean)
+        const tagIds: string[] = Array.isArray(question?.tags)
+          ? question.tags
+              .map((tagId: unknown) => normalizeId(tagId))
+              .filter(isNonEmptyString)
           : [];
-        tagIds.forEach((tagId) => {
+        tagIds.forEach((tagId: string) => {
           if (!subskillTagIds.has(tagId)) {
             return;
           }
@@ -888,8 +902,8 @@ async function rebuildTagPerformanceForSchool(params: {
     groupMap.get(key)!.rows.push(row);
   });
 
-  const peerStatsWrites = [];
-  const performanceUpdates = [];
+  const peerStatsWrites: BulkUpdateOperation[] = [];
+  const performanceUpdates: BulkUpdateOperation[] = [];
 
   const computePercentile = (values: number[], value: number) => {
     if (values.length === 0) return 0;
@@ -1009,7 +1023,7 @@ async function updateWeaknessAndPracticeSets(params: {
     now.getTime() - PRACTICE_RESEND_DAYS * 24 * 60 * 60 * 1000,
   );
 
-  const weaknessWrites = [];
+  const weaknessWrites: BulkUpdateOperation[] = [];
   const practiceSetsToCreate: Array<{
     studentId: string;
     tagId: string;

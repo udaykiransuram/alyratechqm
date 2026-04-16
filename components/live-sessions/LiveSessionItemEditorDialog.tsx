@@ -130,6 +130,14 @@ function normalizeTagList(tags: unknown): TagItem[] {
     );
 }
 
+function getRichTextTextLength(value: string) {
+  return String(value || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .trim().length;
+}
+
 function getTypeLabel(type: LiveSessionItemType) {
   if (type === "single") {
     return "Single choice";
@@ -480,6 +488,16 @@ export default function LiveSessionItemEditorDialog({
     () => subskillTags.filter((tag) => selectedTagIds.includes(tag._id)),
     [selectedTagIds, subskillTags],
   );
+  const hasPromptContent = getRichTextTextLength(promptHtml) > 0;
+  const explanationLength = getRichTextTextLength(explanationHtml);
+  const completedOptionCount = hasOptions
+    ? options.filter((option) => getRichTextTextLength(option.contentHtml) > 0).length
+    : 0;
+  const footerSummary = hasOptions
+    ? `${options.length} option${options.length === 1 ? "" : "s"} • ${answerIndexes.length} correct`
+    : explanationLength > 0
+      ? "Written response • explanation added"
+      : "Written response • teacher review";
 
   function handleAnswerToggle(index: number) {
     setAnswerIndexes((current) => {
@@ -620,6 +638,18 @@ export default function LiveSessionItemEditorDialog({
     );
   }
 
+  function openQuestionPicker() {
+    setSelectedQuestionIds([]);
+    setModalSearch("");
+    setSelectedFilterTags([]);
+    setQuestionTagMatchMode("any");
+    setQuestionFilterClassId("all");
+    setQuestionFilterSubjectId("all");
+    setQuestionFilterSubjects(subjects);
+    setQuestionPage(1);
+    setIsQuestionPickerOpen(true);
+  }
+
   async function handleSave() {
     setError(null);
     setIsSaving(true);
@@ -680,30 +710,51 @@ export default function LiveSessionItemEditorDialog({
           }}
         >
           <DialogHeader className="border-b border-border/60 bg-muted/20 px-4 py-3.5 pr-12 text-left sm:px-5 sm:pr-14">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <DialogTitle className="text-lg sm:text-xl">{dialogTitle}</DialogTitle>
-                <DialogDescription>{dialogDescription}</DialogDescription>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="app-kicker">Live item builder</span>
+                  <span className="app-meta-chip">
+                    {isEditMode ? "Editing saved item" : "New live item"}
+                  </span>
+                  <span className="app-meta-chip">{getTypeLabel(type)}</span>
+                </div>
+                <div className="space-y-1">
+                  <DialogTitle className="text-lg sm:text-xl">{dialogTitle}</DialogTitle>
+                  <DialogDescription className="max-w-3xl">
+                    {dialogDescription}
+                  </DialogDescription>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="app-meta-chip">
+                    {hasPromptContent ? "Prompt ready" : "Add prompt"}
+                  </span>
+                  <span className="app-meta-chip">
+                    {hasOptions
+                      ? `${completedOptionCount}/${options.length} options filled`
+                      : "Short-text response"}
+                  </span>
+                  <span className="app-meta-chip">
+                    {selectedSubskillTags.length} subskill tag
+                    {selectedSubskillTags.length === 1 ? "" : "s"}
+                  </span>
+                </div>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="app-button-inline"
-                onClick={() => {
-                  setSelectedQuestionIds([]);
-                  setModalSearch("");
-                  setSelectedFilterTags([]);
-                  setQuestionTagMatchMode("any");
-                  setQuestionFilterClassId("all");
-                  setQuestionFilterSubjectId("all");
-                  setQuestionFilterSubjects(subjects);
-                  setQuestionPage(1);
-                  setIsQuestionPickerOpen(true);
-                }}
-                disabled={isSaving}
-              >
-                Select Existing Question
-              </Button>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[248px]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="app-button-inline w-full"
+                  onClick={openQuestionPicker}
+                  disabled={isSaving}
+                >
+                  Import from Question Bank
+                </Button>
+                <p className="text-xs leading-5 text-muted-foreground sm:max-w-[248px]">
+                  Start from an existing question, then adjust the prompt, answers, and explanation
+                  before saving.
+                </p>
+              </div>
             </div>
           </DialogHeader>
 
@@ -716,196 +767,338 @@ export default function LiveSessionItemEditorDialog({
           >
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden bg-muted/20 p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_320px]">
               <main className="min-h-0 space-y-3 overflow-y-auto pr-1">
-              <Card className="app-surface overflow-hidden shadow-none">
-                <CardHeader className="app-section-header py-3.5">
-                  <CardTitle>Prompt</CardTitle>
-                </CardHeader>
-                <CardContent className="app-section-body">
-                  <RichTextEditor
-                    compact
-                    initialContent={promptHtml}
-                    onChange={setPromptHtml}
-                    editorKey={`${item?._id || "new"}-prompt-${type}`}
-                    imageUploadEndpoint="/api/live-sessions/images"
-                  />
-                </CardContent>
-              </Card>
-
-              {hasOptions ? (
                 <Card className="app-surface overflow-hidden shadow-none">
-                  <CardHeader className="app-section-header py-3.5">
-                    <CardTitle>Answer Options</CardTitle>
-                  </CardHeader>
-                  <CardContent className="app-section-body space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-sm text-muted-foreground">
-                        {type === "single"
-                          ? "Choose one correct option."
-                          : "Choose all correct options."}
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleAddOption}
-                        className="app-button-inline w-full sm:w-auto"
-                        disabled={isSaving}
-                      >
-                        <PlusCircle className="h-4 w-4" />
-                        Add Option
-                      </Button>
-                    </div>
-
-                    {options.map((option, index) => (
-                      <div
-                        key={`option-${index}`}
-                        className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/10 p-2.5"
-                      >
-                        <div className="flex flex-col items-center pt-2">
-                          <Checkbox
-                            checked={answerIndexes.includes(index)}
-                            onCheckedChange={() => handleAnswerToggle(index)}
-                            disabled={isSaving}
-                          />
+                  <CardContent className="app-section-body">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] lg:items-start">
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <p className="app-kicker">Quick Start</p>
+                          <h3 className="text-base font-semibold text-foreground">
+                            Choose the easiest starting point
+                          </h3>
+                          <p className="text-sm leading-6 text-muted-foreground">
+                            Build this item from scratch or import a question-bank item first. You
+                            can still edit everything below before saving.
+                          </p>
                         </div>
-                        <div className="flex-1">
-                          <RichTextEditor
-                            compact
-                            initialContent={option.contentHtml}
-                            onChange={(value) => handleOptionChange(index, value)}
-                            editorKey={`${item?._id || "new"}-option-${index}-${type}`}
-                            imageUploadEndpoint="/api/live-sessions/images"
-                          />
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <div className="rounded-[1rem] border border-border/60 bg-background/80 px-3 py-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                              1. Start
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">
+                              Pick a type or import
+                            </p>
+                          </div>
+                          <div className="rounded-[1rem] border border-border/60 bg-background/80 px-3 py-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                              2. Build
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">
+                              Write the prompt and answers
+                            </p>
+                          </div>
+                          <div className="rounded-[1rem] border border-border/60 bg-background/80 px-3 py-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                              3. Review
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">
+                              Check the answer key and save
+                            </p>
+                          </div>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveOption(index)}
-                          className="mt-1 text-muted-foreground hover:text-destructive"
-                          disabled={isSaving || options.length <= 2}
-                          aria-label={`Remove option ${index + 1}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
                       </div>
-                    ))}
+
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                        <button
+                          type="button"
+                          onClick={openQuestionPicker}
+                          disabled={isSaving}
+                          className="rounded-[1.15rem] border border-border/70 bg-[hsl(var(--app-surface-1)/0.94)] px-4 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="app-status-badge app-status-badge-info">
+                              Fastest
+                            </span>
+                            <span className="app-meta-chip">Reuse bank content</span>
+                          </div>
+                          <p className="mt-2 text-sm font-semibold text-foreground">
+                            Import existing question
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            Pull in the prompt, options, answers, and explanation, then make quick
+                            edits here.
+                          </p>
+                        </button>
+
+                        <div className="rounded-[1.15rem] border border-border/70 bg-[hsl(var(--app-surface-1)/0.88)] px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="app-status-badge app-status-badge-neutral">
+                              Flexible
+                            </span>
+                            <span className="app-meta-chip">Blank canvas</span>
+                          </div>
+                          <p className="mt-2 text-sm font-semibold text-foreground">
+                            Start from scratch
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            Use the editor below to write a fresh live question and supporting
+                            explanation.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
-              ) : (
+
                 <Card className="app-surface overflow-hidden shadow-none">
                   <CardHeader className="app-section-header py-3.5">
-                    <CardTitle>Written Response</CardTitle>
+                    <div className="space-y-1.5">
+                      <p className="app-kicker">Step 1</p>
+                      <CardTitle>Prompt</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Students will see this live prompt exactly as written here.
+                      </p>
+                    </div>
                   </CardHeader>
                   <CardContent className="app-section-body">
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      Students will answer this live prompt in their own words while the item stays active.
-                    </p>
+                    <RichTextEditor
+                      compact
+                      initialContent={promptHtml}
+                      onChange={setPromptHtml}
+                      editorKey={`${item?._id || "new"}-prompt-${type}`}
+                      imageUploadEndpoint="/api/live-sessions/images"
+                    />
                   </CardContent>
                 </Card>
-              )}
 
-              <Card className="app-surface overflow-hidden shadow-none">
-                <CardHeader className="app-section-header py-3.5">
-                  <CardTitle>Explanation</CardTitle>
-                </CardHeader>
-                <CardContent className="app-section-body">
-                  <RichTextEditor
-                    compact
-                    initialContent={explanationHtml}
-                    onChange={setExplanationHtml}
-                    editorKey={`${item?._id || "new"}-explanation-${type}`}
-                    imageUploadEndpoint="/api/live-sessions/images"
-                  />
-                </CardContent>
-              </Card>
-            </main>
-
-              <aside className="min-h-0 space-y-3 overflow-y-auto xl:overflow-visible">
-              <Card className="app-surface overflow-hidden shadow-none">
-                <CardHeader className="app-section-header py-3.5">
-                  <CardTitle>Tags</CardTitle>
-                </CardHeader>
-                <CardContent className="app-section-body space-y-3">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground">Subskill tags</p>
-                    <p className="text-sm text-muted-foreground">
-                      Used for attentiveness and recovery practice.
-                    </p>
-                  </div>
-                  <MultiSelectTags
-                    selectedTags={selectedSubskillTags}
-                    allTags={subskillTags}
-                    onSelectedTagsChange={(nextTags) =>
-                      setSelectedTagIds(nextTags.map((tag) => tag._id))
-                    }
-                    isLoading={initialDataLoading}
-                    disabled={isSaving}
-                  />
-                  {subskillTags.length === 0 && !initialDataLoading ? (
-                    <p className="text-xs text-muted-foreground">
-                      No subskill tags available yet. Create subskill tags to enable live recovery.
-                    </p>
-                  ) : null}
-                </CardContent>
-              </Card>
-
-              <Card className="app-surface overflow-hidden shadow-none">
-                <CardHeader className="app-section-header py-3.5">
-                  <CardTitle>Settings</CardTitle>
-                </CardHeader>
-                <CardContent className="app-section-body space-y-3">
-                  <div className="app-field-group">
-                    <Label className="app-field-label">Live Item Type</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {(["single", "multiple", "short-text"] as LiveSessionItemType[]).map(
-                        (value) => (
+                {hasOptions ? (
+                  <Card className="app-surface overflow-hidden shadow-none">
+                    <CardHeader className="app-section-header py-3.5">
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="space-y-1.5">
+                            <p className="app-kicker">Step 2</p>
+                            <CardTitle>Answer Options</CardTitle>
+                          </div>
                           <Button
-                            key={value}
                             type="button"
-                            variant={type === value ? "default" : "outline"}
-                            size="sm"
-                            className="app-button-compact"
-                            onClick={() => handleTypeChange(value)}
+                            variant="outline"
+                            onClick={handleAddOption}
+                            className="app-button-inline w-full sm:w-auto"
                             disabled={isSaving}
                           >
-                            {getTypeLabel(value)}
+                            <PlusCircle className="h-4 w-4" />
+                            Add Option
                           </Button>
-                        ),
-                      )}
-                    </div>
-                  </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {type === "single"
+                            ? "Choose one correct option and keep each answer easy to scan."
+                            : "Choose all correct options and mark the exact answer set."}
+                        </p>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="app-section-body space-y-3">
+                      {options.map((option, index) => (
+                        <div
+                          key={`option-${index}`}
+                          className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/10 p-2.5"
+                        >
+                          <div className="flex flex-col items-center gap-2 pt-1">
+                            <Checkbox
+                              checked={answerIndexes.includes(index)}
+                              onCheckedChange={() => handleAnswerToggle(index)}
+                              disabled={isSaving}
+                            />
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                              {index + 1}
+                            </span>
+                          </div>
+                          <div className="flex-1">
+                            <RichTextEditor
+                              compact
+                              initialContent={option.contentHtml}
+                              onChange={(value) => handleOptionChange(index, value)}
+                              editorKey={`${item?._id || "new"}-option-${index}-${type}`}
+                              imageUploadEndpoint="/api/live-sessions/images"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveOption(index)}
+                            className="mt-1 text-muted-foreground hover:text-destructive"
+                            disabled={isSaving || options.length <= 2}
+                            aria-label={`Remove option ${index + 1}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="app-surface overflow-hidden shadow-none">
+                    <CardHeader className="app-section-header py-3.5">
+                      <div className="space-y-1.5">
+                        <p className="app-kicker">Step 2</p>
+                        <CardTitle>Written Response</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          Students answer this prompt in their own words while the item stays
+                          active.
+                        </p>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="app-section-body">
+                      <div className="rounded-[1rem] border border-dashed border-border/70 bg-muted/10 px-4 py-4 text-sm leading-6 text-muted-foreground">
+                        There is no option list for short-text prompts. Teachers review responses
+                        manually after class.
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
-                  <div className="app-field-group">
-                    <span className="app-field-label">Response Mode</span>
-                    <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-sm font-medium text-foreground">
-                      {type === "single"
-                        ? "Students select one answer"
-                        : type === "multiple"
-                          ? "Students can choose multiple answers"
-                          : "Students respond with rich text"}
+                <Card className="app-surface overflow-hidden shadow-none">
+                  <CardHeader className="app-section-header py-3.5">
+                    <div className="space-y-1.5">
+                      <p className="app-kicker">Optional</p>
+                      <CardTitle>Explanation</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Add a follow-up explanation or solution students can review after the item
+                        is discussed.
+                      </p>
                     </div>
-                  </div>
+                  </CardHeader>
+                  <CardContent className="app-section-body">
+                    <RichTextEditor
+                      compact
+                      initialContent={explanationHtml}
+                      onChange={setExplanationHtml}
+                      editorKey={`${item?._id || "new"}-explanation-${type}`}
+                      imageUploadEndpoint="/api/live-sessions/images"
+                    />
+                  </CardContent>
+                </Card>
+              </main>
 
-                  <div className="app-field-group">
-                    <span className="app-field-label">Answer Key</span>
-                    <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
-                      {hasOptions
-                        ? answerIndexes.length > 0
-                          ? `${answerIndexes.length} correct ${
-                              answerIndexes.length === 1 ? "option" : "options"
-                            } selected`
-                          : "Choose the correct answer set before saving."
-                        : "Teacher review only in this version."}
+              <aside className="min-h-0 space-y-3 overflow-y-auto xl:overflow-visible">
+                <Card className="app-surface overflow-hidden shadow-none">
+                  <CardHeader className="app-section-header py-3.5">
+                    <div className="space-y-1.5">
+                      <p className="app-kicker">Overview</p>
+                      <CardTitle>Quick setup</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Keep the essentials visible while you build the live item.
+                      </p>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardHeader>
+                  <CardContent className="app-section-body space-y-4">
+                    <div className="app-field-group">
+                      <Label className="app-field-label">Live Item Type</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {(["single", "multiple", "short-text"] as LiveSessionItemType[]).map(
+                          (value) => (
+                            <Button
+                              key={value}
+                              type="button"
+                              variant={type === value ? "default" : "outline"}
+                              size="sm"
+                              className="app-button-compact"
+                              onClick={() => handleTypeChange(value)}
+                              disabled={isSaving}
+                            >
+                              {getTypeLabel(value)}
+                            </Button>
+                          ),
+                        )}
+                      </div>
+                    </div>
 
-              {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="rounded-[1rem] border border-border/60 bg-background/80 px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                          Prompt
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {hasPromptContent ? "Ready" : "Draft"}
+                        </p>
+                      </div>
+                      <div className="rounded-[1rem] border border-border/60 bg-background/80 px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                          Response
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {type === "single"
+                            ? "One answer"
+                            : type === "multiple"
+                              ? "Multiple answers"
+                              : "Written reply"}
+                        </p>
+                      </div>
+                      <div className="rounded-[1rem] border border-border/60 bg-background/80 px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                          Answer Key
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {hasOptions
+                            ? answerIndexes.length > 0
+                              ? `${answerIndexes.length} marked`
+                              : "Not set"
+                            : "Review only"}
+                        </p>
+                      </div>
+                      <div className="rounded-[1rem] border border-border/60 bg-background/80 px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                          Explanation
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {explanationLength > 0 ? "Added" : "Optional"}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="app-surface overflow-hidden shadow-none">
+                  <CardHeader className="app-section-header py-3.5">
+                    <div className="space-y-1.5">
+                      <p className="app-kicker">Recovery</p>
+                      <CardTitle>Subskill Tags</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Tag the item so follow-up recovery and attentiveness practice stay targeted.
+                      </p>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="app-section-body space-y-3">
+                    <MultiSelectTags
+                      selectedTags={selectedSubskillTags}
+                      allTags={subskillTags}
+                      onSelectedTagsChange={(nextTags) =>
+                        setSelectedTagIds(nextTags.map((tag) => tag._id))
+                      }
+                      isLoading={initialDataLoading}
+                      disabled={isSaving}
+                    />
+                    {subskillTags.length === 0 && !initialDataLoading ? (
+                      <p className="text-xs text-muted-foreground">
+                        No subskill tags are available yet. Create them to enable live recovery
+                        tracking.
+                      </p>
+                    ) : null}
+                  </CardContent>
+                </Card>
+
+                {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
               </aside>
             </div>
 
             <DialogFooter className="border-t border-border/60 bg-muted/10 px-4 py-3 sm:px-5">
+              <div className="mr-auto flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <span className="app-meta-chip">{getTypeLabel(type)}</span>
+                <span className="app-meta-chip">{footerSummary}</span>
+              </div>
               <Button
                 variant="outline"
                 type="button"

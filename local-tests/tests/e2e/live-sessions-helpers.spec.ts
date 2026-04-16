@@ -327,6 +327,38 @@ test.describe("Live sessions helper coverage @desktop", () => {
     expect(hiddenStudentSessions).toEqual([]);
   });
 
+  test("keeps section-scoped student visibility when live-session sections are populated objects", async () => {
+    const { isLiveSessionVisibleToStudent } = await loadLiveSessionServer();
+
+    expect(
+      isLiveSessionVisibleToStudent({
+        liveSession: {
+          class: { _id: MOCK_CLASS_ID, name: "Class X" },
+          assignedAcademicSections: [{ _id: MOCK_SECTION_ID, name: "Watson" }],
+          status: "scheduled",
+        },
+        studentPlacement: {
+          classId: MOCK_CLASS_ID,
+          academicSectionId: MOCK_SECTION_ID,
+        },
+      }),
+    ).toBe(true);
+
+    expect(
+      isLiveSessionVisibleToStudent({
+        liveSession: {
+          class: { _id: MOCK_CLASS_ID, name: "Class X" },
+          assignedAcademicSections: [{ _id: MOCK_SECTION_ID, name: "Watson" }],
+          status: "scheduled",
+        },
+        studentPlacement: {
+          classId: MOCK_CLASS_ID,
+          academicSectionId: "999999999999999999999999",
+        },
+      }),
+    ).toBe(false);
+  });
+
   test("records join activity and allows attendance overrides for a scheduled session", async () => {
     const {
       recordStudentLiveSessionJoinAndResolveTarget,

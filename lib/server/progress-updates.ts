@@ -65,6 +65,35 @@ function toId(value: unknown) {
   return String(value || "").trim();
 }
 
+function toNamedReference(value: unknown) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>;
+    const id = toId(record._id ?? value);
+    if (!id) {
+      return null;
+    }
+
+    return {
+      _id: id,
+      name: String(record.name || "").trim(),
+    };
+  }
+
+  const id = toId(value);
+  if (!id) {
+    return null;
+  }
+
+  return {
+    _id: id,
+    name: "",
+  };
+}
+
 async function getTeacherScopedUser(schoolKey: string, userId: string) {
   const { User: UserModel } = await getTenantModels(schoolKey, ["User"]);
   return UserModel.findById(userId)
@@ -313,15 +342,8 @@ export async function listProgressUpdatesDirectory(params: {
         mobileNumber: student?.mobileNumber
           ? String(student.mobileNumber).trim()
           : null,
-        class: student?.class
-          ? { _id: toId(student.class?._id || student.class), name: String(student.class?.name || "").trim() }
-          : null,
-        section: student?.academicSection
-          ? {
-              _id: toId(student.academicSection?._id || student.academicSection),
-              name: String(student.academicSection?.name || "").trim(),
-            }
-          : null,
+        class: toNamedReference(student?.class),
+        section: toNamedReference(student?.academicSection),
       },
       contact: contact
         ? {
@@ -448,6 +470,9 @@ export async function getStudentProgressUpdatesDetail(params: {
     .limit(30)
     .lean();
 
+  const classSummary = toNamedReference(student?.class);
+  const sectionSummary = toNamedReference(student?.academicSection);
+
   return {
     student: {
       _id: toId(student?._id),
@@ -456,15 +481,8 @@ export async function getStudentProgressUpdatesDetail(params: {
       mobileNumber: student?.mobileNumber
         ? String(student.mobileNumber).trim()
         : null,
-      class: student?.class
-        ? { _id: toId(student.class?._id || student.class), name: String(student.class?.name || "").trim() }
-        : null,
-      section: student?.academicSection
-        ? {
-            _id: toId(student.academicSection?._id || student.academicSection),
-            name: String(student.academicSection?.name || "").trim(),
-          }
-        : null,
+      class: classSummary,
+      section: sectionSummary,
     },
     contact: contact
       ? {

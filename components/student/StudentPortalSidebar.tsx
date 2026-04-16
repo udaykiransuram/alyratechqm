@@ -31,7 +31,7 @@ export default function StudentPortalSidebar() {
       {
         title: "Learning",
         items: STUDENT_PORTAL_ITEMS.filter((item) =>
-          ["/student/tests", "/student/courses", "/student/diary"].includes(
+          ["/student/tests", "/student/courses", "/student/live-classes", "/student/diary"].includes(
             item.href,
           ),
         ),

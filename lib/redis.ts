@@ -76,6 +76,11 @@ type RedisRuntimeState = {
   lastLoggedAt: number;
 };
 
+type RedisFallbackLogDetails = {
+  level: "warn" | "error";
+  message: string;
+};
+
 function getRedisUrl() {
   return String(process.env.UPSTASH_REDIS_REST_URL || "").trim();
 }
@@ -111,6 +116,49 @@ function isRedisTemporarilyUnavailable() {
   return getRedisRuntimeState().unavailableUntil > Date.now();
 }
 
+function isAbortLikeError(error: unknown) {
+  if (error instanceof DOMException) {
+    return error.name === "AbortError";
+  }
+
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
+function getRedisFallbackLogDetails(error: unknown): RedisFallbackLogDetails {
+  if (isAbortLikeError(error)) {
+    return {
+      level: "warn",
+      message: `Redis request timed out after ${REDIS_FETCH_TIMEOUT_MS}ms. Falling back without Redis support for ${Math.round(
+        REDIS_FAILURE_BACKOFF_MS / 1000,
+      )}s.`,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      level: "error",
+      message: `Redis temporarily unavailable. Falling back without Redis support: ${error.message}`,
+    };
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return {
+      level: "error",
+      message: `Redis temporarily unavailable. Falling back without Redis support: ${error.trim()}`,
+    };
+  }
+
+  return {
+    level: "error",
+    message: "Redis temporarily unavailable. Falling back without Redis support.",
+  };
+}
+
 function markRedisTemporarilyUnavailable(error: unknown) {
   const state = getRedisRuntimeState();
   const now = Date.now();
@@ -118,10 +166,13 @@ function markRedisTemporarilyUnavailable(error: unknown) {
 
   if (now - state.lastLoggedAt >= REDIS_FAILURE_BACKOFF_MS) {
     state.lastLoggedAt = now;
-    console.error(
-      "Redis temporarily unavailable. Falling back without Redis support:",
-      error,
-    );
+    const logDetails = getRedisFallbackLogDetails(error);
+    if (logDetails.level === "warn") {
+      console.warn(logDetails.message);
+      return;
+    }
+
+    console.error(logDetails.message);
   }
 }
 
@@ -160,9 +211,15 @@ export async function runRedisCommand<T = unknown>(
     return null;
   }
 
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let timedOut = false;
+
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REDIS_FETCH_TIMEOUT_MS);
+    timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, REDIS_FETCH_TIMEOUT_MS);
     const response = await fetch(getRedisUrl(), {
       method: "POST",
       headers: {
@@ -173,7 +230,6 @@ export async function runRedisCommand<T = unknown>(
       signal: controller.signal,
       body: JSON.stringify(command),
     });
-    clearTimeout(timeoutId);
 
     const payload = (await response.json().catch(() => ({}))) as UpstashResponse<T>;
     if (!response.ok || payload.error) {
@@ -186,8 +242,19 @@ export async function runRedisCommand<T = unknown>(
       ? null
       : (payload.result as T);
   } catch (error) {
-    markRedisTemporarilyUnavailable(error);
+    markRedisTemporarilyUnavailable(
+      timedOut
+        ? new DOMException(
+            `Redis request timed out after ${REDIS_FETCH_TIMEOUT_MS}ms.`,
+            "AbortError",
+          )
+        : error,
+    );
     return null;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 

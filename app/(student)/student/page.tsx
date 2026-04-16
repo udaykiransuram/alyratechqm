@@ -208,16 +208,35 @@ export default async function StudentHomePage() {
                   The next meeting-linked sessions scheduled for your class.
                 </p>
               </div>
-              <Badge variant="outline">
-                {dashboard.liveClasses.liveNow} live now
-              </Badge>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Badge variant="outline">
+                  {dashboard.liveClasses.liveNow} live now
+                </Badge>
+                <Button asChild variant="outline" className="app-button-compact-primary">
+                  <AppPrefetchLink href="/student/live-classes" prefetchOnViewport={false}>
+                    View all
+                  </AppPrefetchLink>
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="app-section-body space-y-3">
             {dashboard.liveClasses.items.length === 0 ? (
-              <p className="text-sm leading-6 text-muted-foreground">
-                No live classes are scheduled right now.
-              </p>
+              <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/70 p-4">
+                <p className="text-sm leading-6 text-muted-foreground">
+                  No live classes are scheduled right now.
+                </p>
+                <div className="flex justify-end">
+                  <Button asChild variant="outline" className="app-button-compact-primary">
+                    <AppPrefetchLink
+                      href="/student/live-classes"
+                      prefetchOnViewport={false}
+                    >
+                      Open live classes page
+                    </AppPrefetchLink>
+                  </Button>
+                </div>
+              </div>
             ) : (
               dashboard.liveClasses.items.map((item) => (
                 <div

@@ -142,6 +142,7 @@ export function QuestionFilterPopup({
   ).length;
   const selectedCount = selectedQuestionIds.length;
   const hiddenSelectedCount = Math.max(selectedCount - visibleSelectedCount, 0);
+  const singleSelectReady = isSingleSelect && selectedCount === 1;
   const hasActiveFilters =
     modalSearch.trim().length > 0 ||
     selectedTags.length > 0 ||
@@ -213,8 +214,18 @@ export function QuestionFilterPopup({
         }}
       >
         <DialogHeader className="border-b border-border/60 bg-muted/20 px-4 py-3.5 pr-12 text-left sm:px-5 sm:pr-14">
-          <DialogTitle className="text-lg sm:text-xl">{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <div className="space-y-2">
+            <DialogTitle className="text-lg sm:text-xl">{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+            {isSingleSelect ? (
+              <div className="flex flex-wrap gap-2">
+                <span className="app-meta-chip">Choose one question</span>
+                <span className="app-meta-chip">
+                  {singleSelectReady ? 'Ready to import' : 'Select a card to continue'}
+                </span>
+              </div>
+            ) : null}
+          </div>
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 bg-muted/20 p-3 sm:p-4 lg:grid-cols-[minmax(300px,320px)_minmax(0,1fr)]">
@@ -242,6 +253,19 @@ export function QuestionFilterPopup({
                 event.stopPropagation();
               }}
             >
+              {isSingleSelect ? (
+                <div className="rounded-[1.1rem] border border-border/60 bg-[hsl(var(--app-surface-1)/0.9)] px-3.5 py-3">
+                  <div className="space-y-1.5">
+                    <p className="app-kicker">Import Flow</p>
+                    <p className="text-sm font-semibold text-foreground">Find one strong match</p>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Use the filters below, select one question on the right, then import it back
+                      into the live item editor for final tweaks.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="app-field-group">
                 <Label htmlFor="question-filter-search" className="app-field-label">
                   Search Content
@@ -344,8 +368,15 @@ export function QuestionFilterPopup({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  <span className="inline-flex w-fit rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                    {selectedCount} selected
+                  <span
+                    className={cn(
+                      'inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-medium',
+                      singleSelectReady
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200'
+                        : 'border-border/60 bg-background text-muted-foreground',
+                    )}
+                  >
+                    {singleSelectReady ? '1 question ready to import' : `${selectedCount} selected`}
                     {hiddenSelectedCount > 0 ? ` • ${hiddenSelectedCount} outside current view` : ''}
                   </span>
                   {hiddenSelectedCount > 0 ? (
@@ -449,6 +480,15 @@ export function QuestionFilterPopup({
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {isSingleSelect ? (
+                    <div className="rounded-[1rem] border border-border/60 bg-muted/10 px-3.5 py-3 text-sm text-muted-foreground">
+                      Click anywhere on a question card to select it, then use
+                      {' '}
+                      <span className="font-semibold text-foreground">{confirmLabel}</span>
+                      {' '}
+                      below.
+                    </div>
+                  ) : null}
                   {allQuestionsToShow.map((question) => {
                     const isSelected = selectedQuestionIdSet.has(
                       normalizeQuestionId(question._id),
@@ -529,7 +569,11 @@ export function QuestionFilterPopup({
 
         <DialogFooter className="border-t border-border/60 bg-muted/10 px-4 py-3 sm:px-5">
           <span className="mr-auto text-left text-sm text-muted-foreground">
-            {selectedCount} question(s) selected
+            {isSingleSelect
+              ? selectedCount === 1
+                ? '1 question selected and ready to import'
+                : 'Select one question to continue'
+              : `${selectedCount} question(s) selected`}
           </span>
           <Button variant="outline" className="app-button-filter" onClick={() => onOpenChange(false)}>
             Cancel
