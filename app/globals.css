@@ -2761,6 +2761,28 @@
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
   }
 
+  @media (max-width: 640px) {
+    .app-student-page-shell .app-page-hero-body {
+      gap: 0.6rem;
+      padding: 0.75rem;
+    }
+
+    .app-student-page-shell .app-page-eyebrow,
+    .app-student-page-shell .app-page-description {
+      display: none;
+    }
+
+    .app-student-page-shell .app-page-title-lg {
+      font-size: 1.45rem;
+      line-height: 1.1;
+    }
+
+    .app-student-page-shell .app-page-hero-toolbar {
+      margin-top: 0.35rem;
+      padding: 0.55rem;
+    }
+  }
+
   .app-student-page-shell .app-surface {
     border-color: hsl(var(--border) / 0.7);
     background: hsl(var(--app-surface-1) / 0.98);
@@ -4177,6 +4199,65 @@
 
   .app-course-resource-jump-input {
     @apply h-9 w-[84px] rounded-lg border border-border/70 bg-background px-2 text-sm font-semibold text-foreground shadow-sm;
+  }
+
+  .app-live-session-focus-stage {
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98) 0%,
+        hsl(var(--app-surface-2) / 0.72) 100%
+      );
+  }
+
+  .app-live-session-stream-shell {
+    background-color: #000;
+  }
+
+  .app-live-session-stream-frame {
+    background-color: #000;
+  }
+
+  .app-live-session-stream-full {
+    min-height: 60dvh;
+  }
+
+  [data-live-focus="true"] .app-live-session-stream-shell {
+    height: calc(100dvh - 7.5rem);
+    min-height: calc(100dvh - 7.5rem);
+  }
+
+  [data-live-focus="true"] .app-live-session-stream-stage {
+    height: 100%;
+    min-height: 100%;
+  }
+
+  .app-live-session-stream-frame-shell {
+    position: relative;
+    height: 100%;
+    width: 100%;
+  }
+
+  [data-live-focus="true"] .app-live-session-stream-frame {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    width: 100%;
+  }
+
+  @media (max-width: 768px) {
+    .app-live-session-focus-stage {
+      min-height: 100dvh;
+    }
+
+    .app-live-session-focus-stage .app-live-session-stream-shell {
+      min-height: 100dvh;
+    }
+
+    .app-live-session-focus-stage .app-live-session-stream-frame {
+      width: 100vw;
+      height: 100dvh;
+    }
   }
 
   .app-resource-modal {

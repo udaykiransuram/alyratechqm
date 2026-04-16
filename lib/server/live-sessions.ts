@@ -1099,10 +1099,10 @@ function resolveStudentJoinUrlLabel(url: string) {
   }
 }
 
-function sortLiveSessions(left: { status: string; scheduledStartAt?: string | null }, right: {
-  status: string;
-  scheduledStartAt?: string | null;
-}) {
+function sortLiveSessions(
+  left: { status: string; scheduledStartAt?: string | null; createdAt?: string | Date | null },
+  right: { status: string; scheduledStartAt?: string | null; createdAt?: string | Date | null },
+) {
   const rank = (value: string) => {
     if (value === "live") return 0;
     if (value === "scheduled") return 1;
@@ -1116,12 +1116,21 @@ function sortLiveSessions(left: { status: string; scheduledStartAt?: string | nu
     return rankDiff;
   }
 
-  const leftTime = normalizeLiveSessionDate(left.scheduledStartAt)?.getTime() ||
-    Number.POSITIVE_INFINITY;
-  const rightTime = normalizeLiveSessionDate(right.scheduledStartAt)?.getTime() ||
-    Number.POSITIVE_INFINITY;
+  const leftCreated = normalizeLiveSessionDate(left.createdAt)?.getTime() ||
+    Number.NEGATIVE_INFINITY;
+  const rightCreated = normalizeLiveSessionDate(right.createdAt)?.getTime() ||
+    Number.NEGATIVE_INFINITY;
+  const createdDiff = rightCreated - leftCreated;
+  if (createdDiff !== 0) {
+    return createdDiff;
+  }
 
-  return leftTime - rightTime;
+  const leftTime = normalizeLiveSessionDate(left.scheduledStartAt)?.getTime() ||
+    Number.NEGATIVE_INFINITY;
+  const rightTime = normalizeLiveSessionDate(right.scheduledStartAt)?.getTime() ||
+    Number.NEGATIVE_INFINITY;
+
+  return rightTime - leftTime;
 }
 
 async function getTeacherScopedUser(schoolKey: string, userId: string) {

@@ -139,6 +139,8 @@ export default function StudentLiveSessionCompanionClient({
   const [isFocusModeAvailable, setIsFocusModeAvailable] = useState(false);
   const [isFocusModePending, setIsFocusModePending] = useState(false);
   const [hasStartedStream, setHasStartedStream] = useState(false);
+  const [isStreamLoaded, setIsStreamLoaded] = useState(false);
+  const [streamLoadTimedOut, setStreamLoadTimedOut] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date().toISOString());
   const refreshInFlightRef = useRef(false);
   const presenceInFlightRef = useRef(false);
@@ -367,6 +369,37 @@ export default function StudentLiveSessionCompanionClient({
       : getObjectiveHelperText(activeItem.type)
     : "Stay on this page. The next question will appear here automatically.";
 
+  const streamFrameId = useMemo(
+    () => `student-live-stream-${liveSession._id}`,
+    [liveSession._id],
+  );
+
+  const lockLandscapeOrientation = useCallback(async () => {
+    if (typeof screen === "undefined") {
+      return;
+    }
+    const orientation = screen.orientation;
+    if (!orientation?.lock) {
+      return;
+    }
+    try {
+      await orientation.lock("landscape");
+    } catch {
+      // Ignore lock failures on unsupported devices.
+    }
+  }, []);
+
+  const unlockOrientation = useCallback(() => {
+    if (typeof screen === "undefined") {
+      return;
+    }
+    try {
+      screen.orientation?.unlock?.();
+    } catch {
+      // Ignore unlock failures.
+    }
+  }, []);
+
   useEffect(() => {
     if (!showSplitCompanionStage && isFocusModeActive) {
       void exitCurrentFullscreen();
@@ -400,7 +433,10 @@ export default function StudentLiveSessionCompanionClient({
           setFocusModeError(
             "Tap Full screen to open the class in full screen.",
           );
+          return;
         }
+
+        await lockLandscapeOrientation();
       });
     }, 50);
 
@@ -408,6 +444,7 @@ export default function StudentLiveSessionCompanionClient({
   }, [
     isFocusModeActive,
     isFocusModePending,
+    lockLandscapeOrientation,
     searchParams,
     showSplitCompanionStage,
     studentJoinStream,
@@ -415,7 +452,22 @@ export default function StudentLiveSessionCompanionClient({
 
   useEffect(() => {
     setHasStartedStream(false);
+    setIsStreamLoaded(false);
+    setStreamLoadTimedOut(false);
   }, [studentJoinStream?.embedUrl]);
+
+  useEffect(() => {
+    if (!hasStartedStream) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setStreamLoadTimedOut(true);
+    }, 4500);
+
+    return () => window.clearTimeout(timer);
+  }, [hasStartedStream]);
+
 
   const requestStreamPlayback = useCallback(() => {
     if (!streamFrameRef.current) {
@@ -435,6 +487,15 @@ export default function StudentLiveSessionCompanionClient({
       // Ignore postMessage failures for blocked embeds.
     }
   }, []);
+
+  useEffect(() => {
+    if (isFocusModeActive) {
+      void lockLandscapeOrientation();
+      return;
+    }
+
+    unlockOrientation();
+  }, [isFocusModeActive, lockLandscapeOrientation, unlockOrientation]);
 
   function handleOptionToggle(optionIndex: number) {
     if (!activeItem || activeItem.type === "short-text") {
@@ -528,7 +589,10 @@ export default function StudentLiveSessionCompanionClient({
 
       if (!document.fullscreenElement) {
         setFocusModeError("Could not start full screen right now.");
+        return;
       }
+
+      await lockLandscapeOrientation();
     } finally {
       setIsFocusModePending(false);
     }
@@ -706,40 +770,67 @@ export default function StudentLiveSessionCompanionClient({
   const studentJoinStreamCard = studentJoinStream ? (
     <div
       className={cn(
-        "overflow-hidden rounded-[1.2rem] border border-border/60 bg-black shadow-[0_24px_52px_-36px_hsl(var(--app-shadow-deep)/0.46)]",
+        "app-live-session-stream-shell overflow-hidden rounded-[1.2rem] border border-border/60 bg-black shadow-[0_24px_52px_-36px_hsl(var(--app-shadow-deep)/0.46)]",
         isFocusModeActive
-          ? "h-full min-h-[calc(100dvh-8rem)] rounded-none border-0 shadow-none xl:min-h-[calc(100dvh-8.5rem)]"
+          ? "app-live-session-stream-full h-full min-h-[calc(100dvh-8rem)] rounded-none border-0 shadow-none xl:min-h-[calc(100dvh-8.5rem)]"
           : "",
       )}
     >
       <div
         className={cn(
           isFocusModeActive
-            ? "flex h-full w-full min-h-[calc(100dvh-8rem)] items-center justify-center bg-black xl:min-h-[calc(100dvh-8.5rem)]"
+            ? "app-live-session-stream-stage flex h-full w-full min-h-[calc(100dvh-8rem)] items-center justify-center bg-black xl:min-h-[calc(100dvh-8.5rem)]"
             : "aspect-video w-full",
         )}
       >
         {hasStartedStream ? (
-          <iframe
-            src={streamEmbedUrl}
-            title={`${liveSession.title} live stream`}
-            className={cn(
-              "border-0",
-              isFocusModeActive
-                ? "aspect-video h-auto max-h-full w-full max-w-full"
-                : "h-full w-full",
-            )}
-            referrerPolicy="strict-origin-when-cross-origin"
-            allow="autoplay; encrypted-media; picture-in-picture; web-share"
-            loading="lazy"
-            ref={streamFrameRef}
-            onLoad={requestStreamPlayback}
-          />
+          <div className="app-live-session-stream-frame-shell relative h-full w-full">
+            <iframe
+              id={streamFrameId}
+              src={streamEmbedUrl}
+              title={`${liveSession.title} live stream`}
+              className="app-live-session-stream-frame h-full w-full border-0"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allow="autoplay; encrypted-media; picture-in-picture; web-share"
+              loading="eager"
+              ref={streamFrameRef}
+              onLoad={() => {
+                setIsStreamLoaded(true);
+                requestStreamPlayback();
+              }}
+            />
+            {!isStreamLoaded ? (
+              <>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/55 px-6 text-center text-sm text-white">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                  <p>
+                    {liveSession.status === "live"
+                      ? "Loading the live stream..."
+                      : "The class will appear once the teacher goes live."}
+                  </p>
+                </div>
+                {streamLoadTimedOut && studentJoinStream?.watchUrl ? (
+                  <div className="absolute inset-x-0 bottom-4 flex justify-center">
+                    <a
+                      href={studentJoinStream.watchUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full bg-white/90 px-4 py-2 text-xs font-semibold text-foreground shadow-lg"
+                    >
+                      Open in YouTube
+                    </a>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
         ) : (
           <button
             type="button"
             onClick={() => {
               setHasStartedStream(true);
+              setIsStreamLoaded(false);
+              setStreamLoadTimedOut(false);
               requestStreamPlayback();
             }}
             className={cn(
@@ -1027,10 +1118,11 @@ export default function StudentLiveSessionCompanionClient({
         <>
           <div
             ref={focusStageRef}
+            data-live-focus={isFocusModeActive ? "true" : "false"}
             className={cn(
-              "rounded-[1.75rem] border border-border/60 bg-background/76 p-4 shadow-[0_30px_80px_-44px_hsl(var(--app-shadow-deep)/0.22)]",
+              "app-live-session-focus-stage rounded-[1.75rem] border border-border/60 bg-background/76 p-4 shadow-[0_30px_80px_-44px_hsl(var(--app-shadow-deep)/0.22)]",
               isFocusModeActive
-                ? "h-full w-full overflow-auto rounded-none border-0 bg-background p-0 shadow-none"
+                ? "h-full w-screen overflow-auto rounded-none border-0 bg-background p-0 shadow-none"
                 : "overflow-hidden",
             )}
           >
@@ -1084,8 +1176,8 @@ export default function StudentLiveSessionCompanionClient({
                   : "xl:grid-cols-[minmax(0,1fr)]",
                 isFocusModeActive &&
                   (activeItem
-                    ? "xl:min-h-[calc(100dvh-3.75rem)] xl:grid-cols-[minmax(0,1.6fr)_minmax(16rem,0.6fr)] xl:gap-0"
-                    : "xl:min-h-[calc(100dvh-3.75rem)] xl:grid-cols-[minmax(0,1fr)] xl:gap-0"),
+                    ? "min-h-[calc(100dvh-3.75rem)] grid-cols-1 gap-0 xl:grid-cols-1 xl:min-h-[calc(100dvh-3.75rem)]"
+                    : "min-h-[calc(100dvh-3.75rem)] grid-cols-1 gap-0 xl:grid-cols-1 xl:min-h-[calc(100dvh-3.75rem)]"),
               )}
             >
               <div className={cn("space-y-5", isFocusModeActive && "space-y-0")}>
@@ -1097,7 +1189,7 @@ export default function StudentLiveSessionCompanionClient({
                   className={cn(
                     "space-y-5 xl:sticky xl:top-6 xl:self-start",
                     isFocusModeActive &&
-                      "xl:top-0 xl:max-h-[calc(100dvh-7.5rem)] xl:overflow-auto xl:pr-1",
+                      "max-h-[calc(100dvh-7.5rem)] overflow-auto px-4 pb-4 pt-4 xl:top-0 xl:pr-4",
                   )}
                 >
                   {currentItemCard}
