@@ -1376,7 +1376,7 @@ export default function WorkspaceLiveSessionDetailClient({
                     </div>
                   ))}
 
-                  {responsePage.pages > 1 ? (
+                  {responsePage && responsePage.pages > 1 ? (
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <p className="text-sm text-muted-foreground">
                         Page {responsePage.page} of {responsePage.pages}
