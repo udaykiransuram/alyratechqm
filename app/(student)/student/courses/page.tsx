@@ -260,6 +260,8 @@ export default async function StudentCoursesPage({ searchParams }: StudentCourse
                             src={course.metadata.coverImageUrl}
                             alt={course.metadata.coverImageAltText || course.title}
                             className="app-course-list-cover"
+                            loading="lazy"
+                            decoding="async"
                           />
                         </>
                       ) : (

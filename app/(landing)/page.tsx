@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { unstable_cache } from 'next/cache';
 import { Hero3D } from '@/components/Landing3D';
 import { ProCard } from '@/components/ProCard';
 import GlassPanel from '@/components/GlassPanel';
@@ -18,9 +19,9 @@ export const metadata = {
   description: 'AI-driven diagnostics for K-12 education. Identify learning gaps with precision.',
 };
 
-async function getHomePageData() {
-  try {
-    const dataPromise = (async () => {
+const getHomePageData = unstable_cache(
+  async () => {
+    try {
       await connectDB();
       const [statsDoc, testConfig, testimonials, faqDocs, contactInfo]: [
         any,
@@ -68,19 +69,19 @@ async function getHomePageData() {
         })),
         whatsappHref,
       };
-    })();
-
-    return await dataPromise;
-  } catch {
-    return {
-      stats: [],
-      testConfig: null,
-      testimonials: [],
-      faqs: [],
-      whatsappHref: '',
-    };
-  }
-}
+    } catch {
+      return {
+        stats: [],
+        testConfig: null,
+        testimonials: [],
+        faqs: [],
+        whatsappHref: '',
+      };
+    }
+  },
+  ["public-homepage"],
+  { revalidate: 60 },
+);
 
 export default async function HomePage() {
   const { stats, testConfig, testimonials, faqs, whatsappHref } =
