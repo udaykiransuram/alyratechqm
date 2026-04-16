@@ -379,7 +379,7 @@ export default function StudentLiveSessionCompanionClient({
       return;
     }
     const orientation = screen.orientation as ScreenOrientation & {
-      lock?: (orientation: OrientationLockType) => Promise<void>;
+      lock?: (orientation: "landscape" | "portrait" | "any") => Promise<void>;
     };
     if (!orientation || typeof orientation.lock !== "function") {
       return;
