@@ -889,7 +889,7 @@ export default function StudentLiveSessionCompanionClient({
   ) : null;
 
   const accessCard = (
-    <Card className="app-surface overflow-hidden">
+    <Card className="app-surface overflow-hidden app-live-session-access-card">
       <CardHeader className="app-section-header gap-2">
         <CardTitle>Class details</CardTitle>
         <p className="text-sm text-muted-foreground">
@@ -974,7 +974,7 @@ export default function StudentLiveSessionCompanionClient({
   );
 
   const sessionSnapshotCard = (
-    <Card className="app-surface overflow-hidden">
+    <Card className="app-surface overflow-hidden app-live-session-secondary-card">
       <CardHeader className="app-section-header gap-2">
         <CardTitle>Quick info</CardTitle>
         <p className="text-sm text-muted-foreground">
@@ -1130,14 +1130,19 @@ export default function StudentLiveSessionCompanionClient({
           >
             <div
               className={cn(
-                "mb-5 flex flex-wrap items-start justify-between gap-3 rounded-[1.2rem] border border-border/60 bg-background/80 px-4 py-3 shadow-[0_18px_48px_-42px_hsl(var(--app-shadow-deep)/0.26)]",
+                "app-live-session-focus-bar mb-5 flex flex-wrap items-start justify-between gap-3 rounded-[1.2rem] border border-border/60 bg-background/80 px-4 py-3 shadow-[0_18px_48px_-42px_hsl(var(--app-shadow-deep)/0.26)]",
                 isFocusModeActive &&
                   "sticky top-0 z-10 mb-0 rounded-none border-x-0 border-t-0 bg-background/94 px-4 py-2.5 shadow-none backdrop-blur supports-[backdrop-filter]:bg-background/90",
               )}
             >
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">Class screen</p>
-                <p className={cn("text-sm text-muted-foreground", isFocusModeActive && "text-xs")}>
+                <p
+                  className={cn(
+                    "app-live-session-focus-desc text-sm text-muted-foreground",
+                    isFocusModeActive && "text-xs",
+                  )}
+                >
                   {isFocusModeActive
                     ? "The video and question stay together on one full screen."
                     : "Open full screen to keep the video and question together."}

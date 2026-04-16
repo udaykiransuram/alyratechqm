@@ -2782,6 +2782,10 @@
       padding: 0.55rem;
     }
 
+    .app-student-page-shell .app-page-meta {
+      display: none;
+    }
+
     .app-student-page-shell .app-page-hero {
       border-radius: calc(var(--app-radius-lg) + 0.05rem);
       box-shadow:
@@ -2849,7 +2853,34 @@
       font-size: 0.8rem;
       border-radius: calc(var(--app-radius-md) + 0.15rem);
     }
-  }
+
+    .app-live-session-secondary-card {
+      display: none;
+    }
+
+    .app-live-session-access-card .app-section-header {
+      padding-bottom: 0.6rem;
+    }
+
+    .app-live-session-focus-stage {
+      padding: 0.5rem;
+    }
+
+    .app-live-session-focus-bar {
+      padding: 0.55rem 0.75rem;
+      gap: 0.5rem;
+    }
+
+    .app-live-session-focus-desc {
+      display: none;
+    }
+
+    .app-live-session-stream-shell {
+      border-radius: 1rem;
+      box-shadow:
+        0 12px 24px -28px hsl(var(--app-shadow-deep) / 0.2),
+        inset 0 1px 0 hsl(var(--app-surface-1) / 0.4);
+    }
   }
 
   .app-student-page-shell .app-surface {
@@ -3049,7 +3080,7 @@
 
   @media (max-width: 639px) {
     :root {
-      --app-student-mobile-nav-height: 5.1rem;
+      --app-student-mobile-nav-height: 4.6rem;
     }
 
     .app-student-mobile-nav {
@@ -3073,11 +3104,11 @@
 
   .app-student-mobile-nav .app-student-portal-grid-link {
     min-width: 0;
-    min-height: 2.75rem;
+    min-height: 2.5rem;
     align-items: center;
     justify-content: center;
-    gap: 0.2rem;
-    padding: 0.4rem 0.2rem;
+    gap: 0.15rem;
+    padding: 0.3rem 0.2rem;
     border-radius: 0.8rem;
   }
 
@@ -3124,6 +3155,35 @@
     .app-student-report-card {
       padding: 0.7rem 0.85rem;
       gap: 0.5rem;
+    }
+
+    .app-student-report-card-list {
+      padding: 0.65rem;
+      gap: 0.6rem;
+    }
+
+    .app-student-action-cluster {
+      gap: 0.5rem;
+    }
+
+    .app-student-action-primary,
+    .app-student-action-secondary {
+      min-height: 2.6rem;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.85rem;
+      border-radius: calc(var(--app-radius-md) + 0.2rem);
+    }
+
+    .app-student-action-compact {
+      min-height: 2.25rem;
+      padding: 0.45rem 0.8rem;
+      font-size: 0.8rem;
+      border-radius: calc(var(--app-radius-md) + 0.2rem);
+    }
+
+    .app-student-filter-trigger {
+      min-height: 2.25rem;
+      padding-block: 0.45rem;
     }
 
     .app-section-header {
@@ -4203,6 +4263,10 @@
   @media (max-width: 639px) {
     .app-course-resource-iframe {
       height: clamp(16rem, 68vw, 22rem);
+    }
+
+    .app-course-media-frame {
+      border-radius: 1rem;
     }
 
     .app-course-resource-scroll {
@@ -6706,6 +6770,76 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+
+  @media (max-width: 640px) {
+    .app-exam-focus-topbar {
+      gap: 0.5rem;
+      padding: 0.6rem;
+    }
+
+    .app-exam-focus-topbar-main {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .app-exam-focus-topbar-side {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .app-exam-focus-topbar-actions {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0.4rem;
+      padding: 0.35rem;
+    }
+
+    .app-exam-topbar-action {
+      min-height: 2rem;
+      padding-inline: 0.55rem;
+      font-size: 0.72rem;
+    }
+
+    .app-exam-topbar-action-submit {
+      grid-column: auto;
+      width: auto;
+    }
+
+    .app-exam-focus-topbar-status {
+      flex-wrap: nowrap;
+      gap: 0.4rem;
+      padding: 0.35rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .app-exam-focus-topbar-status::-webkit-scrollbar {
+      display: none;
+    }
+
+    .app-exam-focus-topbar-stat {
+      padding: 0.35rem 0.6rem;
+    }
+
+    .app-exam-focus-topbar-stat-label {
+      display: none;
+    }
+
+    .app-exam-timer-card {
+      padding: 0.45rem 0.6rem;
+    }
+
+    .app-exam-timer-card-kicker {
+      font-size: 9px;
+    }
+
+    .app-exam-timer-card-value {
+      font-size: 0.92rem;
+    }
   }
 
   @media (min-width: 1024px) {
@@ -9431,6 +9565,49 @@
     .analytics-page .analytics-td-center {
       padding: 0.82rem 1rem;
       font-size: 13.5px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .analytics-card-header,
+    .analytics-card-body {
+      padding: 0.85rem;
+    }
+
+    .analytics-toolbar-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+
+    .analytics-card-description {
+      display: none;
+    }
+
+    .analytics-toolbar-meta {
+      display: none;
+    }
+
+    .analytics-toolbar-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .analytics-toolbar-actions > * {
+      width: 100%;
+    }
+
+    .analytics-data-card-compact {
+      padding: 0.65rem 0.75rem;
+    }
+
+    .analytics-page .app-detail-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+    }
+
+    .analytics-page .app-detail-value {
+      font-size: 0.8rem;
     }
   }
 

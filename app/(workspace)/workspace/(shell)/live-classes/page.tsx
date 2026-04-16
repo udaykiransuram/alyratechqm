@@ -286,7 +286,7 @@ export default async function LiveClassesPage({
 
                   <div className="flex flex-wrap justify-end gap-2">
                     <Button asChild variant="outline" className="app-button-page">
-                      <AppPrefetchLink href={`/workspace/live-classes/${session._id}/edit`}>
+                    <AppPrefetchLink href={`/workspace/live-classes/edit/${session._id}`}>
                         Edit
                       </AppPrefetchLink>
                     </Button>
