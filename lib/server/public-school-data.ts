@@ -1,4 +1,5 @@
 import { connectDB } from "@/lib/db";
+import { isHiddenPublicSchoolKey } from "@/lib/public-school/shared";
 import {
   isRedisConfigured,
   readSharedCacheEntry,
@@ -17,6 +18,10 @@ type SchoolDoc = {
   displayName?: string;
 };
 
+type PublicSchoolQueryOptions = {
+  includeHidden?: boolean;
+};
+
 function toPublicSchoolOption(school: SchoolDoc): PublicSchoolOption | null {
   const key = String(school?.key || "").trim().toLowerCase();
   const displayName = String(school?.displayName || "").trim();
@@ -29,6 +34,17 @@ function toPublicSchoolOption(school: SchoolDoc): PublicSchoolOption | null {
     key,
     displayName,
   };
+}
+
+function filterPublicSchoolOptions(
+  schools: PublicSchoolOption[],
+  options?: PublicSchoolQueryOptions,
+) {
+  if (options?.includeHidden) {
+    return schools;
+  }
+
+  return schools.filter((school) => !isHiddenPublicSchoolKey(school.key));
 }
 
 const PUBLIC_SCHOOL_CACHE_TTL_MS = 60_000;
@@ -120,7 +136,9 @@ export function getPublicSchoolCacheStats() {
   };
 }
 
-export async function getPublicSchoolOptions(): Promise<PublicSchoolOption[]> {
+export async function getPublicSchoolOptions(
+  options?: PublicSchoolQueryOptions,
+): Promise<PublicSchoolOption[]> {
   if (isMockedE2ETestMode()) {
     return [];
   }
@@ -128,7 +146,7 @@ export async function getPublicSchoolOptions(): Promise<PublicSchoolOption[]> {
   const cache = getPublicSchoolCacheState();
   if (isFresh(cache.all)) {
     cache.stats.localHits += 1;
-    return cache.all?.value || [];
+    return filterPublicSchoolOptions(cache.all?.value || [], options);
   }
 
   if (!cache.allPromise) {
@@ -181,14 +199,21 @@ export async function getPublicSchoolOptions(): Promise<PublicSchoolOption[]> {
     });
   }
 
-  return cache.allPromise;
+  return cache.allPromise.then((schools) =>
+    filterPublicSchoolOptions(schools, options),
+  );
 }
 
 export async function getPublicSchoolOptionByKey(
   rawSchoolKey: string,
+  options?: PublicSchoolQueryOptions,
 ): Promise<PublicSchoolOption | null> {
   const schoolKey = String(rawSchoolKey || "").trim().toLowerCase();
   if (!schoolKey) {
+    return null;
+  }
+
+  if (!options?.includeHidden && isHiddenPublicSchoolKey(schoolKey)) {
     return null;
   }
 

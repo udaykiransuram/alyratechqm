@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
+import { getStudentPortalSignInPath } from "@/lib/client/student-portal-signin-path";
 import { performNextAuthSignOutAndRedirect } from "@/lib/client/next-auth-client";
 import { STUDENT_SESSION_HEARTBEAT_INTERVAL_MS } from "@/lib/student-session";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
@@ -14,7 +15,10 @@ function buildStudentSessionExpiredCallbackUrl() {
     return "/auth/signin?error=StudentSessionExpired&signedOut=1";
   }
 
-  const signInUrl = new URL("/auth/signin", window.location.origin);
+  const signInUrl = new URL(
+    getStudentPortalSignInPath(),
+    window.location.origin,
+  );
   signInUrl.searchParams.set("error", "StudentSessionExpired");
   signInUrl.searchParams.set("signedOut", "1");
   signInUrl.searchParams.set("callbackUrl", window.location.href);

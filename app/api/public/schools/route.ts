@@ -7,7 +7,9 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const schools = await getPublicSchoolOptions();
+    const schools = await getPublicSchoolOptions({
+      includeHidden: false,
+    });
 
     return NextResponse.json({
       success: true,

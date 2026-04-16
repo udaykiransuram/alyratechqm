@@ -2910,6 +2910,28 @@
     }
   }
 
+  @media (pointer: coarse) and (hover: none) {
+    .app-live-session-focus-bar {
+      display: none;
+    }
+
+    .app-live-session-focus-fab {
+      position: fixed;
+      right: max(0.75rem, env(safe-area-inset-right));
+      bottom: calc(
+        var(--app-student-mobile-nav-height, 0px) + 1.25rem + env(safe-area-inset-bottom)
+      );
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    [data-live-focus="true"] .app-live-session-focus-fab {
+      bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+  }
+
   .app-student-page-shell .app-surface {
     border-color: hsl(var(--border) / 0.7);
     background: hsl(var(--app-surface-1) / 0.98);

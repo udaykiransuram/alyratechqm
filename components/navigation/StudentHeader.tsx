@@ -9,6 +9,7 @@ import { shouldHideStudentChrome } from "@/components/student/student-route-chro
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { fetchApiJson } from "@/lib/client/api";
+import { getStudentPortalSignInPath } from "@/lib/client/student-portal-signin-path";
 import { performNextAuthSignOutAndRedirect } from "@/lib/client/next-auth-client";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +46,10 @@ export default function StudentHeader({
   const notificationsRequestInFlightRef = useRef(false);
 
   async function handleSignOut() {
-    const targetUrl = new URL("/auth/signin", window.location.origin);
+    const targetUrl = new URL(
+      getStudentPortalSignInPath(),
+      window.location.origin,
+    );
     targetUrl.searchParams.set("signedOut", "1");
     await performNextAuthSignOutAndRedirect({
       callbackUrl: targetUrl.toString(),

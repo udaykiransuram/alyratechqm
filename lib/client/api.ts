@@ -3,6 +3,7 @@ import {
   withSchool,
   withSchoolHeaders,
 } from '@/lib/client/school';
+import { getStudentPortalSignInPath } from '@/lib/client/student-portal-signin-path';
 import { performNextAuthSignOutAndRedirect } from '@/lib/client/next-auth-client';
 
 export type ApiPayload<T = any> = {
@@ -442,7 +443,10 @@ async function redirectToExpiredStudentSessionSignIn(): Promise<never> {
 
   if (!studentSessionRedirectPromise) {
     studentSessionRedirectPromise = (async () => {
-      const signInUrl = new URL('/auth/signin', window.location.origin);
+      const signInUrl = new URL(
+        getStudentPortalSignInPath(),
+        window.location.origin,
+      );
       signInUrl.searchParams.set('error', STUDENT_SESSION_EXPIRED_CODE);
       signInUrl.searchParams.set('signedOut', '1');
       signInUrl.searchParams.set('callbackUrl', window.location.href);

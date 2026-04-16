@@ -90,6 +90,52 @@ export const REQUEST_GOVERNOR_POLICIES = {
         "The contact form is temporarily unavailable. Please retry shortly.",
     },
   },
+  summerCrashRegister: {
+    id: "summer-crash-register",
+    label: "Summer crash course registration",
+    scope: "ip",
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 10,
+    maxConcurrent: 2,
+    failMode: "closed",
+    costClass: "public_write",
+    retryAfterSeconds: 5 * 60,
+    alertThresholds: {
+      rate_limited: 4,
+      unavailable: 1,
+    },
+    messages: {
+      rateLimited:
+        "Too many Summer Crash Course registrations were submitted from this network. Please wait a few minutes and try again.",
+      concurrencyLimited:
+        "Summer Crash Course registration is temporarily busy. Please retry in a moment.",
+      unavailable:
+        "Summer Crash Course registration is temporarily unavailable. Please retry shortly.",
+    },
+  },
+  summerCrashLookup: {
+    id: "summer-crash-lookup",
+    label: "Summer crash course ID lookup",
+    scope: "ip",
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 18,
+    maxConcurrent: 3,
+    failMode: "closed",
+    costClass: "public_write",
+    retryAfterSeconds: 2 * 60,
+    alertThresholds: {
+      rate_limited: 6,
+      unavailable: 1,
+    },
+    messages: {
+      rateLimited:
+        "Too many Summer ID lookups were made from this network. Please wait a little and retry.",
+      concurrencyLimited:
+        "Summer ID lookup is temporarily busy. Please retry in a moment.",
+      unavailable:
+        "Summer ID lookup is temporarily unavailable. Please retry shortly.",
+    },
+  },
   cashfreeRegisterPay: {
     id: "cashfree-register-pay",
     label: "Talent test payment session",

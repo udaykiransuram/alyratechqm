@@ -130,7 +130,9 @@ export const authOptions: NextAuthOptions = {
         try {
           await connectDB();
           const schoolKey = String(credentials.schoolKey).trim().toLowerCase();
-          const school = await getPublicSchoolOptionByKey(schoolKey);
+          const school = await getPublicSchoolOptionByKey(schoolKey, {
+            includeHidden: true,
+          });
           if (!school) {
             throw new Error(SCHOOL_NOT_FOUND_ERROR);
           }

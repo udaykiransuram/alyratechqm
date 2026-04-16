@@ -32,6 +32,7 @@ import {
   getSchoolKeyFromCookie,
   setSchoolSelectionCookies,
 } from "@/lib/client/school";
+import { setStudentPortalSignInPath } from "@/lib/client/student-portal-signin-path";
 import type { PublicSchoolOption } from "@/lib/server/public-school-data";
 
 type SchoolOption = PublicSchoolOption;
@@ -360,6 +361,7 @@ export default function SignInClient({
         trimmedSchoolKey,
         selectedSchool?.displayName,
       );
+      setStudentPortalSignInPath("/auth/signin");
 
       window.location.assign(result.url || callbackUrl);
     } catch (error: unknown) {

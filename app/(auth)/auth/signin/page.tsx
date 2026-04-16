@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { cookies } from "next/headers";
 
+import { isHiddenPublicSchoolKey } from "@/lib/public-school/shared";
 import {
   getPublicSchoolOptionByKey,
   getPublicSchoolOptions,
@@ -39,11 +40,14 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     resolvedSearchParams?.signedOut,
   ) === "1";
 
-  const rememberedSchoolKey = String(
+  const rawRememberedSchoolKey = String(
     cookieStore.get("schoolKey")?.value || "",
   )
     .trim()
     .toLowerCase();
+  const rememberedSchoolKey = isHiddenPublicSchoolKey(rawRememberedSchoolKey)
+    ? ""
+    : rawRememberedSchoolKey;
   const rememberedSchoolDisplayName = String(
     cookieStore.get("schoolDisplayName")?.value || "",
   ).trim();

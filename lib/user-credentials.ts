@@ -31,6 +31,27 @@ export function getDefaultStudentPassword(mobileNumber: unknown) {
   return normalizedMobileNumber || undefined;
 }
 
+export async function isUsingDefaultStudentPassword({
+  mobileNumber,
+  passwordHash,
+}: {
+  mobileNumber: unknown;
+  passwordHash: unknown;
+}) {
+  const currentPasswordHash = String(passwordHash || "").trim();
+  const defaultPassword = getDefaultStudentPassword(mobileNumber);
+
+  if (!currentPasswordHash || !defaultPassword) {
+    return false;
+  }
+
+  try {
+    return await bcrypt.compare(defaultPassword, currentPasswordHash);
+  } catch {
+    return false;
+  }
+}
+
 export async function resolveStudentPasswordAdminInfo({
   mobileNumber,
   passwordHash,
@@ -54,10 +75,10 @@ export async function resolveStudentPasswordAdminInfo({
 
   if (defaultPassword) {
     try {
-      const usesDefaultPassword = await bcrypt.compare(
-        defaultPassword,
-        currentPasswordHash,
-      );
+      const usesDefaultPassword = await isUsingDefaultStudentPassword({
+        mobileNumber,
+        passwordHash: currentPasswordHash,
+      });
 
       if (usesDefaultPassword) {
         return {

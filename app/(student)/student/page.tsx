@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
 import { formatDiaryDateLabel } from "@/lib/diary/shared";
 import { getStudentDashboardData } from "@/lib/server/student-dashboard";
+import { getSummerCrashStudentState } from "@/lib/server/summer-crash";
+import { isSummerCrashSession } from "@/lib/summer-crash/shared";
 
 export const runtime = "nodejs";
 
@@ -94,6 +96,25 @@ export default async function StudentHomePage() {
 
   if (!schoolKey || !studentId) {
     redirect("/auth/signin");
+  }
+
+  if (
+    isSummerCrashSession({
+      accountType: session.user.accountType,
+      role: session.user.role,
+      schoolKey,
+    })
+  ) {
+    const summerState = await getSummerCrashStudentState({
+      schoolKey,
+      studentId,
+      studentPlacement: {
+        classId: session.user.studentClassId,
+        academicSectionId: session.user.studentAcademicSectionId,
+      },
+    });
+
+    redirect(summerState.destinationHref);
   }
 
   const dashboard = await getStudentDashboardData({
