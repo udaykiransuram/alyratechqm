@@ -2781,6 +2781,75 @@
       margin-top: 0.35rem;
       padding: 0.55rem;
     }
+
+    .app-student-page-shell .app-page-hero {
+      border-radius: calc(var(--app-radius-lg) + 0.05rem);
+      box-shadow:
+        0 10px 18px -22px hsl(var(--app-shadow-deep) / 0.08),
+        inset 0 1px 0 hsl(var(--app-surface-1) / 0.86);
+    }
+
+    .app-student-page-shell .app-section-header {
+      padding-inline: 0.8rem;
+      padding-top: 0.7rem;
+      padding-bottom: 0.65rem;
+    }
+
+    .app-student-page-shell .app-section-body {
+      padding-inline: 0.8rem;
+      padding-bottom: 0.85rem;
+    }
+
+    .app-student-page-shell .app-surface {
+      border-radius: calc(var(--app-radius-md) + 0.1rem);
+      box-shadow:
+        0 10px 20px -24px hsl(var(--app-shadow-deep) / 0.08),
+        inset 0 1px 0 hsl(var(--app-surface-1) / 0.86);
+    }
+
+    .app-student-page-shell .app-metric-grid {
+      gap: 0.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.8rem), 1fr));
+    }
+
+    .app-student-page-shell .app-metric-card {
+      padding: 0.6rem 0.7rem;
+    }
+
+    .app-student-page-shell .app-metric-value {
+      margin-top: 0.25rem;
+      font-size: 1.02rem;
+    }
+
+    .app-student-page-shell .app-metric-meta {
+      margin-top: 0.15rem;
+      font-size: 0.68rem;
+    }
+
+    .app-student-compact-card {
+      gap: 0.45rem;
+      padding: 0.75rem 0.85rem;
+      border-radius: calc(var(--app-radius-md) + 0.15rem);
+    }
+
+    .app-student-compact-title {
+      font-size: 0.95rem;
+      line-height: 1.35;
+    }
+
+    .app-student-compact-meta {
+      font-size: 0.72rem;
+      line-height: 1.2rem;
+    }
+
+    .app-student-compact-actions .app-button-page,
+    .app-student-page-shell .app-button-page {
+      min-height: 2.25rem;
+      padding-inline: 0.75rem;
+      font-size: 0.8rem;
+      border-radius: calc(var(--app-radius-md) + 0.15rem);
+    }
+  }
   }
 
   .app-student-page-shell .app-surface {
