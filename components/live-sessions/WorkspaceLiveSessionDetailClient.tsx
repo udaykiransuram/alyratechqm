@@ -85,6 +85,19 @@ function getAbsoluteShareLink(shareHref: string) {
 }
 
 function ItemStats({ item }: { item: LiveSessionTeacherItem }) {
+  const accuracy =
+    item.correctCount !== null && item.responseCount > 0
+      ? Math.round((item.correctCount / item.responseCount) * 100)
+      : null;
+  const accuracyVariant =
+    accuracy === null
+      ? "outline"
+      : accuracy >= 85
+        ? "success"
+        : accuracy >= 60
+          ? "warning"
+          : "danger";
+
   return (
     <div className="flex flex-wrap gap-2">
       <Badge
@@ -107,6 +120,14 @@ function ItemStats({ item }: { item: LiveSessionTeacherItem }) {
           >
             {item.incorrectCount || 0} incorrect
           </Badge>
+          {accuracy !== null ? (
+            <Badge
+              variant={accuracyVariant}
+              className="min-h-8 rounded-full px-3 py-1.5 text-[0.72rem] font-semibold"
+            >
+              {accuracy}% accuracy
+            </Badge>
+          ) : null}
         </>
       ) : null}
     </div>
@@ -226,6 +247,9 @@ export default function WorkspaceLiveSessionDetailClient({
   const [responsePage, setResponsePage] = useState<LiveSessionItemResponsePage | null>(
     null,
   );
+  const [responseFilter, setResponseFilter] = useState<
+    "all" | "correct" | "incorrect"
+  >("all");
   const [isLoadingResponses, setIsLoadingResponses] = useState(false);
   const [rawTranscript, setRawTranscript] = useState(liveSession.transcript?.rawText || "");
   const [summaryHtml, setSummaryHtml] = useState(
@@ -235,6 +259,33 @@ export default function WorkspaceLiveSessionDetailClient({
     Boolean(liveSession.transcript?.isPublished),
   );
   const [isSavingTranscript, setIsSavingTranscript] = useState(false);
+
+  const filteredResponses = useMemo(() => {
+    const responses = responsePage?.responses || [];
+    if (responseFilter === "all") {
+      return responses;
+    }
+
+    if (responseFilter === "correct") {
+      return responses.filter((response) => response.isCorrect === true);
+    }
+
+    return responses.filter((response) => response.isCorrect === false);
+  }, [responsePage, responseFilter]);
+
+  const responseSummary = useMemo(() => {
+    if (!responseViewerItem) {
+      return null;
+    }
+    const total = responseViewerItem.responseCount;
+    const correct =
+      responseViewerItem.correctCount !== null ? responseViewerItem.correctCount : null;
+    const incorrect =
+      responseViewerItem.incorrectCount !== null ? responseViewerItem.incorrectCount : null;
+    const accuracy =
+      correct !== null && total > 0 ? Math.round((correct / total) * 100) : null;
+    return { total, correct, incorrect, accuracy };
+  }, [responseViewerItem]);
 
   useEffect(() => {
     setRawTranscript(liveSession.transcript?.rawText || "");
@@ -486,6 +537,7 @@ export default function WorkspaceLiveSessionDetailClient({
     setError(null);
     setIsLoadingResponses(true);
     setResponseViewerItem(item);
+    setResponseFilter("all");
 
     try {
       const response = await fetch(
@@ -1211,16 +1263,75 @@ export default function WorkspaceLiveSessionDetailClient({
                 <ContentRenderer htmlContent={responseViewerItem.promptHtml} />
               </div>
 
+              {responseSummary ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border border-border/60 bg-background/72 px-3 py-2 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">
+                      {responseSummary.total} responses
+                    </Badge>
+                    {responseSummary.correct !== null ? (
+                      <Badge variant="success">
+                        {responseSummary.correct} correct
+                      </Badge>
+                    ) : null}
+                    {responseSummary.incorrect !== null ? (
+                      <Badge variant="warning">
+                        {responseSummary.incorrect} incorrect
+                      </Badge>
+                    ) : null}
+                    {responseSummary.accuracy !== null ? (
+                      <Badge
+                        variant={
+                          responseSummary.accuracy >= 85
+                            ? "success"
+                            : responseSummary.accuracy >= 60
+                              ? "warning"
+                              : "danger"
+                        }
+                      >
+                        {responseSummary.accuracy}% accuracy
+                      </Badge>
+                    ) : null}
+                  </div>
+                  {responseViewerItem.type !== "short-text" ? (
+                    <div className="flex flex-wrap gap-2">
+                      {(["all", "correct", "incorrect"] as const).map((value) => (
+                        <Button
+                          key={value}
+                          type="button"
+                          size="sm"
+                          variant={responseFilter === value ? "default" : "outline"}
+                          className="app-button-compact"
+                          onClick={() => setResponseFilter(value)}
+                        >
+                          {value === "all"
+                            ? "All"
+                            : value === "correct"
+                              ? "Correct"
+                              : "Needs review"}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               {isLoadingResponses ? (
                 <div className="rounded-[1rem] border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
                   Loading responses...
                 </div>
-              ) : responsePage?.responses.length ? (
+              ) : filteredResponses.length ? (
                 <div className="space-y-4">
-                  {responsePage.responses.map((response) => (
+                  {filteredResponses.map((response) => (
                     <div
                       key={`${response.studentId}-${response.updatedAt || "response"}`}
-                      className="rounded-[1rem] border border-border/60 bg-background/70 p-3"
+                      className={`rounded-[1rem] border bg-background/70 p-3 ${
+                        response.isCorrect === true
+                          ? "border-emerald-300/60"
+                          : response.isCorrect === false
+                            ? "border-amber-300/70"
+                            : "border-border/60"
+                      }`}
                     >
                       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -1301,7 +1412,9 @@ export default function WorkspaceLiveSessionDetailClient({
                 </div>
               ) : (
                 <div className="rounded-[1rem] border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
-                  No responses have been submitted for this live item yet.
+                  {responsePage?.responses.length
+                    ? "No responses match the selected filter."
+                    : "No responses have been submitted for this live item yet."}
                 </div>
               )}
             </div>

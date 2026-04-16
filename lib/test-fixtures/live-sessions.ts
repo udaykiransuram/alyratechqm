@@ -833,6 +833,7 @@ function serializeStudentResponseRecord(
     answerHtml: response.answerHtml,
     submittedAt: response.submittedAt,
     updatedAt: response.updatedAt,
+    isCorrect: null,
   };
 }
 
@@ -1588,6 +1589,10 @@ export function getMockStudentLiveSessionDetail(params: {
     publishedTranscriptSummary: serializePublishedTranscript(
       getTranscriptForSession(params.liveSessionId),
     ),
+    pollTotal: 0,
+    pollAnswered: 0,
+    pollCorrect: 0,
+    pollAccuracy: null,
   } satisfies StudentLiveSessionDetail);
 }
 

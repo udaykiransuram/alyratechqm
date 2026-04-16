@@ -132,6 +132,7 @@ export type LiveSessionStudentResponse = {
   answerHtml: string | null;
   submittedAt: string | null;
   updatedAt: string | null;
+  isCorrect: boolean | null;
 };
 
 export type LiveSessionTeacherTranscript = {
@@ -205,4 +206,8 @@ export type StudentLiveSessionDetail = StudentLiveSessionSummary & {
   activeItem: LiveSessionStudentItem | null;
   studentResponse: LiveSessionStudentResponse | null;
   publishedTranscriptSummary: LiveSessionPublishedTranscript | null;
+  pollTotal: number;
+  pollAnswered: number;
+  pollCorrect: number;
+  pollAccuracy: number | null;
 };

@@ -45,5 +45,15 @@ export default function createNextConfig(phase) {
         "date-fns",
       ],
     },
+    webpack: (config) => {
+      config.resolve.alias = {
+        ...(config.resolve.alias || {}),
+        "@tiptap/core/jsx-runtime": path.join(
+          PROJECT_ROOT,
+          "lib/shims/tiptap-jsx-runtime.ts",
+        ),
+      };
+      return config;
+    },
   };
 }

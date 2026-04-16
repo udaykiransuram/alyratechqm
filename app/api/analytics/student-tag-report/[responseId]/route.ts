@@ -42,6 +42,7 @@ import {
 } from "@/lib/question-paper/grading";
 import { z } from "zod";
 import { objectIdSchema, parseOr400 } from "@/lib/validation";
+import { toBinaryResponseBody } from "@/lib/server/binary-response";
 import { withRequestBudget } from "@/lib/server/request-governor";
 
 type ScopedAnalyticsUser = {
@@ -1050,7 +1051,7 @@ export async function GET(
     await new Promise((resolve) => doc.on("end", resolve));
     const pdfBuffer = Buffer.concat(buffers);
 
-      return new NextResponse(pdfBuffer, {
+      return new NextResponse(toBinaryResponseBody(pdfBuffer), {
         status: 200,
         headers: {
           "Content-Type": "application/pdf",

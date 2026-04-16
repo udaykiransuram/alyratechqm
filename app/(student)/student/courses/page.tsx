@@ -189,35 +189,7 @@ export default async function StudentCoursesPage({ searchParams }: StudentCourse
         title="Courses"
         variant="overview"
         density="compact"
-        description="Open guided learning paths, continue where you left off, and complete the linked assessments."
-        meta={
-          <>
-            <span className="app-meta-chip">Learning flow</span>
-            <span className="app-meta-chip">Assessment-linked</span>
-          </>
-        }
-        stats={[
-          {
-            label: "Courses",
-            value: String(courseList.stats.total),
-            meta: "Assigned to you.",
-          },
-          {
-            label: "In progress",
-            value: String(courseList.stats.inProgress),
-            meta: "Resume-ready.",
-          },
-          {
-            label: "Completed",
-            value: String(courseList.stats.completed),
-            meta: "Required assessments done.",
-          },
-          {
-            label: "Required assessments",
-            value: String(courseList.stats.requiredAssessments),
-            meta: "Across all assigned courses.",
-          },
-        ]}
+        description="Continue your assigned learning paths."
       >
         <StudentPortalNav />
       </PageHero>
@@ -277,14 +249,6 @@ export default async function StudentCoursesPage({ searchParams }: StudentCourse
                     : startsAtLabel
                       ? `Starts ${startsAtLabel}`
                       : "Starts immediately";
-              const learningTools = [
-                `${course.blockCount} blocks`,
-                course.metadata.enforceSequentialProgress ? "Sequential" : null,
-                course.metadata.allowNotes ? "Notes" : null,
-                course.metadata.allowBookmarks ? "Bookmarks" : null,
-                course.metadata.completionBadgeLabel || null,
-              ].filter(Boolean) as string[];
-
               return (
                 <div key={course._id} className="app-course-card-wrap">
                   <Card className="app-course-list-card app-course-list-card-compact flex flex-col">
@@ -310,14 +274,6 @@ export default async function StudentCoursesPage({ searchParams }: StudentCourse
                         <span className="app-course-meta-text capitalize">
                           {formatCourseLabel(course.status)}
                         </span>
-                        <span className="app-course-meta-text capitalize">
-                          {formatCourseLabel(course.availabilityStatus)}
-                        </span>
-                        {course.class?.name ? (
-                          <span className="app-course-meta-text">
-                            {course.class.name}
-                          </span>
-                        ) : null}
                         {course.subjects.length > 0 ? (
                           <span className="app-course-meta-text">
                             {course.subjects.length} subject
@@ -336,15 +292,11 @@ export default async function StudentCoursesPage({ searchParams }: StudentCourse
                     </CardHeader>
                     <CardContent className="app-course-list-body-compact">
                       <div className="app-course-inline-meta">
+                        <span>{availabilitySummary}</span>
                         <span>Progress {course.completionPercent}%</span>
-                        <span>Blocks {course.blockCount}</span>
-                        <span>
-                          Assessments {course.completedAssessmentCount}/
-                          {course.requiredAssessmentCount}
-                        </span>
+                        <span>{course.blockCount} blocks</span>
                       </div>
                       <div className="app-course-inline-meta">
-                        <span>{availabilitySummary}</span>
                         <span>{sectionSummary}</span>
                         <span>
                           {course.metadata.enforceSequentialProgress
@@ -352,13 +304,6 @@ export default async function StudentCoursesPage({ searchParams }: StudentCourse
                             : "Flexible flow"}
                         </span>
                       </div>
-
-                      {learningTools.length > 0 ? (
-                        <div className="app-course-inline-meta">
-                          <span>Tools</span>
-                          <span>{learningTools.join(" • ")}</span>
-                        </div>
-                      ) : null}
 
                       <div className="app-course-action-row">
                         <Button

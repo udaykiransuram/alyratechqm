@@ -201,7 +201,7 @@ export default function StudentAccountPageClient({
         title="Student Account"
         variant="overview"
         density="compact"
-        description="Update your contact details, keep your login secure, and jump straight into analysis reports for completed online tests."
+        description="Update your contact details and access reports."
         actions={
           latestReportHref ? (
             <Button
@@ -219,35 +219,6 @@ export default function StudentAccountPageClient({
             </Button>
           ) : undefined
         }
-        meta={
-          <>
-            <span className="app-meta-chip">Roll number login</span>
-            <span className="app-meta-chip">Online-test report access</span>
-            <span className="app-meta-chip">Self-service account updates</span>
-          </>
-        }
-        stats={[
-          {
-            label: "Username",
-            value: student?.rollNumber || "—",
-            meta: "Your roll number stays the username for online tests and portal access.",
-          },
-          {
-            label: "Class",
-            value: student?.className || "Not assigned",
-            meta: "Class placement controls online-test eligibility.",
-          },
-          {
-            label: "Section",
-            value: student?.academicSectionName || "Not assigned",
-            meta: "Section placement is used when a test is section-specific.",
-          },
-          {
-            label: "Completed online tests",
-            value: String(reportTests.length),
-            meta: "Each completed online test here can open its analysis report.",
-          },
-        ]}
       >
         <StudentPortalNav />
       </PageHero>

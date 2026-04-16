@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { appendBenchmarkSheetsToWorkbook } from "@/lib/analytics/benchmarkExport";
 import { requireTenantSession } from "@/lib/api-auth";
+import { toBinaryResponseBody } from "@/lib/server/binary-response";
 import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
 
 export const dynamic = "force-dynamic";
@@ -694,7 +695,7 @@ export async function GET(
       type: "buffer",
     }) as Buffer;
 
-    return new NextResponse(buffer, {
+    return new NextResponse(toBinaryResponseBody(buffer), {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

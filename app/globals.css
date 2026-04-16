@@ -2510,6 +2510,28 @@
     @apply app-page-shell max-w-[84rem] px-4 py-4 sm:px-0 sm:py-5;
   }
 
+  .app-student-home-header {
+    @apply flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  .app-student-home-title {
+    @apply text-[1.65rem] font-semibold tracking-[-0.03em] text-foreground;
+  }
+
+  .app-student-home-subtitle {
+    @apply text-[13px] text-muted-foreground;
+  }
+
+  .app-student-home-nav {
+    display: none;
+  }
+
+  @media (min-width: 640px) and (max-width: 1023px) {
+    .app-student-home-nav {
+      display: block;
+    }
+  }
+
   .app-student-sidebar-shell {
     top: var(--app-header-height);
     bottom: 0;
@@ -2642,16 +2664,9 @@
   .app-student-page-shell .app-page-hero {
     border-color: hsl(var(--border) / 0.78);
     border-radius: calc(var(--app-radius-lg) + 0.125rem);
-    background:
-      radial-gradient(circle at top left, hsl(var(--primary) / 0.07) 0%, transparent 16rem),
-      linear-gradient(
-        180deg,
-        hsl(var(--app-surface-1) / 0.995) 0%,
-        hsl(var(--app-surface-1) / 0.985) 48%,
-        hsl(var(--app-surface-2) / 0.86) 100%
-      );
+    background: hsl(var(--app-surface-1) / 0.98);
     box-shadow:
-      0 20px 36px -34px hsl(var(--app-shadow-deep) / 0.1),
+      0 18px 30px -32px hsl(var(--app-shadow-deep) / 0.1),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
   }
 
@@ -2749,9 +2764,37 @@
   }
 
   .app-student-page-shell .app-surface {
+    border-color: hsl(var(--border) / 0.7);
+    background: hsl(var(--app-surface-1) / 0.98);
     box-shadow:
-      0 18px 34px -34px hsl(var(--app-shadow-deep) / 0.1),
-      inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
+      0 14px 26px -30px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.86);
+  }
+
+  .app-student-compact-card {
+    @apply flex flex-col gap-2 rounded-2xl border px-4 py-3;
+    border-color: hsl(var(--border) / 0.7);
+    background: hsl(var(--app-surface-1) / 0.98);
+    box-shadow:
+      0 12px 22px -28px hsl(var(--app-shadow-deep) / 0.08),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.86);
+  }
+
+  .app-student-compact-title {
+    @apply text-[15px] font-semibold text-foreground;
+    letter-spacing: -0.01em;
+  }
+
+  .app-student-compact-meta {
+    @apply text-[12px] text-muted-foreground;
+  }
+
+  .app-student-compact-row {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+
+  .app-student-compact-actions {
+    @apply flex flex-wrap items-center gap-2;
   }
 
   .app-student-page-shell .app-section-header {
@@ -2785,6 +2828,10 @@
   .app-student-portal-link {
     justify-content: center;
     gap: 0.38rem;
+  }
+
+  .app-student-portal-mobile {
+    width: 100%;
   }
 
   .app-student-portal-link-icon {
@@ -2892,74 +2939,64 @@
       ) !important;
   }
 
-  .app-student-portal-nav {
-    @apply hidden justify-center border-b px-3 py-2 backdrop-blur;
+  .app-student-mobile-nav {
+    @apply hidden justify-center border-t px-3 py-2 backdrop-blur;
     position: fixed;
     left: 0;
     right: 0;
-    top: var(--app-header-height);
+    bottom: 0;
     z-index: 40;
     border-color: hsl(var(--border) / 0.66);
-    background:
-      linear-gradient(
-        180deg,
-        hsl(var(--app-surface-1) / 0.94) 0%,
-        hsl(var(--app-surface-2) / 0.9) 100%
-      );
+    background: hsl(var(--app-surface-1) / 0.98);
+    padding-bottom: calc(0.4rem + env(safe-area-inset-bottom));
     box-shadow:
-      0 14px 24px -24px hsl(var(--app-shadow-deep) / 0.1),
+      0 -12px 24px -24px hsl(var(--app-shadow-deep) / 0.12),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.76);
   }
 
   @media (max-width: 639px) {
     :root {
-      --app-student-mobile-nav-height: 6.7rem;
+      --app-student-mobile-nav-height: 5.1rem;
     }
 
-    .app-student-portal-nav {
+    .app-student-mobile-nav {
       @apply flex;
     }
   }
 
-  .app-student-portal-nav .app-student-portal-grid {
-    width: min(100%, 24rem);
+  .app-student-mobile-nav .app-student-portal-grid {
+    width: min(100%, 28rem);
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.35rem;
-    padding: 0.4rem;
-    border-color: hsl(var(--border) / 0.74);
-    border-radius: 1.05rem;
-    background:
-      linear-gradient(
-        180deg,
-        hsl(var(--app-surface-1) / 0.98) 0%,
-        hsl(var(--app-surface-2) / 0.82) 100%
-      );
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.2rem;
+    padding: 0.3rem 0.4rem;
+    border-color: hsl(var(--border) / 0.7);
+    border-radius: 1.1rem;
+    background: hsl(var(--app-surface-1) / 0.98);
     box-shadow:
-      0 14px 22px -24px hsl(var(--app-shadow-deep) / 0.08),
+      0 12px 20px -22px hsl(var(--app-shadow-deep) / 0.08),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
   }
 
-  .app-student-portal-nav .app-student-portal-grid-link {
+  .app-student-mobile-nav .app-student-portal-grid-link {
     min-width: 0;
-    min-height: 2.65rem;
+    min-height: 2.75rem;
     align-items: center;
     justify-content: center;
     gap: 0.2rem;
-    padding: 0.42rem 0.36rem;
-    border-radius: 0.74rem;
+    padding: 0.4rem 0.2rem;
+    border-radius: 0.8rem;
   }
 
-  .app-student-portal-nav .app-student-portal-link-icon {
-    height: 1.1rem;
-    width: 1.1rem;
+  .app-student-mobile-nav .app-student-portal-link-icon {
+    height: 1.15rem;
+    width: 1.15rem;
   }
 
-  .app-student-portal-nav .app-segmented-link-label {
-    font-size: 0.68rem;
-    line-height: 0.95rem;
-    white-space: normal;
-    text-wrap: balance;
+  .app-student-mobile-nav .app-segmented-link-label {
+    font-size: 0.65rem;
+    line-height: 0.9rem;
+    white-space: nowrap;
   }
 
   @media (min-width: 768px) {
@@ -3599,15 +3636,10 @@
 
   .app-student-report-card {
     @apply space-y-2.5 rounded-[1rem] border p-3;
-    border-color: hsl(var(--border) / 0.72);
-    background:
-      linear-gradient(
-        180deg,
-        hsl(var(--app-surface-1) / 0.99) 0%,
-        hsl(var(--app-surface-2) / 0.8) 100%
-      );
+    border-color: hsl(var(--border) / 0.7);
+    background: hsl(var(--app-surface-1) / 0.98);
     box-shadow:
-      0 14px 24px -24px hsl(var(--app-shadow-deep) / 0.12),
+      0 12px 22px -26px hsl(var(--app-shadow-deep) / 0.1),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.88);
   }
 
@@ -3765,6 +3797,12 @@
         hsl(var(--app-surface-2) / 0.48) 0%,
         hsl(var(--app-surface-1) / 0.96) 100%
       );
+  }
+
+  @media (max-width: 639px) {
+    .app-course-list-cover-shell {
+      display: none;
+    }
   }
 
   .app-course-list-cover {

@@ -134,6 +134,39 @@ async function deleteLiveSessionViaApi(page: Page, liveSessionId: string) {
 }
 
 test.describe("Live classes workflow @desktop", () => {
+  test("student live classes page supports filters", async ({ page }) => {
+    await setStudentSession(page);
+    const response = await navigateToAppRoute(page, "/student/live-classes");
+    expect(response?.status() ?? 0).toBeLessThan(400);
+
+    await expect(
+      page.getByRole("heading", { name: "Mathematics Live Doubt Clinic" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Science Lab Readiness Session" }),
+    ).toBeVisible();
+
+    await page.getByLabel("Status").selectOption("live");
+    await Promise.all([
+      page.waitForURL(/\/student\/live-classes\?status=live$/),
+      page.getByRole("button", { name: "Apply filters" }).click(),
+    ]);
+
+    await expect(
+      page.getByRole("heading", { name: "Science Lab Readiness Session" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Mathematics Live Doubt Clinic" }),
+    ).toHaveCount(0);
+    await Promise.all([
+      page.waitForURL(/\/student\/live-classes$/),
+      page.getByRole("link", { name: "Reset" }).click(),
+    ]);
+    await expect(
+      page.getByRole("heading", { name: "Weekly Exam Strategy Session" }),
+    ).toBeVisible();
+  });
+
   test("admin can schedule a live class that students join and attendance can be marked", async ({
     page,
   }) => {
@@ -314,7 +347,7 @@ test.describe("Live classes workflow @desktop", () => {
       );
       expect(studentDetailResponse?.status() ?? 0).toBeLessThan(400);
 
-      await expect(page.getByText("Current live item")).toBeVisible();
+      await expect(page.getByText("Question")).toBeVisible();
       await expect(
         page.getByText(/Select the two checks you should complete/i),
       ).toBeVisible();

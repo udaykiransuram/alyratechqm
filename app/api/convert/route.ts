@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx";
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenantSession } from "@/lib/api-auth";
+import { toBinaryResponseBody } from "@/lib/server/binary-response";
 import { withRequestBudget } from "@/lib/server/request-governor";
 // Note: saveAs (file-saver) is a browser-only API and is not required when running in Node.js.
 // The browser download line in generateWordDoc is already commented out, so we omit importing file-saver here.
@@ -308,7 +309,7 @@ export async function POST(req: NextRequest) {
 
       const buffer = await Packer.toBuffer(doc);
 
-      return new NextResponse(buffer, {
+      return new NextResponse(toBinaryResponseBody(buffer), {
         status: 200,
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -318,7 +319,7 @@ export async function POST(req: NextRequest) {
     } else if (isExcel) {
       // Generate Excel file
       const wbout = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-      return new NextResponse(wbout, {
+      return new NextResponse(toBinaryResponseBody(wbout), {
         status: 200,
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -107,14 +107,14 @@ export default async function StudentLiveClassDetailPage({
                   meta: "Session end time",
                 },
                 {
-                  label: "Join status",
+                  label: "Attendance",
                   value: liveSession.attendanceStatus || "invited",
-                  meta: "Updated automatically after you join.",
+                  meta: "Updates while you stay on this page.",
                 },
                 {
-                  label: "Join clicks",
+                  label: "Times joined",
                   value: String(liveSession.joinClicks),
-                  meta: "Tracked for attendance.",
+                  meta: "Counts each time the class link opens.",
                 },
               ]
             : undefined
@@ -124,7 +124,7 @@ export default async function StudentLiveClassDetailPage({
       </PageHero>
 
       {!liveSession ? (
-        <div className="app-feedback app-feedback-error">Live class not found.</div>
+        <div className="app-feedback app-feedback-error">This class could not be found.</div>
       ) : (
         <StudentLiveSessionCompanionClient initialLiveSession={liveSession} />
       )}

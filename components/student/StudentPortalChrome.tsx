@@ -15,8 +15,8 @@ export default function StudentPortalChrome() {
 
   return (
     <>
-      <div className="app-student-portal-nav">
-        <StudentPortalNav />
+      <div className="app-student-mobile-nav">
+        <StudentPortalNav variant="mobile" />
       </div>
       <StudentPortalSidebar />
     </>

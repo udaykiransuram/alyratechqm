@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { NextResponse } from "next/server";
+import { toBinaryResponseBody } from "@/lib/server/binary-response";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,7 @@ export async function GET() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "ImportTemplate");
   const wbout = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-  return new NextResponse(wbout, {
+  return new NextResponse(toBinaryResponseBody(wbout), {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

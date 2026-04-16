@@ -25,7 +25,7 @@ export default function StudentTestsFilters({
   allSubjectsValue,
 }: StudentTestsFiltersProps) {
   return (
-    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_15rem]">
+    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem]">
       <div className="space-y-2">
         <label className="app-field-label">Test</label>
         <SearchableCommandSelect

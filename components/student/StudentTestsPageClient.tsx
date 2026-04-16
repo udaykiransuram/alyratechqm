@@ -405,28 +405,6 @@ export default function StudentTestsPageClient({
     return recentAssignedTest ? getTestActionDetails(recentAssignedTest) : null;
   }, [recentAssignedTest]);
 
-  const queueSummary = useMemo(() => {
-    return tests.reduce(
-      (summary, test) => {
-        if (test.status === "in_progress") {
-          summary.inProgress += 1;
-        }
-        if (test.status === "available") {
-          summary.readyNow += 1;
-        }
-        if (test.status === "submitted" || test.status === "auto_submitted") {
-          summary.reportsReady += 1;
-        }
-        return summary;
-      },
-      {
-        inProgress: 0,
-        readyNow: 0,
-        reportsReady: 0,
-      },
-    );
-  }, [tests]);
-
   const showFilters = tests.length > 1 || subjectOptions.length > 1;
   const filterActive =
     testFilter !== ALL_TESTS_VALUE || subjectFilter !== ALL_SUBJECTS_VALUE;
@@ -443,35 +421,7 @@ export default function StudentTestsPageClient({
           title="Tests"
           variant="overview"
           density="compact"
-          description="View and continue your assigned tests."
-          meta={
-            <>
-              <span className="app-meta-chip">Draft recovery on this device</span>
-              <span className="app-meta-chip">Analysis reports</span>
-            </>
-          }
-          stats={[
-            {
-              label: "Assigned",
-              value: String(tests.length),
-              meta: "In your queue",
-            },
-            {
-              label: "Ready Now",
-              value: String(queueSummary.readyNow),
-              meta: "Start now",
-            },
-            {
-              label: "In Progress",
-              value: String(queueSummary.inProgress),
-              meta: "Continue",
-            },
-            {
-              label: "Reports Ready",
-              value: String(queueSummary.reportsReady),
-              meta: "Review",
-            },
-          ]}
+          description="Start or review your assigned tests."
         >
           <StudentPortalNav />
         </PageHero>
@@ -491,38 +441,7 @@ export default function StudentTestsPageClient({
         title="Tests"
         variant="overview"
         density="compact"
-        description="View and continue your assigned tests."
-        meta={
-          <>
-            <span className="app-meta-chip">Draft recovery on this device</span>
-            <span className="app-meta-chip">
-              {subjectOptions.length} subject{subjectOptions.length === 1 ? "" : "s"} in queue
-            </span>
-            <span className="app-meta-chip">Analysis reports</span>
-          </>
-        }
-        stats={[
-          {
-            label: "Assigned",
-            value: String(tests.length),
-            meta: "In your queue",
-          },
-          {
-            label: "Ready Now",
-            value: String(queueSummary.readyNow),
-            meta: "Start now",
-          },
-          {
-            label: "In Progress",
-            value: String(queueSummary.inProgress),
-            meta: "Continue",
-          },
-          {
-            label: "Reports Ready",
-            value: String(queueSummary.reportsReady),
-            meta: "Review",
-          },
-        ]}
+        description="Start or review your assigned tests."
       >
         <StudentPortalNav />
       </PageHero>
@@ -534,43 +453,39 @@ export default function StudentTestsPageClient({
       ) : null}
 
       {recentAssignedTest ? (
-        <div className="app-toolbar">
-          <div className="app-toolbar-row">
-            <div className="app-toolbar-copy">
-              <p className="app-kicker">Latest</p>
-              <p className="app-title-md">{recentAssignedTest.title}</p>
+        <div className="app-student-compact-card">
+          <div className="app-student-compact-row">
+            <div>
+              <p className="app-kicker">Latest test</p>
+              <p className="app-student-compact-title">
+                {recentAssignedTest.title}
+              </p>
               {recentAssignedTestMeta ? (
-                <p className="app-copy-meta">{recentAssignedTestMeta}</p>
+                <p className="app-student-compact-meta">{recentAssignedTestMeta}</p>
               ) : null}
             </div>
-            <div className="app-toolbar-actions">
-              <span className="app-meta-chip">
-                {STATUS_LABELS[recentAssignedTest.status] || recentAssignedTest.status}
-              </span>
-              {recentAssignedTestAction ? (
-                <Button
-                  asChild
-                  size="lg"
-                  variant={recentAssignedTestAction.actionVariant}
-                  className="app-student-action-secondary"
+            {recentAssignedTestAction ? (
+              <Button
+                asChild
+                variant={recentAssignedTestAction.actionVariant}
+                className="app-button-compact-primary"
+              >
+                <AppPrefetchLink
+                  href={recentAssignedTestAction.actionHref}
+                  relatedApiPrefetches={recentAssignedTestAction.relatedApiPrefetches}
+                  requestFullscreenOnClick={
+                    recentAssignedTestAction.requestFullscreenOnClick
+                  }
                 >
-                  <AppPrefetchLink
-                    href={recentAssignedTestAction.actionHref}
-                    relatedApiPrefetches={recentAssignedTestAction.relatedApiPrefetches}
-                    requestFullscreenOnClick={
-                      recentAssignedTestAction.requestFullscreenOnClick
-                    }
-                  >
-                    {recentAssignedTestAction.actionLabel}
-                  </AppPrefetchLink>
-                </Button>
-              ) : null}
-            </div>
+                  {recentAssignedTestAction.actionLabel}
+                </AppPrefetchLink>
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : null}
 
-      <div className="app-toolbar space-y-3">
+      <div className="space-y-3">
         {showFilters ? (
           <StudentTestsFilters
             testFilter={testFilter}
@@ -583,34 +498,10 @@ export default function StudentTestsPageClient({
           />
         ) : null}
 
-        <div
-          className={
-            showFilters
-              ? "flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3"
-              : "flex flex-wrap items-center justify-between gap-3"
-          }
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="app-meta-chip">
-              {filteredTests.length} exam{filteredTests.length === 1 ? "" : "s"}
-            </span>
-            {testFilter !== ALL_TESTS_VALUE ? (
-              <span className="app-meta-chip">
-                {
-                  testOptions.find((option) => option.value === testFilter)
-                    ?.label
-                }
-              </span>
-            ) : null}
-            {subjectFilter !== ALL_SUBJECTS_VALUE ? (
-              <span className="app-meta-chip">
-                {
-                  subjectOptions.find((option) => option.value === subjectFilter)
-                    ?.label
-                }
-              </span>
-            ) : null}
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {filteredTests.length} test{filteredTests.length === 1 ? "" : "s"}
+          </p>
           {filterActive ? (
             <Button
               variant="outline"
@@ -621,7 +512,7 @@ export default function StudentTestsPageClient({
                 setSubjectFilter(ALL_SUBJECTS_VALUE);
               }}
             >
-              Clear
+              Clear filters
             </Button>
           ) : null}
         </div>
@@ -661,74 +552,35 @@ export default function StudentTestsPageClient({
                       test.status === "auto_submitted") &&
                     test.attempt;
 
+                  const subjectLabelText =
+                    subjectLabels.length > 0
+                      ? subjectLabels.map((subject) => subject.name || subject._id).join(", ")
+                      : "No subject";
+
                   return (
                     <article key={test._id} className="app-student-report-card">
-                      <div className="app-student-report-card-head">
-                        <p className="app-list-title">{test.title}</p>
+                      <div className="app-student-compact-row">
+                        <div className="min-w-0">
+                          <p className="app-student-compact-title">{test.title}</p>
+                          <p className="app-student-compact-meta">
+                            {[subjectLabelText, classLabel].filter(Boolean).join(" • ")} •{" "}
+                            {getTimingChip(test)}
+                          </p>
+                        </div>
                         <Badge variant={getStatusVariant(test.status)}>
                           {STATUS_LABELS[test.status] || test.status}
                         </Badge>
                       </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {classLabel ? (
-                          <Badge variant="secondary">{classLabel}</Badge>
-                        ) : null}
-                        {subjectLabels.length > 0 ? (
-                          subjectLabels.map((subject) => (
-                            <Badge key={subject._id} variant="outline">
-                              {subject.name || subject._id}
-                            </Badge>
-                          ))
-                        ) : (
-                          <span className="app-list-meta">No subject</span>
-                        )}
-                      </div>
-                      <div className="app-student-report-card-meta-grid">
-                        <div>
-                          <p className="app-list-meta">Window</p>
-                          <p className="app-list-value">
-                            Opens {formatDateTime(test.onlineStartsAt || test.examDate)}
-                          </p>
-                          <p className="app-list-meta">
-                            Closes {formatDateTime(test.onlineEndsAt)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="app-list-meta">Attempt</p>
-                          <p className="app-list-value">{getTimingChip(test)}</p>
-                          {hasLocalDraft ? (
-                            <p className="app-list-meta text-amber-700 dark:text-amber-300">
-                              Local draft saved on this device
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="app-student-report-card-meta-grid">
-                        <div>
-                          <p className="app-list-meta">Test details</p>
-                          <p className="app-list-value">
-                            {test.duration} min • {test.totalMarks} marks
-                          </p>
-                          <p className="app-list-meta">Pass {test.passingMarks}</p>
-                        </div>
-                        <div>
-                          <p className="app-list-meta">Result</p>
-                          {scoreVisible ? (
-                            <>
-                              <p className="app-list-value">
-                                Score {test.attempt?.totalMarksAwarded ?? 0} / {test.totalMarks}
-                              </p>
-                              <p className="app-list-meta">
-                                {test.requiresManualReview
-                                  ? "Auto-graded only"
-                                  : "Final score"}
-                              </p>
-                            </>
-                          ) : (
-                            <p className="app-list-meta">Not submitted yet</p>
-                          )}
-                        </div>
-                      </div>
+                      {scoreVisible ? (
+                        <p className="app-student-compact-meta">
+                          Score {test.attempt?.totalMarksAwarded ?? 0} / {test.totalMarks}
+                        </p>
+                      ) : null}
+                      {hasLocalDraft ? (
+                        <p className="app-student-compact-meta text-amber-700 dark:text-amber-300">
+                          Draft saved on this device
+                        </p>
+                      ) : null}
                       <Button
                         asChild
                         size="md"

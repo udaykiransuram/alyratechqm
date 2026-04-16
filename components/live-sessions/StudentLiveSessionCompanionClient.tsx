@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -9,6 +11,7 @@ import {
   FileText,
   Maximize2,
   Minimize2,
+  Play,
   RefreshCw,
   Video,
 } from "lucide-react";
@@ -23,12 +26,15 @@ import {
   exitCurrentFullscreen,
   isFullscreenSupported,
   requestElementFullscreen,
+  requestGlobalFullscreen,
 } from "@/lib/client/fullscreen";
+import { useClientRuntimeSignals } from "@/lib/client/runtime-signals";
 import type {
   LiveSessionStudentItem,
   StudentLiveSessionDetail,
 } from "@/lib/live-sessions/types";
 import { resolveLiveSessionYouTubeStream } from "@/lib/live-sessions/youtube";
+import { buildYouTubeThumbnailUrl } from "@/lib/courses/youtube";
 import { hasMeaningfulRichTextContent } from "@/lib/security/html-sanitize";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +44,8 @@ type StudentLiveSessionCompanionClientProps = {
 
 const LIVE_SESSION_POLL_INTERVAL_MS = 8_000;
 const LIVE_SESSION_PRESENCE_INTERVAL_MS = 20_000;
+const LIVE_SESSION_POLL_INTERVAL_LITE_MS = 16_000;
+const LIVE_SESSION_PRESENCE_INTERVAL_LITE_MS = 40_000;
 
 function formatDateTime(value?: string | null) {
   if (!value) {
@@ -80,14 +88,14 @@ function formatStatusLabel(value: string) {
 
 function getItemTypeLabel(type: LiveSessionStudentItem["type"]) {
   if (type === "single") {
-    return "Single choice";
+    return "One answer";
   }
 
   if (type === "multiple") {
-    return "Multiple choice";
+    return "More than one";
   }
 
-  return "Short text";
+  return "Written answer";
 }
 
 function buildDraftState(session: StudentLiveSessionDetail) {
@@ -105,13 +113,15 @@ function buildDraftState(session: StudentLiveSessionDetail) {
 
 function getObjectiveHelperText(type: LiveSessionStudentItem["type"]) {
   return type === "single"
-    ? "Choose one answer and submit it while the teacher keeps this item open."
-    : "Choose all answers that apply, then submit your response.";
+    ? "Choose one answer."
+    : "Choose all answers that apply.";
 }
 
 export default function StudentLiveSessionCompanionClient({
   initialLiveSession,
 }: StudentLiveSessionCompanionClientProps) {
+  const searchParams = useSearchParams();
+  const runtimeSignals = useClientRuntimeSignals();
   const [liveSession, setLiveSession] = useState(initialLiveSession);
   const initialDraft = useMemo(
     () => buildDraftState(initialLiveSession),
@@ -128,10 +138,18 @@ export default function StudentLiveSessionCompanionClient({
   const [isFocusModeActive, setIsFocusModeActive] = useState(false);
   const [isFocusModeAvailable, setIsFocusModeAvailable] = useState(false);
   const [isFocusModePending, setIsFocusModePending] = useState(false);
+  const [hasStartedStream, setHasStartedStream] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date().toISOString());
   const refreshInFlightRef = useRef(false);
   const presenceInFlightRef = useRef(false);
   const focusStageRef = useRef<HTMLDivElement | null>(null);
+  const streamFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const pollIntervalMs = runtimeSignals.lowBandwidth
+    ? LIVE_SESSION_POLL_INTERVAL_LITE_MS
+    : LIVE_SESSION_POLL_INTERVAL_MS;
+  const presenceIntervalMs = runtimeSignals.lowBandwidth
+    ? LIVE_SESSION_PRESENCE_INTERVAL_LITE_MS
+    : LIVE_SESSION_PRESENCE_INTERVAL_MS;
 
   useEffect(() => {
     setLiveSession(initialLiveSession);
@@ -219,10 +237,7 @@ export default function StudentLiveSessionCompanionClient({
       void refreshLiveSession({ silent: true });
     };
 
-    const intervalId = window.setInterval(
-      refreshWhenVisible,
-      LIVE_SESSION_POLL_INTERVAL_MS,
-    );
+    const intervalId = window.setInterval(refreshWhenVisible, pollIntervalMs);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -237,7 +252,7 @@ export default function StudentLiveSessionCompanionClient({
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [refreshLiveSession]);
+  }, [pollIntervalMs, refreshLiveSession]);
 
   useEffect(() => {
     let disposed = false;
@@ -267,7 +282,7 @@ export default function StudentLiveSessionCompanionClient({
 
     const intervalId = window.setInterval(
       () => void sendPresence(),
-      LIVE_SESSION_PRESENCE_INTERVAL_MS,
+      presenceIntervalMs,
     );
 
     const handleVisibilityChange = () => {
@@ -284,7 +299,7 @@ export default function StudentLiveSessionCompanionClient({
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [liveSession._id]);
+  }, [liveSession._id, presenceIntervalMs]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -293,7 +308,7 @@ export default function StudentLiveSessionCompanionClient({
 
     const syncFocusModeState = () => {
       setIsFocusModeAvailable(isFullscreenSupported());
-      setIsFocusModeActive(document.fullscreenElement === focusStageRef.current);
+      setIsFocusModeActive(Boolean(document.fullscreenElement));
     };
 
     syncFocusModeState();
@@ -309,15 +324,34 @@ export default function StudentLiveSessionCompanionClient({
     () => resolveLiveSessionYouTubeStream(liveSession.studentJoinUrl),
     [liveSession.studentJoinUrl],
   );
+  const streamPosterUrl = studentJoinStream
+    ? buildYouTubeThumbnailUrl(studentJoinStream.videoId)
+    : "";
+  const siteOrigin =
+    typeof window !== "undefined" ? window.location.origin : "";
+  const streamEmbedUrl = studentJoinStream
+    ? `${studentJoinStream.embedUrl}&autoplay=1&mute=1&playsinline=1&iv_load_policy=3&enablejsapi=1&controls=1&fs=0&modestbranding=1&rel=0${
+        siteOrigin ? `&origin=${encodeURIComponent(siteOrigin)}` : ""
+      }`
+    : "";
+  const isSessionOver =
+    liveSession.status === "completed" || liveSession.status === "cancelled";
   const hasSupportingContent = Boolean(
-    studentJoinStream || liveSession.publishedTranscriptSummary,
+    studentJoinStream || (isSessionOver && liveSession.publishedTranscriptSummary),
   );
-  const showSplitCompanionStage = Boolean(studentJoinStream && activeItem);
+  const showSplitCompanionStage = Boolean(studentJoinStream);
   const useCompactQuestionLayout = Boolean(activeItem && studentJoinStream);
   const savedResponse =
     activeItem && liveSession.studentResponse?.itemId === activeItem._id
       ? liveSession.studentResponse
       : null;
+  const isCorrectResponse =
+    savedResponse?.isCorrect === true &&
+    (activeItem?.type === "single" || activeItem?.type === "multiple");
+  const optionCount =
+    activeItem && (activeItem.type === "single" || activeItem.type === "multiple")
+      ? activeItem.options.length
+      : 0;
   const canSubmit =
     activeItem?.type === "short-text"
       ? hasMeaningfulRichTextContent(answerHtml)
@@ -329,15 +363,78 @@ export default function StudentLiveSessionCompanionClient({
 
   const activeItemHint = activeItem
     ? activeItem.type === "short-text"
-      ? "Write your response below. You can keep editing it until the teacher closes this prompt."
+      ? "Type your answer below. You can change it until the teacher closes this question."
       : getObjectiveHelperText(activeItem.type)
-    : "Stay on this page. The next live item will appear here as soon as the teacher opens it.";
+    : "Stay on this page. The next question will appear here automatically.";
 
   useEffect(() => {
     if (!showSplitCompanionStage && isFocusModeActive) {
       void exitCurrentFullscreen();
     }
   }, [isFocusModeActive, showSplitCompanionStage]);
+
+  useEffect(() => {
+    if (!studentJoinStream || !showSplitCompanionStage) {
+      return;
+    }
+
+    if (!searchParams?.get("join")) {
+      return;
+    }
+
+    if (isFocusModeActive || isFocusModePending) {
+      return;
+    }
+
+    if (!isFullscreenSupported() || !focusStageRef.current) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void requestElementFullscreen(focusStageRef.current).then(async (success) => {
+        if (!success) {
+          await requestGlobalFullscreen();
+        }
+
+        if (!document.fullscreenElement) {
+          setFocusModeError(
+            "Tap Full screen to open the class in full screen.",
+          );
+        }
+      });
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [
+    isFocusModeActive,
+    isFocusModePending,
+    searchParams,
+    showSplitCompanionStage,
+    studentJoinStream,
+  ]);
+
+  useEffect(() => {
+    setHasStartedStream(false);
+  }, [studentJoinStream?.embedUrl]);
+
+  const requestStreamPlayback = useCallback(() => {
+    if (!streamFrameRef.current) {
+      return;
+    }
+
+    try {
+      streamFrameRef.current.contentWindow?.postMessage(
+        JSON.stringify({ event: "command", func: "mute", args: [] }),
+        "*",
+      );
+      streamFrameRef.current.contentWindow?.postMessage(
+        JSON.stringify({ event: "command", func: "playVideo", args: [] }),
+        "*",
+      );
+    } catch {
+      // Ignore postMessage failures for blocked embeds.
+    }
+  }, []);
 
   function handleOptionToggle(optionIndex: number) {
     if (!activeItem || activeItem.type === "short-text") {
@@ -407,7 +504,7 @@ export default function StudentLiveSessionCompanionClient({
 
     if (!isFocusModeAvailable) {
       setFocusModeError(
-        "Focus mode is not available in this browser. Use the normal split view instead.",
+        "Full screen is not available in this browser. Use the normal view instead.",
       );
       return;
     }
@@ -416,16 +513,21 @@ export default function StudentLiveSessionCompanionClient({
     setIsFocusModePending(true);
 
     try {
-      const success = isFocusModeActive
-        ? await exitCurrentFullscreen()
-        : await requestElementFullscreen(focusStageRef.current);
+      if (isFocusModeActive) {
+        const exited = await exitCurrentFullscreen();
+        if (!exited) {
+          setFocusModeError("Could not exit full screen right now.");
+        }
+        return;
+      }
 
+      const success = await requestElementFullscreen(focusStageRef.current);
       if (!success) {
-        setFocusModeError(
-          isFocusModeActive
-            ? "Could not exit focus mode right now."
-            : "Could not start focus mode right now.",
-        );
+        await requestGlobalFullscreen();
+      }
+
+      if (!document.fullscreenElement) {
+        setFocusModeError("Could not start full screen right now.");
       }
     } finally {
       setIsFocusModePending(false);
@@ -447,7 +549,7 @@ export default function StudentLiveSessionCompanionClient({
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Current live item</CardTitle>
+            <CardTitle>Question</CardTitle>
             <p className="text-sm text-muted-foreground">{activeItemHint}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -477,9 +579,16 @@ export default function StudentLiveSessionCompanionClient({
           <>
             <div
               className={cn(
-                "rounded-[1.35rem] border border-border/60 bg-background/78 p-5 shadow-[0_20px_48px_-36px_hsl(var(--app-shadow-deep)/0.2)] md:min-h-[11rem] md:p-6 xl:px-7 xl:py-6",
+                "max-h-[18rem] overflow-auto overscroll-contain rounded-[1.35rem] border border-border/60 bg-background/78 p-5 pr-4 shadow-[0_20px_48px_-36px_hsl(var(--app-shadow-deep)/0.2)] md:max-h-[22rem] md:min-h-[11rem] md:p-6 xl:px-7 xl:py-6",
+                optionCount > 0 &&
+                  optionCount <= 3 &&
+                  "max-h-[22rem] md:max-h-[26rem] xl:max-h-[28rem]",
                 useCompactQuestionLayout &&
-                  "max-h-[13rem] overflow-auto rounded-[1.1rem] p-4 shadow-[0_18px_38px_-34px_hsl(var(--app-shadow-deep)/0.18)] md:min-h-[8.5rem] md:p-4 xl:max-h-[14.5rem] xl:px-5 xl:py-4",
+                  "max-h-[13rem] rounded-[1.1rem] p-4 pr-3 shadow-[0_18px_38px_-34px_hsl(var(--app-shadow-deep)/0.18)] md:max-h-[16rem] md:min-h-[8.5rem] md:p-4 xl:max-h-[14.5rem] xl:px-5 xl:py-4",
+                useCompactQuestionLayout &&
+                  optionCount > 0 &&
+                  optionCount <= 3 &&
+                  "max-h-[16rem] md:max-h-[20rem] xl:max-h-[20rem]",
               )}
             >
               <ContentRenderer htmlContent={activeItem.promptHtml} enableImageZoom />
@@ -495,7 +604,7 @@ export default function StudentLiveSessionCompanionClient({
                   allowImages={false}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Rich text and math are supported. Image uploads stay disabled for student answers in this version.
+                  You can type text and math here.
                 </p>
               </div>
             ) : (
@@ -534,7 +643,7 @@ export default function StudentLiveSessionCompanionClient({
                         >
                           {String.fromCharCode(65 + option.index)}
                         </span>
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 line-clamp-1">
                           <ContentRenderer htmlContent={option.contentHtml} />
                         </div>
                         {isSelected ? (
@@ -557,12 +666,18 @@ export default function StudentLiveSessionCompanionClient({
             >
               <div className="space-y-1 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">
-                  {savedResponse ? "Response saved" : "Ready to submit"}
+                  {savedResponse
+                    ? isCorrectResponse
+                      ? "Nice work"
+                      : "Response saved"
+                    : "Ready to submit"}
                 </p>
                 <p>
                   {savedResponse?.updatedAt
-                    ? `Last updated ${formatDateTime(savedResponse.updatedAt)}`
-                    : "Your live answer stays separate from formal tests and marks."}
+                    ? isCorrectResponse
+                      ? "Your answer is correct."
+                      : `Last updated ${formatDateTime(savedResponse.updatedAt)}`
+                    : "Your answer will be saved for this class."}
                 </p>
               </div>
               <Button
@@ -581,7 +696,7 @@ export default function StudentLiveSessionCompanionClient({
           </>
         ) : (
           <div className="rounded-[1.2rem] border border-dashed border-border/70 bg-background/60 p-5 text-sm text-muted-foreground">
-            No live item is open right now. Keep this page ready and the next prompt will appear here automatically.
+            No question is open right now. Keep this page open and the next question will appear automatically.
           </div>
         )}
       </CardContent>
@@ -604,20 +719,51 @@ export default function StudentLiveSessionCompanionClient({
             : "aspect-video w-full",
         )}
       >
-        <iframe
-          src={studentJoinStream.embedUrl}
-          title={`${liveSession.title} live stream`}
-          className={cn(
-            "border-0",
-            isFocusModeActive
-              ? "aspect-video h-auto max-h-full w-full max-w-full"
-              : "h-full w-full",
-          )}
-          referrerPolicy="strict-origin-when-cross-origin"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-          loading="lazy"
-        />
+        {hasStartedStream ? (
+          <iframe
+            src={streamEmbedUrl}
+            title={`${liveSession.title} live stream`}
+            className={cn(
+              "border-0",
+              isFocusModeActive
+                ? "aspect-video h-auto max-h-full w-full max-w-full"
+                : "h-full w-full",
+            )}
+            referrerPolicy="strict-origin-when-cross-origin"
+            allow="autoplay; encrypted-media; picture-in-picture; web-share"
+            loading="lazy"
+            ref={streamFrameRef}
+            onLoad={requestStreamPlayback}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setHasStartedStream(true);
+              requestStreamPlayback();
+            }}
+            className={cn(
+              "relative flex h-full w-full items-center justify-center bg-black",
+              isFocusModeActive ? "min-h-[calc(100dvh-8rem)]" : "",
+            )}
+            aria-label="Start live class video"
+          >
+            {streamPosterUrl ? (
+              <Image
+                src={streamPosterUrl}
+                alt=""
+                fill
+                unoptimized
+                sizes="(min-width: 1280px) 60vw, 100vw"
+                className="absolute inset-0 h-full w-full object-cover opacity-85"
+              />
+            ) : null}
+            <span className="relative z-10 inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-foreground shadow-lg">
+              <Play className="h-4 w-4" />
+              Start
+            </span>
+          </button>
+        )}
       </div>
     </div>
   ) : null;
@@ -628,9 +774,9 @@ export default function StudentLiveSessionCompanionClient({
         <div className="flex items-start gap-3">
           <FileText className="mt-0.5 h-5 w-5 text-primary" />
           <div>
-            <CardTitle>Published class summary</CardTitle>
+            <CardTitle>Class notes</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Notes shared by the teacher for this live class.
+              Notes shared by your teacher.
             </p>
           </div>
         </div>
@@ -652,22 +798,22 @@ export default function StudentLiveSessionCompanionClient({
   const accessCard = (
     <Card className="app-surface overflow-hidden">
       <CardHeader className="app-section-header gap-2">
-        <CardTitle>Class access</CardTitle>
+        <CardTitle>Class details</CardTitle>
         <p className="text-sm text-muted-foreground">
           {studentJoinStream
-            ? "The live lesson is embedded directly in this portal for students."
-            : "Use the original join flow whenever you need to enter the meeting itself."}
+            ? "The class video opens on this page."
+            : "Use this class link if your teacher asks you to open the meeting."}
         </p>
       </CardHeader>
       <CardContent className="app-section-body space-y-4">
         <div className="rounded-[1rem] border border-border/60 bg-background/72 p-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Video className="h-4 w-4" />
-            Join flow
+            Video
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {studentJoinStream
-              ? "Embedded in the live-class page."
+              ? "Opens on this page."
               : liveSession.studentJoinUrlLabel}
           </p>
         </div>
@@ -692,7 +838,7 @@ export default function StudentLiveSessionCompanionClient({
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                Meeting code
+                Code
               </p>
               <p className="mt-1 font-medium text-foreground">
                 {liveSession.meetingCode || "Not provided"}
@@ -717,7 +863,7 @@ export default function StudentLiveSessionCompanionClient({
           <Button asChild variant="outline" className="app-button-page">
             <AppPrefetchLink href="/student/live-classes">
               <ArrowLeft className="h-4 w-4" />
-              Back to live classes
+              Back to classes
             </AppPrefetchLink>
           </Button>
 
@@ -725,7 +871,7 @@ export default function StudentLiveSessionCompanionClient({
             <Button asChild className="app-button-page">
               <a href={liveSession.joinHref}>
                 <ExternalLink className="h-4 w-4" />
-                Join live class
+                Open class link
               </a>
             </Button>
           ) : null}
@@ -737,9 +883,9 @@ export default function StudentLiveSessionCompanionClient({
   const sessionSnapshotCard = (
     <Card className="app-surface overflow-hidden">
       <CardHeader className="app-section-header gap-2">
-        <CardTitle>Session snapshot</CardTitle>
+        <CardTitle>Quick info</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Quick status details for your current live-class companion.
+          Simple details for this class.
         </p>
       </CardHeader>
       <CardContent className="app-section-body space-y-3">
@@ -752,7 +898,7 @@ export default function StudentLiveSessionCompanionClient({
             <Badge variant="outline">{liveSession.hostTeacher.name}</Badge>
           ) : null}
           {liveSession.attendanceStatus === "present" ? (
-            <Badge variant="success">Live attendance verified</Badge>
+            <Badge variant="success">Marked present</Badge>
           ) : null}
         </div>
 
@@ -763,14 +909,14 @@ export default function StudentLiveSessionCompanionClient({
               {formatStatusLabel(liveSession.attendanceStatus || "invited")}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Verified after 2 minutes on this live page.
+              This updates while you stay on this page.
             </p>
           </div>
           <div className="app-detail-item">
-            <p className="app-detail-label">Join clicks</p>
+            <p className="app-detail-label">Times joined</p>
             <p className="app-detail-value">{liveSession.joinClicks}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Re-joins add to the count.
+              Each time you open the class link, the count goes up.
             </p>
           </div>
         </div>
@@ -778,11 +924,98 @@ export default function StudentLiveSessionCompanionClient({
         <div className="app-detail-item">
           <div className="flex items-center gap-2 font-medium text-foreground">
             <Clock3 className="h-4 w-4 text-primary" />
-            Last synced {formatTime(lastSyncedAt)}
+            Updated {formatTime(lastSyncedAt)}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            This page refreshes the active item automatically while it stays open.
+            This page updates automatically while it stays open.
           </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const afterClassStatsCard = (
+    <Card className="app-surface overflow-hidden">
+      <CardHeader className="app-section-header gap-2">
+        <CardTitle>Class summary</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Your after-class stats and attendance.
+        </p>
+      </CardHeader>
+      <CardContent className="app-section-body space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <Badge className="capitalize">{formatStatusLabel(liveSession.status)}</Badge>
+          {liveSession.subject?.name ? (
+            <Badge variant="outline">{liveSession.subject.name}</Badge>
+          ) : null}
+          {liveSession.hostTeacher?.name ? (
+            <Badge variant="outline">{liveSession.hostTeacher.name}</Badge>
+          ) : null}
+          {liveSession.attendanceStatus === "present" ? (
+            <Badge variant="success">Marked present</Badge>
+          ) : null}
+        </div>
+
+        <div className="app-detail-grid sm:grid-cols-2">
+          <div className="app-detail-item">
+            <p className="app-detail-label">Start</p>
+            <p className="app-detail-value">
+              {formatDateTime(liveSession.scheduledStartAt)}
+            </p>
+          </div>
+          <div className="app-detail-item">
+            <p className="app-detail-label">End</p>
+            <p className="app-detail-value">
+              {formatDateTime(liveSession.scheduledEndAt)}
+            </p>
+          </div>
+          <div className="app-detail-item">
+            <p className="app-detail-label">Attendance</p>
+            <p className="app-detail-value capitalize">
+              {formatStatusLabel(liveSession.attendanceStatus || "invited")}
+            </p>
+          </div>
+          <div className="app-detail-item">
+            <p className="app-detail-label">Times joined</p>
+            <p className="app-detail-value">{liveSession.joinClicks}</p>
+          </div>
+        </div>
+
+        <div className="rounded-[1rem] border border-border/60 bg-background/72 p-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Poll performance
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge variant="outline">{liveSession.pollAnswered}/{liveSession.pollTotal} answered</Badge>
+            <Badge variant="success">{liveSession.pollCorrect} correct</Badge>
+            <Badge variant="warning">
+              {Math.max(0, liveSession.pollAnswered - liveSession.pollCorrect)} incorrect
+            </Badge>
+            {typeof liveSession.pollAccuracy === "number" ? (
+              <Badge
+                variant={
+                  liveSession.pollAccuracy >= 85
+                    ? "success"
+                    : liveSession.pollAccuracy >= 60
+                      ? "warning"
+                      : "danger"
+                }
+              >
+                {liveSession.pollAccuracy}% accuracy
+              </Badge>
+            ) : (
+              <Badge variant="outline">Accuracy —</Badge>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Button asChild variant="outline" className="app-button-page">
+            <AppPrefetchLink href="/student/live-classes">
+              <ArrowLeft className="h-4 w-4" />
+              Back to classes
+            </AppPrefetchLink>
+          </Button>
         </div>
       </CardContent>
     </Card>
@@ -809,17 +1042,14 @@ export default function StudentLiveSessionCompanionClient({
               )}
             >
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">Companion stage</p>
+                <p className="text-sm font-semibold text-foreground">Class screen</p>
                 <p className={cn("text-sm text-muted-foreground", isFocusModeActive && "text-xs")}>
                   {isFocusModeActive
-                    ? "The lesson and the current live question now stay together in one fullscreen workspace."
-                    : "Open focus mode to keep the YouTube lesson and the assigned live question together on one screen."}
+                    ? "The video and question stay together on one full screen."
+                    : "Open full screen to keep the video and question together."}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="hidden sm:inline-flex">
-                  Student companion
-                </Badge>
                 <Button
                   type="button"
                   size="sm"
@@ -836,8 +1066,8 @@ export default function StudentLiveSessionCompanionClient({
                   {isFocusModePending
                     ? "Working..."
                     : isFocusModeActive
-                      ? "Exit focus mode"
-                      : "Focus mode"}
+                      ? "Exit full screen"
+                      : "Full screen"}
                 </Button>
               </div>
             </div>
@@ -848,51 +1078,71 @@ export default function StudentLiveSessionCompanionClient({
 
             <div
               className={cn(
-                "grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(24rem,0.98fr)] xl:items-start",
+                "grid gap-5 xl:items-start",
+                activeItem
+                  ? "xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.85fr)]"
+                  : "xl:grid-cols-[minmax(0,1fr)]",
                 isFocusModeActive &&
-                  "xl:min-h-[calc(100dvh-3.75rem)] xl:grid-cols-[minmax(0,1.22fr)_minmax(18.75rem,0.78fr)] xl:gap-0",
+                  (activeItem
+                    ? "xl:min-h-[calc(100dvh-3.75rem)] xl:grid-cols-[minmax(0,1.6fr)_minmax(16rem,0.6fr)] xl:gap-0"
+                    : "xl:min-h-[calc(100dvh-3.75rem)] xl:grid-cols-[minmax(0,1fr)] xl:gap-0"),
               )}
             >
               <div className={cn("space-y-5", isFocusModeActive && "space-y-0")}>
                 {studentJoinStreamCard}
-                {!isFocusModeActive ? transcriptCard : null}
+                {isSessionOver && !isFocusModeActive ? transcriptCard : null}
               </div>
-              <div
-                className={cn(
-                  "space-y-5 xl:sticky xl:top-6 xl:self-start",
-                  isFocusModeActive &&
-                    "xl:top-0 xl:max-h-[calc(100dvh-7.5rem)] xl:overflow-auto xl:pr-1",
-                )}
-              >
-                {currentItemCard}
-              </div>
+              {activeItem ? (
+                <div
+                  className={cn(
+                    "space-y-5 xl:sticky xl:top-6 xl:self-start",
+                    isFocusModeActive &&
+                      "xl:top-0 xl:max-h-[calc(100dvh-7.5rem)] xl:overflow-auto xl:pr-1",
+                  )}
+                >
+                  {currentItemCard}
+                </div>
+              ) : null}
             </div>
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.92fr)]">
-            {accessCard}
-            {sessionSnapshotCard}
-          </div>
+          {activeItem ? (
+            isSessionOver ? (
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
+                {afterClassStatsCard}
+                {transcriptCard}
+              </div>
+            ) : (
+              <div className="flex">
+                <Button asChild variant="outline" className="app-button-page">
+                  <AppPrefetchLink href="/student/live-classes">
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to classes
+                  </AppPrefetchLink>
+                </Button>
+              </div>
+            )
+          ) : null}
         </>
       ) : (
         <>
-          {currentItemCard}
+          {activeItem ? currentItemCard : null}
 
           {hasSupportingContent ? (
             <>
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(20rem,0.92fr)] xl:items-start">
                 <div className="space-y-5">
                   {studentJoinStreamCard}
-                  {transcriptCard}
+                  {isSessionOver ? transcriptCard : null}
                 </div>
-                {accessCard}
+                {isSessionOver ? afterClassStatsCard : accessCard}
               </div>
-              {sessionSnapshotCard}
+              {isSessionOver ? null : sessionSnapshotCard}
             </>
           ) : (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.92fr)]">
-              {accessCard}
-              {sessionSnapshotCard}
+              {isSessionOver ? afterClassStatsCard : accessCard}
+              {isSessionOver ? transcriptCard : sessionSnapshotCard}
             </div>
           )}
         </>

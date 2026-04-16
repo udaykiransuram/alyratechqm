@@ -44,32 +44,6 @@ function getStudentDiaryStatusVariant(status: string) {
   return "neutral";
 }
 
-function getDiaryContentLabels(content: {
-  hasLessonSummary: boolean;
-  hasHomework: boolean;
-  hasTeacherNote: boolean;
-  resourceCount: number;
-}) {
-  const labels: string[] = [];
-
-  if (content.hasLessonSummary) {
-    labels.push("Lesson");
-  }
-  if (content.hasHomework) {
-    labels.push("Homework");
-  }
-  if (content.hasTeacherNote) {
-    labels.push("Teacher Note");
-  }
-  if (content.resourceCount > 0) {
-    labels.push(
-      `${content.resourceCount} Resource${content.resourceCount === 1 ? "" : "s"}`,
-    );
-  }
-
-  return labels;
-}
-
 function getSearchParam(
   searchParams: Record<string, string | string[] | undefined> | undefined,
   key: string,
@@ -180,37 +154,7 @@ export default async function StudentDiaryPage({
         title="Diary"
         variant="overview"
         density="compact"
-        description="Check today’s subject instructions, homework, and resources, then mark work done when complete."
-        meta={
-          <>
-            <span className="app-meta-chip">
-              {formatDiaryDateLabel(selectedDate) || selectedDate}
-            </span>
-            <span className="app-meta-chip">Date-first board</span>
-          </>
-        }
-        stats={[
-          {
-            label: "Entries",
-            value: String(diaryList.total),
-            meta: "Matching your current filters",
-          },
-          {
-            label: "Remaining",
-            value: String(entries.filter((entry) => entry.state.status !== "completed").length),
-            meta: "On this page",
-          },
-          {
-            label: "Completed",
-            value: String(entries.filter((entry) => entry.state.status === "completed").length),
-            meta: "On this page",
-          },
-          {
-            label: "Resources",
-            value: String(entries.reduce((sum, entry) => sum + entry.content.resourceCount, 0)),
-            meta: "On this page",
-          },
-        ]}
+        description="Today’s homework and teacher notes."
         toolbar={
           <DiaryBoardFiltersClient
             variant="embedded"
@@ -241,7 +185,6 @@ export default async function StudentDiaryPage({
       ) : (
         <div className="app-diary-entry-list">
           {entries.map((entry) => {
-            const contentLabels = getDiaryContentLabels(entry.content);
             const subline = [
               entry.author?.name ? `Shared by ${entry.author.name}` : "Teacher update",
               formatDiaryDateLabel(entry.entryDate) || entry.entryDate,
@@ -258,9 +201,6 @@ export default async function StudentDiaryPage({
                       {entry.subject?.name ? (
                         <Badge variant="outline">{entry.subject.name}</Badge>
                       ) : null}
-                      {entry.class?.name ? (
-                        <Badge variant="outline">{entry.class.name}</Badge>
-                      ) : null}
                     </div>
 
                     <div className="space-y-1.5">
@@ -268,15 +208,6 @@ export default async function StudentDiaryPage({
                       <p className="app-diary-list-subline">{subline}</p>
                     </div>
 
-                    {contentLabels.length > 0 ? (
-                      <div className="app-diary-list-content">
-                        {contentLabels.map((label) => (
-                          <Badge key={`${entry._id}-${label}`} variant="outline">
-                            {label}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : null}
                   </div>
 
                   <div className="app-diary-list-actions app-diary-list-actions-student">
@@ -285,7 +216,7 @@ export default async function StudentDiaryPage({
                         href={`/student/diary/${entry._id}`}
                         prefetchOnViewport={false}
                       >
-                        View entry
+                        Open
                       </AppPrefetchLink>
                     </Button>
                   </div>

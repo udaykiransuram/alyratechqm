@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 
 import { buildQuestionImportTemplateDocx } from "@/lib/question-import/template";
+import { toBinaryResponseBody } from "@/lib/server/binary-response";
 
 export async function GET(req: NextRequest) {
   const format = String(req.nextUrl.searchParams.get("format") || "docx")
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
 
   const fileBuffer = await buildQuestionImportTemplateDocx();
 
-  return new NextResponse(fileBuffer, {
+  return new NextResponse(toBinaryResponseBody(fileBuffer), {
     status: 200,
     headers: {
       "Content-Type":

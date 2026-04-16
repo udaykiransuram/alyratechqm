@@ -409,19 +409,31 @@ function serializeLiveSessionStudentItem(item: any): LiveSessionStudentItem {
 
 function serializeLiveSessionStudentResponse(
   response: any,
+  item?: any,
 ): LiveSessionStudentResponse | null {
   if (!response) {
     return null;
   }
 
+  const itemType = normalizeLiveSessionItemType(item?.type);
+  const selectedOptionIndexes = normalizeIntegerIndexes(
+    response?.selectedOptionIndexes,
+  );
+  const answerIndexes = normalizeIntegerIndexes(item?.answerIndexes);
+  const isCorrect =
+    itemType === "short-text" || !item
+      ? null
+      : isObjectiveResponseCorrect(selectedOptionIndexes, answerIndexes);
+
   return {
     itemId: toId(response?.item),
-    selectedOptionIndexes: normalizeIntegerIndexes(response?.selectedOptionIndexes),
+    selectedOptionIndexes,
     answerHtml: response?.answerHtml
       ? sanitizeLiveSessionRichText(response.answerHtml)
       : null,
     submittedAt: toIsoOrNull(response?.submittedAt),
     updatedAt: toIsoOrNull(response?.updatedAt),
+    isCorrect,
   };
 }
 
@@ -959,15 +971,24 @@ async function loadStudentLiveSessionV2State(params: {
   const itemRows = await loadLiveSessionItemRows({
     schoolKey: params.schoolKey,
     liveSessionId: params.liveSessionId,
-    statuses: ["active"],
+    statuses: ["active", "closed"],
   });
 
   const activeSource =
     itemRows.find((item) => toId(item?._id) === String(params.activeItemId || "").trim()) ||
-    itemRows[0] ||
+    itemRows.find((item) => normalizeLiveSessionItemStatus(item?.status) === "active") ||
     null;
   const activeItemId = toId(activeSource?._id);
-  const [responseRows, transcriptRow] = await Promise.all([
+
+  const objectiveItems = itemRows.filter((item) => {
+    const type = normalizeLiveSessionItemType(item?.type);
+    return type === "single" || type === "multiple";
+  });
+  const objectiveItemIds = objectiveItems
+    .map((item) => toId(item?._id))
+    .filter(Boolean);
+
+  const [responseRows, transcriptRow, objectiveResponses] = await Promise.all([
     activeItemId
       ? loadLiveSessionResponseRows({
           schoolKey: params.schoolKey,
@@ -980,15 +1001,50 @@ async function loadStudentLiveSessionV2State(params: {
       liveSessionId: params.liveSessionId,
       publishedOnly: true,
     }),
+    objectiveItemIds.length > 0
+      ? loadLiveSessionResponseRows({
+          schoolKey: params.schoolKey,
+          itemIds: objectiveItemIds,
+          studentId: params.studentId,
+        })
+      : Promise.resolve([]),
   ]);
+
+  const itemById = new Map(
+    objectiveItems.map((item) => [toId(item?._id), item]),
+  );
+  let pollCorrect = 0;
+  (Array.isArray(objectiveResponses) ? objectiveResponses : []).forEach((response) => {
+    const itemId = toId(response?.item);
+    const item = itemById.get(itemId);
+    if (!item) {
+      return;
+    }
+    const selected = normalizeIntegerIndexes(response?.selectedOptionIndexes);
+    const expected = normalizeIntegerIndexes(item?.answerIndexes);
+    if (isObjectiveResponseCorrect(selected, expected)) {
+      pollCorrect += 1;
+    }
+  });
+  const pollAnswered = Array.isArray(objectiveResponses) ? objectiveResponses.length : 0;
+  const pollTotal = objectiveItems.length;
+  const pollAccuracy =
+    pollAnswered > 0 ? Math.round((pollCorrect / pollAnswered) * 100) : null;
 
   return {
     shareHref: buildLiveSessionShareHref(params.liveSessionId),
     activeItem: activeSource ? serializeLiveSessionStudentItem(activeSource) : null,
-    studentResponse: serializeLiveSessionStudentResponse(responseRows[0] || null),
+    studentResponse: serializeLiveSessionStudentResponse(
+      responseRows[0] || null,
+      activeSource,
+    ),
     publishedTranscriptSummary: serializePublishedLiveSessionTranscript(
       transcriptRow,
     ),
+    pollTotal,
+    pollAnswered,
+    pollCorrect,
+    pollAccuracy,
   };
 }
 
@@ -1927,9 +1983,6 @@ async function upsertLiveSessionResponseRecord(params: {
   );
 
   const update = {
-    liveSession: params.liveSessionId,
-    item: params.itemId,
-    student: params.studentId,
     itemType: params.itemType,
     selectedOptionIndexes: params.selectedOptionIndexes,
     answerHtml:
