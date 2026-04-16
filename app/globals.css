@@ -856,6 +856,8 @@
       }
     }
 
+  }
+
 @layer components {
   .app-nav-text {
     color: hsl(var(--app-nav-foreground));
