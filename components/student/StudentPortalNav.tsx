@@ -14,7 +14,7 @@ export default function StudentPortalNav() {
 
   return (
     <nav
-      className="app-segmented-control app-student-portal-sections"
+      className="app-segmented-control app-student-portal-sections app-student-portal-grid"
       aria-label="Student portal sections"
     >
       {STUDENT_PORTAL_ITEMS.map((item) => {
@@ -27,7 +27,7 @@ export default function StudentPortalNav() {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "app-segmented-link app-student-portal-link min-w-[6.5rem] items-center text-center",
+              "app-segmented-link app-student-portal-link app-student-portal-grid-link items-center text-center",
               active && "app-segmented-link-active",
             )}
           >

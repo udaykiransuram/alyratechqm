@@ -30,6 +30,7 @@ import {
   parseOr400,
   schoolKeySchema,
 } from "@/lib/validation";
+import { withRequestBudget } from "@/lib/server/request-governor";
 import "@/models/User";
 import "@/models/Class";
 import "@/models/Subject";
@@ -127,8 +128,17 @@ export async function GET(
   );
   void parsedQuery;
 
-  try {
-    await connectDB();
+  return withRequestBudget(
+    {
+      request: req,
+      policy: "analyticsBenchmarkReport",
+      schoolKey,
+      userId: auth.session.user.id,
+      scopeId: `${schoolKey}:${paperId}`,
+    },
+    async () => {
+      try {
+        await connectDB();
 
     const {
       QuestionPaper: QuestionPaperModel,
@@ -394,39 +404,41 @@ export async function GET(
     });
     const paperSubjects = serializePaperSubjects(paperObj);
 
-    return NextResponse.json({
-      success: true,
-      baseline: report.baseline,
-      baselineMode: report.baselineMode,
-      cohorts: report.cohorts,
-      tagBenchmarks: report.tagBenchmarks,
-      distractorBenchmarks: report.distractorBenchmarks,
-      questionBenchmarks: report.questionBenchmarks,
-      rosterMetrics: report.rosterMetrics,
-      insights: report.insights,
-      questionScope: report.questionScope,
-      paper: {
-        _id: toIdString(paperObj),
-        title: String(paperObj?.title || ""),
-        classId: paperClassId || undefined,
-        className: String(paperObj?.class?.name || ""),
-        ...paperSubjects,
-        subjectId: paperSubjects.subject?._id || undefined,
-        subjectName: paperSubjects.subject?.name || "",
-        totalMarks: Number(paperObj?.totalMarks || 0),
-        passingMarks: Number(paperObj?.passingMarks || 0),
-        duration: Number(paperObj?.duration || 0),
-      },
-      filters: {
-        academicSections: report.rosterMetrics.academicSections,
-        subjects: paperSubjects.subjects,
-      },
-    });
-  } catch (error: any) {
-    console.error("Error in benchmark report route:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "Server error" },
-      { status: 500 },
-    );
-  }
+        return NextResponse.json({
+          success: true,
+          baseline: report.baseline,
+          baselineMode: report.baselineMode,
+          cohorts: report.cohorts,
+          tagBenchmarks: report.tagBenchmarks,
+          distractorBenchmarks: report.distractorBenchmarks,
+          questionBenchmarks: report.questionBenchmarks,
+          rosterMetrics: report.rosterMetrics,
+          insights: report.insights,
+          questionScope: report.questionScope,
+          paper: {
+            _id: toIdString(paperObj),
+            title: String(paperObj?.title || ""),
+            classId: paperClassId || undefined,
+            className: String(paperObj?.class?.name || ""),
+            ...paperSubjects,
+            subjectId: paperSubjects.subject?._id || undefined,
+            subjectName: paperSubjects.subject?.name || "",
+            totalMarks: Number(paperObj?.totalMarks || 0),
+            passingMarks: Number(paperObj?.passingMarks || 0),
+            duration: Number(paperObj?.duration || 0),
+          },
+          filters: {
+            academicSections: report.rosterMetrics.academicSections,
+            subjects: paperSubjects.subjects,
+          },
+        });
+      } catch (error: any) {
+        console.error("Error in benchmark report route:", error);
+        return NextResponse.json(
+          { success: false, message: error?.message || "Server error" },
+          { status: 500 },
+        );
+      }
+    },
+  );
 }

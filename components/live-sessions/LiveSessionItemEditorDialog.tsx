@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { MultiSelectTags, type TagItem } from "@/components/ui/multi-select-tags";
 import type {
   LiveSessionItemType,
   LiveSessionTeacherItem,
@@ -46,6 +47,7 @@ function buildDefaultState(item?: LiveSessionTeacherItem | null) {
     promptHtml: item?.promptHtml || "",
     options,
     answerIndexes: Array.isArray(item?.answerIndexes) ? item.answerIndexes : [],
+    tagIds: Array.isArray(item?.tagIds) ? item.tagIds : [],
     explanationHtml: item?.explanationHtml || "",
   };
 }
@@ -77,6 +79,9 @@ export default function LiveSessionItemEditorDialog({
     { contentHtml: "" },
   ]);
   const [answerIndexes, setAnswerIndexes] = useState<number[]>([]);
+  const [availableTags, setAvailableTags] = useState<TagItem[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [isLoadingTags, setIsLoadingTags] = useState(false);
   const [explanationHtml, setExplanationHtml] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,10 +96,53 @@ export default function LiveSessionItemEditorDialog({
     setPromptHtml(nextState.promptHtml);
     setOptions(nextState.options);
     setAnswerIndexes(nextState.answerIndexes);
+    setSelectedTagIds(nextState.tagIds);
     setExplanationHtml(nextState.explanationHtml);
     setError(null);
     setIsSaving(false);
   }, [item, open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let active = true;
+    const loadTags = async () => {
+      setIsLoadingTags(true);
+      try {
+        const response = await fetch("/api/tags");
+        const data = await response.json().catch(() => ({}));
+        if (!active) return;
+        const tags = Array.isArray(data?.tags) ? data.tags : [];
+        const normalizedTags: TagItem[] = tags
+          .map((tag: any) => ({
+            _id: String(tag?._id || "").trim(),
+            name: String(tag?.name || "").trim(),
+            type: {
+              _id: String(tag?.type?._id || "").trim(),
+              name: String(tag?.type?.name || "").trim(),
+            },
+          }))
+          .filter((tag: TagItem) => tag._id && tag.name && tag.type?._id && tag.type?.name);
+        setAvailableTags(normalizedTags);
+      } catch (loadError) {
+        if (active) {
+          setAvailableTags([]);
+        }
+      } finally {
+        if (active) {
+          setIsLoadingTags(false);
+        }
+      }
+    };
+
+    loadTags();
+
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   const hasOptions = type === "single" || type === "multiple";
   const dialogTitle = isEditMode ? "Edit live item" : "Create live item";
@@ -123,6 +171,20 @@ export default function LiveSessionItemEditorDialog({
       nextType === "single" && current.length > 1 ? [current[0]] : current,
     );
   }
+
+  const subskillTags = useMemo(() => {
+    const normalizeTagType = (value: string) =>
+      value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    return availableTags.filter((tag) => {
+      const normalized = normalizeTagType(tag.type?.name || "");
+      return normalized === "subskill" || normalized === "subskills";
+    });
+  }, [availableTags]);
+
+  const selectedTags = useMemo(
+    () => subskillTags.filter((tag) => selectedTagIds.includes(tag._id)),
+    [selectedTagIds, subskillTags],
+  );
 
   function handleAnswerToggle(index: number) {
     setAnswerIndexes((current) => {
@@ -180,6 +242,7 @@ export default function LiveSessionItemEditorDialog({
             promptHtml,
             options,
             answerIndexes,
+            tagIds: selectedTagIds,
             explanationHtml,
           }),
         },
@@ -207,133 +270,172 @@ export default function LiveSessionItemEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[min(92vw,72rem)] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{dialogTitle}</DialogTitle>
-          <DialogDescription>{dialogDescription}</DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-[min(92vw,72rem)] overflow-y-auto sm:bg-transparent sm:border-0 sm:shadow-none sm:p-0">
+        <div className="app-surface overflow-hidden">
+          <div className="app-section-header">
+            <DialogHeader>
+              <DialogTitle>{dialogTitle}</DialogTitle>
+              <DialogDescription>{dialogDescription}</DialogDescription>
+            </DialogHeader>
+          </div>
 
-        <div className="space-y-5">
-          <div className="space-y-2">
-            <Label>Live item type</Label>
-            <div className="flex flex-wrap gap-2">
-              {(["single", "multiple", "short-text"] as LiveSessionItemType[]).map(
-                (value) => (
+          <div className="app-section-body space-y-5">
+            <section className="app-section">
+              <div className="space-y-2">
+                <Label>Live item type</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(["single", "multiple", "short-text"] as LiveSessionItemType[]).map(
+                    (value) => (
+                      <Button
+                        key={value}
+                        type="button"
+                        variant={type === value ? "default" : "outline"}
+                        size="sm"
+                        className="app-button-compact"
+                        onClick={() => handleTypeChange(value)}
+                        disabled={isSaving}
+                      >
+                        {getTypeLabel(value)}
+                      </Button>
+                    ),
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className="app-section">
+              <div className="space-y-2">
+                <Label>Prompt</Label>
+                <RichTextEditor
+                  initialContent={promptHtml}
+                  onChange={setPromptHtml}
+                  editorKey={`${item?._id || "new"}-prompt-${type}`}
+                  imageUploadEndpoint="/api/live-sessions/images"
+                />
+              </div>
+            </section>
+
+            <section className="app-section space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label>Tags (subskill)</Label>
+                <span className="text-xs text-muted-foreground">
+                  Used for attentiveness and recovery practice.
+                </span>
+              </div>
+              <MultiSelectTags
+                selectedTags={selectedTags}
+                allTags={subskillTags}
+                onSelectedTagsChange={(nextTags) =>
+                  setSelectedTagIds(nextTags.map((tag) => tag._id))
+                }
+                isLoading={isLoadingTags}
+                disabled={isSaving}
+              />
+              {subskillTags.length === 0 && !isLoadingTags ? (
+                <p className="text-xs text-muted-foreground">
+                  No subskill tags available yet. Create subskill tags to enable live recovery.
+                </p>
+              ) : null}
+            </section>
+
+            {hasOptions ? (
+              <section className="app-section space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <Label>Answer options</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {type === "single"
+                        ? "Choose one correct option."
+                        : "Choose all correct options."}
+                    </p>
+                  </div>
                   <Button
-                    key={value}
                     type="button"
-                    variant={type === value ? "default" : "outline"}
                     size="sm"
-                    onClick={() => handleTypeChange(value)}
+                    variant="outline"
+                    className="app-button-compact"
+                    onClick={handleAddOption}
                     disabled={isSaving}
                   >
-                    {getTypeLabel(value)}
+                    <PlusCircle className="h-4 w-4" />
+                    Add option
                   </Button>
-                ),
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Prompt</Label>
-            <RichTextEditor
-              initialContent={promptHtml}
-              onChange={setPromptHtml}
-              editorKey={`${item?._id || "new"}-prompt-${type}`}
-              imageUploadEndpoint="/api/live-sessions/images"
-            />
-          </div>
-
-          {hasOptions ? (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <Label>Answer options</Label>
-                  <p className="text-xs text-muted-foreground">
-                    {type === "single"
-                      ? "Choose one correct option."
-                      : "Choose all correct options."}
-                  </p>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleAddOption}
-                  disabled={isSaving}
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  Add option
-                </Button>
-              </div>
 
-              <div className="space-y-3">
-                {options.map((option, index) => (
-                  <div
-                    key={`option-${index}`}
-                    className="rounded-[1.2rem] border border-border/70 bg-background/70 p-3"
-                  >
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <Checkbox
-                          checked={answerIndexes.includes(index)}
-                          onCheckedChange={() => handleAnswerToggle(index)}
-                          disabled={isSaving}
+                <div className="space-y-3">
+                  {options.map((option, index) => (
+                    <div
+                      key={`option-${index}`}
+                      className="app-exam-option"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <label className="flex items-start gap-2 text-[13px] font-semibold text-foreground">
+                          <Checkbox
+                            checked={answerIndexes.includes(index)}
+                            onCheckedChange={() => handleAnswerToggle(index)}
+                            disabled={isSaving}
+                          />
+                          <span>
+                            {type === "single" ? "Correct option" : "Correct answer"}
+                          </span>
+                        </label>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => handleRemoveOption(index)}
+                          disabled={isSaving || options.length <= 2}
+                          aria-label={`Remove option ${index + 1}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div className="app-exam-option-content">
+                        <RichTextEditor
+                          initialContent={option.contentHtml}
+                          onChange={(value) => handleOptionChange(index, value)}
+                          editorKey={`${item?._id || "new"}-option-${index}-${type}`}
+                          compact
+                          imageUploadEndpoint="/api/live-sessions/images"
                         />
-                        {type === "single" ? "Correct option" : "Correct answer"}
-                      </label>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => handleRemoveOption(index)}
-                        disabled={isSaving || options.length <= 2}
-                        aria-label={`Remove option ${index + 1}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      </div>
                     </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
-                    <RichTextEditor
-                      initialContent={option.contentHtml}
-                      onChange={(value) => handleOptionChange(index, value)}
-                      editorKey={`${item?._id || "new"}-option-${index}-${type}`}
-                      compact
-                      imageUploadEndpoint="/api/live-sessions/images"
-                    />
-                  </div>
-                ))}
+            <section className="app-section">
+              <div className="space-y-2">
+                <Label>Explanation</Label>
+                <RichTextEditor
+                  initialContent={explanationHtml}
+                  onChange={setExplanationHtml}
+                  editorKey={`${item?._id || "new"}-explanation-${type}`}
+                  compact
+                  imageUploadEndpoint="/api/live-sessions/images"
+                />
               </div>
-            </div>
-          ) : null}
+            </section>
 
-          <div className="space-y-2">
-            <Label>Explanation</Label>
-            <RichTextEditor
-              initialContent={explanationHtml}
-              onChange={setExplanationHtml}
-              editorKey={`${item?._id || "new"}-explanation-${type}`}
-              compact
-              imageUploadEndpoint="/api/live-sessions/images"
-            />
+            {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
           </div>
 
-          {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+          <DialogFooter className="border-t border-border/70 px-4 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? "Saving..." : isEditMode ? "Save live item" : "Create live item"}
+            </Button>
+          </DialogFooter>
         </div>
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "Saving..." : isEditMode ? "Save live item" : "Create live item"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

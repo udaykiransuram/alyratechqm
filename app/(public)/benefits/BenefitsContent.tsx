@@ -181,6 +181,54 @@ const stakeholders = [
   },
 ];
 
+const comparisonRows: Array<[string, string, string]> = [
+  [
+    "Analysis Depth",
+    'Subject Level ("Math: 60%")',
+    'Sub-skill Level ("Ratio – Part-to-Whole: Weak")',
+  ],
+  [
+    "Question Papers",
+    "Same paper across schools",
+    "Unique question bank per school",
+  ],
+  [
+    "Error Diagnosis",
+    "Not available",
+    "Misconception, procedural & conceptual classification",
+  ],
+  [
+    "Teacher Support",
+    "None",
+    "Heat maps, worksheets, real-world teaching guides",
+  ],
+  [
+    "Recall Integration",
+    "None",
+    "Past topics woven into current assessments",
+  ],
+  [
+    "Teacher Metrics",
+    "Subjective feedback",
+    "Teacher Performance Index with data",
+  ],
+  [
+    "Tech Dependency",
+    "Requires software & logins",
+    "Zero tech — physical reports delivered to you",
+  ],
+  [
+    "Admin Visibility",
+    "End-of-term summary",
+    "Detailed printed reports with drill-down metrics",
+  ],
+  [
+    "Parent Reports",
+    "PTM once a quarter",
+    "WhatsApp updates + printed report cards",
+  ],
+];
+
 export interface BenefitsStat {
   value: string;
   label: string;
@@ -411,7 +459,26 @@ export default function BenefitsContent({
                   How we compare to traditional school assessments.
                 </p>
               </div>
-              <div className="overflow-x-auto">
+              <div className="benefits-compare-mobile md:hidden">
+                {comparisonRows.map(([feature, traditional, alyra]) => (
+                  <article key={feature} className="benefits-compare-mobile-card">
+                    <p className="benefits-compare-mobile-title">{feature}</p>
+                    <div className="space-y-2">
+                      <div>
+                        <p className="benefits-compare-mobile-label">Traditional reports</p>
+                        <p className="benefits-compare-mobile-value">{traditional}</p>
+                      </div>
+                      <div>
+                        <p className="benefits-compare-mobile-label">Alyra Tech</p>
+                        <p className="benefits-compare-mobile-value benefits-compare-mobile-value-strong">
+                          {alyra}
+                        </p>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full text-left text-sm text-slate-600">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                     <tr>
@@ -427,53 +494,7 @@ export default function BenefitsContent({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {[
-                      [
-                        "Analysis Depth",
-                        'Subject Level ("Math: 60%")',
-                        'Sub-skill Level ("Ratio – Part-to-Whole: Weak")',
-                      ],
-                      [
-                        "Question Papers",
-                        "Same paper across schools",
-                        "Unique question bank per school",
-                      ],
-                      [
-                        "Error Diagnosis",
-                        "Not available",
-                        "Misconception, procedural & conceptual classification",
-                      ],
-                      [
-                        "Teacher Support",
-                        "None",
-                        "Heat maps, worksheets, real-world teaching guides",
-                      ],
-                      [
-                        "Recall Integration",
-                        "None",
-                        "Past topics woven into current assessments",
-                      ],
-                      [
-                        "Teacher Metrics",
-                        "Subjective feedback",
-                        "Teacher Performance Index with data",
-                      ],
-                      [
-                        "Tech Dependency",
-                        "Requires software & logins",
-                        "Zero tech — physical reports delivered to you",
-                      ],
-                      [
-                        "Admin Visibility",
-                        "End-of-term summary",
-                        "Detailed printed reports with drill-down metrics",
-                      ],
-                      [
-                        "Parent Reports",
-                        "PTM once a quarter",
-                        "WhatsApp updates + printed report cards",
-                      ],
-                    ].map(([feature, traditional, alyra]) => (
+                    {comparisonRows.map(([feature, traditional, alyra]) => (
                       <tr
                         key={feature}
                         className="transition-colors hover:bg-slate-50"

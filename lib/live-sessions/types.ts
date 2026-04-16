@@ -101,6 +101,7 @@ export type LiveSessionTeacherItem = {
   promptHtml: string;
   options: LiveSessionItemOption[];
   answerIndexes: number[];
+  tagIds: string[];
   explanationHtml: string;
   status: LiveSessionItemStatus;
   order: number;

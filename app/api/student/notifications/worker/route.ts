@@ -3,14 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
+import { recordOpsFailure } from "@/lib/ops-runtime";
 import {
   listRedisPartitionQueuePartitions,
   STUDENT_NOTIFICATION_REDIS_QUEUE,
 } from "@/lib/redis";
+import { withRequestBudget } from "@/lib/server/request-governor";
 import { runStudentNotificationWorker } from "@/lib/server/student-notification-worker";
 import StudentNotificationJob from "@/models/StudentNotificationJob";
 
 export const runtime = "nodejs";
+const STUDENT_NOTIFICATION_BACKLOG_ALERT_THRESHOLD = 250;
 
 function getWorkerSecret() {
   return String(process.env.STUDENT_NOTIFICATION_WORKER_SECRET || "").trim();
@@ -136,6 +139,32 @@ function normalizePositiveInteger(
   return Math.min(max, Math.max(1, Math.floor(parsed)));
 }
 
+async function maybeAlertStudentNotificationBacklog(
+  req: NextRequest,
+  schoolKey: string | undefined,
+  remainingQueued: number,
+  processed: number,
+) {
+  if (remainingQueued < STUDENT_NOTIFICATION_BACKLOG_ALERT_THRESHOLD) {
+    return;
+  }
+
+  await recordOpsFailure({
+    schoolKey,
+    req,
+    action: "student_notification_backlog",
+    message:
+      "Student notification backlog stayed above the configured threshold after a worker run.",
+    severity: "warn",
+    alertLevel: "trust_critical",
+    metadata: {
+      remainingQueued,
+      processed,
+      threshold: STUDENT_NOTIFICATION_BACKLOG_ALERT_THRESHOLD,
+    },
+  });
+}
+
 async function runScheduledNotificationWorker({
   schoolKey,
   limitPerSchool,
@@ -237,13 +266,37 @@ async function runScheduledNotificationWorker({
 }
 
 export async function POST(req: NextRequest) {
-  await connectDB();
-
   if (isCronWorkerRequest(req)) {
     const body = await req.json().catch(() => ({}));
-    const result = await runScheduledWorkerFromRequest(req, body);
+    const schoolKey =
+      String(
+        body?.schoolKey || req.nextUrl.searchParams.get("schoolKey") || "",
+      ).trim() || undefined;
+    return withRequestBudget(
+      {
+        request: req,
+        policy: "studentNotificationWorker",
+        schoolKey,
+        scopeId: schoolKey || "scheduled",
+      },
+      async () => {
+        await connectDB();
+        const result = await runScheduledWorkerFromRequest(req, body);
 
-    return NextResponse.json({ success: true, ...result });
+        await Promise.all(
+          result.schools.map((school) =>
+            maybeAlertStudentNotificationBacklog(
+              req,
+              school.schoolKey,
+              school.remainingQueued,
+              school.processed,
+            ),
+          ),
+        );
+
+        return NextResponse.json({ success: true, ...result });
+      },
+    );
   }
 
   const auth = await requireTenantSession(req, {
@@ -252,25 +305,41 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   const body = await req.json().catch(() => ({}));
-  const jobIds: string[] = Array.from(
-    new Set(
-      (Array.isArray(body?.jobIds) ? body.jobIds : [])
-        .map((jobId: any) => String(jobId || "").trim())
-        .filter(Boolean),
-    ),
-  );
-  const result = await runStudentNotificationWorker({
-    schoolKey: auth.schoolKey,
-    limit: normalizePositiveInteger(body?.limit, 25, 100),
-    jobIds,
-  });
+  return withRequestBudget(
+    {
+      request: req,
+      policy: "studentNotificationWorker",
+      schoolKey: auth.schoolKey,
+      userId: auth.session.user.id,
+    },
+    async () => {
+      await connectDB();
+      const jobIds: string[] = Array.from(
+        new Set(
+          (Array.isArray(body?.jobIds) ? body.jobIds : [])
+            .map((jobId: any) => String(jobId || "").trim())
+            .filter(Boolean),
+        ),
+      );
+      const result = await runStudentNotificationWorker({
+        schoolKey: auth.schoolKey,
+        limit: normalizePositiveInteger(body?.limit, 25, 100),
+        jobIds,
+      });
 
-  return NextResponse.json({ success: true, mode: "tenant", ...result });
+      await maybeAlertStudentNotificationBacklog(
+        req,
+        auth.schoolKey,
+        result.remainingQueued,
+        result.processed,
+      );
+
+      return NextResponse.json({ success: true, mode: "tenant", ...result });
+    },
+  );
 }
 
 export async function GET(req: NextRequest) {
-  await connectDB();
-
   if (!isCronWorkerRequest(req)) {
     return NextResponse.json(
       {
@@ -285,6 +354,29 @@ export async function GET(req: NextRequest) {
     return buildScheduledCronDisabledResponse();
   }
 
-  const result = await runScheduledWorkerFromRequest(req);
-  return NextResponse.json({ success: true, ...result });
+  const schoolKey =
+    String(req.nextUrl.searchParams.get("schoolKey") || "").trim() || undefined;
+  return withRequestBudget(
+    {
+      request: req,
+      policy: "studentNotificationWorker",
+      schoolKey,
+      scopeId: schoolKey || "scheduled",
+    },
+    async () => {
+      await connectDB();
+      const result = await runScheduledWorkerFromRequest(req);
+      await Promise.all(
+        result.schools.map((school) =>
+          maybeAlertStudentNotificationBacklog(
+            req,
+            school.schoolKey,
+            school.remainingQueued,
+            school.processed,
+          ),
+        ),
+      );
+      return NextResponse.json({ success: true, ...result });
+    },
+  );
 }

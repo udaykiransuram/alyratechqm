@@ -101,6 +101,7 @@ export type LiveSessionItemWriteInput = {
   promptHtml: string;
   options: Array<{ contentHtml: string }>;
   answerIndexes: number[];
+  tagIds: string[];
   explanationHtml?: string | null;
 };
 
@@ -373,6 +374,9 @@ function serializeLiveSessionTeacherItem(
     promptHtml: sanitizeLiveSessionRichText(item?.promptHtml || ""),
     options,
     answerIndexes,
+    tagIds: Array.isArray(item?.tagIds)
+      ? item.tagIds.map((tagId: any) => toId(tagId)).filter(Boolean)
+      : [],
     explanationHtml: sanitizeLiveSessionRichText(item?.explanationHtml || ""),
     status: normalizeLiveSessionItemStatus(item?.status),
     order: Math.max(0, Math.trunc(Number(item?.order || 0))),
@@ -476,6 +480,9 @@ export function normalizeLiveSessionItemWriteInput(
     }),
   );
   const answerIndexes = normalizeIntegerIndexes(input?.answerIndexes);
+  const tagIds = (Array.isArray(input?.tagIds) ? input.tagIds : [])
+    .map((value) => toId(value))
+    .filter(Boolean);
 
   if (!hasMeaningfulRichTextContent(promptHtml)) {
     throwLiveSessionError("Live-item prompts cannot be empty.", 400);
@@ -523,6 +530,7 @@ export function normalizeLiveSessionItemWriteInput(
     promptHtml,
     options: type === "short-text" ? [] : options,
     answerIndexes: type === "short-text" ? [] : answerIndexes,
+    tagIds,
     explanationHtml,
   };
 }
@@ -2023,6 +2031,7 @@ export async function createWorkspaceLiveSessionItem(params: {
     promptHtml: params.input.promptHtml,
     options: params.input.options,
     answerIndexes: params.input.answerIndexes,
+    tagIds: params.input.tagIds,
     explanationHtml: params.input.explanationHtml || "",
     status: "draft",
     order: nextOrder,
@@ -2086,6 +2095,7 @@ export async function updateWorkspaceLiveSessionItem(params: {
   item.promptHtml = params.input.promptHtml;
   item.options = params.input.options as any;
   item.answerIndexes = params.input.answerIndexes as any;
+  item.tagIds = params.input.tagIds as any;
   item.explanationHtml = params.input.explanationHtml || "";
   item.updatedBy = params.viewerId as any;
   await item.save();
@@ -3654,6 +3664,88 @@ export async function recordStudentLiveSessionJoin(params: {
   return {
     redirectUrl: String(liveSession?.studentJoinUrl || "").trim(),
     session: await getStudentLiveSessionById(params),
+  };
+}
+
+export async function recordStudentLiveSessionPresence(params: {
+  schoolKey: string;
+  studentId: string;
+  studentPlacement?: {
+    classId?: string | null;
+    academicSectionId?: string | null;
+  } | null;
+  liveSessionId: string;
+}) {
+  const MIN_PRESENCE_MS = 2 * 60 * 1000;
+
+  if (isMockedE2ETestMode()) {
+    return {
+      attendanceStatus: "present" as const,
+    };
+  }
+
+  await connectDB();
+
+  const detail = await getStudentLiveSessionById(params);
+  if (!detail) {
+    return null;
+  }
+
+  if (!detail.canJoin) {
+    return {
+      attendanceStatus: detail.attendanceStatus || "invited",
+    };
+  }
+
+  const { LiveSessionAttendance: LiveSessionAttendanceModel } =
+    await getTenantModels(params.schoolKey, ["LiveSessionAttendance"]);
+
+  const attendance = await LiveSessionAttendanceModel.findOne({
+    liveSession: params.liveSessionId,
+    student: params.studentId,
+  });
+
+  let attendanceStatus: LiveSessionAttendanceStatus = "joined";
+
+  if (!attendance) {
+    const now = new Date();
+    await LiveSessionAttendanceModel.create({
+      liveSession: params.liveSessionId,
+      student: params.studentId,
+      joinClicks: 0,
+      firstJoinedAt: now,
+      lastJoinedAt: now,
+      status: "joined",
+    });
+    attendanceStatus = "joined";
+  } else {
+    const now = new Date();
+    attendance.firstJoinedAt = attendance.firstJoinedAt || now;
+    attendance.lastJoinedAt = now;
+    const currentStatus = String(attendance.status || "");
+    const hasManualOverride = Boolean(attendance.markedBy);
+    const elapsedMs =
+      attendance.firstJoinedAt instanceof Date
+        ? now.getTime() - attendance.firstJoinedAt.getTime()
+        : 0;
+    if (
+      !hasManualOverride &&
+      (currentStatus === "invited" || currentStatus === "joined") &&
+      elapsedMs >= MIN_PRESENCE_MS
+    ) {
+      attendance.status = "present";
+    }
+    await attendance.save();
+    attendanceStatus = (attendance.status as LiveSessionAttendanceStatus) || "joined";
+  }
+
+  await invalidateStudentDashboardCacheForStudents(
+    params.schoolKey,
+    [params.studentId],
+  ).catch(() => undefined);
+
+  return {
+    attendanceStatus,
   };
 }
 

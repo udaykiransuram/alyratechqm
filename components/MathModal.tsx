@@ -29,6 +29,7 @@ type Props = {
 const RECENT_KEY = 'recent_math_expressions';
 
 const mathFieldStyle: CSSProperties = {
+  display: 'block',
   width: '100%',
   minHeight: '176px',
   fontSize: '1.35rem',
@@ -220,7 +221,7 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto bg-muted/20 p-3 sm:p-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(460px,0.9fr)] xl:gap-4">
+        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto bg-muted/20 p-3 sm:p-4 2xl:grid-cols-[minmax(0,1.18fr)_minmax(22rem,0.82fr)] 2xl:gap-4">
           <div className="app-surface overflow-hidden shadow-none">
             <div className="app-section-header py-3.5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -260,33 +261,14 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
               {mathLiveLoadError ? (
                 <p className="text-sm text-muted-foreground">{mathLiveLoadError}</p>
               ) : null}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="app-surface overflow-hidden shadow-none">
-              <div className="app-section-header py-3.5">
-                <p className="text-sm font-medium text-foreground">Preview</p>
-                <p className="text-sm text-muted-foreground">Verify the rendered output before inserting it.</p>
-              </div>
-              <div className="app-section-body space-y-2.5">
-                <div
-                  className="min-h-[240px] rounded-xl border border-border/60 bg-background px-5 py-4 text-base text-foreground"
-                  dangerouslySetInnerHTML={{
-                    __html: previewHtml || '<span class="text-sm text-muted-foreground">Start typing to preview the expression.</span>',
-                  }}
-                />
-                {error ? <p className="text-sm text-destructive">{error}</p> : null}
-              </div>
-            </div>
-
-            {recent.length > 0 ? (
-              <div className="app-surface overflow-hidden shadow-none">
-                <div className="app-section-header py-3.5">
-                  <p className="text-sm font-medium text-foreground">Recent</p>
-                  <p className="text-sm text-muted-foreground">Reuse one of your recently inserted expressions.</p>
-                </div>
-                <div className="app-section-body">
+              {recent.length > 0 ? (
+                <div className="space-y-2 border-t border-border/60 pt-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Recent</p>
+                    <p className="text-sm text-muted-foreground">
+                      Reuse one of your recently inserted expressions.
+                    </p>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {recent.map((item) => (
                       <Button
@@ -301,8 +283,24 @@ export default function MathModal({ open, onClose, onInsert, initialLatex }: Pro
                     ))}
                   </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
+          </div>
+
+          <div className="app-surface overflow-hidden shadow-none 2xl:min-h-0">
+            <div className="app-section-header py-3.5">
+              <p className="text-sm font-medium text-foreground">Preview</p>
+              <p className="text-sm text-muted-foreground">Verify the rendered output before inserting it.</p>
+            </div>
+            <div className="app-section-body space-y-2.5 2xl:min-h-0">
+              <div
+                className="min-h-[200px] rounded-xl border border-border/60 bg-background px-5 py-4 text-base text-foreground sm:min-h-[240px] 2xl:h-full 2xl:max-h-[calc(98vh-15rem)] 2xl:overflow-auto"
+                dangerouslySetInnerHTML={{
+                  __html: previewHtml || '<span class="text-sm text-muted-foreground">Start typing to preview the expression.</span>',
+                }}
+              />
+              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            </div>
           </div>
         </div>
 

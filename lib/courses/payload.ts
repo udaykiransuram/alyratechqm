@@ -147,7 +147,7 @@ export function validateNormalizedCourseBlocks(
         ) {
           return {
             ok: false as const,
-            message: "Lesson resources require a title and uploaded file.",
+            message: "Lesson resources require a title and file link.",
           };
         }
       }
@@ -193,7 +193,7 @@ export function validateNormalizedCourseBlocks(
     ) {
       return {
         ok: false as const,
-        message: "Resource blocks require a title and uploaded file.",
+        message: "Resource blocks require a title and file link.",
       };
     }
 

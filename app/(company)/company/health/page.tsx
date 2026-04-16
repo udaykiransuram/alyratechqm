@@ -90,6 +90,18 @@ function formatHitRate(hits: number, misses: number) {
   return `${Math.round((Number(hits || 0) / total) * 100)}%`;
 }
 
+function formatWindow(value: number | null | undefined) {
+  if (!Number.isFinite(value as number) || value == null || value <= 0) {
+    return "—";
+  }
+
+  if (value >= 60 * 60 * 1000) {
+    return `${Math.round(value / (60 * 60 * 1000))}h`;
+  }
+
+  return `${Math.round(value / (60 * 1000))}m`;
+}
+
 function getMongoReadyStateLabel(readyState: number | null) {
   if (readyState === 1) return "Connected";
   if (readyState === 2) return "Connecting";
@@ -282,6 +294,11 @@ export default async function CompanyHealthPage() {
             label: "Heap used",
             value: formatMemory(health.scale.process.memoryMb.heapUsed),
             meta: `Tenant DBs cached: ${formatCount(health.scale.tenancy.activeConnections)}`,
+          },
+          {
+            label: "Guardrails",
+            value: health.scale.caches.requestGovernor.configured ? "Active" : "Off",
+            meta: `${formatCount(health.scale.caches.requestGovernor.totals.rateLimited)} limited / ${formatCount(health.scale.caches.requestGovernor.totals.unavailable)} unavailable`,
           },
         ]}
       />
@@ -585,6 +602,42 @@ export default async function CompanyHealthPage() {
                     label: "Public school cache",
                     value: `${formatCount(health.scale.caches.publicSchoolData.allCount)} schools`,
                   },
+                  {
+                    label: "Guardrails configured",
+                    value: health.scale.caches.requestGovernor.configured
+                      ? "Yes"
+                      : "No",
+                  },
+                  {
+                    label: "Guardrail backoff",
+                    value: health.scale.caches.requestGovernor.temporarilyUnavailable
+                      ? "Redis unavailable"
+                      : "Ready",
+                  },
+                  {
+                    label: "Guardrail active leases",
+                    value: formatCount(
+                      health.scale.caches.requestGovernor.totals.active,
+                    ),
+                  },
+                  {
+                    label: "Guardrail rate limits",
+                    value: formatCount(
+                      health.scale.caches.requestGovernor.totals.rateLimited,
+                    ),
+                  },
+                  {
+                    label: "Guardrail concurrency limits",
+                    value: formatCount(
+                      health.scale.caches.requestGovernor.totals.concurrencyLimited,
+                    ),
+                  },
+                  {
+                    label: "Guardrail unavailable responses",
+                    value: formatCount(
+                      health.scale.caches.requestGovernor.totals.unavailable,
+                    ),
+                  },
                 ].map((row) => (
                   <div
                     key={row.label}
@@ -607,6 +660,92 @@ export default async function CompanyHealthPage() {
                   </div>
                 </div>
               ) : null}
+
+              <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      Request governor policies
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      Route budgets, concurrency caps, and live stream pressure across the expensive paths.
+                    </div>
+                  </div>
+                  <Badge
+                    variant={
+                      health.scale.caches.requestGovernor.temporarilyUnavailable
+                        ? "warning"
+                        : health.scale.caches.requestGovernor.configured
+                          ? "success"
+                          : "warning"
+                    }
+                  >
+                    {health.scale.caches.requestGovernor.temporarilyUnavailable
+                      ? "Backoff"
+                      : health.scale.caches.requestGovernor.configured
+                        ? "Active"
+                        : "Not configured"}
+                  </Badge>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {health.scale.caches.requestGovernor.policies.map((policy) => (
+                    <div
+                      key={policy.id}
+                      className="rounded-xl border border-border/60 bg-muted/20 px-3.5 py-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-foreground">
+                            {policy.label}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                            <span>{policy.costClass.replace(/_/g, " ")}</span>
+                            <span>{policy.scope}</span>
+                            <span>{policy.failMode}</span>
+                            <span>{formatWindow(policy.windowMs)}</span>
+                          </div>
+                        </div>
+                        <div className="text-right text-xs text-muted-foreground">
+                          <div>{formatCount(policy.maxRequests)} req/window</div>
+                          <div>{formatCount(policy.maxConcurrent)} concurrent</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        {[
+                          {
+                            label: "Active",
+                            value: formatCount(policy.active),
+                          },
+                          {
+                            label: "Limited",
+                            value: formatCount(
+                              policy.rateLimited + policy.concurrencyLimited,
+                            ),
+                          },
+                          {
+                            label: "Unavailable",
+                            value: formatCount(policy.unavailable),
+                          },
+                        ].map((item) => (
+                          <div
+                            key={item.label}
+                            className="rounded-xl border border-border/60 bg-background/75 px-3 py-2"
+                          >
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                              {item.label}
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-foreground">
+                              {item.value}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </CardContent>
           </Card>
 

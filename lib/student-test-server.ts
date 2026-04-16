@@ -478,6 +478,7 @@ async function loadOnlinePapersForClassUncached(
   return QuestionPaperModel.find({
     class: classId,
     onlineEnabled: true,
+    isPracticeSet: { $ne: true },
     ...buildArchiveFilter(false),
   })
     .select(
@@ -527,7 +528,7 @@ async function loadOnlinePapersByIdsUncached(
     ...buildArchiveFilter(false),
   })
     .select(
-      "title class subject subjectIds duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections.name sections.questions.question",
+      "title class subject subjectIds duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections.name sections.questions.question isPracticeSet practiceStudent",
     )
     .populate({ path: "class", model: ClassModel, select: "name" })
     .populate({ path: "subject", model: SubjectModel, select: "name" })
@@ -552,9 +553,10 @@ async function loadOnlinePaperAssignmentsForClassUncached(
   return QuestionPaperModel.find({
     class: classId,
     onlineEnabled: true,
+    isPracticeSet: { $ne: true },
     ...buildArchiveFilter(false),
   })
-    .select("_id class assignedAcademicSections")
+    .select("_id class assignedAcademicSections isPracticeSet practiceStudent")
     .lean();
 }
 

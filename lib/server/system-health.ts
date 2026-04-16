@@ -13,6 +13,7 @@ import {
 } from "@/lib/redis";
 import { getAppServiceConfig, type AppServiceMode } from "@/lib/service-mode";
 import { getPublicSchoolCacheStats } from "@/lib/server/public-school-data";
+import { getRequestGovernorHealthSnapshot } from "@/lib/server/request-governor";
 import { getStudentDashboardCacheStats } from "@/lib/server/student-dashboard-cache";
 import { getWorkspaceSupportDataCacheStats } from "@/lib/server/workspace-support-data";
 import { getStudentTestResourceCacheStats } from "@/lib/student-test-server";
@@ -144,6 +145,39 @@ export type SystemHealthSnapshot = {
         redisReady: number;
         redisDelayed: number;
       };
+      requestGovernor: {
+        configured: boolean;
+        temporarilyUnavailable: boolean;
+        totals: {
+          active: number;
+          allowed: number;
+          softAllowed: number;
+          completed: number;
+          failed: number;
+          rateLimited: number;
+          concurrencyLimited: number;
+          unavailable: number;
+        };
+        policies: Array<{
+          id: string;
+          label: string;
+          scope: string;
+          costClass: string;
+          failMode: string;
+          windowMs: number;
+          maxRequests: number;
+          maxConcurrent: number;
+          active: number;
+          allowed: number;
+          softAllowed: number;
+          completed: number;
+          failed: number;
+          rateLimited: number;
+          concurrencyLimited: number;
+          unavailable: number;
+          updatedAt: string | null;
+        }>;
+      };
     };
   };
 };
@@ -203,10 +237,11 @@ export async function getSystemHealthSnapshot(): Promise<SystemHealthSnapshot> {
   const ok = mongo.status === "up" && dependenciesOk;
   const memoryUsage = process.memoryUsage();
   const tenantDbCache = getTenantDbCacheStats();
-  const [studentNotificationQueueStats, reportDispatchQueueStats] =
+  const [studentNotificationQueueStats, reportDispatchQueueStats, requestGovernor] =
     await Promise.all([
       getRedisPartitionQueueStats(STUDENT_NOTIFICATION_REDIS_QUEUE),
       getRedisPartitionQueueStats(REPORT_DISPATCH_REDIS_QUEUE),
+      getRequestGovernorHealthSnapshot(),
     ]);
   const notificationQueueCounts =
     mongo.status === "up"
@@ -307,6 +342,7 @@ export async function getSystemHealthSnapshot(): Promise<SystemHealthSnapshot> {
           redisReady: reportDispatchQueueStats.ready,
           redisDelayed: reportDispatchQueueStats.delayed,
         },
+        requestGovernor,
       },
     },
   };

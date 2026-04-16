@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { CashfreeSDK, load } from '@/lib/cashfree';
 import { SearchableDatalistInput } from '@/components/ui/searchable-datalist-input';
@@ -49,6 +49,7 @@ const cachedClassesBySchool = new Map<string, ClassOption[]>();
 const cachedSectionsBySchoolClass = new Map<string, SectionOption[]>();
 
 export default function TalentTestRegisterPage() {
+	const formRef = useRef<HTMLFormElement | null>(null);
 	const [cashfreeSDK, setCashfreeSDK] = useState<CashfreeSDK | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [testConfig, setTestConfig] = useState<{ name?: string; price?: number; currency?: string; duration?: string; subjects?: string[]; features?: string[] } | null>(null);
@@ -485,8 +486,22 @@ export default function TalentTestRegisterPage() {
 			setLoading(false);
 		}
 	};
+	const isSubmitDisabled =
+		loading ||
+		!cashfreeSDK ||
+		!acceptedTerms ||
+		directoryLoading.schools ||
+		directoryLoading.classes ||
+		directoryLoading.sections;
+	const amountLabel = `${testConfig?.currency === 'INR' ? '₹' : testConfig?.currency === 'USD' ? '$' : '€'}${testConfig?.price || 100}`;
+	const submitButtonLabel = loading
+		? '⏳ Processing...'
+		: !cashfreeSDK
+			? '⏳ Loading Payment Gateway...'
+			: `💳 Pay ${amountLabel} & Complete Registration`;
+
 	return (
-		<div className="public-flow-page">
+		<div className="public-flow-page public-register-page">
 			<div className="public-flow-shell-narrow">
 				{/* Header Section */}
 				<div className="public-flow-hero text-center">
@@ -524,12 +539,17 @@ export default function TalentTestRegisterPage() {
 
 			{/* Main Form Card */}
 				<div className="public-flow-surface">
-					<form onSubmit={handleSubmit} className="space-y-8">
+					<form
+						id="talent-test-register-form"
+						ref={formRef}
+						onSubmit={handleSubmit}
+						className="space-y-8 pb-24 sm:pb-0"
+					>
 						{directoryError ? (
 							<div className="app-feedback app-feedback-error">{directoryError}</div>
 						) : null}
 						{/* Student Details Section */}
-						<div className="space-y-6">
+						<div className="space-y-6 public-register-section-shell">
 							<h2 className="flex items-center gap-3 text-xl font-semibold tracking-[-0.02em] text-foreground">
 								<span className="public-flow-step">1</span>
 								Student Information
@@ -547,6 +567,7 @@ export default function TalentTestRegisterPage() {
 										value={formData.studentName}
 										onChange={handleChange}
 										placeholder="Enter student's full name as per Aadhar"
+										autoComplete="name"
 									className="public-flow-input"
 									required
 								/>
@@ -577,12 +598,13 @@ export default function TalentTestRegisterPage() {
 											School Roll Number <span className="text-red-500">*</span>
 										</label>
 										<input
-											type="text"
-											name="rollNumber"
-											id="rollNumber"
-											value={formData.rollNumber}
-											onChange={handleChange}
-											placeholder="Current school roll number"
+										type="text"
+										name="rollNumber"
+										id="rollNumber"
+										value={formData.rollNumber}
+										onChange={handleChange}
+										placeholder="Current school roll number"
+										autoComplete="off"
 											className="public-flow-input"
 											required
 										/>
@@ -633,13 +655,16 @@ export default function TalentTestRegisterPage() {
 											Mobile Number <span className="text-red-500">*</span>
 										</label>
 										<input
-											type="tel"
-											name="phone"
-											id="phone"
-											value={formData.phone}
-											onChange={handleChange}
-											placeholder="10-digit mobile number"
-											pattern="[0-9]{10}"
+										type="tel"
+										name="phone"
+										id="phone"
+										value={formData.phone}
+										onChange={handleChange}
+										placeholder="10-digit mobile number"
+										pattern="[0-9]{10}"
+										inputMode="numeric"
+										autoComplete="tel-national"
+										maxLength={10}
 											className="public-flow-input"
 											required
 										/>
@@ -659,6 +684,8 @@ export default function TalentTestRegisterPage() {
 										onChange={handleChange}
 										placeholder="1234 5678 9012"
 										maxLength={14} // 12 digits + 2 spaces
+										inputMode="numeric"
+										autoComplete="off"
 										className="public-flow-input"
 									required
 								/>
@@ -676,6 +703,7 @@ export default function TalentTestRegisterPage() {
 										value={formData.careerAspiration}
 										onChange={handleChange}
 										placeholder="e.g., Doctor, Engineer, Scientist, Artist, etc."
+										autoComplete="off"
 										className="public-flow-input"
 									required
 								/>
@@ -701,6 +729,7 @@ export default function TalentTestRegisterPage() {
 									value={formData.guardianName}
 									onChange={handleChange}
 									placeholder="Enter parent or guardian's full name"
+									autoComplete="name"
 									className="public-flow-input"
 									required
 								/>
@@ -745,21 +774,33 @@ export default function TalentTestRegisterPage() {
 						<div className="public-flow-section space-y-4">
 							<button
 								type="submit"
-								disabled={loading || !cashfreeSDK || !acceptedTerms || directoryLoading.schools || directoryLoading.classes || directoryLoading.sections}
-								className="public-flow-button-primary w-full text-base sm:text-lg"
+								disabled={isSubmitDisabled}
+								className="public-flow-button-primary hidden w-full text-base sm:inline-flex sm:text-lg"
 							>
-								{loading
-									? '⏳ Processing...'
-									: !cashfreeSDK
-									? '⏳ Loading Payment Gateway...'
-									: `💳 Pay ${testConfig?.currency === 'INR' ? '₹' : testConfig?.currency === 'USD' ? '$' : '€'}${testConfig?.price || 100} & Complete Registration`}
+								{submitButtonLabel}
 							</button>
 
-							<p className="text-center text-xs text-muted-foreground">
+							<p className="hidden text-center text-xs text-muted-foreground sm:block">
 								🔒 Secure payment powered by Cashfree • Your data is encrypted and safe
 							</p>
 						</div>
 					</form>
+					<div className="public-register-mobile-cta sm:hidden">
+						<div className="public-register-mobile-cta-meta">
+							<p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Registration fee</p>
+							<p className="text-sm font-semibold text-foreground">{amountLabel}</p>
+						</div>
+						<button
+							type="button"
+							disabled={isSubmitDisabled}
+							className="public-flow-button-primary w-full text-sm"
+							onClick={() => {
+								formRef.current?.requestSubmit();
+							}}
+						>
+							{submitButtonLabel}
+						</button>
+					</div>
 
 					<div className="mt-8 grid gap-4 md:grid-cols-2">
 						<div className="public-flow-card-soft space-y-3">

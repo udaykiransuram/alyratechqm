@@ -666,49 +666,53 @@ export default function WorkspaceLiveSessionDetailClient({
 
             {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
 
-            <div className="flex flex-wrap gap-2">
-              {liveSession.status === "scheduled" ? (
-                <Button
-                  type="button"
-                  className="app-button-page"
-                  onClick={handleStart}
-                  disabled={isWorking}
-                >
-                  Start live class
+	            <div className="grid gap-2 sm:flex sm:flex-wrap">
+	              {liveSession.status === "scheduled" ? (
+	                <Button
+	                  type="button"
+	                  className="app-button-page"
+	                  size="sm"
+	                  onClick={handleStart}
+	                  disabled={isWorking}
+	                >
+	                  Start live class
                 </Button>
               ) : null}
 
               {liveSession.status === "live" ? (
-                <Button
-                  type="button"
-                  className="app-button-page"
-                  onClick={handleEnd}
-                  disabled={isWorking}
-                >
-                  End live class
+	                <Button
+	                  type="button"
+	                  className="app-button-page"
+	                  size="sm"
+	                  onClick={handleEnd}
+	                  disabled={isWorking}
+	                >
+	                  End live class
                 </Button>
               ) : null}
 
               {liveSession.status === "draft" ? (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  className="app-button-page"
-                  onClick={handleDelete}
-                  disabled={isWorking}
-                >
-                  Delete draft
+	                <Button
+	                  type="button"
+	                  variant="destructive"
+	                  className="app-button-page"
+	                  size="sm"
+	                  onClick={handleDelete}
+	                  disabled={isWorking}
+	                >
+	                  Delete draft
                 </Button>
               ) : null}
 
               {liveSession.status !== "completed" && liveSession.status !== "cancelled" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="app-button-page"
-                  onClick={handleCancel}
-                  disabled={isWorking}
-                >
+	                <Button
+	                  type="button"
+	                  variant="outline"
+	                  className="app-button-page"
+	                  size="sm"
+	                  onClick={handleCancel}
+	                  disabled={isWorking}
+	                >
                   Cancel session
                 </Button>
               ) : null}
@@ -726,7 +730,12 @@ export default function WorkspaceLiveSessionDetailClient({
                     Queue draft items, activate them one at a time, and review live participation.
                   </p>
                 </div>
-                <Button type="button" onClick={openCreateItemDialog}>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="app-button-page"
+                  onClick={openCreateItemDialog}
+                >
                   <Layers3 className="h-4 w-4" />
                   Create live item
                 </Button>
@@ -753,10 +762,10 @@ export default function WorkspaceLiveSessionDetailClient({
                     </Button>
                   </div>
                   <LiveItemCard item={liveSession.activeItem}>
-                    <div className="flex flex-wrap gap-2">
-                      {liveSession.activeItem.responseCount > 0 ? (
-                        <Button
-                          type="button"
+	                    <div className="grid gap-2 sm:flex sm:flex-wrap">
+	                      {liveSession.activeItem.responseCount > 0 ? (
+	                        <Button
+	                          type="button"
                           size="sm"
                           variant="outline"
                           onClick={() => void loadResponses(liveSession.activeItem!, 1)}
@@ -791,51 +800,56 @@ export default function WorkspaceLiveSessionDetailClient({
                   <div className="space-y-3">
                     {draftItems.map((item, index) => (
                       <LiveItemCard key={item._id} item={item}>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openEditItemDialog(item)}
-                            disabled={isWorking}
-                          >
+	                        <div className="grid gap-2 sm:flex sm:flex-wrap">
+	                          <Button
+	                            type="button"
+	                            size="sm"
+	                            variant="outline"
+	                            className="w-full sm:w-auto"
+	                            onClick={() => openEditItemDialog(item)}
+	                            disabled={isWorking}
+	                          >
                             Edit
                           </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => handleActivateItem(item._id)}
-                            disabled={isWorking}
-                          >
+	                          <Button
+	                            type="button"
+	                            size="sm"
+	                            className="w-full sm:w-auto"
+	                            onClick={() => handleActivateItem(item._id)}
+	                            disabled={isWorking}
+	                          >
                             Activate
                           </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDraftReorder(item._id, -1)}
-                            disabled={isWorking || index === 0}
-                          >
+	                          <Button
+	                            type="button"
+	                            size="sm"
+	                            variant="outline"
+	                            className="w-full sm:w-auto"
+	                            onClick={() => handleDraftReorder(item._id, -1)}
+	                            disabled={isWorking || index === 0}
+	                          >
                             <MoveUp className="h-4 w-4" />
                             Move up
                           </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDraftReorder(item._id, 1)}
-                            disabled={isWorking || index === draftItems.length - 1}
-                          >
+	                          <Button
+	                            type="button"
+	                            size="sm"
+	                            variant="outline"
+	                            className="w-full sm:w-auto"
+	                            onClick={() => handleDraftReorder(item._id, 1)}
+	                            disabled={isWorking || index === draftItems.length - 1}
+	                          >
                             <MoveDown className="h-4 w-4" />
                             Move down
                           </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteItem(item._id)}
-                            disabled={isWorking}
-                          >
+	                          <Button
+	                            type="button"
+	                            size="sm"
+	                            variant="ghost"
+	                            className="w-full sm:w-auto"
+	                            onClick={() => handleDeleteItem(item._id)}
+	                            disabled={isWorking}
+	                          >
                             Delete
                           </Button>
                         </div>
@@ -861,27 +875,29 @@ export default function WorkspaceLiveSessionDetailClient({
                   <div className="space-y-3">
                     {historyItems.map((item) => (
                       <LiveItemCard key={item._id} item={item}>
-                        <div className="flex flex-wrap gap-2">
-                          {item.responseCount > 0 ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void loadResponses(item, 1)}
-                              disabled={isLoadingResponses}
-                            >
+	                        <div className="grid gap-2 sm:flex sm:flex-wrap">
+	                          {item.responseCount > 0 ? (
+	                            <Button
+	                              type="button"
+	                              size="sm"
+	                              variant="outline"
+	                              className="w-full sm:w-auto"
+	                              onClick={() => void loadResponses(item, 1)}
+	                              disabled={isLoadingResponses}
+	                            >
                               <MessagesSquare className="h-4 w-4" />
                               View responses
                             </Button>
                           ) : null}
                           {item.status !== "archived" ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleArchiveItem(item._id)}
-                              disabled={isWorking}
-                            >
+	                            <Button
+	                              type="button"
+	                              size="sm"
+	                              variant="ghost"
+	                              className="w-full sm:w-auto"
+	                              onClick={() => handleArchiveItem(item._id)}
+	                              disabled={isWorking}
+	                            >
                               Archive
                             </Button>
                           ) : null}
@@ -894,8 +910,8 @@ export default function WorkspaceLiveSessionDetailClient({
             </CardContent>
           </Card>
 
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header gap-2">
+	        <Card className="app-surface overflow-hidden">
+	          <CardHeader className="app-section-header gap-2">
               <div className="flex items-start gap-3">
                 <FileText className="mt-0.5 h-5 w-5 text-primary" />
                 <div>
@@ -971,88 +987,161 @@ export default function WorkspaceLiveSessionDetailClient({
                   Join clicks are logged automatically. Mark final attendance when the session ends.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">{liveSession.presentCount} present</Badge>
-                <Badge variant="outline">{liveSession.absentCount} absent</Badge>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">{liveSession.audienceCount} students</Badge>
+              <Badge variant="outline">{liveSession.joinedCount} joined</Badge>
+              <Badge variant="outline">{liveSession.presentCount} present</Badge>
+              <Badge variant="outline">{liveSession.absentCount} absent</Badge>
             </div>
-          </CardHeader>
-          <CardContent className="app-section-body">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Join clicks</TableHead>
-                  <TableHead>First join</TableHead>
-                  <TableHead>Marked by</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {liveSession.attendance.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-sm text-muted-foreground">
-                      No students are targeted by this live class yet.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  liveSession.attendance.map((item) => (
-                    <TableRow key={item.studentId}>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <p className="font-medium text-foreground">{item.studentName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {item.rollNumber ? `Roll ${item.rollNumber}` : "No roll number"}
-                            {item.academicSectionName ? ` • ${item.academicSectionName}` : ""}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className="capitalize">{formatLabel(item.status)}</Badge>
-                      </TableCell>
-                      <TableCell>{item.joinClicks}</TableCell>
-                      <TableCell>{formatDateTime(item.firstJoinedAt)}</TableCell>
-                      <TableCell>
-                        {item.markedByName
-                          ? `${item.markedByName} • ${formatDateTime(item.markedAt)}`
-                          : "Not marked"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={item.status === "present" ? "default" : "outline"}
-                            className="app-button-compact"
-                            disabled={activeStudentId === item.studentId}
-                            onClick={() =>
-                              handleAttendanceUpdate(item.studentId, "present")
-                            }
-                          >
-                            Present
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={item.status === "absent" ? "default" : "outline"}
-                            className="app-button-compact"
-                            disabled={activeStudentId === item.studentId}
-                            onClick={() =>
-                              handleAttendanceUpdate(item.studentId, "absent")
-                            }
-                          >
-                            Absent
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+          </div>
+        </CardHeader>
+	          <CardContent className="app-section-body space-y-4">
+              <div className="app-detail-grid sm:grid-cols-2 lg:grid-cols-4">
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Audience</p>
+                  <p className="app-detail-value">{liveSession.audienceCount}</p>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Joined</p>
+                  <p className="app-detail-value">{liveSession.joinedCount}</p>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Present</p>
+                  <p className="app-detail-value">{liveSession.presentCount}</p>
+                </div>
+                <div className="app-detail-item">
+                  <p className="app-detail-label">Absent</p>
+                  <p className="app-detail-value">{liveSession.absentCount}</p>
+                </div>
+              </div>
+	            {liveSession.attendance.length === 0 ? (
+	              <div className="rounded-[1.2rem] border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
+	                No students are targeted by this live class yet.
+	              </div>
+	            ) : (
+	              <>
+	                <div className="space-y-3 lg:hidden">
+	                  {liveSession.attendance.map((item) => (
+	                    <div
+	                      key={`mobile-${item.studentId}`}
+	                      className="rounded-[1rem] border border-border/60 bg-background/70 p-3"
+	                    >
+	                      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+	                        <div className="space-y-1">
+	                          <p className="text-sm font-semibold text-foreground">{item.studentName}</p>
+	                          <p className="text-xs text-muted-foreground">
+	                            {item.rollNumber ? `Roll ${item.rollNumber}` : "No roll number"}
+	                            {item.academicSectionName ? ` • ${item.academicSectionName}` : ""}
+	                          </p>
+	                        </div>
+	                        <Badge className="capitalize">{formatLabel(item.status)}</Badge>
+	                      </div>
+	                      <div className="space-y-1 text-xs text-muted-foreground">
+                        <p>Join clicks: {item.joinClicks}</p>
+                        <p>First seen: {formatDateTime(item.firstJoinedAt)}</p>
+                        <p>Last seen: {formatDateTime(item.lastJoinedAt)}</p>
+                        <p>
+                          Marked by:{" "}
+                          {item.markedByName
+                            ? `${item.markedByName} • ${formatDateTime(item.markedAt)}`
+                            : "Not marked"}
+                        </p>
+	                      </div>
+	                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+	                        <Button
+	                          type="button"
+	                          size="sm"
+	                          variant={item.status === "present" ? "default" : "outline"}
+	                          className="app-button-compact w-full"
+	                          disabled={activeStudentId === item.studentId}
+	                          onClick={() => handleAttendanceUpdate(item.studentId, "present")}
+	                        >
+	                          Present
+	                        </Button>
+	                        <Button
+	                          type="button"
+	                          size="sm"
+	                          variant={item.status === "absent" ? "default" : "outline"}
+	                          className="app-button-compact w-full"
+	                          disabled={activeStudentId === item.studentId}
+	                          onClick={() => handleAttendanceUpdate(item.studentId, "absent")}
+	                        >
+	                          Absent
+	                        </Button>
+	                      </div>
+	                    </div>
+	                  ))}
+	                </div>
+
+	                <div className="hidden lg:block app-table-wrap app-table-dense">
+	                  <Table>
+	                    <TableHeader>
+	                      <TableRow>
+	                        <TableHead>Student</TableHead>
+	                        <TableHead>Status</TableHead>
+	                        <TableHead>Join clicks</TableHead>
+	                        <TableHead>First seen</TableHead>
+	                        <TableHead>Last seen</TableHead>
+	                        <TableHead>Marked by</TableHead>
+	                        <TableHead className="text-right">Actions</TableHead>
+	                      </TableRow>
+	                    </TableHeader>
+	                    <TableBody>
+	                      {liveSession.attendance.map((item) => (
+	                        <TableRow key={item.studentId}>
+	                          <TableCell>
+	                            <div className="space-y-1">
+	                              <p className="font-medium text-foreground">{item.studentName}</p>
+	                              <p className="text-xs text-muted-foreground">
+	                                {item.rollNumber ? `Roll ${item.rollNumber}` : "No roll number"}
+	                                {item.academicSectionName ? ` • ${item.academicSectionName}` : ""}
+	                              </p>
+	                            </div>
+	                          </TableCell>
+	                          <TableCell>
+	                            <Badge className="capitalize">{formatLabel(item.status)}</Badge>
+	                          </TableCell>
+	                          <TableCell>{item.joinClicks}</TableCell>
+	                          <TableCell>{formatDateTime(item.firstJoinedAt)}</TableCell>
+	                          <TableCell>{formatDateTime(item.lastJoinedAt)}</TableCell>
+	                          <TableCell>
+	                            {item.markedByName
+	                              ? `${item.markedByName} • ${formatDateTime(item.markedAt)}`
+	                              : "Not marked"}
+	                          </TableCell>
+	                          <TableCell className="text-right">
+	                            <div className="flex justify-end gap-2">
+	                              <Button
+	                                type="button"
+	                                size="sm"
+	                                variant={item.status === "present" ? "default" : "outline"}
+	                                className="app-button-compact"
+	                                disabled={activeStudentId === item.studentId}
+	                                onClick={() => handleAttendanceUpdate(item.studentId, "present")}
+	                              >
+	                                Present
+	                              </Button>
+	                              <Button
+	                                type="button"
+	                                size="sm"
+	                                variant={item.status === "absent" ? "default" : "outline"}
+	                                className="app-button-compact"
+	                                disabled={activeStudentId === item.studentId}
+	                                onClick={() => handleAttendanceUpdate(item.studentId, "absent")}
+	                              >
+	                                Absent
+	                              </Button>
+	                            </div>
+	                          </TableCell>
+	                        </TableRow>
+	                      ))}
+	                    </TableBody>
+	                  </Table>
+	                </div>
+	              </>
+	            )}
+	          </CardContent>
+	        </Card>
       </div>
 
       <LiveSessionItemEditorDialog

@@ -373,7 +373,11 @@ export default function QuestionPaperResponsesPageClient({
   }, [responsesReturnTo]);
 
   const backAction = (
-    <Button variant="outline" onClick={navigateBack} className="app-button-back">
+    <Button
+      variant="outline"
+      onClick={navigateBack}
+      className="app-button-back w-full justify-center sm:w-auto"
+    >
       <ArrowLeft className="h-4 w-4" />
       Back
     </Button>
@@ -425,8 +429,8 @@ export default function QuestionPaperResponsesPageClient({
         title="Student Responses"
         description="Review submitted responses for this paper and open student analytics from the same assessment workspace."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {backAction}
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+            <div className="w-full sm:w-auto">{backAction}</div>
             <Select
               value={selectedAcademicSection}
               onValueChange={(value) => {
@@ -434,7 +438,7 @@ export default function QuestionPaperResponsesPageClient({
                 setSelectedAcademicSection(value);
               }}
             >
-              <SelectTrigger className="w-full sm:w-64">
+              <SelectTrigger className="w-full min-w-0 sm:w-64">
                 <SelectValue placeholder="Class section" />
               </SelectTrigger>
               <SelectContent>
@@ -477,7 +481,7 @@ export default function QuestionPaperResponsesPageClient({
         <CardHeader className="app-section-header">
           <CardTitle>Response List</CardTitle>
         </CardHeader>
-        <CardContent className="app-section-body">
+        <CardContent className="app-section-body space-y-4">
           <ListPagination
             page={page}
             totalPages={pages}
@@ -496,59 +500,115 @@ export default function QuestionPaperResponsesPageClient({
               </p>
             </div>
           ) : (
-            <div className="app-table-wrap">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Class Section</TableHead>
-                    <TableHead>Roll Number</TableHead>
-                    <TableHead>Submitted At</TableHead>
-                    <TableHead>Total Marks</TableHead>
-                    <TableHead>Tag Analytics</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {responses.map((response) => (
-                    <TableRow key={response._id}>
-                      <TableCell>{response.student?.name || "Anonymous Student"}</TableCell>
-                      <TableCell>{response.student?.academicSection?.name || "—"}</TableCell>
-                      <TableCell>{response.student?.rollNumber || "N/A"}</TableCell>
-                      <TableCell>
+            <>
+              <div className="space-y-3 md:hidden">
+                {responses.map((response) => (
+                  <div
+                    key={`mobile-${response._id}`}
+                    className="rounded-2xl border border-border/60 bg-background/70 p-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          {response.student?.name || "Anonymous Student"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {response.student?.academicSection?.name || "—"}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="shrink-0">
+                        {response.totalMarksAwarded ?? "—"}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                      <p>Roll Number: {response.student?.rollNumber || "N/A"}</p>
+                      <p>
+                        Submitted:{" "}
                         {response.submittedAt
                           ? new Date(response.submittedAt).toLocaleString()
                           : "Not submitted"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {response.totalMarksAwarded ?? "—"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          asChild
-                          size="sm"
-                          variant="outline"
-                          className="app-button-compact"
-                        >
-                          <AppPrefetchLink
-                            href={buildHrefWithReturnTo(
-                              `/workspace/analytics/student-tag-report/${response._id}`,
-                              responsesReturnTo,
-                            )}
-                            relatedApiPrefetches={[
-                              `/api/analytics/student-tag-report/${response._id}?groupFields=1`,
-                            ]}
-                          >
-                            View Tag Analytics
-                          </AppPrefetchLink>
-                        </Button>
-                      </TableCell>
+                      </p>
+                    </div>
+
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="app-button-compact mt-3 w-full justify-center"
+                    >
+                      <AppPrefetchLink
+                        href={buildHrefWithReturnTo(
+                          `/workspace/analytics/student-tag-report/${response._id}`,
+                          responsesReturnTo,
+                        )}
+                        relatedApiPrefetches={[
+                          `/api/analytics/student-tag-report/${response._id}?groupFields=1`,
+                        ]}
+                        prefetchOnViewport={false}
+                      >
+                        View Tag Analytics
+                      </AppPrefetchLink>
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="app-table-wrap hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Class Section</TableHead>
+                      <TableHead>Roll Number</TableHead>
+                      <TableHead>Submitted At</TableHead>
+                      <TableHead>Total Marks</TableHead>
+                      <TableHead>Tag Analytics</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {responses.map((response) => (
+                      <TableRow key={response._id}>
+                        <TableCell>{response.student?.name || "Anonymous Student"}</TableCell>
+                        <TableCell>{response.student?.academicSection?.name || "—"}</TableCell>
+                        <TableCell>{response.student?.rollNumber || "N/A"}</TableCell>
+                        <TableCell>
+                          {response.submittedAt
+                            ? new Date(response.submittedAt).toLocaleString()
+                            : "Not submitted"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {response.totalMarksAwarded ?? "—"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="app-button-compact"
+                          >
+                            <AppPrefetchLink
+                              href={buildHrefWithReturnTo(
+                                `/workspace/analytics/student-tag-report/${response._id}`,
+                                responsesReturnTo,
+                              )}
+                              relatedApiPrefetches={[
+                                `/api/analytics/student-tag-report/${response._id}?groupFields=1`,
+                              ]}
+                              prefetchOnViewport={false}
+                            >
+                              View Tag Analytics
+                            </AppPrefetchLink>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

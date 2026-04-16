@@ -57,6 +57,9 @@ export interface IQuestionPaper extends Document {
   sections: ISection[];
   assignedAcademicSections?: Types.ObjectId[];
   createdBy: Types.ObjectId; // Reference to the User who created it
+  isPracticeSet?: boolean;
+  practiceStudent?: Types.ObjectId;
+  practiceTag?: Types.ObjectId;
 }
 
 // --- Schemas ---
@@ -183,6 +186,21 @@ const QuestionPaperSchema = new Schema<IQuestionPaper>(
     assignedAcademicSections: [
       { type: Schema.Types.ObjectId, ref: "AcademicSection" },
     ],
+    isPracticeSet: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    practiceStudent: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    practiceTag: {
+      type: Schema.Types.ObjectId,
+      ref: "Tag",
+      default: null,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User", // Assuming you have a 'User' model
@@ -222,6 +240,9 @@ if (
     !existingQuestionPaperModel.schema.path("onlineEndsAt") ||
     !existingQuestionPaperModel.schema.path("subjectIds") ||
     !existingQuestionPaperModel.schema.path("assignedAcademicSections") ||
+    !existingQuestionPaperModel.schema.path("isPracticeSet") ||
+    !existingQuestionPaperModel.schema.path("practiceStudent") ||
+    !existingQuestionPaperModel.schema.path("practiceTag") ||
     !existingQuestionPaperModel.schema.path("sections.instructions") ||
     !existingQuestionPaperModel.schema.path("sections.defaultMarks") ||
     !existingQuestionPaperModel.schema.path("sections.defaultNegativeMarks") ||

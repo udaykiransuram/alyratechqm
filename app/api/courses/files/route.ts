@@ -9,7 +9,9 @@ import { storePublicFile } from "@/lib/server/public-file-storage";
 const MAX_FILE_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_FILE_UPLOAD_SIZE_LABEL = "20 MB";
 const SUPPORTED_FILE_FORMATS_LABEL =
-  "PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, ZIP, and MP4";
+  "PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, ZIP, MP4, WEBM, MOV, and M4V";
+const LARGE_VIDEO_GUIDANCE =
+  "For larger videos, use a YouTube lesson item or paste a hosted video file URL into the resource link field.";
 
 export async function POST(req: NextRequest) {
   const auth = await requireTenantSession(req, {
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: `Uploaded file is empty. Upload a ${SUPPORTED_FILE_FORMATS_LABEL} file up to ${MAX_FILE_UPLOAD_SIZE_LABEL}.`,
+        message: `Uploaded file is empty. Upload a ${SUPPORTED_FILE_FORMATS_LABEL} file up to ${MAX_FILE_UPLOAD_SIZE_LABEL}. ${LARGE_VIDEO_GUIDANCE}`,
       },
       { status: 400 },
     );
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: `File too large. Upload ${SUPPORTED_FILE_FORMATS_LABEL} files up to ${MAX_FILE_UPLOAD_SIZE_LABEL}.`,
+        message: `File too large. Upload ${SUPPORTED_FILE_FORMATS_LABEL} files up to ${MAX_FILE_UPLOAD_SIZE_LABEL}. ${LARGE_VIDEO_GUIDANCE}`,
       },
       { status: 413 },
     );

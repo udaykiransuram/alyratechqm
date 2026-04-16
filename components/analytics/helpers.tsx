@@ -36,6 +36,77 @@ export function getGroupLabel(key: string, row: any, groupType?: string) {
   return key;
 }
 
+const STATS_TREE_NON_GROUP_KEYS = new Set([
+  "correct",
+  "incorrect",
+  "unattempted",
+  "correctQuestionIds",
+  "incorrectQuestionIds",
+  "unattemptedQuestionIds",
+  "tags",
+  "optionTags",
+  "correctStudents",
+  "incorrectStudents",
+  "unattemptedStudents",
+]);
+
+export type FlattenedStatsRow = {
+  key: string;
+  label: string;
+  level: number;
+  path: string[];
+  row: Record<string, any>;
+};
+
+export function flattenStatsRows(
+  stats: Record<string, any>,
+  groupBy: string[],
+  sortConfig: { key: string; direction: "asc" | "desc" },
+) {
+  const result: FlattenedStatsRow[] = [];
+
+  function walk(node: Record<string, any>, level = 0, path: string[] = []) {
+    if (!node || typeof node !== "object") return;
+
+    const rows = Object.entries(node)
+      .filter(
+        ([key, value]) =>
+          typeof value === "object" &&
+          value !== null &&
+          !STATS_TREE_NON_GROUP_KEYS.has(key),
+      )
+      .map(([key, value]) => ({
+        key,
+        ...(value as Record<string, any>),
+      }));
+
+    if (rows.length === 0) return;
+
+    const sortedRows = sortStatsRows(rows, sortConfig.key, sortConfig.direction);
+
+    sortedRows.forEach((row) => {
+      const nextPath = [...path, row.key];
+
+      result.push({
+        key: row.key,
+        label: getGroupLabel(row.key, row, groupBy[level]),
+        level,
+        path: nextPath,
+        row,
+      });
+
+      const childNode = node[row.key];
+      if (childNode && typeof childNode === "object") {
+        walk(childNode, level + 1, nextPath);
+      }
+    });
+  }
+
+  walk(stats, 0, []);
+
+  return result;
+}
+
 export function aggregateStudentsByKey(root: any, key: string) {
   const map = new Map<
     string,

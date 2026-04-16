@@ -198,15 +198,15 @@ export default function ManageSectionsClient({
             />
           ) : (
             <>
-              <div className="app-filter-summary mb-3">
-                <div className="app-filter-summary-copy">
-                  <p className="app-filter-summary-title">Current scope</p>
-                </div>
-                <div className="app-filter-summary-actions">
-                  <div className="w-full sm:w-[260px]">
-                    <SearchableCommandSelect
-                      value={sectionFilterClassId}
-                      options={sectionClassOptions}
+	              <div className="app-filter-summary mb-3">
+	                <div className="app-filter-summary-copy">
+	                  <p className="app-filter-summary-title">Current scope</p>
+	                </div>
+	                <div className="app-filter-summary-actions">
+	                  <div className="w-full sm:w-[260px]">
+	                    <SearchableCommandSelect
+	                      value={sectionFilterClassId}
+	                      options={sectionClassOptions}
                       onValueChange={setSectionFilterClassId}
                       placeholder="Filter by class"
                       searchPlaceholder="Search classes..."
@@ -239,83 +239,145 @@ export default function ManageSectionsClient({
                     </Button>
                   }
                 />
-              ) : (
-                <div className="app-table-wrap app-table-dense">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Section</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredSections.map((section) => (
-                        <TableRow key={section._id}>
-                          <TableCell>
-                            <div className="app-table-cell-stack">
-                              <div className="app-table-cell-title">{section.name}</div>
-                              <div className="app-table-cell-note">
-                                {getSectionClass(section)?.name || "No class linked"}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {section.isActive === false ? "Inactive" : "Active"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="app-row-action-button app-row-action-button-danger"
-                                  disabled={Boolean(archivingSectionId)}
-                                  aria-label={`Archive ${section.name}`}
-                                  title={`Archive ${section.name}`}
-                                >
-                                  {archivingSectionId === section._id ? (
-                                    <Spinner />
-                                  ) : (
-                                    <Archive className="h-4 w-4" />
-                                  )}
-                                  Archive
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Archive section?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This action cannot be undone. This will archive the section
-                                    <strong className="mx-1">
-                                      &ldquo;{section.name}&rdquo;
-                                    </strong>
-                                    .
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel disabled={Boolean(archivingSectionId)}>
-                                    Cancel
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => void handleArchiveSection(section._id)}
-                                    disabled={Boolean(archivingSectionId)}
-                                  >
-                                    {archivingSectionId === section._id ? <Spinner /> : "Archive"}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
+	              ) : (
+	                <>
+	                  <div className="space-y-3 md:hidden">
+	                    {filteredSections.map((section) => (
+	                      <div
+	                        key={`mobile-${section._id}`}
+	                        className="rounded-2xl border border-border/60 bg-background/70 p-3"
+	                      >
+	                        <div className="space-y-2">
+	                          <div className="space-y-1">
+	                            <p className="text-sm font-semibold text-foreground">{section.name}</p>
+	                            <p className="text-xs text-muted-foreground">
+	                              {getSectionClass(section)?.name || "No class linked"}
+	                            </p>
+	                            <p className="text-xs text-muted-foreground">
+	                              {section.isActive === false ? "Inactive" : "Active"}
+	                            </p>
+	                          </div>
+	                          <AlertDialog>
+	                            <AlertDialogTrigger asChild>
+	                              <Button
+	                                variant="outline"
+	                                size="sm"
+	                                className="app-row-action-button app-row-action-button-danger w-full justify-center"
+	                                disabled={Boolean(archivingSectionId)}
+	                                aria-label={`Archive ${section.name}`}
+	                                title={`Archive ${section.name}`}
+	                              >
+	                                {archivingSectionId === section._id ? (
+	                                  <Spinner />
+	                                ) : (
+	                                  <Archive className="h-4 w-4" />
+	                                )}
+	                                Archive
+	                              </Button>
+	                            </AlertDialogTrigger>
+	                            <AlertDialogContent>
+	                              <AlertDialogHeader>
+	                                <AlertDialogTitle>Archive section?</AlertDialogTitle>
+	                                <AlertDialogDescription>
+	                                  This action cannot be undone. This will archive the section
+	                                  <strong className="mx-1">&ldquo;{section.name}&rdquo;</strong>.
+	                                </AlertDialogDescription>
+	                              </AlertDialogHeader>
+	                              <AlertDialogFooter>
+	                                <AlertDialogCancel disabled={Boolean(archivingSectionId)}>
+	                                  Cancel
+	                                </AlertDialogCancel>
+	                                <AlertDialogAction
+	                                  onClick={() => void handleArchiveSection(section._id)}
+	                                  disabled={Boolean(archivingSectionId)}
+	                                >
+	                                  {archivingSectionId === section._id ? <Spinner /> : "Archive"}
+	                                </AlertDialogAction>
+	                              </AlertDialogFooter>
+	                            </AlertDialogContent>
+	                          </AlertDialog>
+	                        </div>
+	                      </div>
+	                    ))}
+	                  </div>
+
+	                  <div className="app-table-wrap app-table-dense hidden md:block">
+	                    <Table>
+	                      <TableHeader>
+	                        <TableRow>
+	                          <TableHead>Section</TableHead>
+	                          <TableHead>Status</TableHead>
+	                          <TableHead className="text-right">Actions</TableHead>
+	                        </TableRow>
+	                      </TableHeader>
+	                      <TableBody>
+	                        {filteredSections.map((section) => (
+	                          <TableRow key={section._id}>
+	                            <TableCell>
+	                              <div className="app-table-cell-stack">
+	                                <div className="app-table-cell-title">{section.name}</div>
+	                                <div className="app-table-cell-note">
+	                                  {getSectionClass(section)?.name || "No class linked"}
+	                                </div>
+	                              </div>
+	                            </TableCell>
+	                            <TableCell>
+	                              {section.isActive === false ? "Inactive" : "Active"}
+	                            </TableCell>
+	                            <TableCell className="text-right">
+	                              <AlertDialog>
+	                                <AlertDialogTrigger asChild>
+	                                  <Button
+	                                    variant="outline"
+	                                    size="sm"
+	                                    className="app-row-action-button app-row-action-button-danger"
+	                                    disabled={Boolean(archivingSectionId)}
+	                                    aria-label={`Archive ${section.name}`}
+	                                    title={`Archive ${section.name}`}
+	                                  >
+	                                    {archivingSectionId === section._id ? (
+	                                      <Spinner />
+	                                    ) : (
+	                                      <Archive className="h-4 w-4" />
+	                                    )}
+	                                    Archive
+	                                  </Button>
+	                                </AlertDialogTrigger>
+	                                <AlertDialogContent>
+	                                  <AlertDialogHeader>
+	                                    <AlertDialogTitle>Archive section?</AlertDialogTitle>
+	                                    <AlertDialogDescription>
+	                                      This action cannot be undone. This will archive the section
+	                                      <strong className="mx-1">
+	                                        &ldquo;{section.name}&rdquo;
+	                                      </strong>
+	                                      .
+	                                    </AlertDialogDescription>
+	                                  </AlertDialogHeader>
+	                                  <AlertDialogFooter>
+	                                    <AlertDialogCancel disabled={Boolean(archivingSectionId)}>
+	                                      Cancel
+	                                    </AlertDialogCancel>
+	                                    <AlertDialogAction
+	                                      onClick={() => void handleArchiveSection(section._id)}
+	                                      disabled={Boolean(archivingSectionId)}
+	                                    >
+	                                      {archivingSectionId === section._id ? <Spinner /> : "Archive"}
+	                                    </AlertDialogAction>
+	                                  </AlertDialogFooter>
+	                                </AlertDialogContent>
+	                              </AlertDialog>
+	                            </TableCell>
+	                          </TableRow>
+	                        ))}
+	                      </TableBody>
+	                    </Table>
+	                  </div>
+	                </>
+	              )}
+	            </>
+	          )}
+	        </CardContent>
       </Card>
     </PageShell>
   );

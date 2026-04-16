@@ -647,134 +647,238 @@ export default function StudentTestsPageClient({
                 : "No online tests are assigned right now."}
             </div>
           ) : (
-            <div className="app-table-wrap rounded-none border-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[24rem]">Test</TableHead>
-                    <TableHead className="w-[14rem]">Window</TableHead>
-                    <TableHead className="w-[14rem]">Attempt</TableHead>
-                    <TableHead className="w-[14rem]">Result</TableHead>
-                    <TableHead className="text-right min-w-[10rem]">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTests.map((test) => {
-                    const actionDetails = getTestActionDetails(test);
-                    const subjectLabels = getTestSubjects(test);
-                    const classLabel = String(test.class?.name || "").trim();
-                    const hasLocalDraft =
-                      test.status === "in_progress" &&
-                      Boolean(draftUpdatedAtByPaperId[test._id]);
-                    const scoreVisible =
-                      (test.status === "submitted" ||
-                        test.status === "auto_submitted") &&
-                      test.attempt;
+            <div className="space-y-0">
+              <div className="app-student-report-card-list md:hidden">
+                {filteredTests.map((test) => {
+                  const actionDetails = getTestActionDetails(test);
+                  const subjectLabels = getTestSubjects(test);
+                  const classLabel = String(test.class?.name || "").trim();
+                  const hasLocalDraft =
+                    test.status === "in_progress" &&
+                    Boolean(draftUpdatedAtByPaperId[test._id]);
+                  const scoreVisible =
+                    (test.status === "submitted" ||
+                      test.status === "auto_submitted") &&
+                    test.attempt;
 
-                    return (
-                      <TableRow key={test._id}>
-                        <TableCell>
-                          <div className="min-w-[17rem] space-y-2">
-                            <div className="app-list-title">{test.title}</div>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              {classLabel ? (
-                                <Badge variant="secondary">{classLabel}</Badge>
+                  return (
+                    <article key={test._id} className="app-student-report-card">
+                      <div className="app-student-report-card-head">
+                        <p className="app-list-title">{test.title}</p>
+                        <Badge variant={getStatusVariant(test.status)}>
+                          {STATUS_LABELS[test.status] || test.status}
+                        </Badge>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {classLabel ? (
+                          <Badge variant="secondary">{classLabel}</Badge>
+                        ) : null}
+                        {subjectLabels.length > 0 ? (
+                          subjectLabels.map((subject) => (
+                            <Badge key={subject._id} variant="outline">
+                              {subject.name || subject._id}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="app-list-meta">No subject</span>
+                        )}
+                      </div>
+                      <div className="app-student-report-card-meta-grid">
+                        <div>
+                          <p className="app-list-meta">Window</p>
+                          <p className="app-list-value">
+                            Opens {formatDateTime(test.onlineStartsAt || test.examDate)}
+                          </p>
+                          <p className="app-list-meta">
+                            Closes {formatDateTime(test.onlineEndsAt)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="app-list-meta">Attempt</p>
+                          <p className="app-list-value">{getTimingChip(test)}</p>
+                          {hasLocalDraft ? (
+                            <p className="app-list-meta text-amber-700 dark:text-amber-300">
+                              Local draft saved on this device
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="app-student-report-card-meta-grid">
+                        <div>
+                          <p className="app-list-meta">Test details</p>
+                          <p className="app-list-value">
+                            {test.duration} min • {test.totalMarks} marks
+                          </p>
+                          <p className="app-list-meta">Pass {test.passingMarks}</p>
+                        </div>
+                        <div>
+                          <p className="app-list-meta">Result</p>
+                          {scoreVisible ? (
+                            <>
+                              <p className="app-list-value">
+                                Score {test.attempt?.totalMarksAwarded ?? 0} / {test.totalMarks}
+                              </p>
+                              <p className="app-list-meta">
+                                {test.requiresManualReview
+                                  ? "Auto-graded only"
+                                  : "Final score"}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="app-list-meta">Not submitted yet</p>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        asChild
+                        size="md"
+                        variant={actionDetails.actionVariant}
+                        className="app-student-action-compact"
+                      >
+                        <AppPrefetchLink
+                          href={actionDetails.actionHref}
+                          relatedApiPrefetches={actionDetails.relatedApiPrefetches}
+                          prefetchOnViewport={false}
+                          requestFullscreenOnClick={
+                            actionDetails.requestFullscreenOnClick
+                          }
+                        >
+                          {actionDetails.actionLabel}
+                        </AppPrefetchLink>
+                      </Button>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="app-table-wrap hidden rounded-none border-0 md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[24rem]">Test</TableHead>
+                      <TableHead className="w-[14rem]">Window</TableHead>
+                      <TableHead className="w-[14rem]">Attempt</TableHead>
+                      <TableHead className="w-[14rem]">Result</TableHead>
+                      <TableHead className="text-right min-w-[10rem]">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTests.map((test) => {
+                      const actionDetails = getTestActionDetails(test);
+                      const subjectLabels = getTestSubjects(test);
+                      const classLabel = String(test.class?.name || "").trim();
+                      const hasLocalDraft =
+                        test.status === "in_progress" &&
+                        Boolean(draftUpdatedAtByPaperId[test._id]);
+                      const scoreVisible =
+                        (test.status === "submitted" ||
+                          test.status === "auto_submitted") &&
+                        test.attempt;
+
+                      return (
+                        <TableRow key={test._id}>
+                          <TableCell>
+                            <div className="min-w-[17rem] space-y-2">
+                              <div className="app-list-title">{test.title}</div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {classLabel ? (
+                                  <Badge variant="secondary">{classLabel}</Badge>
+                                ) : null}
+                                {subjectLabels.length > 0 ? (
+                                  subjectLabels.map((subject) => (
+                                    <Badge key={subject._id} variant="outline">
+                                      {subject.name || subject._id}
+                                    </Badge>
+                                  ))
+                                ) : (
+                                  <span className="app-list-meta">No subject</span>
+                                )}
+                              </div>
+                              <div className="app-list-meta">
+                                {test.onlineEndsAt
+                                  ? `Closes ${formatDateTime(test.onlineEndsAt)}`
+                                  : "Online test"}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="app-list-value">
+                                Opens {formatDateTime(test.onlineStartsAt || test.examDate)}
+                              </div>
+                              <div className="app-list-meta">
+                                Closes {formatDateTime(test.onlineEndsAt)}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="min-w-[11rem] space-y-1.5">
+                              <Badge variant={getStatusVariant(test.status)}>
+                                {STATUS_LABELS[test.status] || test.status}
+                              </Badge>
+                              <div className="app-list-meta">
+                                {getTimingChip(test)}
+                              </div>
+                              {hasLocalDraft ? (
+                                <div className="app-list-meta text-amber-700 dark:text-amber-300">
+                                  Local draft saved on this device
+                                </div>
                               ) : null}
-                              {subjectLabels.length > 0 ? (
-                                subjectLabels.map((subject) => (
-                                  <Badge key={subject._id} variant="outline">
-                                    {subject.name || subject._id}
-                                  </Badge>
-                                ))
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="min-w-[12rem] space-y-1">
+                              <div className="app-list-value">
+                                {test.duration} min • {test.totalMarks} marks
+                              </div>
+                              <div className="app-list-meta">
+                                Pass {test.passingMarks}
+                              </div>
+                              {scoreVisible ? (
+                                <>
+                                  <div className="app-list-value">
+                                    Score {test.attempt?.totalMarksAwarded ?? 0} / {test.totalMarks}
+                                  </div>
+                                  <div className="app-list-meta">
+                                    {test.requiresManualReview
+                                      ? "Auto-graded only"
+                                      : "Final score"}
+                                  </div>
+                                  {test.requiresManualReview ? (
+                                    <div className="app-list-meta">
+                                      Manual review pending
+                                    </div>
+                                  ) : null}
+                                </>
                               ) : (
-                                <span className="app-list-meta">No subject</span>
+                                <div className="app-list-meta">Not submitted yet</div>
                               )}
                             </div>
-                            <div className="app-list-meta">
-                              {test.onlineEndsAt
-                                ? `Closes ${formatDateTime(test.onlineEndsAt)}`
-                                : "Online test"}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="app-list-value">
-                              Opens {formatDateTime(test.onlineStartsAt || test.examDate)}
-                            </div>
-                            <div className="app-list-meta">
-                              Closes {formatDateTime(test.onlineEndsAt)}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="min-w-[11rem] space-y-1.5">
-                            <Badge variant={getStatusVariant(test.status)}>
-                              {STATUS_LABELS[test.status] || test.status}
-                            </Badge>
-                            <div className="app-list-meta">
-                              {getTimingChip(test)}
-                            </div>
-                            {hasLocalDraft ? (
-                              <div className="app-list-meta text-amber-700 dark:text-amber-300">
-                                Local draft saved on this device
-                              </div>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="min-w-[12rem] space-y-1">
-                            <div className="app-list-value">
-                              {test.duration} min • {test.totalMarks} marks
-                            </div>
-                            <div className="app-list-meta">
-                              Pass {test.passingMarks}
-                            </div>
-                            {scoreVisible ? (
-                              <>
-                                <div className="app-list-value">
-                                  Score {test.attempt?.totalMarksAwarded ?? 0} / {test.totalMarks}
-                                </div>
-                                <div className="app-list-meta">
-                                  {test.requiresManualReview
-                                    ? "Auto-graded only"
-                                    : "Final score"}
-                                </div>
-                                {test.requiresManualReview ? (
-                                  <div className="app-list-meta">
-                                    Manual review pending
-                                  </div>
-                                ) : null}
-                              </>
-                            ) : (
-                              <div className="app-list-meta">Not submitted yet</div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            asChild
-                            size="md"
-                            variant={actionDetails.actionVariant}
-                            className="app-student-action-compact"
-                          >
-                            <AppPrefetchLink
-                              href={actionDetails.actionHref}
-                              relatedApiPrefetches={actionDetails.relatedApiPrefetches}
-                              prefetchOnViewport={false}
-                              requestFullscreenOnClick={
-                                actionDetails.requestFullscreenOnClick
-                              }
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              asChild
+                              size="md"
+                              variant={actionDetails.actionVariant}
+                              className="app-student-action-compact"
                             >
-                              {actionDetails.actionLabel}
-                            </AppPrefetchLink>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                              <AppPrefetchLink
+                                href={actionDetails.actionHref}
+                                relatedApiPrefetches={actionDetails.relatedApiPrefetches}
+                                prefetchOnViewport={false}
+                                requestFullscreenOnClick={
+                                  actionDetails.requestFullscreenOnClick
+                                }
+                              >
+                                {actionDetails.actionLabel}
+                              </AppPrefetchLink>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>

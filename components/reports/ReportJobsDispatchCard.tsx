@@ -228,8 +228,215 @@ function ReportJobsDispatchCard({
               disabled={isPending}
             />
 
-            <div className="app-table-wrap">
-              <Table className="min-w-[76rem]">
+            <div className="space-y-3 md:hidden">
+              {jobs.map((job) => (
+                <article
+                  key={job._id}
+                  className="rounded-2xl border border-border/70 bg-background/80 p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <p className="app-table-primary">{job.studentName || "-"}</p>
+                      <p className="app-table-secondary">{getTypeLabel(job)}</p>
+                      <p className="break-words text-xs text-muted-foreground">
+                        {job.mobileNumber || "No mobile number"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <span className={getStatusBadgeClass(job.status)}>{job.status}</span>
+                      {job.deliveryAttemptSummary?.awaitingProviderAck ? (
+                        <span className="app-status-badge app-status-badge-warning">
+                          Awaiting provider ack
+                        </span>
+                      ) : null}
+                      {job.deliveryAttemptSummary?.recoveredStaleLock ? (
+                        <span className="app-status-badge app-status-badge-warning">
+                          Recovered stale lock
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-3">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Report
+                      </p>
+                      <p className="app-table-primary">{job.paperTitle || "-"}</p>
+                      <p className="app-table-secondary">{getReportLabel(job)}</p>
+                      <p className="text-xs text-muted-foreground">{getScopeLabel(job)}</p>
+                      {isBenchmarkJob(job) ? (
+                        <div className="space-y-1">
+                          <span className="app-status-badge app-status-badge-info w-fit">
+                            Benchmark included
+                          </span>
+                          <p className="text-xs text-muted-foreground">{getBenchmarkLabel(job)}</p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Student-only analytics</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Delivery
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <span className={getDeliveryBadgeClass(job.deliveryStatus)}>
+                          {job.deliveryStatus || "-"}
+                        </span>
+                        {job.providerAcceptedAt ? (
+                          <span className="app-status-badge app-status-badge-success">
+                            Accepted
+                          </span>
+                        ) : null}
+                      </div>
+                      {job.deliveryError ? (
+                        <p className="break-words text-xs text-rose-600">{job.deliveryError}</p>
+                      ) : null}
+                      {job.providerMessageId ? (
+                        <p className="break-all text-xs text-slate-500" title={job.providerMessageId}>
+                          {job.providerMessageId}
+                        </p>
+                      ) : null}
+                      {job.lastWebhookAt ? (
+                        <p className="text-xs text-muted-foreground">
+                          Last webhook: {formatDateTime(job.lastWebhookAt)}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Attempts
+                      </p>
+                      <p className="app-table-primary">
+                        {job.attempts || 0}/{job.maxAttempts || 3}
+                      </p>
+                      {job.deliveryAttemptSummary ? (
+                        <>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="app-status-badge app-status-badge-neutral">
+                              {job.deliveryAttemptSummary.totalTracked} tracked
+                            </span>
+                            {job.deliveryAttemptSummary.acceptedCount > 0 ? (
+                              <span className="app-status-badge app-status-badge-success">
+                                {job.deliveryAttemptSummary.acceptedCount} accepted
+                              </span>
+                            ) : null}
+                            {job.deliveryAttemptSummary.pendingAckCount > 0 ? (
+                              <span className="app-status-badge app-status-badge-warning">
+                                {job.deliveryAttemptSummary.pendingAckCount} pending ack
+                              </span>
+                            ) : null}
+                            {job.deliveryAttemptSummary.expiredCount > 0 ? (
+                              <span className="app-status-badge app-status-badge-danger">
+                                {job.deliveryAttemptSummary.expiredCount} expired
+                              </span>
+                            ) : null}
+                          </div>
+                          {job.deliveryAttemptSummary.latestAttempt ? (
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              <div className="flex flex-wrap gap-2">
+                                <span
+                                  className={getAttemptStateBadgeClass(
+                                    job.deliveryAttemptSummary.latestAttempt.state,
+                                  )}
+                                >
+                                  Attempt #{job.deliveryAttemptSummary.latestAttempt.attemptNumber}{" "}
+                                  {getAttemptStateLabel(job.deliveryAttemptSummary.latestAttempt.state)}
+                                </span>
+                                {job.deliveryAttemptSummary.latestAttempt.deliveryStatus ? (
+                                  <span
+                                    className={getDeliveryBadgeClass(
+                                      job.deliveryAttemptSummary.latestAttempt.deliveryStatus || undefined,
+                                    )}
+                                  >
+                                    {job.deliveryAttemptSummary.latestAttempt.deliveryStatus}
+                                  </span>
+                                ) : null}
+                              </div>
+                              {job.deliveryAttemptSummary.latestAttempt.createdAt ? (
+                                <p>
+                                  Started{" "}
+                                  {formatDateTime(
+                                    job.deliveryAttemptSummary.latestAttempt.createdAt || undefined,
+                                  )}
+                                </p>
+                              ) : null}
+                              {job.deliveryAttemptSummary.latestAttempt.acknowledgedAt ? (
+                                <p>
+                                  Acknowledged{" "}
+                                  {formatDateTime(
+                                    job.deliveryAttemptSummary.latestAttempt.acknowledgedAt || undefined,
+                                  )}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2 rounded-xl border border-border/70 bg-muted/20 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Issue & action
+                      </p>
+                      <p className="break-words text-xs text-rose-600">
+                        {job.error || "No reported error"}
+                      </p>
+                      {job.deliveryAttemptSummary?.latestAttempt?.note &&
+                      job.deliveryAttemptSummary.latestAttempt.note !== job.error ? (
+                        <p className="break-words text-xs text-muted-foreground">
+                          {job.deliveryAttemptSummary.latestAttempt.note}
+                        </p>
+                      ) : null}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {job.reportUrl ? (
+                          <Button asChild variant="outline" size="sm" className="app-button-compact">
+                            <a href={job.reportUrl} target="_blank" rel="noreferrer">
+                              Open report
+                            </a>
+                          </Button>
+                        ) : null}
+                        {job.status === "failed" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="app-button-compact"
+                            onClick={() => onRetryJob(job._id)}
+                            disabled={retryingId === job._id}
+                          >
+                            {retryingId === job._id ? "Retrying..." : "Retry now"}
+                          </Button>
+                        ) : (
+                          <span className="app-table-secondary">No action needed</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      {job.processingStartedAt && job.status === "processing" ? (
+                        <p>Processing since {formatDateTime(job.processingStartedAt)}</p>
+                      ) : null}
+                      {job.nextRetryAt ? <p>Next retry at {formatDateTime(job.nextRetryAt)}</p> : null}
+                      {job.deliveryAttemptSummary?.ackWaitUntil &&
+                      job.deliveryAttemptSummary.awaitingProviderAck ? (
+                        <p>
+                          Provider ack wait until{" "}
+                          {formatDateTime(job.deliveryAttemptSummary.ackWaitUntil)}
+                        </p>
+                      ) : null}
+                      {job.updatedAt ? <p>Updated {formatDateTime(job.updatedAt)}</p> : null}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden md:block">
+              <div className="app-table-wrap">
+                <Table className="min-w-[76rem]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[16rem]">Dispatch</TableHead>
@@ -470,7 +677,8 @@ function ReportJobsDispatchCard({
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
             </div>
           </div>
         )}

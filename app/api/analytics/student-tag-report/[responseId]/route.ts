@@ -42,6 +42,7 @@ import {
 } from "@/lib/question-paper/grading";
 import { z } from "zod";
 import { objectIdSchema, parseOr400 } from "@/lib/validation";
+import { withRequestBudget } from "@/lib/server/request-governor";
 
 type ScopedAnalyticsUser = {
   hasAllClasses?: boolean;
@@ -198,39 +199,48 @@ export async function GET(
     );
   }
 
-  // --- Handle groupFields=1 for dynamic grouping options ---
+  return withRequestBudget(
+    {
+      request: req,
+      policy: "analyticsStudentTagReport",
+      schoolKey: tenantKey,
+      userId: auth.session.user.id,
+      scopeId: `${tenantKey}:${resolvedResponseId}`,
+    },
+    async () => {
+      // --- Handle groupFields=1 for dynamic grouping options ---
 
-  // Resolve tenant-bound models consistently with other APIs
-  // Ensure related models (Question, Tag, TagType) are registered on the tenant connection
-  const {
-    QuestionPaperResponse: QPRModel,
-    QuestionPaper: QPModel,
-    Tag: TagModel,
-    TagType: TagTypeModel,
-    User: UserModel,
-    Class: ClassModel,
-    AcademicSection: AcademicSectionModel,
-  } = await getTenantModels(tenantKey, [
-    "QuestionPaperResponse",
-    "QuestionPaper",
-    "Question",
-    "Tag",
-    "TagType",
-    "Subject",
-    "Class",
-    "User",
-    "AcademicSection",
-  ]);
-  const scopedUser: ScopedAnalyticsUser | null = !isStudentSession
-    ? ((await UserModel.findById(auth.session.user.id)
-        .select(
-          "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
-        )
-        .lean()) as ScopedAnalyticsUser | null)
-    : null;
+      // Resolve tenant-bound models consistently with other APIs
+      // Ensure related models (Question, Tag, TagType) are registered on the tenant connection
+      const {
+        QuestionPaperResponse: QPRModel,
+        QuestionPaper: QPModel,
+        Tag: TagModel,
+        TagType: TagTypeModel,
+        User: UserModel,
+        Class: ClassModel,
+        AcademicSection: AcademicSectionModel,
+      } = await getTenantModels(tenantKey, [
+        "QuestionPaperResponse",
+        "QuestionPaper",
+        "Question",
+        "Tag",
+        "TagType",
+        "Subject",
+        "Class",
+        "User",
+        "AcademicSection",
+      ]);
+      const scopedUser: ScopedAnalyticsUser | null = !isStudentSession
+        ? ((await UserModel.findById(auth.session.user.id)
+            .select(
+              "hasAllClasses classIds hasAllSubjects subjectIds hasAllSections academicSectionIds",
+            )
+            .lean()) as ScopedAnalyticsUser | null)
+        : null;
 
-  if (req.nextUrl.searchParams.get("groupFields") === "1") {
-    try {
+      if (req.nextUrl.searchParams.get("groupFields") === "1") {
+        try {
       const response = await QPRModel.findOne(responseQuery)
         .populate({
           path: "paper",
@@ -1040,18 +1050,20 @@ export async function GET(
     await new Promise((resolve) => doc.on("end", resolve));
     const pdfBuffer = Buffer.concat(buffers);
 
-    return new NextResponse(pdfBuffer, {
-      status: 200,
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="student_tag_analytics.pdf"`,
-      },
-    });
-  } catch (error: any) {
-    console.error("Error in analytics route:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "Failed to load analytics." },
-      { status: 500 },
-    );
-  }
+      return new NextResponse(pdfBuffer, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="student_tag_analytics.pdf"`,
+        },
+      });
+    } catch (error: any) {
+      console.error("Error in analytics route:", error);
+      return NextResponse.json(
+        { success: false, message: error?.message || "Failed to load analytics." },
+        { status: 500 },
+      );
+    }
+    },
+  );
 }

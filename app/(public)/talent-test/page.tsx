@@ -233,7 +233,7 @@ export default async function TalentTestLandingPage() {
   return (
     <div className="public-flow-page !px-0 !py-0">
       {/* Hero Section */}
-      <section className="mx-4 mt-4 public-flow-hero md:py-16">
+      <section className="mx-4 mt-4 public-flow-hero public-talent-hero md:py-16">
         <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-teal-500/10 blur-3xl" />
         <div className="absolute -bottom-24 -left-16 h-80 w-80 rounded-full bg-teal-500/10 blur-3xl" />
         
@@ -241,7 +241,7 @@ export default async function TalentTestLandingPage() {
           <div className="text-center">
             {/* Removed free trial badge as per requirement */}
             <Reveal delay={0.06}>
-              <h1 className="text-5xl font-extrabold tracking-tight md:text-7xl">
+              <h1 className="public-talent-hero-title text-5xl font-extrabold tracking-tight md:text-7xl">
                 <span className="bg-teal-600 bg-clip-text text-transparent">Ignite Brilliance.</span>
                 <br />
                 <span className="bg-teal-600 bg-clip-text text-transparent">Master Tomorrow.</span>
@@ -254,7 +254,7 @@ export default async function TalentTestLandingPage() {
               </p>
             </Reveal>
             <Reveal delay={0.18}>
-              <div className="mt-9 flex flex-wrap justify-center gap-3">
+              <div className="public-talent-hero-actions mt-9 flex flex-wrap justify-center gap-3">
                 <Link href="/register" prefetch className="public-flow-button-primary inline-flex min-w-[13.5rem] items-center justify-center px-8 py-3.5 text-lg">
                   {priceLabel ? `Enroll Now for ${priceLabel} ✨` : 'Enroll Now ✨'}
                 </Link>
@@ -264,10 +264,10 @@ export default async function TalentTestLandingPage() {
               </div>
             </Reveal>
             <Reveal delay={0.24}>
-              <div className="mx-auto mt-10 grid max-w-4xl grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="public-talent-hero-stats mx-auto mt-10 grid max-w-4xl grid-cols-2 gap-4 md:grid-cols-4">
                 {heroStats.map((stat, i) => (
                   <div key={i} className="public-flow-stat-card">
-                    <div className="text-4xl font-bold text-teal-600">{stat.value}</div>
+                    <div className="public-talent-hero-stat-value text-4xl font-bold text-teal-600">{stat.value}</div>
                     <div className="mt-2 text-sm text-muted-foreground">{stat.label}</div>
                   </div>
                 ))}

@@ -31,6 +31,7 @@ type StudentLiveSessionCompanionClientProps = {
 };
 
 const LIVE_SESSION_POLL_INTERVAL_MS = 8_000;
+const LIVE_SESSION_PRESENCE_INTERVAL_MS = 20_000;
 
 function formatDateTime(value?: string | null) {
   if (!value) {
@@ -119,6 +120,7 @@ export default function StudentLiveSessionCompanionClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date().toISOString());
   const refreshInFlightRef = useRef(false);
+  const presenceInFlightRef = useRef(false);
 
   useEffect(() => {
     setLiveSession(initialLiveSession);
@@ -225,6 +227,53 @@ export default function StudentLiveSessionCompanionClient({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refreshLiveSession]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const sendPresence = async () => {
+      if (disposed || presenceInFlightRef.current) {
+        return;
+      }
+
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+
+      presenceInFlightRef.current = true;
+      try {
+        await fetch(`/api/student/live-sessions/${liveSession._id}/presence`, {
+          method: "POST",
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+      } catch {
+        // Ignore presence failures; the next tick will retry.
+      } finally {
+        presenceInFlightRef.current = false;
+      }
+    };
+
+    const intervalId = window.setInterval(
+      () => void sendPresence(),
+      LIVE_SESSION_PRESENCE_INTERVAL_MS,
+    );
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void sendPresence();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    void sendPresence();
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [liveSession._id]);
 
   const activeItem = liveSession.activeItem;
   const studentJoinStream = useMemo(
@@ -590,33 +639,36 @@ export default function StudentLiveSessionCompanionClient({
               {liveSession.hostTeacher?.name ? (
                 <Badge variant="outline">{liveSession.hostTeacher.name}</Badge>
               ) : null}
+              {liveSession.attendanceStatus === "present" ? (
+                <Badge variant="success">Live attendance verified</Badge>
+              ) : null}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[1rem] border border-border/60 bg-background/72 p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  Attendance
-                </p>
-                <p className="mt-2 font-medium text-foreground capitalize">
+            <div className="app-detail-grid sm:grid-cols-2">
+              <div className="app-detail-item">
+                <p className="app-detail-label">Attendance</p>
+                <p className="app-detail-value capitalize">
                   {formatStatusLabel(liveSession.attendanceStatus || "invited")}
                 </p>
-              </div>
-              <div className="rounded-[1rem] border border-border/60 bg-background/72 p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  Join clicks
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Verified after 2 minutes on this live page.
                 </p>
-                <p className="mt-2 font-medium text-foreground">
-                  {liveSession.joinClicks}
+              </div>
+              <div className="app-detail-item">
+                <p className="app-detail-label">Join clicks</p>
+                <p className="app-detail-value">{liveSession.joinClicks}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Re-joins add to the count.
                 </p>
               </div>
             </div>
 
-            <div className="rounded-[1rem] border border-border/60 bg-background/72 px-4 py-3 text-sm text-muted-foreground">
+            <div className="app-detail-item">
               <div className="flex items-center gap-2 font-medium text-foreground">
                 <Clock3 className="h-4 w-4 text-primary" />
                 Last synced {formatTime(lastSyncedAt)}
               </div>
-              <p className="mt-2 leading-6">
+              <p className="mt-2 text-sm text-muted-foreground">
                 This page refreshes the active item automatically while it stays open.
               </p>
             </div>

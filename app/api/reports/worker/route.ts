@@ -8,6 +8,8 @@ import {
 } from "@/lib/redis";
 import { runReportDispatchWorker } from "@/lib/reports/dispatchWorker";
 import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
+import { recordOpsFailure } from "@/lib/ops-runtime";
+import { withRequestBudget } from "@/lib/server/request-governor";
 import ReportDispatchJob from "@/models/ReportDispatchJob";
 
 export const runtime = "nodejs";
@@ -58,6 +60,34 @@ function normalizePositiveInteger(
   }
 
   return Math.min(max, Math.max(1, Math.floor(parsed)));
+}
+
+const REPORT_DISPATCH_BACKLOG_ALERT_THRESHOLD = 100;
+
+async function maybeAlertReportDispatchBacklog(
+  req: NextRequest,
+  schoolKey: string | undefined,
+  remainingQueued: number,
+  processed: number,
+) {
+  if (remainingQueued < REPORT_DISPATCH_BACKLOG_ALERT_THRESHOLD) {
+    return;
+  }
+
+  await recordOpsFailure({
+    schoolKey,
+    req,
+    action: "report_dispatch_backlog",
+    message:
+      "Report dispatch backlog stayed above the configured threshold after a worker run.",
+    severity: "warn",
+    alertLevel: "trust_critical",
+    metadata: {
+      remainingQueued,
+      processed,
+      threshold: REPORT_DISPATCH_BACKLOG_ALERT_THRESHOLD,
+    },
+  });
 }
 
 async function runScheduledDispatchWorker({
@@ -158,45 +188,84 @@ async function runScheduledDispatchWorker({
 }
 
 export async function POST(req: NextRequest) {
-  await connectDB();
   const trustedOrigin = getTrustedInternalOrigin();
 
   if (isCronWorkerRequest(req)) {
     const body = await req.json().catch(() => ({}));
     const schoolKey = String(body?.schoolKey || "").trim() || undefined;
-    const limitPerSchool = normalizePositiveInteger(
-      body?.limitPerSchool,
-      10,
-      100,
-    );
-    const maxSchools = normalizePositiveInteger(body?.maxSchools, 25, 100);
-    const jobIds: string[] = Array.from(
-      new Set(
-        (Array.isArray(body?.jobIds) ? body.jobIds : [])
-          .map((jobId: any) => String(jobId || "").trim())
-          .filter(Boolean),
-      ),
-    );
-    const result = await runScheduledDispatchWorker({
-      origin: trustedOrigin,
-      schoolKey,
-      limitPerSchool,
-      maxSchools,
-      jobIds,
-    });
+    return withRequestBudget(
+      {
+        request: req,
+        policy: "reportDispatchWorker",
+        schoolKey,
+        scopeId: schoolKey || "scheduled",
+      },
+      async () => {
+        await connectDB();
+        const limitPerSchool = normalizePositiveInteger(
+          body?.limitPerSchool,
+          10,
+          100,
+        );
+        const maxSchools = normalizePositiveInteger(body?.maxSchools, 25, 100);
+        const jobIds: string[] = Array.from(
+          new Set(
+            (Array.isArray(body?.jobIds) ? body.jobIds : [])
+              .map((jobId: any) => String(jobId || "").trim())
+              .filter(Boolean),
+          ),
+        );
+        const result = await runScheduledDispatchWorker({
+          origin: trustedOrigin,
+          schoolKey,
+          limitPerSchool,
+          maxSchools,
+          jobIds,
+        });
 
-    return NextResponse.json({ success: true, ...result });
+        await Promise.all(
+          result.schools.map((school) =>
+            maybeAlertReportDispatchBacklog(
+              req,
+              school.schoolKey,
+              school.remainingQueued,
+              school.processed,
+            ),
+          ),
+        );
+
+        return NextResponse.json({ success: true, ...result });
+      },
+    );
   }
 
   const auth = await requireTenantSession(req, {
     allowRoles: ["admin"],
   });
   if (!auth.ok) return auth.response;
-  const { schoolKey } = auth;
-  const result = await runReportDispatchWorker({
-    origin: trustedOrigin,
-    schoolKey,
-  });
+  return withRequestBudget(
+    {
+      request: req,
+      policy: "reportDispatchWorker",
+      schoolKey: auth.schoolKey,
+      userId: auth.session.user.id,
+    },
+    async () => {
+      await connectDB();
+      const { schoolKey } = auth;
+      const result = await runReportDispatchWorker({
+        origin: trustedOrigin,
+        schoolKey,
+      });
 
-  return NextResponse.json({ success: true, mode: "tenant", ...result });
+      await maybeAlertReportDispatchBacklog(
+        req,
+        schoolKey,
+        result.remainingQueued,
+        result.processed,
+      );
+
+      return NextResponse.json({ success: true, mode: "tenant", ...result });
+    },
+  );
 }

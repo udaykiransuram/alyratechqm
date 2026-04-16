@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
 import { readStudentNotificationSignalVersion } from "@/lib/redis";
+import { enforceRequestBudget } from "@/lib/server/request-governor";
 import { subscribeStudentNotifications } from "@/lib/server/student-notifications-stream";
 
 const STUDENT_NOTIFICATION_STREAM_HEARTBEAT_MS = 15_000;
@@ -16,6 +17,15 @@ export async function GET(req: NextRequest) {
 
   const schoolKey = auth.schoolKey;
   const studentId = auth.session.user.id;
+  const guarded = await enforceRequestBudget({
+    request: req,
+    policy: "studentNotificationStream",
+    schoolKey,
+    userId: studentId,
+  });
+  if (!guarded.ok) {
+    return guarded.response;
+  }
   const initialSignalVersion =
     (await readStudentNotificationSignalVersion(schoolKey, studentId).catch(
       () => null,
@@ -96,12 +106,16 @@ export async function GET(req: NextRequest) {
         clearInterval(heartbeatInterval);
         clearInterval(signalPollInterval);
         unsubscribe();
+        void guarded.lease.release("completed");
         try {
           controller.close();
         } catch {}
       };
 
       req.signal.addEventListener("abort", close, { once: true });
+    },
+    cancel() {
+      void guarded.lease.release("completed");
     },
   });
 

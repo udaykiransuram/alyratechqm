@@ -26,6 +26,12 @@ import '@/models/LiveSessionItem';
 import '@/models/LiveSessionResponse';
 import '@/models/LiveSessionTranscript';
 import '@/models/StudentNotification';
+import '@/models/ParentContact';
+import '@/models/StudentDailyProgress';
+import '@/models/StudentTagWeakness';
+import '@/models/TagPracticeSet';
+import '@/models/StudentTagPerformance';
+import '@/models/TagPeerStats';
 
 type TenantCoreModelMap = {
   TagType: typeof import('@/models/TagType').default;
@@ -50,6 +56,12 @@ type TenantCoreModelMap = {
   LiveSessionResponse: typeof import('@/models/LiveSessionResponse').default;
   LiveSessionTranscript: typeof import('@/models/LiveSessionTranscript').default;
   StudentNotification: typeof import('@/models/StudentNotification').default;
+  ParentContact: typeof import('@/models/ParentContact').default;
+  StudentDailyProgress: typeof import('@/models/StudentDailyProgress').default;
+  StudentTagWeakness: typeof import('@/models/StudentTagWeakness').default;
+  TagPracticeSet: typeof import('@/models/TagPracticeSet').default;
+  StudentTagPerformance: typeof import('@/models/StudentTagPerformance').default;
+  TagPeerStats: typeof import('@/models/TagPeerStats').default;
 };
 
 type TenantModelForName<Name extends string> =

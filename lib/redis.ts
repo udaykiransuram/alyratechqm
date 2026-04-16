@@ -153,7 +153,7 @@ function decodeRedisValue<T>(value: unknown): T | null {
   }
 }
 
-async function runRedisCommand<T = unknown>(
+export async function runRedisCommand<T = unknown>(
   command: RedisCommandValue[],
 ): Promise<T | null> {
   if (!isRedisConfigured() || isRedisTemporarilyUnavailable()) {
@@ -191,7 +191,7 @@ async function runRedisCommand<T = unknown>(
   }
 }
 
-async function runRedisEval<T = unknown>(
+export async function runRedisEval<T = unknown>(
   script: string,
   keys: string[],
   args: Array<string | number>,

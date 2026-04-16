@@ -109,6 +109,9 @@ export default function AuditLogsPage() {
     void loadLogs();
   }, [loadLogs]);
 
+  const formatDateTime = (value?: string) =>
+    value ? new Date(value).toLocaleString() : "-";
+
   return (
     <PageShell width="wide" padding="relaxed">
       <PageHero
@@ -227,7 +230,69 @@ export default function AuditLogsPage() {
 
           {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
 
-          <div className="app-table-wrap">
+          <div className="space-y-2 md:hidden">
+            {logs.length === 0 ? (
+              <div className="rounded-[1.05rem] border border-border/68 bg-background/92 px-4 py-6 text-center text-sm text-muted-foreground shadow-sm">
+                {loading ? "Loading audit logs…" : "No audit activity found."}
+              </div>
+            ) : (
+              logs.map((log) => (
+                <article
+                  key={log._id}
+                  className="rounded-[1.05rem] border border-border/68 bg-background/92 px-3.5 py-3.5 shadow-sm"
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 space-y-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {log.actorName || log.actorEmail || "System"}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {log.actorRole || "Unknown role"}
+                        </p>
+                      </div>
+                      <Badge variant="neutral" className="shrink-0">
+                        {log.action || "-"}
+                      </Badge>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-border/55 bg-background/72 px-3 py-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                          Entity
+                        </p>
+                        <p className="mt-1 text-sm text-foreground">
+                          {log.entityLabel || log.entityType || "-"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {log.entityId || log.entityType || "-"}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border/55 bg-background/72 px-3 py-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                          Time
+                        </p>
+                        <p className="mt-1 text-sm text-foreground">
+                          {formatDateTime(log.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border/55 bg-background/72 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        Summary
+                      </p>
+                      <p className="mt-1 text-sm text-foreground">
+                        {log.summary || "-"}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+
+          <div className="hidden md:block app-table-wrap">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -252,7 +317,7 @@ export default function AuditLogsPage() {
                   logs.map((log) => (
                     <TableRow key={log._id}>
                       <TableCell className="text-muted-foreground">
-                        {log.createdAt ? new Date(log.createdAt).toLocaleString() : "-"}
+                        {formatDateTime(log.createdAt)}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium text-foreground">

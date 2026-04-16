@@ -450,121 +450,207 @@ export default function StudentAccountPageClient({
               No submitted online-test reports are available yet.
             </div>
           ) : (
-            <div className="app-table-wrap rounded-none border-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[24rem]">Test</TableHead>
-                    <TableHead className="w-[13rem]">Submitted</TableHead>
-                    <TableHead className="w-[11rem]">Status</TableHead>
-                    <TableHead className="w-[13rem]">Score</TableHead>
-                    <TableHead className="text-right min-w-[10rem]">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {reportTests.map((test, index) => {
-                    const responseId = test.attempt?._id;
-                    if (!responseId) return null;
+            <div className="space-y-0">
+              <div className="app-student-report-card-list md:hidden">
+                {reportTests.map((test, index) => {
+                  const responseId = test.attempt?._id;
+                  if (!responseId) return null;
 
-                    const reportHref = buildHrefWithReturnTo(
-                      `/student/reports/${responseId}`,
-                      "/student/account",
-                    );
-                    const statusLabel = getAttemptStatusLabel(
-                      test.attempt?.status || test.status,
-                    );
-                    const scoreLabel =
-                      typeof test.attempt?.totalMarksAwarded === "number"
-                        ? String(test.attempt.totalMarksAwarded)
-                        : "Pending";
-                    const subjectLabel = test.subject?.name
-                      ? formatTitleCase(test.subject.name)
-                      : "Subject Pending";
-                    const windowLabel = test.onlineEndsAt
-                      ? formatDateTime(test.onlineEndsAt)
-                      : "Available now";
-                    const submittedLabel = formatDateTime(test.attempt?.submittedAt);
+                  const reportHref = buildHrefWithReturnTo(
+                    `/student/reports/${responseId}`,
+                    "/student/account",
+                  );
+                  const statusLabel = getAttemptStatusLabel(
+                    test.attempt?.status || test.status,
+                  );
+                  const scoreLabel =
+                    typeof test.attempt?.totalMarksAwarded === "number"
+                      ? String(test.attempt.totalMarksAwarded)
+                      : "Pending";
+                  const subjectLabel = test.subject?.name
+                    ? formatTitleCase(test.subject.name)
+                    : "Subject Pending";
+                  const windowLabel = test.onlineEndsAt
+                    ? formatDateTime(test.onlineEndsAt)
+                    : "Available now";
+                  const submittedLabel = formatDateTime(test.attempt?.submittedAt);
 
-                    return (
-                      <TableRow key={responseId}>
-                        <TableCell>
-                          <div className="min-w-[18rem] space-y-2">
-                            {index === 0 ? (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge variant="info">Most Recent</Badge>
-                              </div>
-                            ) : null}
-                            <div className="space-y-1">
-                              <div className="app-list-title">
-                                {test.title || "Online Test"}
-                              </div>
-                              <div className="app-list-meta">
-                                Completed analysis report
-                              </div>
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {test.subject?.name ? (
-                                  <Badge variant="outline">{subjectLabel}</Badge>
-                                ) : (
-                                  <span className="app-list-meta">{subjectLabel}</span>
-                                )}
-                                <span className="app-list-meta">
-                                  Window end {windowLabel}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="min-w-[11rem] space-y-1">
-                            <div className="app-list-value">{submittedLabel}</div>
-                            <div className="app-list-meta">
-                              {index === 0 ? "Latest submission" : "Submitted"}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="min-w-[10rem] space-y-2">
-                            <Badge
-                              variant={getAttemptStatusVariant(
-                                test.attempt?.status || test.status,
-                              )}
-                            >
-                              {statusLabel}
+                  return (
+                    <article key={responseId} className="app-student-report-card">
+                      <div className="app-student-report-card-head">
+                        <div className="min-w-0 space-y-1">
+                          {index === 0 ? (
+                            <Badge variant="info" className="w-fit">
+                              Most Recent
                             </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="min-w-[11rem] space-y-1">
-                            <div className="app-list-value">{scoreLabel}</div>
-                            <div className="app-list-meta">Marks awarded</div>
-                            <div className="app-list-meta">
-                              Window end {windowLabel}
+                          ) : null}
+                          <p className="app-list-title">{test.title || "Online Test"}</p>
+                        </div>
+                        <Badge
+                          variant={getAttemptStatusVariant(
+                            test.attempt?.status || test.status,
+                          )}
+                        >
+                          {statusLabel}
+                        </Badge>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {test.subject?.name ? (
+                          <Badge variant="outline">{subjectLabel}</Badge>
+                        ) : (
+                          <span className="app-list-meta">{subjectLabel}</span>
+                        )}
+                        <span className="app-list-meta">
+                          Window end {windowLabel}
+                        </span>
+                      </div>
+                      <div className="app-student-report-card-meta-grid">
+                        <div>
+                          <p className="app-list-meta">Submitted</p>
+                          <p className="app-list-value">{submittedLabel}</p>
+                        </div>
+                        <div>
+                          <p className="app-list-meta">Score</p>
+                          <p className="app-list-value">{scoreLabel}</p>
+                          <p className="app-list-meta">Marks awarded</p>
+                        </div>
+                      </div>
+                      <Button
+                        asChild
+                        size="md"
+                        variant="secondary"
+                        className="app-student-action-compact"
+                      >
+                        <AppPrefetchLink
+                          href={reportHref}
+                          relatedApiPrefetches={[
+                            `/api/analytics/student-tag-report/${responseId}?groupFields=1`,
+                          ]}
+                          prefetchOnViewport={false}
+                        >
+                          Open Report
+                        </AppPrefetchLink>
+                      </Button>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="app-table-wrap hidden rounded-none border-0 md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[24rem]">Test</TableHead>
+                      <TableHead className="w-[13rem]">Submitted</TableHead>
+                      <TableHead className="w-[11rem]">Status</TableHead>
+                      <TableHead className="w-[13rem]">Score</TableHead>
+                      <TableHead className="text-right min-w-[10rem]">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportTests.map((test, index) => {
+                      const responseId = test.attempt?._id;
+                      if (!responseId) return null;
+
+                      const reportHref = buildHrefWithReturnTo(
+                        `/student/reports/${responseId}`,
+                        "/student/account",
+                      );
+                      const statusLabel = getAttemptStatusLabel(
+                        test.attempt?.status || test.status,
+                      );
+                      const scoreLabel =
+                        typeof test.attempt?.totalMarksAwarded === "number"
+                          ? String(test.attempt.totalMarksAwarded)
+                          : "Pending";
+                      const subjectLabel = test.subject?.name
+                        ? formatTitleCase(test.subject.name)
+                        : "Subject Pending";
+                      const windowLabel = test.onlineEndsAt
+                        ? formatDateTime(test.onlineEndsAt)
+                        : "Available now";
+                      const submittedLabel = formatDateTime(test.attempt?.submittedAt);
+
+                      return (
+                        <TableRow key={responseId}>
+                          <TableCell>
+                            <div className="min-w-[18rem] space-y-2">
+                              {index === 0 ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant="info">Most Recent</Badge>
+                                </div>
+                              ) : null}
+                              <div className="space-y-1">
+                                <div className="app-list-title">
+                                  {test.title || "Online Test"}
+                                </div>
+                                <div className="app-list-meta">
+                                  Completed analysis report
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {test.subject?.name ? (
+                                    <Badge variant="outline">{subjectLabel}</Badge>
+                                  ) : (
+                                    <span className="app-list-meta">{subjectLabel}</span>
+                                  )}
+                                  <span className="app-list-meta">
+                                    Window end {windowLabel}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            asChild
-                            size="md"
-                            variant="secondary"
-                            className="app-student-action-compact"
-                          >
-                            <AppPrefetchLink
-                              href={reportHref}
-                              relatedApiPrefetches={[
-                                `/api/analytics/student-tag-report/${responseId}?groupFields=1`,
-                              ]}
-                              prefetchOnViewport={false}
+                          </TableCell>
+                          <TableCell>
+                            <div className="min-w-[11rem] space-y-1">
+                              <div className="app-list-value">{submittedLabel}</div>
+                              <div className="app-list-meta">
+                                {index === 0 ? "Latest submission" : "Submitted"}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="min-w-[10rem] space-y-2">
+                              <Badge
+                                variant={getAttemptStatusVariant(
+                                  test.attempt?.status || test.status,
+                                )}
+                              >
+                                {statusLabel}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="min-w-[11rem] space-y-1">
+                              <div className="app-list-value">{scoreLabel}</div>
+                              <div className="app-list-meta">Marks awarded</div>
+                              <div className="app-list-meta">
+                                Window end {windowLabel}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              asChild
+                              size="md"
+                              variant="secondary"
+                              className="app-student-action-compact"
                             >
-                              Open Report
-                            </AppPrefetchLink>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                              <AppPrefetchLink
+                                href={reportHref}
+                                relatedApiPrefetches={[
+                                  `/api/analytics/student-tag-report/${responseId}?groupFields=1`,
+                                ]}
+                                prefetchOnViewport={false}
+                              >
+                                Open Report
+                              </AppPrefetchLink>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>

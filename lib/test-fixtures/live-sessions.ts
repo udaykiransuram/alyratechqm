@@ -87,6 +87,7 @@ type MockLiveSessionItemRecord = {
   promptHtml: string;
   options: MockLiveSessionItemOptionRecord[];
   answerIndexes: number[];
+  tagIds: string[];
   explanationHtml: string;
   status: LiveSessionItemStatus;
   order: number;
@@ -467,6 +468,7 @@ function buildInitialMockLiveSessionState(): MockLiveSessionState {
         { contentHtml: "<p>Geometry proofs</p>" },
       ],
       answerIndexes: [1],
+      tagIds: [],
       explanationHtml: "<p>Linear equations is the core focus for this session.</p>",
       status: "draft",
       order: 0,
@@ -484,6 +486,7 @@ function buildInitialMockLiveSessionState(): MockLiveSessionState {
       promptHtml: "<p>Type one doubt you want covered in the live class.</p>",
       options: [],
       answerIndexes: [],
+      tagIds: [],
       explanationHtml: "",
       status: "draft",
       order: 1,
@@ -505,6 +508,7 @@ function buildInitialMockLiveSessionState(): MockLiveSessionState {
         { contentHtml: "<p>I switched off my camera permanently.</p>" },
       ],
       answerIndexes: [0, 1],
+      tagIds: [],
       explanationHtml: "<p>Students should join prepared with safety and record materials.</p>",
       status: "active",
       order: 0,
@@ -525,6 +529,7 @@ function buildInitialMockLiveSessionState(): MockLiveSessionState {
         { contentHtml: "<p>Electricity circuit sheet</p>" },
       ],
       answerIndexes: [0],
+      tagIds: [],
       explanationHtml: "<p>Today’s lab prep focuses on acid-base indicator observations.</p>",
       status: "closed",
       order: 1,
@@ -542,6 +547,7 @@ function buildInitialMockLiveSessionState(): MockLiveSessionState {
       promptHtml: "<p>Write one exam strategy you plan to use next week.</p>",
       options: [],
       answerIndexes: [],
+      tagIds: [],
       explanationHtml: "",
       status: "closed",
       order: 0,
@@ -780,6 +786,7 @@ function serializeTeacherItem(item: MockLiveSessionItemRecord): LiveSessionTeach
     promptHtml: item.promptHtml,
     options,
     answerIndexes: normalizeIndexes(item.answerIndexes),
+    tagIds: Array.isArray(item.tagIds) ? item.tagIds : [],
     explanationHtml: item.explanationHtml,
     status: item.status,
     order: item.order,
@@ -1690,6 +1697,7 @@ export function createMockLiveSessionItem(params: {
     promptHtml: string;
     options: Array<{ contentHtml: string }>;
     answerIndexes: number[];
+    tagIds: string[];
     explanationHtml?: string | null;
   };
 }) {
@@ -1719,6 +1727,7 @@ export function createMockLiveSessionItem(params: {
       contentHtml: option.contentHtml,
     })),
     answerIndexes: normalizeIndexes(params.input.answerIndexes),
+    tagIds: Array.isArray(params.input.tagIds) ? params.input.tagIds : [],
     explanationHtml: String(params.input.explanationHtml || ""),
     status: "draft",
     order: nextOrder,
@@ -1746,6 +1755,7 @@ export function updateMockLiveSessionItem(params: {
     promptHtml: string;
     options: Array<{ contentHtml: string }>;
     answerIndexes: number[];
+    tagIds: string[];
     explanationHtml?: string | null;
   };
 }) {
@@ -1760,6 +1770,7 @@ export function updateMockLiveSessionItem(params: {
     contentHtml: option.contentHtml,
   }));
   item.answerIndexes = normalizeIndexes(params.input.answerIndexes);
+  item.tagIds = Array.isArray(params.input.tagIds) ? params.input.tagIds : [];
   item.explanationHtml = String(params.input.explanationHtml || "");
   item.updatedBy = params.updatedBy;
   item.updatedAt = new Date().toISOString();

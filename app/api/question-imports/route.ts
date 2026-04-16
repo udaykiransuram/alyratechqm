@@ -17,6 +17,7 @@ import {
   applyWorkspaceQuestionImportMappings,
   serializeQuestionImportDraftRecord,
 } from "@/lib/server/question-imports";
+import { withRequestBudget } from "@/lib/server/request-governor";
 
 const MAX_DOCX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_DOCX_UPLOAD_SIZE_LABEL = "20 MB";
@@ -41,71 +42,83 @@ export async function POST(req: NextRequest) {
     return auth.response;
   }
 
-  const formData = await req.formData();
-  const file = formData.get("file");
+  return withRequestBudget(
+    {
+      request: req,
+      policy: "questionImportCreate",
+      schoolKey: auth.schoolKey,
+      userId: auth.session.user.id,
+    },
+    async () => {
+      const formData = await req.formData();
+      const file = formData.get("file");
 
-  if (!(file instanceof File)) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Upload a DOCX teacher-master file to start an import draft.",
-      },
-      { status: 400 },
-    );
-  }
+      if (!(file instanceof File)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Upload a DOCX teacher-master file to start an import draft.",
+          },
+          { status: 400 },
+        );
+      }
 
-  if (!isSupportedQuestionImportFile(file)) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Only DOCX teacher-master files are supported in this import flow.",
-      },
-      { status: 400 },
-    );
-  }
+      if (!isSupportedQuestionImportFile(file)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Only DOCX teacher-master files are supported in this import flow.",
+          },
+          { status: 400 },
+        );
+      }
 
-  if (file.size <= 0) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: "The uploaded DOCX file is empty.",
-      },
-      { status: 400 },
-    );
-  }
+      if (file.size <= 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "The uploaded DOCX file is empty.",
+          },
+          { status: 400 },
+        );
+      }
 
-  if (file.size > MAX_DOCX_UPLOAD_SIZE_BYTES) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: `The uploaded DOCX file is too large. Keep imports under ${MAX_DOCX_UPLOAD_SIZE_LABEL}.`,
-      },
-      { status: 413 },
-    );
-  }
+      if (file.size > MAX_DOCX_UPLOAD_SIZE_BYTES) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `The uploaded DOCX file is too large. Keep imports under ${MAX_DOCX_UPLOAD_SIZE_LABEL}.`,
+          },
+          { status: 413 },
+        );
+      }
 
-  try {
-    await connectDB();
-    const { QuestionImportDraft: QuestionImportDraftModel } = await getTenantModels(
-      auth.schoolKey,
-      ["QuestionImportDraft"],
-    );
+      try {
+        await connectDB();
+        const {
+          QuestionImportDraft: QuestionImportDraftModel,
+        } = await getTenantModels(auth.schoolKey, ["QuestionImportDraft"]);
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const parsedPayload = await parseTeacherMasterDocx({
-      buffer,
-      storeImage: async ({ buffer: imageBuffer, fileName, sourcePath }) =>
-        storePublicImage({
-          buffer: imageBuffer,
-          schoolKey: auth.schoolKey,
-          fileName,
-          mimeType: undefined,
-          relativeFolder: "question-imports",
-        }).then((storedImage) => ({
-          url: storedImage.url,
-          fileName: storedImage.fileName || sourcePath.split("/").pop() || fileName,
-        })),
-    });
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const parsedPayload = await parseTeacherMasterDocx({
+          buffer,
+          storeImage: async ({ buffer: imageBuffer, fileName, sourcePath }) =>
+            storePublicImage({
+              buffer: imageBuffer,
+              schoolKey: auth.schoolKey,
+              fileName,
+              mimeType: undefined,
+              relativeFolder: "question-imports",
+            }).then((storedImage) => ({
+              url: storedImage.url,
+              fileName:
+                storedImage.fileName ||
+                sourcePath.split("/").pop() ||
+                fileName,
+            })),
+        });
 
     const payload = await applyWorkspaceQuestionImportMappings(
       auth.schoolKey,
@@ -143,31 +156,33 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        draft: serializeQuestionImportDraftRecord(draft),
-      },
-      { status: 201 },
-    );
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Failed to create the question import draft.";
-    const normalizedMessage = message.toLowerCase();
-    const isStorageConfigurationError =
-      normalizedMessage.includes("vercel blob") ||
-      normalizedMessage.includes("blob_read_write_token") ||
-      normalizedMessage.includes("image uploads") ||
-      normalizedMessage.includes("file uploads");
+        return NextResponse.json(
+          {
+            success: true,
+            draft: serializeQuestionImportDraftRecord(draft),
+          },
+          { status: 201 },
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to create the question import draft.";
+        const normalizedMessage = message.toLowerCase();
+        const isStorageConfigurationError =
+          normalizedMessage.includes("vercel blob") ||
+          normalizedMessage.includes("blob_read_write_token") ||
+          normalizedMessage.includes("image uploads") ||
+          normalizedMessage.includes("file uploads");
 
-    return NextResponse.json(
-      {
-        success: false,
-        message,
-      },
-      { status: isStorageConfigurationError ? 500 : 400 },
-    );
-  }
+        return NextResponse.json(
+          {
+            success: false,
+            message,
+          },
+          { status: isStorageConfigurationError ? 500 : 400 },
+        );
+      }
+    },
+  );
 }

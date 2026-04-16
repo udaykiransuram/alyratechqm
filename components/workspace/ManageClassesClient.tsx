@@ -210,73 +210,127 @@ export default function ManageClassesClient({
                 </Button>
               }
             />
-          ) : (
-            <div className="app-table-wrap app-table-dense">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Class Name</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {classes.map((classItem) => (
-                    <TableRow key={classItem._id}>
-                      <TableCell>
-                        <div className="app-table-cell-title">{classItem.name}</div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="app-row-action-button app-row-action-button-danger"
-                              disabled={Boolean(archivingClassId)}
-                              aria-label={`Archive ${classItem.name}`}
-                              title={`Archive ${classItem.name}`}
-                            >
-                              {archivingClassId === classItem._id ? (
-                                <Spinner />
-                              ) : (
-                                <Archive className="h-4 w-4" />
-                              )}
-                              Archive
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Archive class?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This action cannot be undone. This will archive the class
-                                <strong className="mx-1">
-                                  &ldquo;{classItem.name}&rdquo;
-                                </strong>
-                                .
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel disabled={Boolean(archivingClassId)}>
-                                Cancel
-                              </AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => void handleArchiveClass(classItem._id)}
-                                disabled={Boolean(archivingClassId)}
-                              >
-                                {archivingClassId === classItem._id ? <Spinner /> : "Archive"}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </PageShell>
+	          ) : (
+	            <>
+	              <div className="space-y-3 md:hidden">
+	                {classes.map((classItem) => (
+	                  <div
+	                    key={`mobile-${classItem._id}`}
+	                    className="rounded-2xl border border-border/60 bg-background/70 p-3"
+	                  >
+	                    <div className="space-y-2">
+	                      <p className="text-sm font-semibold text-foreground">{classItem.name}</p>
+	                      <AlertDialog>
+	                        <AlertDialogTrigger asChild>
+	                          <Button
+	                            variant="outline"
+	                            size="sm"
+	                            className="app-row-action-button app-row-action-button-danger w-full justify-center"
+	                            disabled={Boolean(archivingClassId)}
+	                            aria-label={`Archive ${classItem.name}`}
+	                            title={`Archive ${classItem.name}`}
+	                          >
+	                            {archivingClassId === classItem._id ? (
+	                              <Spinner />
+	                            ) : (
+	                              <Archive className="h-4 w-4" />
+	                            )}
+	                            Archive
+	                          </Button>
+	                        </AlertDialogTrigger>
+	                        <AlertDialogContent>
+	                          <AlertDialogHeader>
+	                            <AlertDialogTitle>Archive class?</AlertDialogTitle>
+	                            <AlertDialogDescription>
+	                              This action cannot be undone. This will archive the class
+	                              <strong className="mx-1">&ldquo;{classItem.name}&rdquo;</strong>.
+	                            </AlertDialogDescription>
+	                          </AlertDialogHeader>
+	                          <AlertDialogFooter>
+	                            <AlertDialogCancel disabled={Boolean(archivingClassId)}>
+	                              Cancel
+	                            </AlertDialogCancel>
+	                            <AlertDialogAction
+	                              onClick={() => void handleArchiveClass(classItem._id)}
+	                              disabled={Boolean(archivingClassId)}
+	                            >
+	                              {archivingClassId === classItem._id ? <Spinner /> : "Archive"}
+	                            </AlertDialogAction>
+	                          </AlertDialogFooter>
+	                        </AlertDialogContent>
+	                      </AlertDialog>
+	                    </div>
+	                  </div>
+	                ))}
+	              </div>
+
+	              <div className="app-table-wrap app-table-dense hidden md:block">
+	                <Table>
+	                  <TableHeader>
+	                    <TableRow>
+	                      <TableHead>Class Name</TableHead>
+	                      <TableHead className="text-right">Actions</TableHead>
+	                    </TableRow>
+	                  </TableHeader>
+	                  <TableBody>
+	                    {classes.map((classItem) => (
+	                      <TableRow key={classItem._id}>
+	                        <TableCell>
+	                          <div className="app-table-cell-title">{classItem.name}</div>
+	                        </TableCell>
+	                        <TableCell className="text-right">
+	                          <AlertDialog>
+	                            <AlertDialogTrigger asChild>
+	                              <Button
+	                                variant="outline"
+	                                size="sm"
+	                                className="app-row-action-button app-row-action-button-danger"
+	                                disabled={Boolean(archivingClassId)}
+	                                aria-label={`Archive ${classItem.name}`}
+	                                title={`Archive ${classItem.name}`}
+	                              >
+	                                {archivingClassId === classItem._id ? (
+	                                  <Spinner />
+	                                ) : (
+	                                  <Archive className="h-4 w-4" />
+	                                )}
+	                                Archive
+	                              </Button>
+	                            </AlertDialogTrigger>
+	                            <AlertDialogContent>
+	                              <AlertDialogHeader>
+	                                <AlertDialogTitle>Archive class?</AlertDialogTitle>
+	                                <AlertDialogDescription>
+	                                  This action cannot be undone. This will archive the class
+	                                  <strong className="mx-1">
+	                                    &ldquo;{classItem.name}&rdquo;
+	                                  </strong>
+	                                  .
+	                                </AlertDialogDescription>
+	                              </AlertDialogHeader>
+	                              <AlertDialogFooter>
+	                                <AlertDialogCancel disabled={Boolean(archivingClassId)}>
+	                                  Cancel
+	                                </AlertDialogCancel>
+	                                <AlertDialogAction
+	                                  onClick={() => void handleArchiveClass(classItem._id)}
+	                                  disabled={Boolean(archivingClassId)}
+	                                >
+	                                  {archivingClassId === classItem._id ? <Spinner /> : "Archive"}
+	                                </AlertDialogAction>
+	                              </AlertDialogFooter>
+	                            </AlertDialogContent>
+	                          </AlertDialog>
+	                        </TableCell>
+	                      </TableRow>
+	                    ))}
+	                  </TableBody>
+	                </Table>
+	              </div>
+	            </>
+	          )}
+	        </CardContent>
+	      </Card>
+	    </PageShell>
   );
 }

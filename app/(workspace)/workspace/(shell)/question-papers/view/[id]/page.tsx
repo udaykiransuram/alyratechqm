@@ -1,5 +1,5 @@
 import dynamicComponent from "next/dynamic";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import PageHero from "@/components/layout/PageHero";
@@ -248,6 +248,36 @@ export default async function ViewQuestionPaperPage({
         </div>
       </div>
 
+      <Card className="app-surface overflow-hidden xl:hidden">
+        <CardHeader className="app-section-header">
+          <CardTitle>Paper Summary</CardTitle>
+        </CardHeader>
+        <CardContent className="app-section-body">
+          <details open className="group rounded-xl border border-border/60 bg-background/72 px-3 py-2.5">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+              Section and scoring overview
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+            </summary>
+            <div className="mt-3">
+              <PaperSummary
+                sections={summarySections}
+                totalPaperMarks={Number(paper.totalMarks ?? 0)}
+                duration={Number(paper.duration ?? 0)}
+                passingMarks={Number(paper.passingMarks ?? 0)}
+                examDate={paper.examDate ?? ""}
+                onlineEnabled={Boolean(paper.onlineEnabled)}
+                onlineStartsAt={paper.onlineStartsAt ?? null}
+                onlineEndsAt={paper.onlineEndsAt ?? null}
+                subjects={paperSubjects.map((subject) => ({
+                  _id: subject._id || "",
+                  name: subject.name || "",
+                }))}
+              />
+            </div>
+          </details>
+        </CardContent>
+      </Card>
+
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="min-w-0 space-y-4">
           {paper.instructions ? (
@@ -439,7 +469,7 @@ export default async function ViewQuestionPaperPage({
           )}
         </main>
 
-        <aside className="space-y-4 xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start print:hidden">
+        <aside className="hidden space-y-4 print:hidden xl:block xl:sticky xl:top-[calc(var(--app-header-height)+1.5rem)] xl:self-start">
           <PaperSummary
             sections={summarySections}
             totalPaperMarks={Number(paper.totalMarks ?? 0)}

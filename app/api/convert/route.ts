@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx";
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenantSession } from "@/lib/api-auth";
+import { withRequestBudget } from "@/lib/server/request-governor";
 // Note: saveAs (file-saver) is a browser-only API and is not required when running in Node.js.
 // The browser download line in generateWordDoc is already commented out, so we omit importing file-saver here.
 
@@ -36,35 +37,43 @@ type ConvertResponse = {
 };
 
 export async function POST(req: NextRequest) {
+  const auth = await requireTenantSession(req, {
+    allowRoles: ["admin", "teacher"],
+  });
+  if (!auth.ok) return auth.response;
+
   try {
-    const auth = await requireTenantSession(req, {
-      allowRoles: ["admin", "teacher"],
-    });
-    if (!auth.ok) return auth.response;
+    return withRequestBudget(
+      {
+        request: req,
+        policy: "convertImport",
+        schoolKey: auth.schoolKey,
+        userId: auth.session.user.id,
+      },
+      async () => {
+        const formData = await req.formData();
+        const file = formData.get("file") as File | null;
+        if (!file) return json400({ error: "file is required (FormData key: 'file')" });
+        if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+          return json400({ error: "File exceeds the 10MB upload limit." });
+        }
 
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    if (!file) return json400({ error: "file is required (FormData key: 'file')" });
-    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-      return json400({ error: "File exceeds the 10MB upload limit." });
-    }
+        const fileType = String(file.type || "").toLowerCase();
+        const lowerName = String(file.name || "").toLowerCase();
+        const isAllowedByName =
+          lowerName.endsWith(".xlsx") ||
+          lowerName.endsWith(".xls") ||
+          lowerName.endsWith(".xlsm") ||
+          lowerName.endsWith(".csv");
+        if (!ALLOWED_SHEET_MIME_TYPES.has(fileType) && !isAllowedByName) {
+          return json400({ error: "Only Excel/CSV files are supported." });
+        }
 
-    const fileType = String(file.type || "").toLowerCase();
-    const lowerName = String(file.name || "").toLowerCase();
-    const isAllowedByName =
-      lowerName.endsWith(".xlsx") ||
-      lowerName.endsWith(".xls") ||
-      lowerName.endsWith(".xlsm") ||
-      lowerName.endsWith(".csv");
-    if (!ALLOWED_SHEET_MIME_TYPES.has(fileType) && !isAllowedByName) {
-      return json400({ error: "Only Excel/CSV files are supported." });
-    }
-
-    // --- Parse XLSX ---
-    const ab = await file.arrayBuffer();
-    const wb = XLSX.read(ab, { type: "array" });
-    const sheetName = wb.SheetNames[0];
-    const sheet = wb.Sheets[sheetName];
+        // --- Parse XLSX ---
+        const ab = await file.arrayBuffer();
+        const wb = XLSX.read(ab, { type: "array" });
+        const sheetName = wb.SheetNames[0];
+        const sheet = wb.Sheets[sheetName];
 
     const headerRow = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, range: 0, blankrows: false })[0];
     if (!headerRow || headerRow.length === 0) return json400({ error: "No header row found." });
@@ -319,6 +328,8 @@ export async function POST(req: NextRequest) {
     } else {
       return NextResponse.json(payload);
     }
+      },
+    );
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err?.message ?? "Internal error" }), {
       status: 500,

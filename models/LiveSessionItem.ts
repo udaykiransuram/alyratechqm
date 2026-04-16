@@ -19,6 +19,7 @@ export interface ILiveSessionItem extends Document {
   promptHtml: string;
   options: ILiveSessionItemOption[];
   answerIndexes: number[];
+  tagIds: Types.ObjectId[];
   explanationHtml?: string;
   status: LiveSessionItemStatus;
   order: number;
@@ -75,6 +76,11 @@ const LiveSessionItemSchema = new Schema<ILiveSessionItem>(
     },
     answerIndexes: {
       type: [Number],
+      default: [],
+    },
+    tagIds: {
+      type: [Schema.Types.ObjectId],
+      ref: "Tag",
       default: [],
     },
     explanationHtml: {
@@ -190,6 +196,10 @@ LiveSessionItemSchema.index(
   { liveSession: 1, status: 1, order: 1 },
   { name: "live_session_item_status_order_1" },
 );
+LiveSessionItemSchema.index(
+  { liveSession: 1, tagIds: 1 },
+  { name: "live_session_item_tags_1" },
+);
 
 const modelRegistry = getModelRegistry();
 
@@ -201,6 +211,7 @@ if (
   existingLiveSessionItemModel &&
   (!existingLiveSessionItemModel.schema.path("promptHtml") ||
     !existingLiveSessionItemModel.schema.path("answerIndexes") ||
+    !existingLiveSessionItemModel.schema.path("tagIds") ||
     !existingLiveSessionItemModel.schema.path("status") ||
     !existingLiveSessionItemModel.schema.path("order"))
 ) {

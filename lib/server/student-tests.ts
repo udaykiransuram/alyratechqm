@@ -28,6 +28,7 @@ import {
   sanitizePaperForStudent,
   serializeStudentAttempt,
 } from "@/lib/student-tests";
+import { buildArchiveFilter } from "@/lib/archive";
 
 const STATUS_ORDER: Record<string, number> = {
   in_progress: 0,
@@ -139,11 +140,36 @@ export async function listStudentTestsData(params: {
           params.schoolKey,
           placement.classId,
         );
+  const practicePapers =
+    requestedPaperIds.length > 0
+      ? []
+      : await QuestionPaperModel.find({
+          class: placement.classId,
+          onlineEnabled: true,
+          isPracticeSet: true,
+          practiceStudent: params.studentId,
+          ...buildArchiveFilter(false),
+        })
+          .select(
+            "title class subject subjectIds duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections.name sections.questions.question isPracticeSet practiceStudent",
+          )
+          .populate({ path: "class", model: ClassModel, select: "name" })
+          .populate({ path: "subject", model: SubjectModel, select: "name" })
+          .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
+          .populate({
+            path: "sections.questions.question",
+            model: QuestionModel,
+            select: "type matrixOptions subject",
+            populate: { path: "subject", model: SubjectModel, select: "name" },
+          })
+          .lean();
 
-  const eligiblePapers = papers.filter(
+  const mergedPapers = [...papers, ...practicePapers];
+
+  const eligiblePapers = mergedPapers.filter(
     (paper: any) =>
       paperSupportsOnlineDelivery(paper) &&
-      isStudentEligibleForPaper(paper, placement),
+      isStudentEligibleForPaper(paper, { ...placement, studentId: params.studentId }),
   );
 
   if (eligiblePapers.length === 0) {

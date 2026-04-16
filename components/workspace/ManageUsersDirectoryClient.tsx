@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { Archive, ChevronLeft, ChevronRight, Edit, Eye } from "lucide-react";
+import {
+  Archive,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Edit,
+  Eye,
+} from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
@@ -437,7 +444,151 @@ export default function ManageUsersDirectoryClient({
                   </div>
                 </div>
 
-                <div className="app-table-wrap app-table-dense">
+                <div className="space-y-2 md:hidden">
+                  {users.map((user) => (
+                    <article
+                      key={`mobile-${user._id}`}
+                      className="rounded-[1.05rem] border border-border/68 bg-background/90 px-3.5 py-3.5 shadow-sm"
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 space-y-1">
+                            <p className="truncate text-sm font-semibold text-foreground">
+                              {user.name}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {user.role === "student" && user.rollNumber
+                                ? `Roll: ${user.rollNumber}`
+                                : getRoleAccountLabel(user.role)}
+                            </p>
+                          </div>
+                          <Badge
+                            variant={getRoleBadgeVariant(user.role)}
+                            className="capitalize"
+                          >
+                            {user.role}
+                          </Badge>
+                        </div>
+
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div className="rounded-lg border border-border/55 bg-background/72 px-3 py-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                              Contact
+                            </p>
+                            <p className="mt-1 truncate text-sm text-foreground">
+                              {user.email || "No email"}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {user.mobileNumber || "No phone"}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-border/55 bg-background/72 px-3 py-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                              Scope
+                            </p>
+                            <p className="mt-1 text-sm text-foreground">
+                              {getScopeSummary(user)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="app-row-action-button app-row-action-button-accent w-full"
+                          >
+                            <AppPrefetchLink
+                              href={buildReturnHref(getUserDetailPath(user))}
+                              relatedApiPrefetches={[
+                                `/api/users/${user._id}`,
+                                "/api/classes",
+                                "/api/sections",
+                                "/api/subjects",
+                              ]}
+                              aria-label={`View ${user.name}`}
+                              title={`View ${user.name}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                              View Profile
+                            </AppPrefetchLink>
+                          </Button>
+                          <details className="group rounded-xl border border-border/60 bg-background/72 px-2.5 py-2">
+                            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+                              More actions
+                              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+                            </summary>
+                            <div className="mt-2 grid gap-2">
+                              <Button
+                                asChild
+                                variant="outline"
+                                size="sm"
+                                className="app-row-action-button w-full"
+                              >
+                                <AppPrefetchLink
+                                  href={buildReturnHref(getUserEditPath(user))}
+                                  relatedApiPrefetches={[
+                                    `/api/users/${user._id}`,
+                                    "/api/classes",
+                                    "/api/sections",
+                                    "/api/subjects",
+                                  ]}
+                                  aria-label={`Edit ${user.name}`}
+                                  title={`Edit ${user.name}`}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                  Edit Profile
+                                </AppPrefetchLink>
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="app-row-action-button app-row-action-button-danger w-full"
+                                    disabled={Boolean(archivingUserId)}
+                                    aria-label={`Archive ${user.name}`}
+                                    title={`Archive ${user.name}`}
+                                  >
+                                    {archivingUserId === user._id ? (
+                                      <Spinner />
+                                    ) : (
+                                      <Archive className="h-4 w-4" />
+                                    )}
+                                    Archive User
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Archive user?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will archive the user
+                                      <strong className="mx-1">{user.name}</strong>.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel disabled={Boolean(archivingUserId)}>
+                                      Cancel
+                                    </AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => void handleArchiveUser(user._id)}
+                                      disabled={Boolean(archivingUserId)}
+                                    >
+                                      {archivingUserId === user._id ? <Spinner /> : "Archive"}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </details>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="hidden md:block app-table-wrap app-table-dense">
                   <Table>
                     <TableHeader>
                       <TableRow>

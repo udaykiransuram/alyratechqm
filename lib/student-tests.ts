@@ -185,6 +185,24 @@ export function paperRequiresManualReview(paper: any) {
 }
 
 export function isStudentEligibleForPaper(paper: any, student: any) {
+  const practiceStudentId = normalizeId(
+    paper?.practiceStudent?._id || paper?.practiceStudent,
+  );
+  if (paper?.isPracticeSet && practiceStudentId) {
+    const studentId = normalizeId(student?.studentId || student?._id || student?.id);
+    const studentClassId = normalizeId(
+      student?.classId || student?.class?._id || student?.class,
+    );
+    const paperClassId = normalizeId(paper?.class?._id || paper?.class);
+    return Boolean(
+      studentId &&
+        studentClassId &&
+        paperClassId &&
+        studentId === practiceStudentId &&
+        studentClassId === paperClassId,
+    );
+  }
+
   const studentClassId = normalizeId(
     student?.classId || student?.class?._id || student?.class,
   );

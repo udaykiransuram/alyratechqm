@@ -237,6 +237,30 @@ function formatDateTimeLocalInput(value?: string | null) {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+function deriveFileNameFromUrl(value?: string | null) {
+  const normalizedValue = String(value || "").trim();
+  if (!normalizedValue) {
+    return "";
+  }
+
+  let pathname = normalizedValue;
+  try {
+    pathname = normalizedValue.startsWith("/")
+      ? normalizedValue
+      : new URL(normalizedValue).pathname;
+  } catch {
+    pathname = normalizedValue.split("?")[0]?.split("#")[0] || normalizedValue;
+  }
+
+  const lastSegment = pathname.split("/").filter(Boolean).pop() || "";
+
+  try {
+    return decodeURIComponent(lastSegment);
+  } catch {
+    return lastSegment;
+  }
+}
+
 function createLessonItem(
   type: EditableLessonItem["type"],
   overrides?: Partial<EditableLessonItem>,
@@ -1906,7 +1930,7 @@ export default function CourseEditorClient({
               return "Lesson resources need a title.";
             }
             if (!item.fileUrl.trim() || !item.fileName.trim()) {
-              return "Lesson resources need an uploaded file.";
+              return "Lesson resources need a file link.";
             }
           }
         }
@@ -2292,7 +2316,7 @@ export default function CourseEditorClient({
             if (!item.title.trim()) {
               itemErrors[item.id] = "Resource title is required.";
             } else if (!item.fileUrl.trim() || !item.fileName.trim()) {
-              itemErrors[item.id] = "Upload a resource file.";
+              itemErrors[item.id] = "Add a file link or upload a file.";
             }
           }
         });
@@ -2746,9 +2770,9 @@ export default function CourseEditorClient({
     }
 
     const resourceTitleError =
-      itemError && itemError.includes("title") ? itemError : undefined;
+      itemError && itemError.toLowerCase().includes("title") ? itemError : undefined;
     const resourceUploadError =
-      itemError && itemError.includes("Upload") ? itemError : undefined;
+      itemError && itemError.toLowerCase().includes("file") ? itemError : undefined;
 
     return (
       <div className="space-y-4">
@@ -2774,9 +2798,45 @@ export default function CourseEditorClient({
         </FormField>
 
         <FormField
-          label="Resource or video file"
-          hint={resourceUploadError || "PDF, DOCX, or video files are supported."}
+          label="Hosted file or video URL"
+          hint={
+            resourceUploadError ||
+            "Paste a hosted document or video URL here for larger files."
+          }
           hintTone={resourceUploadError ? "error" : "muted"}
+        >
+          <Input
+            value={item.fileUrl}
+            onChange={(event) =>
+              updateLessonItem<EditableLessonResourceItem>(
+                lessonBlock.id,
+                item.id,
+                (currentItem) => {
+                  const nextFileUrl = event.target.value;
+                  const currentDerivedFileName = deriveFileNameFromUrl(currentItem.fileUrl);
+                  const nextDerivedFileName = deriveFileNameFromUrl(nextFileUrl);
+                  const shouldSyncFileName =
+                    !currentItem.fileName.trim() ||
+                    currentItem.fileName === currentDerivedFileName;
+
+                  return {
+                    ...currentItem,
+                    fileUrl: nextFileUrl,
+                    fileName:
+                      shouldSyncFileName && nextDerivedFileName
+                        ? nextDerivedFileName
+                        : currentItem.fileName,
+                  };
+                },
+              )
+            }
+            placeholder="https://cdn.example.com/lessons/fractions-intro.mp4"
+          />
+        </FormField>
+
+        <FormField
+          label="Upload file"
+          hint="Optional for smaller files up to 20 MB. Use a hosted URL or YouTube item for larger videos."
         >
           <FilePickerField
             id={`lesson-resource-${item.id}`}

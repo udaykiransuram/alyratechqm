@@ -270,206 +270,266 @@ export default function LiveSessionEditorClient({
           {mode === "create" ? "Live Class Setup" : "Live Class Details"}
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Choose the class, target sections, meeting links, and session timing.
+          Organize the session basics, audience, schedule, and join details in one place.
         </p>
       </CardHeader>
       <CardContent className="app-section-body">
         <form className="space-y-6" onSubmit={handleSubmit}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="live-session-title">Title</Label>
-              <Input
-                id="live-session-title"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="Algebra revision live class"
-                disabled={isSaving}
-              />
-            </div>
+          <div className="grid gap-4">
+            <section className="app-section">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Session basics</p>
+                  <p className="text-xs text-muted-foreground">
+                    Title and a short prep summary for students.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="app-field-group md:col-span-2">
+                  <Label htmlFor="live-session-title">Title</Label>
+                  <Input
+                    id="live-session-title"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="Algebra revision live class"
+                    disabled={isSaving}
+                  />
+                </div>
 
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="live-session-description">Description</Label>
-              <Textarea
-                id="live-session-description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Tell students what this session covers and how to prepare."
-                rows={4}
-                disabled={isSaving}
-              />
-            </div>
+                <div className="app-field-group md:col-span-2">
+                  <Label htmlFor="live-session-description">Description</Label>
+                  <Textarea
+                    id="live-session-description"
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    placeholder="Tell students what this session covers and how to prepare."
+                    rows={4}
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+            </section>
 
-            <div className="space-y-2">
-              <Label>Class</Label>
-              <SearchableCommandSelect
-                value={classId}
-                options={classOptions}
-                onValueChange={setClassId}
-                placeholder="Select class"
-                searchPlaceholder="Search classes"
-                emptyText="No classes available."
-                disabled={isSaving}
-              />
-            </div>
+            <section className="app-section">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Audience</p>
+                  <p className="text-xs text-muted-foreground">
+                    Choose the class, sections, and host teacher.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="app-field-group">
+                  <Label>Class</Label>
+                  <SearchableCommandSelect
+                    value={classId}
+                    options={classOptions}
+                    onValueChange={setClassId}
+                    placeholder="Select class"
+                    searchPlaceholder="Search classes"
+                    emptyText="No classes available."
+                    disabled={isSaving}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label>Subject</Label>
-              <SearchableCommandSelect
-                value={subjectId}
-                options={subjectOptions}
-                onValueChange={setSubjectId}
-                placeholder="Select subject"
-                searchPlaceholder="Search subjects"
-                emptyText="No subjects available."
-                disabled={isSaving}
-              />
-            </div>
+                <div className="app-field-group">
+                  <Label>Subject</Label>
+                  <SearchableCommandSelect
+                    value={subjectId}
+                    options={subjectOptions}
+                    onValueChange={setSubjectId}
+                    placeholder="Select subject"
+                    searchPlaceholder="Search subjects"
+                    emptyText="No subjects available."
+                    disabled={isSaving}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label>Sections</Label>
-              <SearchableMultiSelectPopover
-                selectedValues={assignedAcademicSectionIds}
-                options={sectionOptions}
-                onSelectedValuesChange={setAssignedAcademicSectionIds}
-                placeholder="Whole class or selected sections"
-                searchPlaceholder="Search sections"
-                emptyText="No sections available."
-                disabled={isSaving}
-              />
-              <p className="text-xs text-muted-foreground">
-                Leave this empty to target the full class.
-              </p>
-            </div>
+                <div className="app-field-group">
+                  <Label>Sections</Label>
+                  <SearchableMultiSelectPopover
+                    selectedValues={assignedAcademicSectionIds}
+                    options={sectionOptions}
+                    onSelectedValuesChange={setAssignedAcademicSectionIds}
+                    placeholder="Whole class or selected sections"
+                    searchPlaceholder="Search sections"
+                    emptyText="No sections available."
+                    disabled={isSaving}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave this empty to target the full class.
+                  </p>
+                </div>
 
-            <div className="space-y-2">
-              <Label>Host teacher</Label>
-              <SearchableCommandSelect
-                value={hostTeacherId}
-                options={teacherOptions}
-                onValueChange={setHostTeacherId}
-                placeholder="Select host teacher"
-                searchPlaceholder="Search teachers"
-                emptyText={
-                  classId && subjectId
-                    ? "No eligible teachers for this scope."
-                    : "Choose class and subject first."
-                }
-                disabled={isSaving || teacherOptions.length <= 1}
-              />
-              <p className="text-xs text-muted-foreground">
-                {teacherOptions.length > 0
-                  ? "Host teachers are filtered by the selected class, subject, and sections."
-                  : "Pick class and subject first to resolve eligible hosts."}
-              </p>
-            </div>
+                <div className="app-field-group">
+                  <Label>Host teacher</Label>
+                  <SearchableCommandSelect
+                    value={hostTeacherId}
+                    options={teacherOptions}
+                    onValueChange={setHostTeacherId}
+                    placeholder="Select host teacher"
+                    searchPlaceholder="Search teachers"
+                    emptyText={
+                      classId && subjectId
+                        ? "No eligible teachers for this scope."
+                        : "Choose class and subject first."
+                    }
+                    disabled={isSaving || teacherOptions.length <= 1}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {teacherOptions.length > 0
+                      ? "Host teachers are filtered by the selected class, subject, and sections."
+                      : "Pick class and subject first to resolve eligible hosts."}
+                  </p>
+                </div>
+              </div>
+            </section>
 
-            <div className="space-y-2">
-              <Label htmlFor="live-session-start">Start time</Label>
-              <Input
-                id="live-session-start"
-                type="datetime-local"
-                value={scheduledStartAt}
-                onChange={(event) => setScheduledStartAt(event.target.value)}
-                disabled={isSaving}
-              />
-            </div>
+            <section className="app-section">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Schedule</p>
+                  <p className="text-xs text-muted-foreground">
+                    Set the session window and notification timing.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="app-field-group">
+                  <Label htmlFor="live-session-start">Start time</Label>
+                  <Input
+                    id="live-session-start"
+                    type="datetime-local"
+                    value={scheduledStartAt}
+                    onChange={(event) => setScheduledStartAt(event.target.value)}
+                    disabled={isSaving}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="live-session-end">End time</Label>
-              <Input
-                id="live-session-end"
-                type="datetime-local"
-                value={scheduledEndAt}
-                onChange={(event) => setScheduledEndAt(event.target.value)}
-                disabled={isSaving}
-              />
-            </div>
+                <div className="app-field-group">
+                  <Label htmlFor="live-session-end">End time</Label>
+                  <Input
+                    id="live-session-end"
+                    type="datetime-local"
+                    value={scheduledEndAt}
+                    onChange={(event) => setScheduledEndAt(event.target.value)}
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+            </section>
 
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="live-session-student-link">Student join link</Label>
-              <Input
-                id="live-session-student-link"
-                value={studentJoinUrl}
-                onChange={(event) => setStudentJoinUrl(event.target.value)}
-                placeholder="https://youtube.com/live/... or https://zoom.us/j/..."
-                disabled={isSaving}
-              />
-              <p className="text-xs text-muted-foreground">
-                Zoom, Meet, and YouTube Live links are supported. YouTube Live links embed automatically on the teacher and student live-class pages.
-              </p>
-            </div>
+            <section className="app-section">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Join details</p>
+                  <p className="text-xs text-muted-foreground">
+                    Meeting links, optional access codes, and student guidance.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="app-field-group md:col-span-2">
+                  <Label htmlFor="live-session-student-link">Student join link</Label>
+                  <Input
+                    id="live-session-student-link"
+                    value={studentJoinUrl}
+                    onChange={(event) => setStudentJoinUrl(event.target.value)}
+                    placeholder="https://youtube.com/live/... or https://zoom.us/j/..."
+                    disabled={isSaving}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Zoom, Meet, and YouTube Live links are supported. YouTube Live links embed automatically on the teacher and student live-class pages.
+                  </p>
+                </div>
 
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="live-session-host-link">Host join link</Label>
-              <Input
-                id="live-session-host-link"
-                value={hostJoinUrl}
-                onChange={(event) => setHostJoinUrl(event.target.value)}
-                placeholder="Optional separate teacher or control-room link"
-                disabled={isSaving}
-              />
-              <p className="text-xs text-muted-foreground">
-                Leave this empty when the teacher and students should use the same stream or meeting link.
-              </p>
-            </div>
+                <div className="app-field-group md:col-span-2">
+                  <Label htmlFor="live-session-host-link">Host join link</Label>
+                  <Input
+                    id="live-session-host-link"
+                    value={hostJoinUrl}
+                    onChange={(event) => setHostJoinUrl(event.target.value)}
+                    placeholder="Optional separate teacher or control-room link"
+                    disabled={isSaving}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave this empty when the teacher and students should use the same stream or meeting link.
+                  </p>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="live-session-meeting-code">Meeting code</Label>
-              <Input
-                id="live-session-meeting-code"
-                value={meetingCode}
-                onChange={(event) => setMeetingCode(event.target.value)}
-                placeholder="Optional"
-                disabled={isSaving}
-              />
-            </div>
+                <div className="app-field-group">
+                  <Label htmlFor="live-session-meeting-code">Meeting code</Label>
+                  <Input
+                    id="live-session-meeting-code"
+                    value={meetingCode}
+                    onChange={(event) => setMeetingCode(event.target.value)}
+                    placeholder="Optional"
+                    disabled={isSaving}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="live-session-passcode">Meeting passcode</Label>
-              <Input
-                id="live-session-passcode"
-                value={meetingPasscode}
-                onChange={(event) => setMeetingPasscode(event.target.value)}
-                placeholder="Optional"
-                disabled={isSaving}
-              />
-            </div>
+                <div className="app-field-group">
+                  <Label htmlFor="live-session-passcode">Meeting passcode</Label>
+                  <Input
+                    id="live-session-passcode"
+                    value={meetingPasscode}
+                    onChange={(event) => setMeetingPasscode(event.target.value)}
+                    placeholder="Optional"
+                    disabled={isSaving}
+                  />
+                </div>
 
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="live-session-join-instructions">
-                Join instructions
-              </Label>
-              <Textarea
-                id="live-session-join-instructions"
-                value={joinInstructions}
-                onChange={(event) => setJoinInstructions(event.target.value)}
-                placeholder="Optional prep notes, notebook reminders, or camera guidance."
-                rows={4}
-                disabled={isSaving}
-              />
-            </div>
+                <div className="app-field-group md:col-span-2">
+                  <Label htmlFor="live-session-join-instructions">
+                    Join instructions
+                  </Label>
+                  <Textarea
+                    id="live-session-join-instructions"
+                    value={joinInstructions}
+                    onChange={(event) => setJoinInstructions(event.target.value)}
+                    placeholder="Optional prep notes, notebook reminders, or camera guidance."
+                    rows={4}
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+            </section>
 
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select
-                value={status}
-                onValueChange={(value) =>
-                  setStatus(value === "draft" ? "draft" : "scheduled")
-                }
-                disabled={isSaving || initialSession?.status === "scheduled"}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="scheduled">Scheduled</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Scheduled live classes trigger in-app student notifications and a 15-minute reminder.
-              </p>
-            </div>
+            <section className="app-section">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Publish state</p>
+                  <p className="text-xs text-muted-foreground">
+                    Scheduled sessions notify students and send reminders.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="app-field-group">
+                  <Label>Status</Label>
+                  <Select
+                    value={status}
+                    onValueChange={(value) =>
+                      setStatus(value === "draft" ? "draft" : "scheduled")
+                    }
+                    disabled={isSaving || initialSession?.status === "scheduled"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="scheduled">Scheduled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Scheduled live classes trigger in-app student notifications and a 15-minute reminder.
+                  </p>
+                </div>
+              </div>
+            </section>
           </div>
 
           {error ? (

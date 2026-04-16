@@ -605,103 +605,187 @@ export default function ManageSchoolsPage() {
               </div>
             ) : (
               <>
-                <div className="app-table-wrap">
-                  <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Display Name</TableHead>
-                      <TableHead>Key</TableHead>
-                      <TableHead>Updated</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedSchools.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={4}
-                          className="py-8 text-center text-muted-foreground"
-                        >
-                          No schools created yet.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      sortedSchools.map((school) => (
-                        <TableRow key={school._id}>
-                          <TableCell className="font-medium">
-                            {school.displayName}
-                          </TableCell>
-                          <TableCell>
-                            <code className="rounded bg-muted px-2 py-1 text-xs">
-                              {school.key}
-                            </code>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
+                <div className="space-y-3 md:hidden">
+                  {sortedSchools.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
+                      No schools created yet.
+                    </div>
+                  ) : (
+                    sortedSchools.map((school) => (
+                      <article
+                        key={school._id}
+                        className="rounded-2xl border border-border/70 bg-background/80 p-4"
+                      >
+                        <div className="space-y-1">
+                          <p className="font-medium text-foreground">{school.displayName}</p>
+                          <div>
+                            <code className="rounded bg-muted px-2 py-1 text-xs">{school.key}</code>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Updated{" "}
                             {school.updatedAt
                               ? new Date(school.updatedAt).toLocaleDateString()
                               : "—"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="app-row-action-group justify-end">
+                          </p>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="app-row-action-button app-row-action-button-accent"
+                            onClick={() => void handleOpenEditSchool(school)}
+                            title="Edit school"
+                            aria-label="Edit school"
+                          >
+                            <Edit className="h-4 w-4" />
+                            Edit
+                          </Button>
+
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="app-row-action-button app-row-action-button-accent"
-                                onClick={() => void handleOpenEditSchool(school)}
-                                title="Edit school"
-                                aria-label="Edit school"
+                                className="app-row-action-button app-row-action-button-danger"
+                                disabled={deletingId === school._id}
+                                title="Delete school"
+                                aria-label="Delete school"
                               >
-                                <Edit className="h-4 w-4" />
-                                Edit
+                                {deletingId === school._id ? (
+                                  <Spinner />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                                Delete
                               </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete school?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This removes {school.displayName} from the
+                                  switcher and deletes its tenant database.
+                                  This cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteSchool(school)}
+                                  className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  {deletingId === school._id ? <Spinner /> : "Delete"}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
 
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
+                <div className="hidden md:block">
+                  <div className="app-table-wrap">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Display Name</TableHead>
+                          <TableHead>Key</TableHead>
+                          <TableHead>Updated</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sortedSchools.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={4}
+                              className="py-8 text-center text-muted-foreground"
+                            >
+                              No schools created yet.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          sortedSchools.map((school) => (
+                            <TableRow key={school._id}>
+                              <TableCell className="font-medium">
+                                {school.displayName}
+                              </TableCell>
+                              <TableCell>
+                                <code className="rounded bg-muted px-2 py-1 text-xs">
+                                  {school.key}
+                                </code>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {school.updatedAt
+                                  ? new Date(school.updatedAt).toLocaleDateString()
+                                  : "—"}
+                              </TableCell>
+                              <TableCell>
+                                <div className="app-row-action-group justify-end">
                                   <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    className="app-row-action-button app-row-action-button-danger"
-                                    disabled={deletingId === school._id}
-                                    title="Delete school"
-                                    aria-label="Delete school"
+                                    className="app-row-action-button app-row-action-button-accent"
+                                    onClick={() => void handleOpenEditSchool(school)}
+                                    title="Edit school"
+                                    aria-label="Edit school"
                                   >
-                                    {deletingId === school._id ? (
-                                      <Spinner />
-                                    ) : (
-                                      <Trash2 className="h-4 w-4" />
-                                    )}
-                                    Delete
+                                    <Edit className="h-4 w-4" />
+                                    Edit
                                   </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete school?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This removes {school.displayName} from the
-                                      switcher and deletes its tenant database.
-                                      This cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDeleteSchool(school)}
-                                      className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    >
-                                      {deletingId === school._id ? <Spinner /> : "Delete"}
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                  </Table>
+
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="app-row-action-button app-row-action-button-danger"
+                                        disabled={deletingId === school._id}
+                                        title="Delete school"
+                                        aria-label="Delete school"
+                                      >
+                                        {deletingId === school._id ? (
+                                          <Spinner />
+                                        ) : (
+                                          <Trash2 className="h-4 w-4" />
+                                        )}
+                                        Delete
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete school?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          This removes {school.displayName} from the
+                                          switcher and deletes its tenant database.
+                                          This cannot be undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() => handleDeleteSchool(school)}
+                                          className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                        >
+                                          {deletingId === school._id ? <Spinner /> : "Delete"}
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               </>
             )}

@@ -831,115 +831,216 @@ export default function IndexingClient({
                                   </div>
                                 )}
 
-                                <div className="app-table-wrap">
-                                  <Table className="text-[13px]">
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Student</TableHead>
-                                        <TableHead>Current Roll No.</TableHead>
-                                        <TableHead>Suggested</TableHead>
-                                        <TableHead>Class / Section</TableHead>
-                                        <TableHead>Linked Records</TableHead>
-                                        <TableHead className="min-w-[240px]">
-                                          Resolution
-                                        </TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {group.students.map((student) => (
-                                        <TableRow key={student.userId}>
-                                          <TableCell>
-                                            <div className="space-y-1">
-                                              <div className="flex flex-wrap items-center gap-2">
-                                                <span className="font-medium text-foreground">
-                                                  {student.name}
-                                                </span>
-                                                {student.isRecommendedKeeper ? (
-                                                  <Badge variant="secondary">
-                                                    Keep
-                                                  </Badge>
-                                                ) : null}
-                                              </div>
-                                              <p className="text-xs text-muted-foreground">
-                                                {student.email || 'No email'}
-                                              </p>
-                                            </div>
-                                          </TableCell>
-                                          <TableCell>
-                                            <span className="font-mono text-sm">
-                                              {student.rollNumber || '—'}
+                                <div className="space-y-3 md:hidden">
+                                  {group.students.map((student) => (
+                                    <article
+                                      key={student.userId}
+                                      className="rounded-2xl border border-border/70 bg-background/80 p-4"
+                                    >
+                                      <div className="space-y-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="font-medium text-foreground">
+                                            {student.name}
+                                          </span>
+                                          {student.isRecommendedKeeper ? (
+                                            <Badge variant="secondary">Keep</Badge>
+                                          ) : null}
+                                        </div>
+                                        <p className="break-words text-xs text-muted-foreground">
+                                          {student.email || 'No email'}
+                                        </p>
+                                      </div>
+
+                                      <div className="mt-3 grid gap-2 text-sm">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <span className="text-muted-foreground">Current Roll</span>
+                                          <span className="font-mono text-foreground">
+                                            {student.rollNumber || '—'}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-start justify-between gap-2">
+                                          <span className="text-muted-foreground">Suggested</span>
+                                          {student.suggestedRollNumber ? (
+                                            <span className="font-mono text-foreground">
+                                              {student.suggestedRollNumber}
                                             </span>
-                                          </TableCell>
-                                          <TableCell>
-                                            {student.suggestedRollNumber ? (
-                                              <span className="font-mono text-sm text-foreground">
-                                                {student.suggestedRollNumber}
-                                              </span>
-                                            ) : (
-                                              <span className="text-sm text-muted-foreground">
-                                                Keep current
-                                              </span>
-                                            )}
-                                          </TableCell>
-                                          <TableCell>
-                                            <div className="space-y-1 text-sm">
-                                              <div>{student.className || 'Unassigned'}</div>
-                                              <div className="text-xs text-muted-foreground">
-                                                {student.academicSectionName || 'No section'}
-                                              </div>
-                                            </div>
-                                          </TableCell>
-                                          <TableCell>
-                                            <div className="space-y-1 text-sm">
-                                              <div>
-                                                Responses: {student.responseCount}
-                                              </div>
-                                              <div className="text-xs text-muted-foreground">
-                                                Report jobs: {student.reportJobCount}
-                                              </div>
-                                            </div>
-                                          </TableCell>
-                                          <TableCell>
-                                            <div className="space-y-2">
-                                              <Input
-                                                value={
-                                                  manualResolutionValues[groupKey]?.[
-                                                    student.userId
-                                                  ] || ''
-                                                }
-                                                onChange={(event) =>
-                                                  handleManualValueChange(
-                                                    school.schoolKey,
-                                                    group.normalizedRollNumber,
-                                                    student.userId,
-                                                    event.target.value,
-                                                  )
-                                                }
-                                                placeholder={
-                                                  student.suggestedRollNumber ||
-                                                  'Keep current roll number'
-                                                }
-                                                className="h-8"
-                                                disabled={cleanupActionLoading}
-                                              />
-                                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                                {student.canAutoFix ? (
-                                                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">
-                                                    Safe auto-fix candidate
-                                                  </span>
-                                                ) : null}
-                                                {student.hasLinkedData ? (
-                                                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700">
-                                                    Linked data present
-                                                  </span>
-                                                ) : null}
-                                              </div>
-                                            </div>
-                                          </TableCell>
+                                          ) : (
+                                            <span className="text-muted-foreground">Keep current</span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-start justify-between gap-2">
+                                          <span className="text-muted-foreground">Class / Section</span>
+                                          <span className="text-right">
+                                            {student.className || 'Unassigned'}
+                                            <span className="block text-xs text-muted-foreground">
+                                              {student.academicSectionName || 'No section'}
+                                            </span>
+                                          </span>
+                                        </div>
+                                        <div className="flex items-start justify-between gap-2">
+                                          <span className="text-muted-foreground">Linked records</span>
+                                          <span className="text-right">
+                                            Responses: {student.responseCount}
+                                            <span className="block text-xs text-muted-foreground">
+                                              Report jobs: {student.reportJobCount}
+                                            </span>
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className="mt-3 space-y-2">
+                                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                          Resolution
+                                        </Label>
+                                        <Input
+                                          value={
+                                            manualResolutionValues[groupKey]?.[
+                                              student.userId
+                                            ] || ''
+                                          }
+                                          onChange={(event) =>
+                                            handleManualValueChange(
+                                              school.schoolKey,
+                                              group.normalizedRollNumber,
+                                              student.userId,
+                                              event.target.value,
+                                            )
+                                          }
+                                          placeholder={
+                                            student.suggestedRollNumber ||
+                                            'Keep current roll number'
+                                          }
+                                          className="h-9"
+                                          disabled={cleanupActionLoading}
+                                        />
+                                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                          {student.canAutoFix ? (
+                                            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">
+                                              Safe auto-fix candidate
+                                            </span>
+                                          ) : null}
+                                          {student.hasLinkedData ? (
+                                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700">
+                                              Linked data present
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    </article>
+                                  ))}
+                                </div>
+
+                                <div className="hidden md:block">
+                                  <div className="app-table-wrap">
+                                    <Table className="text-[13px]">
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Student</TableHead>
+                                          <TableHead>Current Roll No.</TableHead>
+                                          <TableHead>Suggested</TableHead>
+                                          <TableHead>Class / Section</TableHead>
+                                          <TableHead>Linked Records</TableHead>
+                                          <TableHead className="min-w-[240px]">
+                                            Resolution
+                                          </TableHead>
                                         </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {group.students.map((student) => (
+                                          <TableRow key={student.userId}>
+                                            <TableCell>
+                                              <div className="space-y-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                  <span className="font-medium text-foreground">
+                                                    {student.name}
+                                                  </span>
+                                                  {student.isRecommendedKeeper ? (
+                                                    <Badge variant="secondary">
+                                                      Keep
+                                                    </Badge>
+                                                  ) : null}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">
+                                                  {student.email || 'No email'}
+                                                </p>
+                                              </div>
+                                            </TableCell>
+                                            <TableCell>
+                                              <span className="font-mono text-sm">
+                                                {student.rollNumber || '—'}
+                                              </span>
+                                            </TableCell>
+                                            <TableCell>
+                                              {student.suggestedRollNumber ? (
+                                                <span className="font-mono text-sm text-foreground">
+                                                  {student.suggestedRollNumber}
+                                                </span>
+                                              ) : (
+                                                <span className="text-sm text-muted-foreground">
+                                                  Keep current
+                                                </span>
+                                              )}
+                                            </TableCell>
+                                            <TableCell>
+                                              <div className="space-y-1 text-sm">
+                                                <div>{student.className || 'Unassigned'}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                  {student.academicSectionName || 'No section'}
+                                                </div>
+                                              </div>
+                                            </TableCell>
+                                            <TableCell>
+                                              <div className="space-y-1 text-sm">
+                                                <div>
+                                                  Responses: {student.responseCount}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                  Report jobs: {student.reportJobCount}
+                                                </div>
+                                              </div>
+                                            </TableCell>
+                                            <TableCell>
+                                              <div className="space-y-2">
+                                                <Input
+                                                  value={
+                                                    manualResolutionValues[groupKey]?.[
+                                                      student.userId
+                                                    ] || ''
+                                                  }
+                                                  onChange={(event) =>
+                                                    handleManualValueChange(
+                                                      school.schoolKey,
+                                                      group.normalizedRollNumber,
+                                                      student.userId,
+                                                      event.target.value,
+                                                    )
+                                                  }
+                                                  placeholder={
+                                                    student.suggestedRollNumber ||
+                                                    'Keep current roll number'
+                                                  }
+                                                  className="h-8"
+                                                  disabled={cleanupActionLoading}
+                                                />
+                                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                                  {student.canAutoFix ? (
+                                                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">
+                                                      Safe auto-fix candidate
+                                                    </span>
+                                                  ) : null}
+                                                  {student.hasLinkedData ? (
+                                                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700">
+                                                      Linked data present
+                                                    </span>
+                                                  ) : null}
+                                                </div>
+                                              </div>
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
                                 </div>
                               </div>
                             );

@@ -16,6 +16,7 @@ import {
   scheduleReportDispatchWorker,
 } from "@/lib/reports/dispatchQueue";
 import { getTrustedInternalOrigin } from "@/lib/security/internal-origin";
+import { withRequestBudget } from "@/lib/server/request-governor";
 
 function normalizeMobileNumber(input: string): string {
   const digits = String(input || "").replace(/\D/g, "");
@@ -44,35 +45,44 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ paperId: string }> },
 ) {
-  await connectDB();
   const auth = await requireTenantSession(req, {
     allowRoles: ["admin", "teacher"],
   });
   if (!auth.ok) return auth.response;
   const { paperId } = await params;
-  const { schoolKey } = auth;
-  const requestCookies = req.headers.get("cookie") || "";
+  return withRequestBudget(
+    {
+      request: req,
+      policy: "reportDispatchSend",
+      schoolKey: auth.schoolKey,
+      userId: auth.session.user.id,
+      scopeId: `${auth.schoolKey}:${paperId}`,
+    },
+    async () => {
+      await connectDB();
+      const { schoolKey } = auth;
+      const requestCookies = req.headers.get("cookie") || "";
 
-  if (!process.env.WHATSAPP_ACCESS_TOKEN) {
-    return NextResponse.json(
-      {
-        success: false,
-        message:
-          "WhatsApp is not configured: WHATSAPP_ACCESS_TOKEN missing in environment",
-      },
-      { status: 500 },
-    );
-  }
-  if (!process.env.WHATSAPP_PHONE_NUMBER_ID) {
-    return NextResponse.json(
-      {
-        success: false,
-        message:
-          "WhatsApp is not configured: WHATSAPP_PHONE_NUMBER_ID missing in environment",
-      },
-      { status: 500 },
-    );
-  }
+      if (!process.env.WHATSAPP_ACCESS_TOKEN) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "WhatsApp is not configured: WHATSAPP_ACCESS_TOKEN missing in environment",
+          },
+          { status: 500 },
+        );
+      }
+      if (!process.env.WHATSAPP_PHONE_NUMBER_ID) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "WhatsApp is not configured: WHATSAPP_PHONE_NUMBER_ID missing in environment",
+          },
+          { status: 500 },
+        );
+      }
 
   const academicSectionId =
     new URL(req.url).searchParams.get("academicSectionId")?.trim() || "";
@@ -495,20 +505,22 @@ export async function POST(
     };
   }
 
-  return NextResponse.json({
-    success: queued > 0 || alreadyQueued > 0,
-    queued,
-    alreadyQueued,
-    studentQueued,
-    studentAlreadyQueued,
-    teacherQueued,
-    teacherAlreadyQueued,
-    adminQueued,
-    adminAlreadyQueued,
-    failedCount,
-    failedResponseIds: studentFailures,
-    failedRecipients: recipientFailures,
-    academicSection: academicSectionName || undefined,
-    worker: workerResult,
-  });
+      return NextResponse.json({
+        success: queued > 0 || alreadyQueued > 0,
+        queued,
+        alreadyQueued,
+        studentQueued,
+        studentAlreadyQueued,
+        teacherQueued,
+        teacherAlreadyQueued,
+        adminQueued,
+        adminAlreadyQueued,
+        failedCount,
+        failedResponseIds: studentFailures,
+        failedRecipients: recipientFailures,
+        academicSection: academicSectionName || undefined,
+        worker: workerResult,
+      });
+    },
+  );
 }

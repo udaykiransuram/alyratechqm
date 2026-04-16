@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import LoadingState from "@/components/analytics/LoadingState";
 import ErrorState from "@/components/analytics/ErrorState";
+import OptionTagsDisplay from "@/components/analytics/OptionTagsDisplay";
 import ReportHeader from "@/components/analytics/ReportHeader";
 import StatsTable from "@/components/analytics/StatsTable";
 import FailInsightsCard from "@/components/analytics/insights/FailInsightsCard";
@@ -16,6 +17,7 @@ import {
 } from "@/components/analytics/report-client-lazy";
 import {
   computeInsightsForLastTag,
+  flattenStatsRows,
 } from "@/components/analytics/helpers";
 import { Button } from "@/components/ui/button";
 import { useBackNavigation } from "@/hooks/useReturnNavigation";
@@ -76,6 +78,54 @@ function reconcileGroupBy(
   },
 ) {
   return reconcileAnalyticsGroupBy(current, fields, options);
+}
+
+function AnalyticsMobileMetricButton({
+  label,
+  value,
+  tone,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  tone: "success" | "danger" | "warning";
+  onClick?: () => void;
+}) {
+  const toneClass =
+    tone === "success"
+      ? "border-emerald-200/80 bg-emerald-50/80 text-emerald-700"
+      : tone === "danger"
+        ? "border-rose-200/80 bg-rose-50/80 text-rose-700"
+        : "border-amber-200/80 bg-amber-50/80 text-amber-700";
+
+  const content = (
+    <>
+      <span className="text-[10px] font-semibold uppercase tracking-[0.08em]">
+        {label}
+      </span>
+      <span className="mt-1 text-base font-semibold leading-none">{value}</span>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`flex min-h-[4.25rem] w-full flex-col items-start justify-center rounded-[0.95rem] border px-3 py-2 text-left transition hover:-translate-y-px hover:shadow-sm ${toneClass}`}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={`flex min-h-[4.25rem] w-full flex-col items-start justify-center rounded-[0.95rem] border px-3 py-2 text-left ${toneClass}`}
+    >
+      {content}
+    </div>
+  );
 }
 
 export default function ClassTagReportPageClient({
@@ -224,6 +274,10 @@ export default function ClassTagReportPageClient({
     view === "table" ? "Table" : view === "charts" ? "Charts" : "Benchmark";
   const hasStatsData =
     stats && typeof stats === "object" && Object.keys(stats).length > 0;
+  const mobileStatsRows = React.useMemo(
+    () => flattenStatsRows(stats, groupBy, sortConfig),
+    [groupBy, sortConfig, stats],
+  );
 
   const hasActiveFilters =
     selectedClassId !== "all" ||
@@ -1098,124 +1152,251 @@ export default function ClassTagReportPageClient({
                 No tag data found for the selected criteria.
               </div>
             ) : (
-              <div className="analytics-table-wrap" ref={tableRef}>
-                <table className="min-w-full text-sm">
-                  <thead className="bg-muted/30">
-                    <tr>
-                      <th className="analytics-th">Group / Tag</th>
-                      {showTagsColumn && (
-                        <th className="analytics-th-center">Tags</th>
-                      )}
-                      <th className="analytics-th-center text-emerald-700">
-                        <button
-                          type="button"
-                          className={`analytics-sort-button ${
-                            sortConfig.key === "correct"
-                              ? "analytics-sort-button-active"
-                              : ""
-                          }`}
-                          onClick={() =>
-                            setSortConfig({
-                              key: "correct",
-                              direction:
-                                sortConfig.key === "correct" &&
-                                sortConfig.direction === "asc"
-                                  ? "desc"
-                                  : "asc",
-                            })
-                          }
-                        >
-                          <span>Correct</span>
-                          <span className="analytics-sort-indicator" aria-hidden="true">
-                            {sortConfig.key === "correct"
-                              ? sortConfig.direction === "asc"
-                                ? "▲"
-                                : "▼"
-                              : "↕"}
+              <>
+                <div className="space-y-2.5 md:hidden">
+                  {mobileStatsRows.map((entry) => (
+                    <article
+                      key={entry.path.join("::")}
+                      className="rounded-[1.05rem] border border-border/68 bg-background/92 px-3.5 py-3.5 shadow-sm"
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 space-y-1">
+                            {entry.level > 0 ? (
+                              <p className="truncate text-[11px] text-muted-foreground">
+                                {entry.path.slice(0, -1).join(" → ")}
+                              </p>
+                            ) : null}
+                            <p className="text-sm font-semibold text-foreground">
+                              {entry.label}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-border/60 bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                            Level {entry.level + 1}
                           </span>
-                        </button>
-                      </th>
-                      <th className="analytics-th-center text-rose-700">
-                        <button
-                          type="button"
-                          className={`analytics-sort-button ${
-                            sortConfig.key === "incorrect"
-                              ? "analytics-sort-button-active"
-                              : ""
-                          }`}
-                          onClick={() =>
-                            setSortConfig({
-                              key: "incorrect",
-                              direction:
-                                sortConfig.key === "incorrect" &&
-                                sortConfig.direction === "asc"
-                                  ? "desc"
-                                  : "asc",
-                            })
-                          }
-                        >
-                          <span>Incorrect</span>
-                          <span className="analytics-sort-indicator" aria-hidden="true">
-                            {sortConfig.key === "incorrect"
-                              ? sortConfig.direction === "asc"
-                                ? "▲"
-                                : "▼"
-                              : "↕"}
-                          </span>
-                        </button>
-                      </th>
-                      <th className="analytics-th-center text-amber-700">
-                        <button
-                          type="button"
-                          className={`analytics-sort-button ${
-                            sortConfig.key === "unattempted"
-                              ? "analytics-sort-button-active"
-                              : ""
-                          }`}
-                          onClick={() =>
-                            setSortConfig({
-                              key: "unattempted",
-                              direction:
-                                sortConfig.key === "unattempted" &&
-                                sortConfig.direction === "asc"
-                                  ? "desc"
-                                  : "asc",
-                            })
-                          }
-                        >
-                          <span>Unattempted</span>
-                          <span className="analytics-sort-indicator" aria-hidden="true">
-                            {sortConfig.key === "unattempted"
-                              ? sortConfig.direction === "asc"
-                                ? "▲"
-                                : "▼"
-                              : "↕"}
-                          </span>
-                        </button>
-                      </th>
-                      {showOptionTagsColumn && (
-                        <th className="analytics-th-center">
-                          Selected Option Tags
+                        </div>
+
+                        {showTagsColumn ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {Array.isArray(entry.row.tags) && entry.row.tags.length > 0 ? (
+                              entry.row.tags.map(
+                                (tag: { type: string; value: string }, index: number) => {
+                                  const isSelected = selectedTags.some(
+                                    (selected) =>
+                                      selected.type === tag.type &&
+                                      selected.value === tag.value,
+                                  );
+
+                                  return (
+                                    <button
+                                      key={`${entry.path.join("::")}-${tag.type}-${tag.value}-${index}`}
+                                      type="button"
+                                      className={`analytics-chip-button ${
+                                        isSelected
+                                          ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                                          : "border-border/60 bg-background text-foreground hover:bg-accent hover:text-accent-foreground"
+                                      }`}
+                                      onClick={() => handleTagToggle(tag)}
+                                    >
+                                      {tag.type}: {tag.value}
+                                    </button>
+                                  );
+                                },
+                              )
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                No tags on this row.
+                              </span>
+                            )}
+                          </div>
+                        ) : null}
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <AnalyticsMobileMetricButton
+                            label="Correct"
+                            value={entry.row.correct || 0}
+                            tone="success"
+                            onClick={
+                              Array.isArray(entry.row.correctQuestionIds) &&
+                              entry.row.correctQuestionIds.length > 0
+                                ? () =>
+                                    handleOpenModal(
+                                      "Correct Questions",
+                                      entry.row.correctQuestionIds,
+                                      entry.row,
+                                    )
+                                : undefined
+                            }
+                          />
+                          <AnalyticsMobileMetricButton
+                            label="Incorrect"
+                            value={entry.row.incorrect || 0}
+                            tone="danger"
+                            onClick={
+                              Array.isArray(entry.row.incorrectQuestionIds) &&
+                              entry.row.incorrectQuestionIds.length > 0
+                                ? () =>
+                                    handleOpenModal(
+                                      "Incorrect Questions",
+                                      entry.row.incorrectQuestionIds,
+                                      entry.row,
+                                    )
+                                : undefined
+                            }
+                          />
+                          <AnalyticsMobileMetricButton
+                            label="Unattempted"
+                            value={entry.row.unattempted || 0}
+                            tone="warning"
+                            onClick={
+                              Array.isArray(entry.row.unattemptedQuestionIds) &&
+                              entry.row.unattemptedQuestionIds.length > 0
+                                ? () =>
+                                    handleOpenModal(
+                                      "Unattempted Questions",
+                                      entry.row.unattemptedQuestionIds,
+                                      entry.row,
+                                    )
+                                : undefined
+                            }
+                          />
+                        </div>
+
+                        {showOptionTagsColumn ? (
+                          <div className="rounded-[0.95rem] border border-border/60 bg-background/75 px-3 py-2.5">
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                              Selected Option Tags
+                            </p>
+                            <OptionTagsDisplay
+                              optionTags={entry.row.optionTags}
+                              onTagClick={handleOptionTagClick}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="analytics-table-wrap hidden md:block" ref={tableRef}>
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-muted/30">
+                      <tr>
+                        <th className="analytics-th">Group / Tag</th>
+                        {showTagsColumn && (
+                          <th className="analytics-th-center">Tags</th>
+                        )}
+                        <th className="analytics-th-center text-emerald-700">
+                          <button
+                            type="button"
+                            className={`analytics-sort-button ${
+                              sortConfig.key === "correct"
+                                ? "analytics-sort-button-active"
+                                : ""
+                            }`}
+                            onClick={() =>
+                              setSortConfig({
+                                key: "correct",
+                                direction:
+                                  sortConfig.key === "correct" &&
+                                  sortConfig.direction === "asc"
+                                    ? "desc"
+                                    : "asc",
+                              })
+                            }
+                          >
+                            <span>Correct</span>
+                            <span className="analytics-sort-indicator" aria-hidden="true">
+                              {sortConfig.key === "correct"
+                                ? sortConfig.direction === "asc"
+                                  ? "▲"
+                                  : "▼"
+                                : "↕"}
+                            </span>
+                          </button>
                         </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <StatsTable
-                      stats={stats}
-                      handleOpenModal={handleOpenModal}
-                      handleOptionTagClick={handleOptionTagClick}
-                      selectedTags={selectedTags}
-                      handleTagSelect={handleTagToggle}
-                      sortConfig={sortConfig}
-                      setSortConfig={setSortConfig}
-                      showTagsColumn={showTagsColumn}
-                      showOptionTagsColumn={showOptionTagsColumn}
-                      groupBy={groupBy}
-                    />
-                  </tbody>
-                </table>
-              </div>
+                        <th className="analytics-th-center text-rose-700">
+                          <button
+                            type="button"
+                            className={`analytics-sort-button ${
+                              sortConfig.key === "incorrect"
+                                ? "analytics-sort-button-active"
+                                : ""
+                            }`}
+                            onClick={() =>
+                              setSortConfig({
+                                key: "incorrect",
+                                direction:
+                                  sortConfig.key === "incorrect" &&
+                                  sortConfig.direction === "asc"
+                                    ? "desc"
+                                    : "asc",
+                              })
+                            }
+                          >
+                            <span>Incorrect</span>
+                            <span className="analytics-sort-indicator" aria-hidden="true">
+                              {sortConfig.key === "incorrect"
+                                ? sortConfig.direction === "asc"
+                                  ? "▲"
+                                  : "▼"
+                                : "↕"}
+                            </span>
+                          </button>
+                        </th>
+                        <th className="analytics-th-center text-amber-700">
+                          <button
+                            type="button"
+                            className={`analytics-sort-button ${
+                              sortConfig.key === "unattempted"
+                                ? "analytics-sort-button-active"
+                                : ""
+                            }`}
+                            onClick={() =>
+                              setSortConfig({
+                                key: "unattempted",
+                                direction:
+                                  sortConfig.key === "unattempted" &&
+                                  sortConfig.direction === "asc"
+                                    ? "desc"
+                                    : "asc",
+                              })
+                            }
+                          >
+                            <span>Unattempted</span>
+                            <span className="analytics-sort-indicator" aria-hidden="true">
+                              {sortConfig.key === "unattempted"
+                                ? sortConfig.direction === "asc"
+                                  ? "▲"
+                                  : "▼"
+                                : "↕"}
+                            </span>
+                          </button>
+                        </th>
+                        {showOptionTagsColumn && (
+                          <th className="analytics-th-center">
+                            Selected Option Tags
+                          </th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <StatsTable
+                        stats={stats}
+                        handleOpenModal={handleOpenModal}
+                        handleOptionTagClick={handleOptionTagClick}
+                        selectedTags={selectedTags}
+                        handleTagSelect={handleTagToggle}
+                        sortConfig={sortConfig}
+                        setSortConfig={setSortConfig}
+                        showTagsColumn={showTagsColumn}
+                        showOptionTagsColumn={showOptionTagsColumn}
+                        groupBy={groupBy}
+                      />
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         ) : view === "charts" ? (

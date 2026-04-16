@@ -18,6 +18,7 @@
         --app-sidebar-collapsed-width: 5.5rem;
         --app-sidebar-width: var(--app-sidebar-expanded-width);
         --app-mobile-school-switcher-height: 0px;
+        --app-student-mobile-nav-height: 0px;
         --app-content-max-width: 92rem;
         --app-font-family-straight: "Segoe UI Variable", "SF Pro Text", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         --app-font-family-editorial: var(--font-sans), "Segoe UI Variable", "SF Pro Text", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -1346,6 +1347,80 @@
     color: hsl(var(--app-nav-foreground));
   }
 
+  .app-nav-mobile-scroll {
+    max-height: calc(100dvh - 76px);
+    overflow-y: auto;
+    padding: 0.875rem 1rem 1rem;
+  }
+
+  .app-nav-mobile-shell {
+    @apply flex min-h-full flex-col gap-3;
+  }
+
+  .app-nav-mobile-back {
+    border: 1px solid hsl(var(--app-nav-border) / 0.72) !important;
+    background: hsl(var(--app-nav-chip-surface) / 0.68) !important;
+    color: hsl(var(--app-nav-foreground) / 0.92) !important;
+  }
+
+  .app-nav-mobile-back:hover {
+    border-color: hsl(var(--app-nav-border) / 0.9) !important;
+    background: hsl(var(--app-nav-hover) / 0.8) !important;
+  }
+
+  .app-nav-mobile-group-list {
+    @apply grid gap-2.5;
+  }
+
+  .app-nav-mobile-group-button {
+    @apply flex w-full items-center justify-between gap-3 px-3.5 py-3.5 text-left transition-all duration-200;
+  }
+
+  .app-nav-mobile-group-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 30px -30px hsl(var(--app-shadow-deep) / 0.24);
+  }
+
+  .app-nav-mobile-group-button-active {
+    border-color: hsl(var(--app-nav-accent) / 0.36);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-nav-accent) / 0.16) 0%,
+        hsl(var(--app-nav-chip-surface) / 0.28) 100%
+      );
+  }
+
+  .app-nav-mobile-group-copy {
+    @apply min-w-0 space-y-1;
+  }
+
+  .app-nav-mobile-group-title {
+    @apply truncate text-[14px] font-semibold leading-5;
+    color: hsl(var(--app-nav-foreground));
+    letter-spacing: -0.01em;
+  }
+
+  .app-nav-mobile-group-meta {
+    @apply text-[11.5px] leading-4;
+    color: hsl(var(--app-nav-muted));
+  }
+
+  .app-nav-mobile-group-icon {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border;
+    border-color: hsl(var(--app-nav-border) / 0.62);
+    background-color: hsl(var(--app-nav-chip-surface) / 0.76);
+    color: hsl(var(--app-nav-foreground) / 0.7);
+  }
+
+  .app-nav-mobile-task-link {
+    box-shadow: 0 14px 24px -28px hsl(var(--app-shadow-deep) / 0.24);
+  }
+
+  .app-nav-mobile-task-panel {
+    box-shadow: 0 16px 26px -30px hsl(var(--app-shadow-deep) / 0.2);
+  }
+
   .app-workspace-shell {
     min-height: calc(100vh - var(--app-header-height));
     position: relative;
@@ -1424,7 +1499,9 @@
   }
 
   .app-route-main-student {
-    padding-top: var(--app-header-height);
+    padding-top: calc(
+      var(--app-header-height) + var(--app-student-mobile-nav-height)
+    );
     padding-bottom: 0.85rem;
     background:
       radial-gradient(circle at top left, hsl(var(--primary) / 0.05) 0%, transparent 26rem),
@@ -2816,10 +2893,12 @@
   }
 
   .app-student-portal-nav {
-    @apply hidden justify-center border-b px-3 py-2.5 backdrop-blur;
-    position: sticky;
+    @apply hidden justify-center border-b px-3 py-2 backdrop-blur;
+    position: fixed;
+    left: 0;
+    right: 0;
     top: var(--app-header-height);
-    z-index: 30;
+    z-index: 40;
     border-color: hsl(var(--border) / 0.66);
     background:
       linear-gradient(
@@ -2833,17 +2912,21 @@
   }
 
   @media (max-width: 639px) {
+    :root {
+      --app-student-mobile-nav-height: 6.7rem;
+    }
+
     .app-student-portal-nav {
       @apply flex;
     }
   }
 
-  .app-student-portal-nav .app-segmented-control {
-    width: min(100%, 22rem);
-    flex-wrap: nowrap;
+  .app-student-portal-nav .app-student-portal-grid {
+    width: min(100%, 24rem);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.35rem;
-    overflow-x: auto;
-    padding: 0.35rem;
+    padding: 0.4rem;
     border-color: hsl(var(--border) / 0.74);
     border-radius: 1.05rem;
     background:
@@ -2855,23 +2938,28 @@
     box-shadow:
       0 14px 22px -24px hsl(var(--app-shadow-deep) / 0.08),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
-    scrollbar-width: none;
   }
 
-  .app-student-portal-nav .app-segmented-control::-webkit-scrollbar {
-    display: none;
-  }
-
-  .app-student-portal-nav .app-segmented-link {
-    flex: 1 0 4.25rem;
-    min-width: 4.25rem;
+  .app-student-portal-nav .app-student-portal-grid-link {
+    min-width: 0;
+    min-height: 2.65rem;
     align-items: center;
-    padding: 0.5rem 0.5rem;
-    border-radius: 0.8rem;
+    justify-content: center;
+    gap: 0.2rem;
+    padding: 0.42rem 0.36rem;
+    border-radius: 0.74rem;
+  }
+
+  .app-student-portal-nav .app-student-portal-link-icon {
+    height: 1.1rem;
+    width: 1.1rem;
   }
 
   .app-student-portal-nav .app-segmented-link-label {
-    font-size: 0.78rem;
+    font-size: 0.68rem;
+    line-height: 0.95rem;
+    white-space: normal;
+    text-wrap: balance;
   }
 
   @media (min-width: 768px) {
@@ -3503,6 +3591,32 @@
     overscroll-behavior-x: contain;
     overscroll-behavior-y: auto;
     touch-action: pan-x pan-y;
+  }
+
+  .app-student-report-card-list {
+    @apply space-y-2.5 p-3;
+  }
+
+  .app-student-report-card {
+    @apply space-y-2.5 rounded-[1rem] border p-3;
+    border-color: hsl(var(--border) / 0.72);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.99) 0%,
+        hsl(var(--app-surface-2) / 0.8) 100%
+      );
+    box-shadow:
+      0 14px 24px -24px hsl(var(--app-shadow-deep) / 0.12),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.88);
+  }
+
+  .app-student-report-card-head {
+    @apply flex items-start justify-between gap-2;
+  }
+
+  .app-student-report-card-meta-grid {
+    @apply grid gap-2.5 sm:grid-cols-2;
   }
 
   @media (max-width: 767px) {
@@ -5620,6 +5734,327 @@
       );
   }
 
+  .app-workspace-shell {
+    --app-workspace-glass-top: 0 0% 100%;
+    --app-workspace-glass-mid: 208 100% 98%;
+    --app-workspace-glass-bottom: 210 72% 94%;
+    --app-workspace-glass-border: 207 76% 84%;
+    --app-workspace-glass-border-strong: 208 92% 78%;
+    --app-workspace-glass-tint: 205 100% 80%;
+    --app-workspace-glass-tint-soft: 200 100% 92%;
+    --app-workspace-glass-shadow: 214 42% 21%;
+    --app-workspace-glass-accent: 214 72% 42%;
+    --app-workspace-glass-panel:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-workspace-glass-top) / 0.82) 0%,
+        hsl(var(--app-workspace-glass-mid) / 0.74) 48%,
+        hsl(var(--app-workspace-glass-bottom) / 0.68) 100%
+      ),
+      linear-gradient(
+        135deg,
+        hsl(0 0% 100% / 0.58) 0%,
+        hsl(0 0% 100% / 0.16) 34%,
+        hsl(0 0% 100% / 0.06) 100%
+      ),
+      radial-gradient(
+        circle at 12% -14%,
+        hsl(var(--app-workspace-glass-tint) / 0.26) 0%,
+        transparent 18rem
+      ),
+      radial-gradient(
+        circle at 100% 0%,
+        hsl(var(--app-workspace-glass-tint-soft) / 0.34) 0%,
+        transparent 22rem
+      );
+    --app-workspace-glass-panel-strong:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-workspace-glass-top) / 0.88) 0%,
+        hsl(var(--app-workspace-glass-mid) / 0.8) 44%,
+        hsl(var(--app-workspace-glass-bottom) / 0.74) 100%
+      ),
+      linear-gradient(
+        135deg,
+        hsl(0 0% 100% / 0.62) 0%,
+        hsl(0 0% 100% / 0.2) 36%,
+        hsl(0 0% 100% / 0.08) 100%
+      ),
+      radial-gradient(
+        circle at 14% -16%,
+        hsl(var(--app-workspace-glass-tint) / 0.32) 0%,
+        transparent 18rem
+      ),
+      radial-gradient(
+        circle at 100% 0%,
+        hsl(var(--app-workspace-glass-tint-soft) / 0.4) 0%,
+        transparent 24rem
+      );
+    --app-workspace-glass-header:
+      linear-gradient(
+        180deg,
+        hsl(0 0% 100% / 0.78) 0%,
+        hsl(var(--app-workspace-glass-mid) / 0.58) 100%
+      ),
+      radial-gradient(
+        circle at 100% 0%,
+        hsl(var(--app-workspace-glass-tint) / 0.2) 0%,
+        transparent 14rem
+      );
+    --app-workspace-glass-chip:
+      linear-gradient(
+        180deg,
+        hsl(0 0% 100% / 0.8) 0%,
+        hsl(var(--app-workspace-glass-mid) / 0.62) 100%
+      );
+    --app-workspace-glass-shadow-soft:
+      0 20px 40px -34px hsl(var(--app-workspace-glass-shadow) / 0.18),
+      0 8px 18px -16px hsl(var(--app-workspace-glass-shadow) / 0.08),
+      inset 0 1px 0 hsl(0 0% 100% / 0.88);
+    --app-workspace-glass-shadow-strong:
+      0 30px 56px -40px hsl(var(--app-workspace-glass-shadow) / 0.22),
+      0 12px 24px -18px hsl(var(--app-workspace-glass-shadow) / 0.1),
+      inset 0 1px 0 hsl(0 0% 100% / 0.92);
+    background:
+      radial-gradient(
+        circle at top left,
+        hsl(var(--app-workspace-glass-tint) / 0.2) 0%,
+        transparent 20rem
+      ),
+      radial-gradient(
+        circle at top right,
+        hsl(var(--app-workspace-glass-tint-soft) / 0.38) 0%,
+        transparent 22rem
+      ),
+      radial-gradient(
+        circle at bottom left,
+        hsl(var(--app-workspace-glass-tint) / 0.14) 0%,
+        transparent 26rem
+      ),
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1)) 0%,
+        hsl(var(--app-surface-2) / 0.9) 18rem,
+        hsl(var(--background)) 100%
+      );
+  }
+
+  .app-workspace-shell .app-page-hero,
+  .app-workspace-shell .app-toolbar,
+  .app-workspace-shell .app-surface,
+  .app-workspace-shell .app-filter-panel,
+  .app-workspace-shell .app-filter-summary,
+  .app-workspace-shell .app-report-filter-card,
+  .app-workspace-shell .app-report-filter-footer,
+  .app-workspace-shell .app-link-card,
+  .app-workspace-shell .app-spotlight-card,
+  .app-workspace-shell .app-spotlight-card-strong,
+  .app-workspace-shell .app-flow-item,
+  .app-workspace-shell .app-workspace-module-card,
+  .app-workspace-shell .app-course-list-card,
+  .app-workspace-shell .app-course-cover-card,
+  .app-workspace-shell .app-course-block-card,
+  .app-workspace-shell .app-course-editor-card,
+  .app-workspace-shell .app-course-module-shell,
+  .app-workspace-shell .app-course-lesson-panel,
+  .app-workspace-shell .app-course-special-block,
+  .app-workspace-shell .app-course-detail-card,
+  .app-workspace-shell .app-course-panel,
+  .app-workspace-shell .app-course-resource-preview,
+  .app-workspace-shell .app-course-resource-iframe-shell {
+    border-color: hsl(var(--app-workspace-glass-border) / 0.72);
+    background: var(--app-workspace-glass-panel);
+    box-shadow: var(--app-workspace-glass-shadow-soft);
+    backdrop-filter: blur(18px) saturate(155%);
+    -webkit-backdrop-filter: blur(18px) saturate(155%);
+  }
+
+  .app-workspace-shell .app-page-hero,
+  .app-workspace-shell .app-filter-panel,
+  .app-workspace-shell .app-workspace-module-card,
+  .app-workspace-shell .app-course-list-card,
+  .app-workspace-shell .app-course-editor-card {
+    background: var(--app-workspace-glass-panel-strong);
+    box-shadow: var(--app-workspace-glass-shadow-strong);
+  }
+
+  .app-workspace-shell .app-section,
+  .app-workspace-shell .app-metric-card,
+  .app-workspace-shell .app-report-filter-preview,
+  .app-workspace-shell .app-course-metric-card,
+  .app-workspace-shell .app-course-stat-pill,
+  .app-workspace-shell .app-course-section-summary,
+  .app-workspace-shell .app-course-outline-button,
+  .app-workspace-shell .app-course-inline-accordion-content,
+  .app-workspace-shell .app-course-editor-empty-state,
+  .app-workspace-shell .app-course-list-cover-shell,
+  .app-workspace-shell .app-course-media-frame,
+  .app-workspace-shell .app-course-lesson-item-shell,
+  .app-workspace-shell .app-course-inline-accordion-trigger,
+  .app-workspace-shell .app-course-settings-trigger,
+  .app-workspace-shell .app-course-preview-trigger,
+  .app-workspace-shell .app-segmented-control {
+    border-color: hsl(var(--app-workspace-glass-border) / 0.68);
+    background: var(--app-workspace-glass-panel);
+    box-shadow: var(--app-workspace-glass-shadow-soft);
+  }
+
+  .app-workspace-shell .app-section-header,
+  .app-workspace-shell .app-filter-panel-header,
+  .app-workspace-shell .app-page-hero-toolbar,
+  .app-workspace-shell .app-course-editor-section-header,
+  .app-workspace-shell .app-course-module-header,
+  .app-workspace-shell .app-course-lesson-toolbar,
+  .app-workspace-shell .app-course-special-trigger,
+  .app-workspace-shell .app-course-lesson-item-header {
+    border-color: hsl(var(--app-workspace-glass-border-strong) / 0.5);
+    background: var(--app-workspace-glass-header);
+    box-shadow: inset 0 -1px 0 hsl(var(--app-workspace-glass-border) / 0.16);
+  }
+
+  .app-workspace-shell .app-page-hero::before {
+    background: radial-gradient(
+      circle,
+      hsl(var(--app-workspace-glass-tint) / 0.3) 0%,
+      transparent 72%
+    );
+    opacity: 0.92;
+  }
+
+  .app-workspace-shell .app-page-hero::after {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--app-workspace-glass-border-strong) / 0.7) 0%,
+      transparent 82%
+    );
+  }
+
+  .app-workspace-shell .app-page-eyebrow,
+  .app-workspace-shell .app-meta-chip,
+  .app-workspace-shell .app-workspace-module-label,
+  .app-workspace-shell .app-workspace-module-chip {
+    border-color: hsl(var(--app-workspace-glass-border-strong) / 0.42);
+    background: var(--app-workspace-glass-chip);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.86),
+      0 12px 24px -26px hsl(var(--app-workspace-glass-shadow) / 0.12);
+    color: hsl(var(--foreground) / 0.78);
+  }
+
+  .app-workspace-shell .app-page-eyebrow {
+    color: hsl(var(--app-workspace-glass-accent));
+  }
+
+  .app-workspace-shell .app-workspace-module-card {
+    --app-workspace-module-accent: 210 86% 58%;
+    --app-workspace-module-glow: 201 100% 86%;
+  }
+
+  .app-workspace-shell .app-workspace-module-card-papers {
+    --app-workspace-module-accent: 208 84% 58%;
+    --app-workspace-module-glow: 198 100% 86%;
+  }
+
+  .app-workspace-shell .app-workspace-module-card-questions {
+    --app-workspace-module-accent: 216 82% 60%;
+    --app-workspace-module-glow: 206 100% 86%;
+  }
+
+  .app-workspace-shell .app-workspace-module-card-students {
+    --app-workspace-module-accent: 201 84% 58%;
+    --app-workspace-module-glow: 194 100% 88%;
+  }
+
+  .app-workspace-shell .app-workspace-module-card-reports {
+    --app-workspace-module-accent: 223 80% 66%;
+    --app-workspace-module-glow: 210 100% 88%;
+  }
+
+  .app-workspace-shell .app-workspace-module-icon,
+  .app-workspace-shell .app-workspace-overview-link-icon,
+  .app-workspace-shell .app-course-lesson-item-icon {
+    border-color: hsl(var(--app-workspace-glass-border-strong) / 0.44);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(0 0% 100% / 0.9) 0%,
+        hsl(var(--app-workspace-glass-tint-soft) / 0.64) 100%
+      );
+    color: hsl(var(--app-workspace-glass-accent));
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.92),
+      0 18px 28px -26px hsl(var(--app-workspace-glass-shadow) / 0.16);
+  }
+
+  .app-workspace-shell .app-workspace-module-cta {
+    color: hsl(var(--app-workspace-glass-accent));
+  }
+
+  .app-workspace-shell .app-workspace-module-card:hover,
+  .app-workspace-shell .app-link-card:hover,
+  .app-workspace-shell .app-course-card-wrap:hover .app-course-list-card,
+  .app-workspace-shell .app-course-card-wrap:focus-within .app-course-list-card {
+    border-color: hsl(var(--app-workspace-glass-border-strong) / 0.68);
+    box-shadow: var(--app-workspace-glass-shadow-strong);
+  }
+
+  .app-workspace-shell .app-course-outline-button:hover {
+    border-color: hsl(var(--app-workspace-glass-border-strong) / 0.6);
+    background: var(--app-workspace-glass-panel-strong);
+    box-shadow:
+      0 22px 36px -32px hsl(var(--app-workspace-glass-shadow) / 0.16),
+      inset 0 1px 0 hsl(0 0% 100% / 0.9);
+  }
+
+  .app-workspace-shell .app-course-outline-button-active {
+    border-color: hsl(var(--app-workspace-glass-border-strong) / 0.74);
+    background: var(--app-workspace-glass-panel-strong);
+    box-shadow:
+      0 24px 40px -32px hsl(var(--app-workspace-glass-shadow) / 0.18),
+      inset 0 0 0 1px hsl(var(--app-workspace-glass-tint) / 0.18);
+  }
+
+  .app-workspace-shell .app-course-list-cover-placeholder {
+    background:
+      linear-gradient(
+        135deg,
+        hsl(0 0% 100% / 0.94) 0%,
+        hsl(var(--app-workspace-glass-mid) / 0.88) 48%,
+        hsl(var(--app-workspace-glass-tint-soft) / 0.66) 100%
+      );
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.82),
+      inset 0 -24px 40px -32px hsl(var(--app-workspace-glass-shadow) / 0.14);
+  }
+
+  .app-workspace-shell .app-course-lesson-item-remove {
+    border-color: hsl(var(--app-workspace-glass-border-strong) / 0.38);
+    background: hsl(0 0% 100% / 0.74);
+  }
+
+  .app-workspace-shell .app-course-editor-grid {
+    --app-course-setup-band: hsl(var(--app-workspace-glass-tint) / 0.18);
+    --app-course-setup-border: hsl(var(--app-workspace-glass-border-strong) / 0.42);
+    --app-course-curriculum-band: hsl(var(--app-workspace-glass-tint-soft) / 0.24);
+    --app-course-curriculum-border: hsl(var(--app-workspace-glass-border-strong) / 0.46);
+    --app-course-publish-band: hsl(var(--app-workspace-glass-tint) / 0.2);
+    --app-course-publish-border: hsl(var(--app-workspace-glass-border-strong) / 0.48);
+    --app-course-module-band: hsl(var(--app-workspace-glass-tint-soft) / 0.22);
+    --app-course-module-border: hsl(var(--app-workspace-glass-border-strong) / 0.38);
+    --app-course-lesson-band: hsl(var(--app-workspace-glass-tint-soft) / 0.18);
+    --app-course-lesson-border: hsl(var(--app-workspace-glass-border) / 0.36);
+    --app-course-item-band: hsl(var(--app-workspace-glass-tint-soft) / 0.16);
+    --app-course-item-border: hsl(var(--app-workspace-glass-border) / 0.34);
+    --app-course-settings-band: hsl(var(--app-workspace-glass-tint) / 0.18);
+    --app-course-settings-border: hsl(var(--app-workspace-glass-border-strong) / 0.4);
+    --app-course-preview-band: hsl(var(--app-workspace-glass-tint-soft) / 0.18);
+    --app-course-preview-border: hsl(var(--app-workspace-glass-border) / 0.36);
+    --app-course-special-info-band: hsl(var(--app-workspace-glass-tint-soft) / 0.22);
+    --app-course-special-info-border: hsl(var(--app-workspace-glass-border-strong) / 0.4);
+    --app-course-special-warning-band: hsl(var(--app-workspace-glass-tint) / 0.2);
+    --app-course-special-warning-border: hsl(var(--app-workspace-glass-border-strong) / 0.42);
+  }
+
   .app-chip-cloud {
     @apply flex flex-wrap gap-2;
   }
@@ -5665,6 +6100,29 @@
     @apply mt-0.5 text-[11px] leading-4;
     color: inherit;
     opacity: 0.72;
+  }
+
+  .app-workspace-shell .app-segmented-control {
+    border-color: hsl(var(--app-workspace-glass-border) / 0.68);
+    background: var(--app-workspace-glass-panel);
+    box-shadow: var(--app-workspace-glass-shadow-soft);
+  }
+
+  .app-workspace-shell .app-segmented-link:hover {
+    background-color: hsl(0 0% 100% / 0.72);
+  }
+
+  .app-workspace-shell .app-segmented-link-active {
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-workspace-glass-tint-soft) / 0.94) 0%,
+        hsl(var(--app-workspace-glass-tint) / 0.76) 100%
+      );
+    color: hsl(var(--app-workspace-glass-accent));
+    box-shadow:
+      0 16px 24px -24px hsl(var(--app-workspace-glass-shadow) / 0.18),
+      inset 0 1px 0 hsl(0 0% 100% / 0.74);
   }
 
   .app-exam-shell {
@@ -12509,6 +12967,10 @@ html[data-public-home-flagship="true"] ::selection {
     @apply mx-auto w-full max-w-4xl;
   }
 
+  .public-register-page .public-flow-shell-narrow {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 5.75rem);
+  }
+
   .public-flow-hero {
     @apply relative overflow-hidden rounded-[2rem] border px-6 py-8 sm:px-8 sm:py-10 md:px-10 md:py-12;
     border-color: hsl(var(--public-border) / 0.74);
@@ -12701,6 +13163,119 @@ html[data-public-home-flagship="true"] ::selection {
 
   .public-flow-text-link:hover {
     color: hsl(var(--public-ink));
+  }
+
+  .public-register-section-shell {
+    @apply rounded-2xl border p-4 sm:p-5;
+    border-color: hsl(var(--public-border) / 0.6);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--public-surface) / 0.92) 0%,
+        hsl(var(--public-surface-2) / 0.62) 100%
+      );
+  }
+
+  .public-register-mobile-cta {
+    @apply fixed inset-x-0 bottom-0 z-40 space-y-2 border-t px-4 pb-[calc(env(safe-area-inset-bottom)+0.8rem)] pt-2.5;
+    border-color: hsl(var(--public-border) / 0.74);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--public-surface) / 0.96) 0%,
+        hsl(var(--public-bg) / 0.98) 100%
+      );
+    box-shadow: 0 -18px 34px -30px hsl(var(--public-shadow) / 0.3);
+  }
+
+  .public-register-mobile-cta-meta {
+    @apply flex items-center justify-between gap-3;
+  }
+
+  .public-talent-hero-title {
+    line-height: 0.98;
+  }
+
+  .public-talent-hero-actions > a {
+    width: 100%;
+    min-width: 0 !important;
+    font-size: 0.95rem;
+    padding-inline: 1rem;
+  }
+
+  .public-talent-hero-stats {
+    gap: 0.65rem;
+  }
+
+  .public-talent-hero-stat-value {
+    font-size: 1.65rem;
+    line-height: 1.05;
+  }
+
+  .benefits-compare-mobile {
+    @apply grid gap-2.5 p-3;
+  }
+
+  .benefits-compare-mobile-card {
+    @apply space-y-2.5 rounded-xl border p-3;
+    border-color: hsl(215 24% 86%);
+    background:
+      linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 100%);
+  }
+
+  .benefits-compare-mobile-title {
+    @apply text-sm font-semibold text-slate-900;
+  }
+
+  .benefits-compare-mobile-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500;
+  }
+
+  .benefits-compare-mobile-value {
+    @apply text-[13px] leading-5 text-slate-600;
+  }
+
+  .benefits-compare-mobile-value-strong {
+    @apply text-emerald-700;
+  }
+
+  @media (min-width: 640px) {
+    .public-register-page .public-flow-shell-narrow {
+      padding-bottom: 0;
+    }
+  }
+
+  @media (min-width: 640px) {
+    .public-talent-hero-actions > a {
+      width: auto;
+      min-width: 12rem !important;
+      font-size: 1rem;
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .public-talent-hero {
+      margin-inline: 0;
+      border-radius: 1.4rem;
+      padding-inline: 1rem;
+      padding-block: 1.25rem;
+    }
+
+    .public-talent-hero-title {
+      font-size: clamp(2rem, 10vw, 2.7rem);
+    }
+
+    .public-talent-hero p {
+      font-size: 0.95rem;
+      line-height: 1.55;
+    }
+
+    .public-talent-hero-stats {
+      grid-template-columns: 1fr;
+      max-width: 100%;
+      margin-top: 0.75rem;
+    }
   }
 
   .app-page-title,

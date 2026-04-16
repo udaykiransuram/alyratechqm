@@ -38,6 +38,7 @@ import { syncExamRuntimeMongoProjectionsForPaperWithCooldown } from "@/lib/exam-
 import { requireTenantSession } from "@/lib/api-auth";
 import { z } from "zod";
 import { objectIdSchema, schoolKeySchema, parseOr400 } from "@/lib/validation";
+import { withRequestBudget } from "@/lib/server/request-governor";
 
 // Recursively deduplicate question ID arrays in stats
 function dedupeStatsArrays(obj: any) {
@@ -184,8 +185,17 @@ export async function GET(
   // Do not block on validation; proceed with best-effort to avoid hard failures in UI
   // If invalid, Mongoose will return null on findById which we handle with 404 below
 
-  try {
-    await connectDB();
+  return withRequestBudget(
+    {
+      request: req,
+      policy: "analyticsClassTagReport",
+      schoolKey: tenantKey,
+      userId: auth.session.user.id,
+      scopeId: `${tenantKey}:${paperId}`,
+    },
+    async () => {
+      try {
+        await connectDB();
 
     const {
       QuestionPaperResponse: QPRModel,
@@ -711,18 +721,20 @@ export async function GET(
     // PDF generation (optional, similar to student route)
     // ...implement if needed...
 
-    return NextResponse.json({
-      success: true,
-      stats,
-      students,
-      paper: paperTitle,
-      paperSubjects: paperSubjects.subjects,
-    });
-  } catch (error: any) {
-    console.error("Error in class analytics route:", error);
-    return NextResponse.json(
-      { success: false, message: error.message },
-      { status: 500 },
-    );
-  }
+        return NextResponse.json({
+          success: true,
+          stats,
+          students,
+          paper: paperTitle,
+          paperSubjects: paperSubjects.subjects,
+        });
+      } catch (error: any) {
+        console.error("Error in class analytics route:", error);
+        return NextResponse.json(
+          { success: false, message: error.message },
+          { status: 500 },
+        );
+      }
+    },
+  );
 }

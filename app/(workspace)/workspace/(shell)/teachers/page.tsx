@@ -150,7 +150,87 @@ export default async function TeachersPage({
                 previousHref={previousHref}
                 nextHref={nextHref}
               />
-              <div className="app-table-wrap">
+              <div className="space-y-2 md:hidden">
+                {teachers.map((teacher) => (
+                  <article
+                    key={teacher._id}
+                    className="rounded-[1.05rem] border border-border/68 bg-background/90 px-3.5 py-3.5 shadow-sm"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 space-y-1">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {teacher.name}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {teacher.email || "No email"}
+                          </p>
+                        </div>
+                        <Badge className="capitalize">{teacher.role}</Badge>
+                      </div>
+                      <div className="rounded-lg border border-border/55 bg-background/72 px-3 py-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                          Phone
+                        </p>
+                        <p className="mt-1 text-sm text-foreground">
+                          {teacher.mobileNumber || "-"}
+                        </p>
+                      </div>
+                      <div className="grid gap-2">
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          className="app-row-action-button app-row-action-button-accent w-full"
+                        >
+                          <AppPrefetchLink
+                            href={buildHrefWithReturnTo(
+                              `${TEACHERS_BASE_PATH}/${teacher._id}`,
+                              currentPath,
+                            )}
+                            relatedApiPrefetches={[
+                              `/api/users/${teacher._id}`,
+                              "/api/classes",
+                              "/api/sections",
+                              "/api/subjects",
+                            ]}
+                            aria-label={`View ${teacher.name}`}
+                            title="View teacher"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View Teacher
+                          </AppPrefetchLink>
+                        </Button>
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          className="app-row-action-button w-full"
+                        >
+                          <AppPrefetchLink
+                            href={buildHrefWithReturnTo(
+                              `${TEACHERS_BASE_PATH}/edit/${teacher._id}`,
+                              currentPath,
+                            )}
+                            relatedApiPrefetches={[
+                              `/api/users/${teacher._id}`,
+                              "/api/classes",
+                              "/api/sections",
+                              "/api/subjects",
+                            ]}
+                            aria-label={`Edit ${teacher.name}`}
+                            title="Edit teacher"
+                          >
+                            <Edit className="h-4 w-4" />
+                            Edit Teacher
+                          </AppPrefetchLink>
+                        </Button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden md:block app-table-wrap">
                 <Table>
                   <TableHeader>
                     <TableRow>

@@ -108,6 +108,13 @@ const schoolSidebarGroups: SidebarGroup[] = [
         ],
       },
       {
+        label: "Progress Updates",
+        icon: BarChart2,
+        children: [
+          { href: "/workspace/progress-updates", label: "Daily Updates" },
+        ],
+      },
+      {
         label: "Teachers",
         icon: UserCog,
         children: [
