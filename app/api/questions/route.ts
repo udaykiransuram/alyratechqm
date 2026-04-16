@@ -28,6 +28,13 @@ function buildStableQuestionSort(
   };
 }
 
+const SUPPORTED_QUESTION_TYPES = new Set([
+  'single',
+  'multiple',
+  'matrix-match',
+  'descriptive',
+]);
+
 function sanitizeQuestionForPickerResponse(question: any) {
   const fullQuestion = sanitizeQuestionForApiResponse(question);
 
@@ -72,6 +79,24 @@ export async function GET(req: NextRequest) {
   // Filter by subject
   const subjectId = searchParams.get('subject');
   if (subjectId) query.subject = subjectId;
+
+  const questionTypes = Array.from(
+    new Set(
+      [
+        searchParams.get('type') || '',
+        ...(searchParams.get('types') || '')
+          .split(',')
+          .map((value) => value.trim()),
+      ]
+        .map((value) => value.trim())
+        .filter((value) => SUPPORTED_QUESTION_TYPES.has(value)),
+    ),
+  );
+  if (questionTypes.length === 1) {
+    query.type = questionTypes[0];
+  } else if (questionTypes.length > 1) {
+    query.type = { $in: questionTypes };
+  }
 
   // Filter by tags (comma-separated), supports tagsMode=or|and (default: or)
   const tagsParam = searchParams.get('tags');

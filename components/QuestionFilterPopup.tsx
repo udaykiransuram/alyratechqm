@@ -1,3 +1,5 @@
+'use client';
+
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 import type { Dispatch, SetStateAction, MouseEvent } from 'react';
@@ -74,6 +76,10 @@ type QuestionFilterPopupProps = {
   selectingAllFilteredQuestions: boolean;
   toast: any;
   handleEditQuestionSave: (updated: any) => Promise<void>;
+  selectionMode?: 'multiple' | 'single';
+  title?: string;
+  description?: string;
+  confirmLabel?: string;
 };
 
 export function QuestionFilterPopup({
@@ -109,7 +115,12 @@ export function QuestionFilterPopup({
   selectingAllFilteredQuestions,
   toast,
   handleEditQuestionSave,
+  selectionMode = 'multiple',
+  title = 'Add Questions to Section',
+  description = 'Filter the question bank, review the matches, and add them in one pass.',
+  confirmLabel = 'Add Selected Questions',
 }: QuestionFilterPopupProps) {
+  const isSingleSelect = selectionMode === 'single';
   const normalizedAllTags = useMemo(
     () =>
       allTags.map((tag) => ({
@@ -136,7 +147,8 @@ export function QuestionFilterPopup({
     selectedTags.length > 0 ||
     String(classId) !== 'all' ||
     String(subjectId) !== 'all';
-  const canShowSelectionControls = !loadingQuestions && allQuestionsToShow.length > 0;
+  const canShowSelectionControls =
+    !isSingleSelect && !loadingQuestions && allQuestionsToShow.length > 0;
   const currentPage = Math.max(questionPage, 1);
   const totalPages = Math.max(questionPageCount, 1);
   const pageStart =
@@ -150,6 +162,10 @@ export function QuestionFilterPopup({
     const normalizedId = normalizeQuestionId(id);
     setSelectedQuestionIds((currentIds) => {
       const currentIdSet = new Set(currentIds.map((item) => normalizeQuestionId(item)));
+      if (isSingleSelect) {
+        return currentIdSet.has(normalizedId) ? [] : [normalizedId];
+      }
+
       if (currentIdSet.has(normalizedId)) {
         return currentIds.filter((item) => normalizeQuestionId(item) !== normalizedId);
       }
@@ -197,10 +213,8 @@ export function QuestionFilterPopup({
         }}
       >
         <DialogHeader className="border-b border-border/60 bg-muted/20 px-4 py-3.5 pr-12 text-left sm:px-5 sm:pr-14">
-          <DialogTitle className="text-lg sm:text-xl">Add Questions to Section</DialogTitle>
-          <DialogDescription>
-            Filter the question bank, review the matches, and add them in one pass.
-          </DialogDescription>
+          <DialogTitle className="text-lg sm:text-xl">{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 bg-muted/20 p-3 sm:p-4 lg:grid-cols-[minmax(300px,320px)_minmax(0,1fr)]">
@@ -269,7 +283,9 @@ export function QuestionFilterPopup({
               />
 
               <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                Selected questions stay selected while you change class, subject, tag, or search filters.
+                {isSingleSelect
+                  ? 'Pick one question to import. Your current choice stays selected while you change filters.'
+                  : 'Selected questions stay selected while you change class, subject, tag, or search filters.'}
               </div>
 
               <div className="app-field-group">
@@ -322,7 +338,9 @@ export function QuestionFilterPopup({
                     Available Questions <span className="text-muted-foreground">({questionResultCount})</span>
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Review the matches and select the questions to add. Selections from other filters stay queued until you confirm.
+                    {isSingleSelect
+                      ? 'Review the matches and choose one question to import into the current flow.'
+                      : 'Review the matches and select the questions to add. Selections from other filters stay queued until you confirm.'}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
@@ -519,10 +537,10 @@ export function QuestionFilterPopup({
           <Button
             className="app-button-inline"
             onClick={() => void handleConfirmQuestions()}
-            disabled={confirmingQuestions}
+            disabled={confirmingQuestions || selectedCount === 0}
             aria-busy={confirmingQuestions}
           >
-            {confirmingQuestions ? 'Adding...' : 'Add Selected Questions'}
+            {confirmingQuestions ? 'Adding...' : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

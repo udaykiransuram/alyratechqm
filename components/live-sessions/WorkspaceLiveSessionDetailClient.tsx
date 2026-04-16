@@ -87,11 +87,26 @@ function getAbsoluteShareLink(shareHref: string) {
 function ItemStats({ item }: { item: LiveSessionTeacherItem }) {
   return (
     <div className="flex flex-wrap gap-2">
-      <Badge variant="outline">{item.responseCount} responses</Badge>
+      <Badge
+        variant="outline"
+        className="min-h-8 rounded-full px-3 py-1.5 text-[0.72rem] font-semibold"
+      >
+        {item.responseCount} responses
+      </Badge>
       {item.correctCount !== null ? (
         <>
-          <Badge variant="outline">{item.correctCount} correct</Badge>
-          <Badge variant="outline">{item.incorrectCount || 0} incorrect</Badge>
+          <Badge
+            variant="outline"
+            className="min-h-8 rounded-full px-3 py-1.5 text-[0.72rem] font-semibold"
+          >
+            {item.correctCount} correct
+          </Badge>
+          <Badge
+            variant="outline"
+            className="min-h-8 rounded-full px-3 py-1.5 text-[0.72rem] font-semibold"
+          >
+            {item.incorrectCount || 0} incorrect
+          </Badge>
         </>
       ) : null}
     </div>
@@ -104,7 +119,7 @@ function ItemOptionStats({ item }: { item: LiveSessionTeacherItem }) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="grid gap-3 lg:grid-cols-2">
       {item.options.map((option) => {
         const stat = item.optionStats.find(
           (entry) => entry.optionIndex === option.index,
@@ -114,14 +129,24 @@ function ItemOptionStats({ item }: { item: LiveSessionTeacherItem }) {
         return (
           <div
             key={`${item._id}-option-${option.index}`}
-            className="rounded-[1rem] border border-border/60 bg-background/70 p-3"
+            className="rounded-[1.15rem] border border-border/60 bg-background/72 p-4 shadow-[0_14px_34px_-28px_hsl(var(--app-shadow-deep)/0.2)]"
           >
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={isCorrect ? "default" : "outline"}>
+                <Badge
+                  variant={isCorrect ? "default" : "outline"}
+                  className="min-h-8 rounded-full px-3 py-1.5 text-[0.72rem] font-semibold"
+                >
                   Option {option.index + 1}
                 </Badge>
-                {isCorrect ? <Badge variant="outline">Correct answer</Badge> : null}
+                {isCorrect ? (
+                  <Badge
+                    variant="outline"
+                    className="min-h-8 rounded-full px-3 py-1.5 text-[0.72rem] font-semibold"
+                  >
+                    Correct answer
+                  </Badge>
+                ) : null}
               </div>
               <span className="text-xs font-medium text-muted-foreground">
                 {stat?.responseCount || 0} responses
@@ -143,30 +168,37 @@ function LiveItemCard({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[1.35rem] border border-border/70 bg-[hsl(var(--app-surface-1)/0.74)] p-4 shadow-[0_16px_30px_-26px_hsl(var(--app-shadow-deep)/0.16)]">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
+    <div className="rounded-[1.6rem] border border-border/70 bg-[hsl(var(--app-surface-1)/0.82)] p-5 shadow-[0_28px_70px_-48px_hsl(var(--app-shadow-deep)/0.24)] md:p-6">
+      <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">{getItemTypeLabel(item.type)}</Badge>
-            <Badge className="capitalize">{formatLabel(item.status)}</Badge>
+            <Badge
+              variant="outline"
+              className="min-h-8 rounded-full px-3 py-1.5 text-[0.72rem] font-semibold"
+            >
+              {getItemTypeLabel(item.type)}
+            </Badge>
+            <Badge className="min-h-8 rounded-full px-3 py-1.5 text-[0.72rem] font-semibold capitalize">
+              {formatLabel(item.status)}
+            </Badge>
           </div>
           <ItemStats item={item} />
         </div>
-        <div className="text-right text-xs text-muted-foreground">
+        <div className="rounded-[1.05rem] border border-border/60 bg-background/60 px-3 py-2 text-left text-xs text-muted-foreground md:min-w-[12rem] md:text-right">
           <p>Opened {formatDateTime(item.openedAt)}</p>
           <p>Updated {formatDateTime(item.updatedAt)}</p>
         </div>
       </div>
 
-      <div className="space-y-3">
-        <div className="rounded-[1rem] border border-border/60 bg-background/72 p-3">
+      <div className="space-y-4">
+        <div className="rounded-[1.2rem] border border-border/60 bg-background/78 p-5 shadow-[inset_0_1px_0_hsl(var(--background)/0.45)] md:min-h-[11rem] md:p-6 xl:px-7 xl:py-6">
           <ContentRenderer htmlContent={item.promptHtml} />
         </div>
 
         <ItemOptionStats item={item} />
 
         {item.explanationHtml ? (
-          <div className="rounded-[1rem] border border-border/60 bg-background/72 p-3">
+          <div className="rounded-[1.2rem] border border-border/60 bg-background/74 p-5 md:p-6 xl:px-7 xl:py-6">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Explanation
             </p>
@@ -174,7 +206,7 @@ function LiveItemCard({
           </div>
         ) : null}
 
-        {children}
+        {children ? <div className="border-t border-border/50 pt-4">{children}</div> : null}
       </div>
     </div>
   );
@@ -720,7 +752,7 @@ export default function WorkspaceLiveSessionDetailClient({
           </CardContent>
         </Card>
 
-        <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="space-y-5">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header gap-2">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -741,9 +773,9 @@ export default function WorkspaceLiveSessionDetailClient({
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="app-section-body space-y-5">
+            <CardContent className="app-section-body space-y-6">
               {liveSession.activeItem ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-foreground">Live now</p>
@@ -797,7 +829,7 @@ export default function WorkspaceLiveSessionDetailClient({
                     No draft live items yet.
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {draftItems.map((item, index) => (
                       <LiveItemCard key={item._id} item={item}>
 	                        <div className="grid gap-2 sm:flex sm:flex-wrap">
@@ -1184,7 +1216,7 @@ export default function WorkspaceLiveSessionDetailClient({
                   Loading responses...
                 </div>
               ) : responsePage?.responses.length ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {responsePage.responses.map((response) => (
                     <div
                       key={`${response.studentId}-${response.updatedAt || "response"}`}

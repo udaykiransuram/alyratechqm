@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { PlusCircle, X } from "lucide-react";
 
+import { QuestionFilterPopup } from "@/components/QuestionFilterPopup";
 import RichTextEditor from "@/components/RichTextEditor";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -16,6 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { MultiSelectTags, type TagItem } from "@/components/ui/multi-select-tags";
+import { useToast } from "@/components/ui/use-toast";
+import { fetchApiJson, isAbortError } from "@/lib/client/api";
 import type {
   LiveSessionItemType,
   LiveSessionTeacherItem,
@@ -32,6 +36,61 @@ type LiveSessionItemEditorDialogProps = {
 type LiveSessionEditorOption = {
   contentHtml: string;
 };
+
+type ExistingQuestionSummary = {
+  _id: string;
+  content: string;
+  subject?: { _id?: string; name?: string } | string | null;
+  class?: { _id?: string; name?: string } | string | null;
+  tags?: TagItem[];
+  options?: Array<{ content?: string | null }>;
+  answerIndexes?: number[];
+  explanation?: string;
+  marks?: number;
+  createdAt?: string;
+  type: "single" | "multiple" | "matrix-match" | "descriptive" | string;
+  detailLevel?: "summary" | "full";
+};
+
+type ClassOption = {
+  _id: string;
+  name: string;
+};
+
+type SubjectOption = {
+  _id: string;
+  name: string;
+  tags?: TagItem[];
+};
+
+type QuestionPickerResponse = {
+  success?: boolean;
+  questions?: ExistingQuestionSummary[];
+  total?: number;
+  page?: number;
+  pages?: number;
+};
+
+const QUESTION_PICKER_PAGE_SIZE = 12;
+
+function isSubskillTag(tag: TagItem) {
+  const normalized = String(tag?.type?.name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+  return normalized === "subskill" || normalized === "subskills";
+}
+
+function mapQuestionTypeToLiveItemType(questionType: string): LiveSessionItemType | null {
+  if (questionType === "single" || questionType === "multiple") {
+    return questionType;
+  }
+
+  if (questionType === "descriptive") {
+    return "short-text";
+  }
+
+  return null;
+}
 
 function buildDefaultState(item?: LiveSessionTeacherItem | null) {
   const type = item?.type || "single";
@@ -50,6 +109,25 @@ function buildDefaultState(item?: LiveSessionTeacherItem | null) {
     tagIds: Array.isArray(item?.tagIds) ? item.tagIds : [],
     explanationHtml: item?.explanationHtml || "",
   };
+}
+
+function normalizeTagList(tags: unknown): TagItem[] {
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+
+  return tags
+    .map((tag) => ({
+      _id: String((tag as any)?._id || "").trim(),
+      name: String((tag as any)?.name || "").trim(),
+      type: {
+        _id: String((tag as any)?.type?._id || "").trim(),
+        name: String((tag as any)?.type?.name || "").trim(),
+      },
+    }))
+    .filter(
+      (tag: TagItem) => tag._id && tag.name && tag.type?._id && tag.type?.name,
+    );
 }
 
 function getTypeLabel(type: LiveSessionItemType) {
@@ -71,6 +149,7 @@ export default function LiveSessionItemEditorDialog({
   item,
   onSaved,
 }: LiveSessionItemEditorDialogProps) {
+  const { toast } = useToast();
   const isEditMode = Boolean(item?._id);
   const [type, setType] = useState<LiveSessionItemType>("single");
   const [promptHtml, setPromptHtml] = useState("");
@@ -80,14 +159,54 @@ export default function LiveSessionItemEditorDialog({
   ]);
   const [answerIndexes, setAnswerIndexes] = useState<number[]>([]);
   const [availableTags, setAvailableTags] = useState<TagItem[]>([]);
+  const [classes, setClasses] = useState<ClassOption[]>([]);
+  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+  const [questionFilterSubjects, setQuestionFilterSubjects] = useState<SubjectOption[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [isLoadingTags, setIsLoadingTags] = useState(false);
+  const [initialDataLoading, setInitialDataLoading] = useState(false);
+  const [questionFilterSubjectsLoading, setQuestionFilterSubjectsLoading] = useState(false);
   const [explanationHtml, setExplanationHtml] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isQuestionPickerOpen, setIsQuestionPickerOpen] = useState(false);
+  const [modalSearch, setModalSearch] = useState("");
+  const [selectedFilterTags, setSelectedFilterTags] = useState<TagItem[]>([]);
+  const [questionTagMatchMode, setQuestionTagMatchMode] = useState<"any" | "all">("any");
+  const [questionFilterClassId, setQuestionFilterClassId] = useState("all");
+  const [questionFilterSubjectId, setQuestionFilterSubjectId] = useState("all");
+  const [questionPage, setQuestionPage] = useState(1);
+  const [questionPageCount, setQuestionPageCount] = useState(1);
+  const [questionResultCount, setQuestionResultCount] = useState(0);
+  const [availableQuestions, setAvailableQuestions] = useState<ExistingQuestionSummary[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<(string | number)[]>([]);
+  const [confirmingQuestions, setConfirmingQuestions] = useState(false);
+  const [importingQuestionId, setImportingQuestionId] = useState<string | null>(null);
+  const selectedFilterTagIdsKey = useMemo(
+    () =>
+      selectedFilterTags
+        .map((tag) => String(tag._id || ""))
+        .filter(Boolean)
+        .sort()
+        .join(","),
+    [selectedFilterTags],
+  );
 
   useEffect(() => {
     if (!open) {
+      setIsQuestionPickerOpen(false);
+      setImportingQuestionId(null);
+      setConfirmingQuestions(false);
+      setSelectedQuestionIds([]);
+      setModalSearch("");
+      setSelectedFilterTags([]);
+      setQuestionTagMatchMode("any");
+      setQuestionFilterClassId("all");
+      setQuestionFilterSubjectId("all");
+      setQuestionPage(1);
+      setQuestionPageCount(1);
+      setQuestionResultCount(0);
+      setAvailableQuestions([]);
       return;
     }
 
@@ -108,41 +227,217 @@ export default function LiveSessionItemEditorDialog({
     }
 
     let active = true;
-    const loadTags = async () => {
-      setIsLoadingTags(true);
+    const loadSupportData = async () => {
+      setInitialDataLoading(true);
       try {
-        const response = await fetch("/api/tags");
-        const data = await response.json().catch(() => ({}));
-        if (!active) return;
-        const tags = Array.isArray(data?.tags) ? data.tags : [];
-        const normalizedTags: TagItem[] = tags
-          .map((tag: any) => ({
-            _id: String(tag?._id || "").trim(),
-            name: String(tag?.name || "").trim(),
-            type: {
-              _id: String(tag?.type?._id || "").trim(),
-              name: String(tag?.type?.name || "").trim(),
-            },
-          }))
-          .filter((tag: TagItem) => tag._id && tag.name && tag.type?._id && tag.type?.name);
-        setAvailableTags(normalizedTags);
-      } catch (loadError) {
-        if (active) {
-          setAvailableTags([]);
+        const [classesData, tagsData, subjectsData] = await Promise.all([
+          fetchApiJson<{ classes?: ClassOption[] }>("/api/classes", {
+            cache: "no-store",
+            fallbackMessage: "Could not load classes for the question bank.",
+          }),
+          fetchApiJson<{ tags?: TagItem[] }>("/api/tags/with-subjects", {
+            cache: "no-store",
+            fallbackMessage: "Could not load tags for the question bank.",
+          }),
+          fetchApiJson<{ subjects?: SubjectOption[] }>("/api/subjects", {
+            cache: "no-store",
+            fallbackMessage: "Could not load subjects for the question bank.",
+          }),
+        ]);
+
+        if (!active) {
+          return;
         }
+
+        const normalizedTags = normalizeTagList(tagsData?.tags);
+        const nextSubjects = Array.isArray(subjectsData?.subjects)
+          ? subjectsData.subjects
+          : [];
+
+        setClasses(Array.isArray(classesData?.classes) ? classesData.classes : []);
+        setAvailableTags(normalizedTags);
+        setSubjects(nextSubjects);
+        setQuestionFilterSubjects(nextSubjects);
+      } catch (loadError) {
+        if (!active || isAbortError(loadError)) {
+          return;
+        }
+
+        toast({
+          title: "Question filters unavailable",
+          description:
+            loadError instanceof Error
+              ? loadError.message
+              : "Could not load the question filter data.",
+          variant: "destructive",
+        });
       } finally {
         if (active) {
-          setIsLoadingTags(false);
+          setInitialDataLoading(false);
         }
       }
     };
 
-    loadTags();
+    void loadSupportData();
 
     return () => {
       active = false;
     };
-  }, [open]);
+  }, [open, toast]);
+
+  useEffect(() => {
+    if (questionFilterClassId === "all") {
+      setQuestionFilterSubjects(subjects);
+      setQuestionFilterSubjectId((current) =>
+        current === "all" || subjects.some((subject) => subject._id === current)
+          ? current
+          : "all",
+      );
+      setQuestionFilterSubjectsLoading(false);
+      return;
+    }
+
+    if (!isQuestionPickerOpen) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    setQuestionFilterSubjectsLoading(true);
+
+    fetchApiJson<{ subjects?: SubjectOption[] }>(
+      `/api/subjects?classId=${questionFilterClassId}`,
+      {
+        signal: abortController.signal,
+        cache: "no-store",
+        fallbackMessage: "Could not load subjects for the selected class.",
+      },
+    )
+      .then((data) => {
+        const nextSubjects = Array.isArray(data?.subjects) ? data.subjects : [];
+        setQuestionFilterSubjects(nextSubjects);
+        setQuestionFilterSubjectId((current) =>
+          current === "all" || nextSubjects.some((subject) => subject._id === current)
+            ? current
+            : "all",
+        );
+      })
+      .catch((loadError) => {
+        if (isAbortError(loadError)) {
+          return;
+        }
+
+        setQuestionFilterSubjects([]);
+        setQuestionFilterSubjectId("all");
+        toast({
+          title: "Subject filters unavailable",
+          description:
+            loadError instanceof Error
+              ? loadError.message
+              : "Could not load subjects for the selected class.",
+          variant: "destructive",
+        });
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) {
+          setQuestionFilterSubjectsLoading(false);
+        }
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [isQuestionPickerOpen, questionFilterClassId, subjects, toast]);
+
+  useEffect(() => {
+    if (!isQuestionPickerOpen) {
+      setIsLoadingQuestions(false);
+      setAvailableQuestions([]);
+      setQuestionResultCount(0);
+      setQuestionPageCount(1);
+      return;
+    }
+
+    const abortController = new AbortController();
+    const searchParams = new URLSearchParams({
+      view: "picker",
+      page: String(questionPage),
+      limit: String(QUESTION_PICKER_PAGE_SIZE),
+      sort: "createdAt",
+      order: "desc",
+      types: "single,multiple,descriptive",
+    });
+
+    if (questionFilterClassId !== "all") {
+      searchParams.set("class", questionFilterClassId);
+    }
+
+    if (questionFilterSubjectId !== "all") {
+      searchParams.set("subject", questionFilterSubjectId);
+    }
+
+    if (selectedFilterTagIdsKey) {
+      searchParams.set("tags", selectedFilterTagIdsKey);
+      searchParams.set("tagsMode", questionTagMatchMode === "all" ? "and" : "or");
+    }
+
+    const trimmedSearch = modalSearch.trim();
+    if (trimmedSearch) {
+      searchParams.set("search", trimmedSearch);
+    }
+
+    setIsLoadingQuestions(true);
+
+    fetchApiJson<QuestionPickerResponse>(`/api/questions?${searchParams.toString()}`, {
+      signal: abortController.signal,
+      cache: "no-store",
+      fallbackMessage: "Could not load questions for the current filters.",
+    })
+      .then((payload) => {
+        const questions = Array.isArray(payload?.questions) ? payload.questions : [];
+        setAvailableQuestions(questions);
+        setQuestionResultCount(
+          Number.isFinite(Number(payload?.total)) ? Number(payload.total) : questions.length,
+        );
+        setQuestionPageCount(
+          Math.max(1, Number.isFinite(Number(payload?.pages)) ? Number(payload.pages) : 1),
+        );
+      })
+      .catch((loadError) => {
+        if (isAbortError(loadError)) {
+          return;
+        }
+
+        setAvailableQuestions([]);
+        setQuestionResultCount(0);
+        setQuestionPageCount(1);
+        toast({
+          title: "Question bank load failed",
+          description:
+            loadError instanceof Error
+              ? loadError.message
+              : "Could not load questions for the current filters.",
+          variant: "destructive",
+        });
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) {
+          setIsLoadingQuestions(false);
+        }
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [
+    isQuestionPickerOpen,
+    modalSearch,
+    questionFilterClassId,
+    questionFilterSubjectId,
+    questionPage,
+    questionTagMatchMode,
+    selectedFilterTagIdsKey,
+    toast,
+  ]);
 
   const hasOptions = type === "single" || type === "multiple";
   const dialogTitle = isEditMode ? "Edit live item" : "Create live item";
@@ -181,7 +476,7 @@ export default function LiveSessionItemEditorDialog({
     });
   }, [availableTags]);
 
-  const selectedTags = useMemo(
+  const selectedSubskillTags = useMemo(
     () => subskillTags.filter((tag) => selectedTagIds.includes(tag._id)),
     [selectedTagIds, subskillTags],
   );
@@ -220,6 +515,108 @@ export default function LiveSessionItemEditorDialog({
       current
         .filter((value) => value !== index)
         .map((value) => (value > index ? value - 1 : value)),
+    );
+  }
+
+  async function handleImportExistingQuestion(questionId: string) {
+    setImportingQuestionId(questionId);
+
+    try {
+      const payload = await fetchApiJson<{
+        success?: boolean;
+        question?: ExistingQuestionSummary;
+        message?: string;
+      }>(`/api/questions/${questionId}`, {
+        cache: "no-store",
+      });
+
+      if (!payload?.success || !payload?.question) {
+        throw new Error(String(payload?.message || "Could not load the selected question."));
+      }
+
+      const question = payload.question as ExistingQuestionSummary;
+      const nextType = mapQuestionTypeToLiveItemType(String(question.type || ""));
+
+      if (!nextType) {
+        throw new Error(
+          "Only single choice, multiple choice, and descriptive questions can be imported.",
+        );
+      }
+
+      setType(nextType);
+      setPromptHtml(String(question.content || ""));
+      setOptions(
+        nextType === "short-text"
+          ? []
+          : Array.isArray(question.options) && question.options.length > 0
+            ? question.options.map((option) => ({
+                contentHtml: String(option?.content || ""),
+              }))
+            : [{ contentHtml: "" }, { contentHtml: "" }],
+      );
+      setAnswerIndexes(
+        nextType === "short-text"
+          ? []
+          : Array.isArray(question.answerIndexes)
+            ? question.answerIndexes
+            : [],
+      );
+      setSelectedTagIds(
+        Array.isArray(question.tags)
+          ? question.tags.filter(isSubskillTag).map((tag) => tag._id)
+          : [],
+      );
+      setExplanationHtml(String(question.explanation || ""));
+      setError(null);
+      setIsQuestionPickerOpen(false);
+      setSelectedQuestionIds([]);
+      setModalSearch("");
+      setSelectedFilterTags([]);
+      setQuestionTagMatchMode("any");
+      setQuestionFilterClassId("all");
+      setQuestionFilterSubjectId("all");
+      setQuestionPage(1);
+    } catch (importError) {
+      toast({
+        title: "Question import failed",
+        description:
+          importError instanceof Error
+            ? importError.message
+            : "Could not import the selected question.",
+        variant: "destructive",
+      });
+    } finally {
+      setImportingQuestionId(null);
+    }
+  }
+
+  async function handleConfirmQuestions() {
+    if (confirmingQuestions || importingQuestionId) {
+      return;
+    }
+
+    if (selectedQuestionIds.length !== 1) {
+      toast({
+        title: "Select one question",
+        description: "Choose exactly one existing question to import into this live item.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setConfirmingQuestions(true);
+    try {
+      await handleImportExistingQuestion(String(selectedQuestionIds[0]));
+    } finally {
+      setConfirmingQuestions(false);
+    }
+  }
+
+  async function handleEditQuestionSave(updatedQuestion: ExistingQuestionSummary) {
+    setAvailableQuestions((currentQuestions) =>
+      currentQuestions.map((question) =>
+        String(question._id) === String(updatedQuestion._id) ? updatedQuestion : question,
+      ),
     );
   }
 
@@ -269,174 +666,329 @@ export default function LiveSessionItemEditorDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[min(92vw,72rem)] overflow-y-auto sm:bg-transparent sm:border-0 sm:shadow-none sm:p-0">
-        <div className="app-surface overflow-hidden">
-          <div className="app-section-header">
-            <DialogHeader>
-              <DialogTitle>{dialogTitle}</DialogTitle>
-              <DialogDescription>{dialogDescription}</DialogDescription>
-            </DialogHeader>
-          </div>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="flex h-[100dvh] w-screen max-w-none flex-col overflow-hidden p-0 sm:h-[min(92vh,900px)] sm:max-h-[min(92vh,900px)] sm:w-[min(96vw,1280px)] sm:max-w-[1280px]"
+          onInteractOutside={(event) => {
+            if (
+              (event.target as HTMLElement).closest(".tag-popover-content") ||
+              (event.target as HTMLElement).closest("[data-tag-popover]")
+            ) {
+              event.preventDefault();
+            }
+          }}
+        >
+          <DialogHeader className="border-b border-border/60 bg-muted/20 px-4 py-3.5 pr-12 text-left sm:px-5 sm:pr-14">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <DialogTitle className="text-lg sm:text-xl">{dialogTitle}</DialogTitle>
+                <DialogDescription>{dialogDescription}</DialogDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="app-button-inline"
+                onClick={() => {
+                  setSelectedQuestionIds([]);
+                  setModalSearch("");
+                  setSelectedFilterTags([]);
+                  setQuestionTagMatchMode("any");
+                  setQuestionFilterClassId("all");
+                  setQuestionFilterSubjectId("all");
+                  setQuestionFilterSubjects(subjects);
+                  setQuestionPage(1);
+                  setIsQuestionPickerOpen(true);
+                }}
+                disabled={isSaving}
+              >
+                Select Existing Question
+              </Button>
+            </div>
+          </DialogHeader>
 
-          <div className="app-section-body space-y-5">
-            <section className="app-section">
-              <div className="space-y-2">
-                <Label>Live item type</Label>
-                <div className="flex flex-wrap gap-2">
-                  {(["single", "multiple", "short-text"] as LiveSessionItemType[]).map(
-                    (value) => (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSave();
+            }}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden bg-muted/20 p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <main className="min-h-0 space-y-3 overflow-y-auto pr-1">
+              <Card className="app-surface overflow-hidden shadow-none">
+                <CardHeader className="app-section-header py-3.5">
+                  <CardTitle>Prompt</CardTitle>
+                </CardHeader>
+                <CardContent className="app-section-body">
+                  <RichTextEditor
+                    compact
+                    initialContent={promptHtml}
+                    onChange={setPromptHtml}
+                    editorKey={`${item?._id || "new"}-prompt-${type}`}
+                    imageUploadEndpoint="/api/live-sessions/images"
+                  />
+                </CardContent>
+              </Card>
+
+              {hasOptions ? (
+                <Card className="app-surface overflow-hidden shadow-none">
+                  <CardHeader className="app-section-header py-3.5">
+                    <CardTitle>Answer Options</CardTitle>
+                  </CardHeader>
+                  <CardContent className="app-section-body space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm text-muted-foreground">
+                        {type === "single"
+                          ? "Choose one correct option."
+                          : "Choose all correct options."}
+                      </p>
                       <Button
-                        key={value}
                         type="button"
-                        variant={type === value ? "default" : "outline"}
-                        size="sm"
-                        className="app-button-compact"
-                        onClick={() => handleTypeChange(value)}
+                        variant="outline"
+                        onClick={handleAddOption}
+                        className="app-button-inline w-full sm:w-auto"
                         disabled={isSaving}
                       >
-                        {getTypeLabel(value)}
+                        <PlusCircle className="h-4 w-4" />
+                        Add Option
                       </Button>
-                    ),
-                  )}
-                </div>
-              </div>
-            </section>
+                    </div>
 
-            <section className="app-section">
-              <div className="space-y-2">
-                <Label>Prompt</Label>
-                <RichTextEditor
-                  initialContent={promptHtml}
-                  onChange={setPromptHtml}
-                  editorKey={`${item?._id || "new"}-prompt-${type}`}
-                  imageUploadEndpoint="/api/live-sessions/images"
-                />
-              </div>
-            </section>
-
-            <section className="app-section space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Label>Tags (subskill)</Label>
-                <span className="text-xs text-muted-foreground">
-                  Used for attentiveness and recovery practice.
-                </span>
-              </div>
-              <MultiSelectTags
-                selectedTags={selectedTags}
-                allTags={subskillTags}
-                onSelectedTagsChange={(nextTags) =>
-                  setSelectedTagIds(nextTags.map((tag) => tag._id))
-                }
-                isLoading={isLoadingTags}
-                disabled={isSaving}
-              />
-              {subskillTags.length === 0 && !isLoadingTags ? (
-                <p className="text-xs text-muted-foreground">
-                  No subskill tags available yet. Create subskill tags to enable live recovery.
-                </p>
-              ) : null}
-            </section>
-
-            {hasOptions ? (
-              <section className="app-section space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <Label>Answer options</Label>
-                    <p className="text-xs text-muted-foreground">
-                      {type === "single"
-                        ? "Choose one correct option."
-                        : "Choose all correct options."}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="app-button-compact"
-                    onClick={handleAddOption}
-                    disabled={isSaving}
-                  >
-                    <PlusCircle className="h-4 w-4" />
-                    Add option
-                  </Button>
-                </div>
-
-                <div className="space-y-3">
-                  {options.map((option, index) => (
-                    <div
-                      key={`option-${index}`}
-                      className="app-exam-option"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <label className="flex items-start gap-2 text-[13px] font-semibold text-foreground">
+                    {options.map((option, index) => (
+                      <div
+                        key={`option-${index}`}
+                        className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/10 p-2.5"
+                      >
+                        <div className="flex flex-col items-center pt-2">
                           <Checkbox
                             checked={answerIndexes.includes(index)}
                             onCheckedChange={() => handleAnswerToggle(index)}
                             disabled={isSaving}
                           />
-                          <span>
-                            {type === "single" ? "Correct option" : "Correct answer"}
-                          </span>
-                        </label>
+                        </div>
+                        <div className="flex-1">
+                          <RichTextEditor
+                            compact
+                            initialContent={option.contentHtml}
+                            onChange={(value) => handleOptionChange(index, value)}
+                            editorKey={`${item?._id || "new"}-option-${index}-${type}`}
+                            imageUploadEndpoint="/api/live-sessions/images"
+                          />
+                        </div>
                         <Button
                           type="button"
-                          size="icon-sm"
                           variant="ghost"
+                          size="icon"
                           onClick={() => handleRemoveOption(index)}
+                          className="mt-1 text-muted-foreground hover:text-destructive"
                           disabled={isSaving || options.length <= 2}
                           aria-label={`Remove option ${index + 1}`}
                         >
                           <X className="h-4 w-4" />
                         </Button>
                       </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="app-surface overflow-hidden shadow-none">
+                  <CardHeader className="app-section-header py-3.5">
+                    <CardTitle>Written Response</CardTitle>
+                  </CardHeader>
+                  <CardContent className="app-section-body">
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      Students will answer this live prompt in their own words while the item stays active.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
 
-                      <div className="app-exam-option-content">
-                        <RichTextEditor
-                          initialContent={option.contentHtml}
-                          onChange={(value) => handleOptionChange(index, value)}
-                          editorKey={`${item?._id || "new"}-option-${index}-${type}`}
-                          compact
-                          imageUploadEndpoint="/api/live-sessions/images"
-                        />
-                      </div>
+              <Card className="app-surface overflow-hidden shadow-none">
+                <CardHeader className="app-section-header py-3.5">
+                  <CardTitle>Explanation</CardTitle>
+                </CardHeader>
+                <CardContent className="app-section-body">
+                  <RichTextEditor
+                    compact
+                    initialContent={explanationHtml}
+                    onChange={setExplanationHtml}
+                    editorKey={`${item?._id || "new"}-explanation-${type}`}
+                    imageUploadEndpoint="/api/live-sessions/images"
+                  />
+                </CardContent>
+              </Card>
+            </main>
+
+              <aside className="min-h-0 space-y-3 overflow-y-auto xl:overflow-visible">
+              <Card className="app-surface overflow-hidden shadow-none">
+                <CardHeader className="app-section-header py-3.5">
+                  <CardTitle>Tags</CardTitle>
+                </CardHeader>
+                <CardContent className="app-section-body space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">Subskill tags</p>
+                    <p className="text-sm text-muted-foreground">
+                      Used for attentiveness and recovery practice.
+                    </p>
+                  </div>
+                  <MultiSelectTags
+                    selectedTags={selectedSubskillTags}
+                    allTags={subskillTags}
+                    onSelectedTagsChange={(nextTags) =>
+                      setSelectedTagIds(nextTags.map((tag) => tag._id))
+                    }
+                    isLoading={initialDataLoading}
+                    disabled={isSaving}
+                  />
+                  {subskillTags.length === 0 && !initialDataLoading ? (
+                    <p className="text-xs text-muted-foreground">
+                      No subskill tags available yet. Create subskill tags to enable live recovery.
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              <Card className="app-surface overflow-hidden shadow-none">
+                <CardHeader className="app-section-header py-3.5">
+                  <CardTitle>Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="app-section-body space-y-3">
+                  <div className="app-field-group">
+                    <Label className="app-field-label">Live Item Type</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {(["single", "multiple", "short-text"] as LiveSessionItemType[]).map(
+                        (value) => (
+                          <Button
+                            key={value}
+                            type="button"
+                            variant={type === value ? "default" : "outline"}
+                            size="sm"
+                            className="app-button-compact"
+                            onClick={() => handleTypeChange(value)}
+                            disabled={isSaving}
+                          >
+                            {getTypeLabel(value)}
+                          </Button>
+                        ),
+                      )}
                     </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                  </div>
 
-            <section className="app-section">
-              <div className="space-y-2">
-                <Label>Explanation</Label>
-                <RichTextEditor
-                  initialContent={explanationHtml}
-                  onChange={setExplanationHtml}
-                  editorKey={`${item?._id || "new"}-explanation-${type}`}
-                  compact
-                  imageUploadEndpoint="/api/live-sessions/images"
-                />
-              </div>
-            </section>
+                  <div className="app-field-group">
+                    <span className="app-field-label">Response Mode</span>
+                    <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-sm font-medium text-foreground">
+                      {type === "single"
+                        ? "Students select one answer"
+                        : type === "multiple"
+                          ? "Students can choose multiple answers"
+                          : "Students respond with rich text"}
+                    </div>
+                  </div>
 
-            {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
-          </div>
+                  <div className="app-field-group">
+                    <span className="app-field-label">Answer Key</span>
+                    <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
+                      {hasOptions
+                        ? answerIndexes.length > 0
+                          ? `${answerIndexes.length} correct ${
+                              answerIndexes.length === 1 ? "option" : "options"
+                            } selected`
+                          : "Choose the correct answer set before saving."
+                        : "Teacher review only in this version."}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <DialogFooter className="border-t border-border/70 px-4 py-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : isEditMode ? "Save live item" : "Create live item"}
-            </Button>
-          </DialogFooter>
-        </div>
-      </DialogContent>
-    </Dialog>
+              {error ? <div className="app-feedback app-feedback-error">{error}</div> : null}
+              </aside>
+            </div>
+
+            <DialogFooter className="border-t border-border/60 bg-muted/10 px-4 py-3 sm:px-5">
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => onOpenChange(false)}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? "Saving..." : isEditMode ? "Save Live Item" : "Create Live Item"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <QuestionFilterPopup
+        open={isQuestionPickerOpen}
+        onOpenChange={(nextOpen) => {
+          setIsQuestionPickerOpen(nextOpen);
+          if (!nextOpen) {
+            setImportingQuestionId(null);
+            setConfirmingQuestions(false);
+            setSelectedQuestionIds([]);
+            setModalSearch("");
+            setSelectedFilterTags([]);
+            setQuestionTagMatchMode("any");
+            setQuestionFilterClassId("all");
+            setQuestionFilterSubjectId("all");
+            setQuestionFilterSubjects(subjects);
+            setQuestionPage(1);
+          }
+        }}
+        classes={classes}
+        classId={questionFilterClassId}
+        setClassId={(id) => {
+          setQuestionPage(1);
+          setQuestionFilterClassId(String(id));
+        }}
+        subjects={questionFilterSubjects}
+        subjectId={questionFilterSubjectId}
+        setSubjectId={(id) => {
+          setQuestionPage(1);
+          setQuestionFilterSubjectId(String(id));
+        }}
+        subjectsLoading={initialDataLoading || questionFilterSubjectsLoading}
+        allTags={availableTags}
+        selectedTags={selectedFilterTags}
+        setSelectedTags={(tags) => {
+          setQuestionPage(1);
+          setSelectedFilterTags(tags);
+        }}
+        questionTagMatchMode={questionTagMatchMode}
+        setQuestionTagMatchMode={setQuestionTagMatchMode}
+        initialDataLoading={initialDataLoading}
+        modalSearch={modalSearch}
+        setModalSearch={setModalSearch}
+        loadingQuestions={isLoadingQuestions}
+        modalAvailableQuestions={availableQuestions}
+        questionResultCount={questionResultCount}
+        questionPage={questionPage}
+        setQuestionPage={setQuestionPage}
+        questionPageCount={questionPageCount}
+        questionPageSize={QUESTION_PICKER_PAGE_SIZE}
+        selectedQuestionIds={selectedQuestionIds}
+        setSelectedQuestionIds={setSelectedQuestionIds}
+        handleConfirmQuestions={handleConfirmQuestions}
+        handleSelectAllFilteredQuestions={async () => {
+          toast({
+            title: "Select one question",
+            description: "This import flow supports one existing question at a time.",
+            variant: "destructive",
+          });
+        }}
+        confirmingQuestions={confirmingQuestions || Boolean(importingQuestionId)}
+        selectingAllFilteredQuestions={false}
+        toast={toast}
+        handleEditQuestionSave={handleEditQuestionSave}
+        selectionMode="single"
+        title="Select Existing Question"
+        description="Import one question-bank item into this live prompt. Single choice, multiple choice, and descriptive questions are supported."
+        confirmLabel="Import Selected Question"
+      />
+    </>
   );
 }

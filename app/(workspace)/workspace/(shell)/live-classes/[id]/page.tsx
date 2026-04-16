@@ -44,7 +44,7 @@ export default async function LiveClassDetailPage({
   });
 
   return (
-    <PageShell width="wide" padding="standard">
+    <PageShell padding="standard">
       <div className="app-course-page">
         <PageHero
           className="app-learning-hero"
