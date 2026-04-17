@@ -44,6 +44,9 @@ import { z } from "zod";
 import { objectIdSchema, parseOr400 } from "@/lib/validation";
 import { toBinaryResponseBody } from "@/lib/server/binary-response";
 import { withRequestBudget } from "@/lib/server/request-governor";
+import {
+  assertSummerCrashStudentApiAccess,
+} from "@/lib/server/summer-crash";
 
 type ScopedAnalyticsUser = {
   hasAllClasses?: boolean;
@@ -134,6 +137,23 @@ export async function GET(
       resolvedResponseId;
   }
   const isStudentSession = auth.session.user.role === "student";
+  if (isStudentSession) {
+    const accessCheck = await assertSummerCrashStudentApiAccess({
+      schoolKey: tenantKey,
+      studentId: auth.session.user.id,
+      target: {
+        kind: "diagnostic-report",
+        responseId: resolvedResponseId,
+      },
+    });
+    if (!accessCheck.allowed) {
+      return NextResponse.json(
+        { success: false, message: accessCheck.message },
+        { status: 403 },
+      );
+    }
+  }
+
   const responseQuery = isStudentSession
     ? { _id: resolvedResponseId, student: auth.session.user.id }
     : { _id: resolvedResponseId };

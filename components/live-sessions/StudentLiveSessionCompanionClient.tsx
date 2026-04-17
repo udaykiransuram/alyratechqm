@@ -143,6 +143,11 @@ export default function StudentLiveSessionCompanionClient({
   const [isStreamLoaded, setIsStreamLoaded] = useState(false);
   const [streamLoadTimedOut, setStreamLoadTimedOut] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date().toISOString());
+  const [streakCount, setStreakCount] = useState(0);
+  const [lastRewardedItemId, setLastRewardedItemId] = useState<string | null>(null);
+  const [rewardText, setRewardText] = useState<string | null>(null);
+  const [showRewardBurst, setShowRewardBurst] = useState(false);
+  const [showEncouragePrompt, setShowEncouragePrompt] = useState(false);
   const refreshInFlightRef = useRef(false);
   const presenceInFlightRef = useRef(false);
   const focusFabHideTimeoutRef = useRef<number | null>(null);
@@ -154,11 +159,75 @@ export default function StudentLiveSessionCompanionClient({
   const presenceIntervalMs = runtimeSignals.lowBandwidth
     ? LIVE_SESSION_PRESENCE_INTERVAL_LITE_MS
     : LIVE_SESSION_PRESENCE_INTERVAL_MS;
+  const activeItem = liveSession.activeItem;
+  const savedResponse =
+    activeItem && liveSession.studentResponse?.itemId === activeItem._id
+      ? liveSession.studentResponse
+      : null;
 
   useEffect(() => {
     setLiveSession(initialLiveSession);
     setLastSyncedAt(new Date().toISOString());
   }, [initialLiveSession]);
+
+  useEffect(() => {
+    if (!activeItem?._id) {
+      setShowEncouragePrompt(false);
+      return;
+    }
+
+    if (savedResponse?.updatedAt) {
+      setShowEncouragePrompt(false);
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setShowEncouragePrompt(true);
+    }, 15_000);
+
+    return () => window.clearTimeout(timerId);
+  }, [activeItem?._id, savedResponse?.updatedAt]);
+
+  useEffect(() => {
+    if (!savedResponse || !activeItem?._id) {
+      return;
+    }
+
+    if (lastRewardedItemId === activeItem._id) {
+      return;
+    }
+
+    setLastRewardedItemId(activeItem._id);
+
+    if (savedResponse.isCorrect === true) {
+      setStreakCount((current) => {
+        const nextStreak = current + 1;
+        const isHotStreak = nextStreak % 3 === 0;
+        setRewardText(isHotStreak ? "Hot streak!" : "Nice work!");
+
+        if (!runtimeSignals.prefersReducedMotion && !runtimeSignals.saveData) {
+          setShowRewardBurst(true);
+          window.setTimeout(
+            () => setShowRewardBurst(false),
+            isHotStreak ? 1200 : 900,
+          );
+        }
+
+        return nextStreak;
+      });
+      return;
+    }
+
+    if (savedResponse.isCorrect === false) {
+      setStreakCount(0);
+    }
+  }, [
+    activeItem?._id,
+    lastRewardedItemId,
+    runtimeSignals.prefersReducedMotion,
+    runtimeSignals.saveData,
+    savedResponse,
+  ]);
 
   useEffect(() => {
     const nextDraft = buildDraftState(liveSession);
@@ -323,7 +392,6 @@ export default function StudentLiveSessionCompanionClient({
     };
   }, []);
 
-  const activeItem = liveSession.activeItem;
   const studentJoinStream = useMemo(
     () => resolveLiveSessionYouTubeStream(liveSession.studentJoinUrl),
     [liveSession.studentJoinUrl],
@@ -345,13 +413,10 @@ export default function StudentLiveSessionCompanionClient({
   );
   const showSplitCompanionStage = Boolean(studentJoinStream);
   const useCompactQuestionLayout = Boolean(activeItem && studentJoinStream);
-  const savedResponse =
-    activeItem && liveSession.studentResponse?.itemId === activeItem._id
-      ? liveSession.studentResponse
-      : null;
   const isCorrectResponse =
     savedResponse?.isCorrect === true &&
     (activeItem?.type === "single" || activeItem?.type === "multiple");
+  const streakBadge = streakCount > 0 ? `Streak: ${streakCount}` : null;
   const optionCount =
     activeItem && (activeItem.type === "single" || activeItem.type === "multiple")
       ? activeItem.options.length
@@ -364,6 +429,17 @@ export default function StudentLiveSessionCompanionClient({
         : activeItem?.type === "multiple"
           ? selectedOptionIndexes.length > 0
           : false;
+  const rewardBurst = showRewardBurst ? (
+    <div className="app-live-reward-burst" aria-hidden="true">
+      {Array.from({ length: 14 }).map((_, index) => (
+        <span
+          key={`reward-confetti-${index}`}
+          className="app-live-reward-confetti"
+          style={{ ["--burst-index" as any]: index }}
+        />
+      ))}
+    </div>
+  ) : null;
 
   const activeItemHint = activeItem
     ? activeItem.type === "short-text"
@@ -765,15 +841,16 @@ export default function StudentLiveSessionCompanionClient({
 
             <div
               className={cn(
-                "flex flex-wrap items-center justify-between gap-3 rounded-[1.15rem] border border-border/60 bg-background/74 px-5 py-4",
+                "app-live-response-panel flex flex-wrap items-center justify-between gap-3 rounded-[1.15rem] border border-border/60 bg-background/74 px-5 py-4",
                 useCompactQuestionLayout && "rounded-[1rem] px-4 py-3",
+                showRewardBurst && "app-live-response-panel-reward",
               )}
             >
               <div className="space-y-1 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">
                   {savedResponse
                     ? isCorrectResponse
-                      ? "Nice work"
+                      ? rewardText || "Nice work"
                       : "Response saved"
                     : "Ready to submit"}
                 </p>
@@ -784,19 +861,31 @@ export default function StudentLiveSessionCompanionClient({
                       : `Last updated ${formatDateTime(savedResponse.updatedAt)}`
                     : "Your answer will be saved for this class."}
                 </p>
+                {showEncouragePrompt && !savedResponse ? (
+                  <p className="app-live-prompt-text">Try it — you’ve got this!</p>
+                ) : null}
               </div>
-              <Button
-                type="button"
-                className="app-button-page"
-                onClick={() => void handleSubmit()}
-                disabled={!canSubmit || isSubmitting}
-              >
-                {isSubmitting
-                  ? "Saving..."
-                  : activeItem.type === "short-text"
-                    ? "Save answer"
-                    : "Submit response"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {streakBadge ? (
+                  <span className="app-live-streak-badge">{streakBadge}</span>
+                ) : null}
+                {rewardText && savedResponse?.updatedAt ? (
+                  <span className="app-live-reward-text">{rewardText}</span>
+                ) : null}
+                <Button
+                  type="button"
+                  className="app-button-page"
+                  onClick={() => void handleSubmit()}
+                  disabled={!canSubmit || isSubmitting}
+                >
+                  {isSubmitting
+                    ? "Saving..."
+                    : activeItem.type === "short-text"
+                      ? "Save answer"
+                      : "Submit response"}
+                </Button>
+              </div>
+              {rewardBurst}
             </div>
           </>
         ) : (

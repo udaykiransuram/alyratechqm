@@ -4,8 +4,12 @@ import { getServerSession } from "next-auth";
 
 import SummerCrashSignInClient from "@/components/summer-crash/SummerCrashSignInClient";
 import { authOptions } from "@/lib/auth";
+import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { SUMMER_CRASH_WELCOME_PATH } from "@/lib/summer-crash/constants";
-import { isSummerCrashSession } from "@/lib/summer-crash/shared";
+import {
+  buildSummerCrashWelcomeHref,
+  isSummerCrashSession,
+} from "@/lib/summer-crash/shared";
 
 export const metadata: Metadata = {
   title: "Sign In | Summer Crash Course",
@@ -29,6 +33,7 @@ export default async function SummerCrashSignInPage({
     getServerSession(authOptions),
     searchParams,
   ]);
+  const nextHref = getSafeReturnToPath(getSearchParam(resolvedSearchParams?.next));
 
   if (
     session &&
@@ -38,7 +43,7 @@ export default async function SummerCrashSignInPage({
       schoolKey: session.user.schoolKey,
     })
   ) {
-    redirect(SUMMER_CRASH_WELCOME_PATH);
+    redirect(nextHref ? buildSummerCrashWelcomeHref(nextHref) : SUMMER_CRASH_WELCOME_PATH);
   }
 
   return (
@@ -47,6 +52,7 @@ export default async function SummerCrashSignInPage({
         <SummerCrashSignInClient
           phone={getSearchParam(resolvedSearchParams?.phone)}
           summerId={getSearchParam(resolvedSearchParams?.summerId)}
+          nextHref={nextHref || ""}
           pageError={getSearchParam(resolvedSearchParams?.error)}
         />
       </div>

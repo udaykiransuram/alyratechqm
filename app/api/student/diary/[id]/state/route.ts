@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 
 import { requireTenantSession } from "@/lib/api-auth";
+import {
+  assertSummerCrashStudentApiAccess,
+} from "@/lib/server/summer-crash";
 import { updateStudentDiaryState } from "@/lib/server/diary";
 
 export async function PATCH(
@@ -16,6 +19,20 @@ export async function PATCH(
     });
     if (!auth.ok) {
       return auth.response;
+    }
+
+    const accessCheck = await assertSummerCrashStudentApiAccess({
+      schoolKey: auth.schoolKey,
+      studentId: auth.session.user.id,
+      target: {
+        kind: "locked-student-content",
+      },
+    });
+    if (!accessCheck.allowed) {
+      return NextResponse.json(
+        { success: false, message: accessCheck.message },
+        { status: 403 },
+      );
     }
 
     const { id } = await params;

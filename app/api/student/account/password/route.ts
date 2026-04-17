@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireTenantSession } from "@/lib/api-auth";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import {
+  assertSummerCrashStudentApiAccess,
+} from "@/lib/server/summer-crash";
 import { validatePasswordInput } from "@/lib/user-credentials";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +18,19 @@ export async function PATCH(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   const schoolKey = auth.schoolKey as string;
+  const accessCheck = await assertSummerCrashStudentApiAccess({
+    schoolKey,
+    studentId: auth.session.user.id,
+    target: {
+      kind: "locked-student-content",
+    },
+  });
+  if (!accessCheck.allowed) {
+    return NextResponse.json(
+      { success: false, message: accessCheck.message },
+      { status: 403 },
+    );
+  }
 
   try {
     await connectDB();

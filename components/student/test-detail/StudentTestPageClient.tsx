@@ -8,6 +8,7 @@ import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
 import PageLoadingState from "@/components/ui/page-loading-state";
+import { SUMMER_CRASH_HOME_PATH } from "@/lib/summer-crash/constants";
 
 import type { StudentTestDetailResponse } from "./student-test-types";
 import { useStudentTestRuntime } from "./useStudentTestRuntimeV2";
@@ -35,6 +36,10 @@ type StudentTestPageClientProps = {
 };
 
 function getBackLabel(href: string) {
+  if (href === SUMMER_CRASH_HOME_PATH) {
+    return "Back to Summer Home";
+  }
+
   return href.startsWith("/student/courses/") ? "Back to Course" : "Back to Tests";
 }
 

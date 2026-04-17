@@ -5,6 +5,10 @@ import StudentTestPageClient from "@/components/student/test-detail/StudentTestP
 import { authOptions } from "@/lib/auth";
 import type { StudentTestDetailResponse } from "@/components/student/test-detail/student-test-types";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
+import {
+  assertSummerCrashStudentPageAccess,
+} from "@/lib/server/summer-crash";
+import { SUMMER_CRASH_HOME_PATH } from "@/lib/summer-crash/constants";
 import { getStudentTestDetailData } from "@/lib/server/student-tests";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
@@ -36,11 +40,26 @@ export default async function StudentTestPage({
   }
 
   const { paperId } = await params;
+  const accessCheck = await assertSummerCrashStudentPageAccess({
+    schoolKey,
+    studentId,
+    target: {
+      kind: "diagnostic-test",
+      paperId,
+    },
+  });
+  if (!accessCheck.allowed) {
+    redirect(accessCheck.policy.redirectHref);
+  }
+
   const resolvedSearchParams = await searchParams;
   const rawReturnTo = Array.isArray(resolvedSearchParams?.returnTo)
     ? resolvedSearchParams.returnTo[0]
     : resolvedSearchParams?.returnTo;
-  const returnToPath = getSafeReturnToPath(rawReturnTo) || "/student/tests";
+  const returnToPath =
+    accessCheck.policy.applies && !accessCheck.policy.isUnlocked
+      ? SUMMER_CRASH_HOME_PATH
+      : getSafeReturnToPath(rawReturnTo) || "/student/tests";
 
   let initialData: StudentTestDetailResponse | null = null;
   let initialLoadError: string | null = null;

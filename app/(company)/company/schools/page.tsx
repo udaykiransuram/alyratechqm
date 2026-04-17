@@ -52,6 +52,11 @@ import PageHero from "@/components/layout/PageHero";
 import PageShell from "@/components/layout/PageShell";
 import { fetchApiJson } from "@/lib/client/api";
 import { clearSchoolKeyCookie, getSchoolKeyFromCookie } from "@/lib/client/school";
+import {
+  SUMMER_CRASH_DISPLAY_NAME,
+  SUMMER_CRASH_SCHOOL_KEY,
+  isSummerCrashSchoolKey,
+} from "@/lib/summer-crash/constants";
 
 interface SchoolItem {
   _id: string;
@@ -78,9 +83,12 @@ const EMPTY_CREATE_FORM = {
   adminMobileNumber: "",
 };
 
+type CreateSchoolPreset = "standard" | "summerCrash";
+
 export default function ManageSchoolsPage() {
   const [schools, setSchools] = useState<SchoolItem[]>([]);
   const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
+  const [createPreset, setCreatePreset] = useState<CreateSchoolPreset>("standard");
   const [editForm, setEditForm] = useState<EditSchoolForm | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [isEditLoading, setIsEditLoading] = useState(false);
@@ -95,6 +103,10 @@ export default function ManageSchoolsPage() {
 
   const sortedSchools = useMemo(
     () => [...schools].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [schools],
+  );
+  const summerCrashSchool = useMemo(
+    () => schools.find((school) => isSummerCrashSchoolKey(school.key)) || null,
     [schools],
   );
 
@@ -174,6 +186,7 @@ export default function ManageSchoolsPage() {
         fallbackMessage: "Failed to create school.",
       });
 
+      setCreatePreset("standard");
       setCreateForm(EMPTY_CREATE_FORM);
       setSchools((current) => [...current, data.school]);
       toast({
@@ -250,12 +263,36 @@ export default function ManageSchoolsPage() {
 
     if (
       editForm.bootstrapAdminId &&
+      (payload.adminName ||
+        payload.adminEmail ||
+        payload.adminMobileNumber ||
+        payload.adminPassword) &&
       (!payload.adminName || !payload.adminEmail || !payload.adminMobileNumber)
     ) {
       toast({
         title: "Validation Error",
         description:
           "Bootstrap school admin name, email, and phone are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      !editForm.bootstrapAdminId &&
+      (payload.adminName ||
+        payload.adminEmail ||
+        payload.adminMobileNumber ||
+        payload.adminPassword) &&
+      (!payload.adminName ||
+        !payload.adminEmail ||
+        !payload.adminMobileNumber ||
+        !payload.adminPassword)
+    ) {
+      toast({
+        title: "Validation Error",
+        description:
+          "Name, email, phone, and password are required to create the first school admin.",
         variant: "destructive",
       });
       return;
@@ -317,6 +354,24 @@ export default function ManageSchoolsPage() {
     } finally {
       setDeletingId(null);
     }
+  }
+
+  function handleUseSummerCrashPreset() {
+    setCreatePreset("summerCrash");
+    setCreateForm((current) => ({
+      ...current,
+      key: SUMMER_CRASH_SCHOOL_KEY,
+      displayName: SUMMER_CRASH_DISPLAY_NAME,
+    }));
+  }
+
+  function handleUseStandardSchoolForm() {
+    setCreatePreset("standard");
+    setCreateForm((current) => ({
+      ...current,
+      key: "",
+      displayName: "",
+    }));
   }
 
   return (
@@ -385,7 +440,7 @@ export default function ManageSchoolsPage() {
         ]}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] xl:items-start">
+	      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] xl:items-start">
         <Card className="app-surface overflow-hidden">
           <CardHeader className="app-section-header">
             <div className="flex items-start gap-3">
@@ -402,13 +457,69 @@ export default function ManageSchoolsPage() {
           </CardHeader>
           <CardContent className="app-section-body">
             <form className="space-y-4" onSubmit={handleCreateSchool}>
+              <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-semibold text-foreground">
+                        Crash Course Workspace
+                      </h3>
+                      <Badge variant="outline">
+                        {summerCrashSchool ? "Already created" : "Hidden tenant"}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Use the fixed Crash Course tenant key and keep it hidden from
+                      the normal public school picker.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Key: <code className="rounded bg-background px-1.5 py-0.5">{SUMMER_CRASH_SCHOOL_KEY}</code>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {summerCrashSchool ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="app-button-compact"
+                        onClick={() => void handleOpenEditSchool(summerCrashSchool)}
+                      >
+                        Edit Crash Course School
+                      </Button>
+                    ) : createPreset === "summerCrash" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="app-button-compact"
+                        onClick={handleUseStandardSchoolForm}
+                        disabled={isSubmitting}
+                      >
+                        Use Standard School Form
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="app-button-compact"
+                        onClick={handleUseSummerCrashPreset}
+                        disabled={isSubmitting}
+                      >
+                        Use Crash Course Preset
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="app-section space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-sm font-semibold text-foreground">
                     School identity
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Set the permanent key and display name for this tenant workspace.
+                    {createPreset === "summerCrash"
+                      ? "Crash Course preset is active. The tenant key and name are locked to the summer workspace defaults."
+                      : "Set the permanent key and display name for this tenant workspace."}
                   </p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -418,7 +529,11 @@ export default function ManageSchoolsPage() {
                     </label>
                     <Input
                       id="create-school-key"
-                      placeholder="e.g., alpha-high"
+                      placeholder={
+                        createPreset === "summerCrash"
+                          ? SUMMER_CRASH_SCHOOL_KEY
+                          : "e.g., alpha-high"
+                      }
                       value={createForm.key}
                       onChange={(event) =>
                         setCreateForm((current) => ({
@@ -426,10 +541,12 @@ export default function ManageSchoolsPage() {
                           key: event.target.value,
                         }))
                       }
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || createPreset === "summerCrash"}
                     />
                     <p className="text-sm text-muted-foreground">
-                      Used for tenant database names, cookies, and routing.
+                      {createPreset === "summerCrash"
+                        ? "This special key keeps the Crash Course school hidden from normal school selection."
+                        : "Used for tenant database names, cookies, and routing."}
                     </p>
                   </div>
 
@@ -442,7 +559,11 @@ export default function ManageSchoolsPage() {
                     </label>
                     <Input
                       id="create-school-display-name"
-                      placeholder="e.g., Alpha High School"
+                      placeholder={
+                        createPreset === "summerCrash"
+                          ? SUMMER_CRASH_DISPLAY_NAME
+                          : "e.g., Alpha High School"
+                      }
                       value={createForm.displayName}
                       onChange={(event) =>
                         setCreateForm((current) => ({
@@ -450,7 +571,7 @@ export default function ManageSchoolsPage() {
                           displayName: event.target.value,
                         }))
                       }
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || createPreset === "summerCrash"}
                     />
                   </div>
                 </div>
@@ -610,17 +731,22 @@ export default function ManageSchoolsPage() {
                     <div className="rounded-xl border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
                       No schools created yet.
                     </div>
-                  ) : (
-                    sortedSchools.map((school) => (
-                      <article
-                        key={school._id}
-                        className="rounded-2xl border border-border/70 bg-background/80 p-4"
-                      >
-                        <div className="space-y-1">
-                          <p className="font-medium text-foreground">{school.displayName}</p>
-                          <div>
-                            <code className="rounded bg-muted px-2 py-1 text-xs">{school.key}</code>
-                          </div>
+	                  ) : (
+	                    sortedSchools.map((school) => (
+	                      <article
+	                        key={school._id}
+	                        className="rounded-2xl border border-border/70 bg-background/80 p-4"
+	                      >
+	                        <div className="space-y-1">
+	                          <div className="flex flex-wrap items-center gap-2">
+	                            <p className="font-medium text-foreground">{school.displayName}</p>
+	                            {isSummerCrashSchoolKey(school.key) ? (
+	                              <Badge variant="outline">Crash Course</Badge>
+	                            ) : null}
+	                          </div>
+	                          <div>
+	                            <code className="rounded bg-muted px-2 py-1 text-xs">{school.key}</code>
+	                          </div>
                           <p className="text-xs text-muted-foreground">
                             Updated{" "}
                             {school.updatedAt
@@ -708,12 +834,17 @@ export default function ManageSchoolsPage() {
                               No schools created yet.
                             </TableCell>
                           </TableRow>
-                        ) : (
-                          sortedSchools.map((school) => (
-                            <TableRow key={school._id}>
-                              <TableCell className="font-medium">
-                                {school.displayName}
-                              </TableCell>
+	                        ) : (
+	                          sortedSchools.map((school) => (
+	                            <TableRow key={school._id}>
+	                              <TableCell>
+                                  <div className="flex flex-wrap items-center gap-2">
+	                                  <span className="font-medium">{school.displayName}</span>
+                                    {isSummerCrashSchoolKey(school.key) ? (
+                                      <Badge variant="outline">Crash Course</Badge>
+                                    ) : null}
+                                  </div>
+	                              </TableCell>
                               <TableCell>
                                 <code className="rounded bg-muted px-2 py-1 text-xs">
                                   {school.key}
@@ -858,112 +989,110 @@ export default function ManageSchoolsPage() {
                     Bootstrap School Admin
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Every new school must start with its first admin account so
-                    the school team can log in and manage users immediately.
+                    {editForm.bootstrapAdminId
+                      ? "Update the current bootstrap school admin for this tenant."
+                      : "Create the first bootstrap school admin for this tenant if one is still missing."}
                   </p>
                 </div>
 
-                {editForm.bootstrapAdminId ? (
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div className="app-field-group">
-                      <label
-                        className="app-field-label"
-                        htmlFor="edit-school-admin-name"
-                      >
-                        Admin Name
-                      </label>
-                      <Input
-                        id="edit-school-admin-name"
-                        placeholder="e.g., Priya Sharma"
-                        value={editForm.adminName}
-                        onChange={(event) =>
-                          setEditForm((current) =>
-                            current
-                              ? { ...current, adminName: event.target.value }
-                              : current,
-                          )
-                        }
-                        disabled={isSaving}
-                      />
-                    </div>
-
-                    <div className="app-field-group">
-                      <label
-                        className="app-field-label"
-                        htmlFor="edit-school-admin-email"
-                      >
-                        Admin Email
-                      </label>
-                      <Input
-                        id="edit-school-admin-email"
-                        type="email"
-                        placeholder="admin@school.com"
-                        value={editForm.adminEmail}
-                        onChange={(event) =>
-                          setEditForm((current) =>
-                            current
-                              ? { ...current, adminEmail: event.target.value }
-                              : current,
-                          )
-                        }
-                        disabled={isSaving}
-                      />
-                    </div>
-
-                    <div className="app-field-group">
-                      <label
-                        className="app-field-label"
-                        htmlFor="edit-school-admin-mobile"
-                      >
-                        Admin Phone
-                      </label>
-                      <Input
-                        id="edit-school-admin-mobile"
-                        placeholder="e.g., 9876543210"
-                        value={editForm.adminMobileNumber}
-                        onChange={(event) =>
-                          setEditForm((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  adminMobileNumber: event.target.value,
-                                }
-                              : current,
-                          )
-                        }
-                        disabled={isSaving}
-                      />
-                    </div>
-
-                    <div className="app-field-group">
-                      <label
-                        className="app-field-label"
-                        htmlFor="edit-school-admin-password"
-                      >
-                        Admin Password
-                      </label>
-                      <Input
-                        id="edit-school-admin-password"
-                        type="password"
-                        placeholder="Leave blank to keep the current password"
-                        value={editForm.adminPassword}
-                        onChange={(event) =>
-                          setEditForm((current) =>
-                            current
-                              ? { ...current, adminPassword: event.target.value }
-                              : current,
-                          )
-                        }
-                        disabled={isSaving}
-                      />
-                    </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="app-field-group">
+                    <label
+                      className="app-field-label"
+                      htmlFor="edit-school-admin-name"
+                    >
+                      Admin Name
+                    </label>
+                    <Input
+                      id="edit-school-admin-name"
+                      placeholder="e.g., Priya Sharma"
+                      value={editForm.adminName}
+                      onChange={(event) =>
+                        setEditForm((current) =>
+                          current
+                            ? { ...current, adminName: event.target.value }
+                            : current,
+                        )
+                      }
+                      disabled={isSaving}
+                    />
                   </div>
-                ) : (
-                  <div className="mt-4 rounded-xl border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
-                    Bootstrap school admin details could not be resolved for this
-                    school yet. You can still update the school name here.
+
+                  <div className="app-field-group">
+                    <label
+                      className="app-field-label"
+                      htmlFor="edit-school-admin-email"
+                    >
+                      Admin Email
+                    </label>
+                    <Input
+                      id="edit-school-admin-email"
+                      type="email"
+                      placeholder="admin@school.com"
+                      value={editForm.adminEmail}
+                      onChange={(event) =>
+                        setEditForm((current) =>
+                          current
+                            ? { ...current, adminEmail: event.target.value }
+                            : current,
+                        )
+                      }
+                      disabled={isSaving}
+                    />
                   </div>
-                )}
+
+                  <div className="app-field-group">
+                    <label
+                      className="app-field-label"
+                      htmlFor="edit-school-admin-mobile"
+                    >
+                      Admin Phone
+                    </label>
+                    <Input
+                      id="edit-school-admin-mobile"
+                      placeholder="e.g., 9876543210"
+                      value={editForm.adminMobileNumber}
+                      onChange={(event) =>
+                        setEditForm((current) =>
+                          current
+                            ? {
+                                ...current,
+                                adminMobileNumber: event.target.value,
+                              }
+                            : current,
+                        )
+                      }
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="app-field-group">
+                    <label
+                      className="app-field-label"
+                      htmlFor="edit-school-admin-password"
+                    >
+                      Admin Password
+                    </label>
+                    <Input
+                      id="edit-school-admin-password"
+                      type="password"
+                      placeholder={
+                        editForm.bootstrapAdminId
+                          ? "Leave blank to keep the current password"
+                          : "Required for the first school admin"
+                      }
+                      value={editForm.adminPassword}
+                      onChange={(event) =>
+                        setEditForm((current) =>
+                          current
+                            ? { ...current, adminPassword: event.target.value }
+                            : current,
+                        )
+                      }
+                      disabled={isSaving}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}

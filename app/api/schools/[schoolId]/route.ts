@@ -199,14 +199,41 @@ export async function PATCH(
         );
       }
     } else if (wantsBootstrapAdminUpdate) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Bootstrap school admin could not be found for this school. Create a new school admin from the school workspace first, then retry.",
-        },
-        { status: 404 },
-      );
+      if (!adminName || !adminEmail || !adminMobileNumber || !adminPassword) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Bootstrap admin name, email, phone, and password are required when creating the first school admin.",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (adminPassword.length < 6) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Bootstrap admin password must be at least 6 characters long.",
+          },
+          { status: 400 },
+        );
+      }
+
+      const existingEmailUser = await UserModel.findOne({
+        email: adminEmail,
+      })
+        .select("_id")
+        .lean();
+      if (existingEmailUser) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "A user with this bootstrap admin email already exists in the school.",
+          },
+          { status: 409 },
+        );
+      }
     }
 
     school.displayName = displayName;
@@ -222,6 +249,29 @@ export async function PATCH(
       if (adminPassword) {
         bootstrapAdmin.passwordHash = await bcrypt.hash(adminPassword, 10);
       }
+    } else if (wantsBootstrapAdminUpdate) {
+      const passwordHash = await bcrypt.hash(adminPassword, 10);
+      const createdBootstrapAdmin = await UserModel.create({
+        name: adminName,
+        email: adminEmail,
+        passwordHash,
+        mobileNumber: adminMobileNumber,
+        role: "admin",
+        hasAllClasses: true,
+        hasAllSections: true,
+        hasAllSubjects: true,
+        classIds: [],
+        academicSectionIds: [],
+        subjectIds: [],
+      });
+
+      school.bootstrapAdminUserId = String(createdBootstrapAdmin._id);
+
+      return NextResponse.json({
+        success: true,
+        school: await school.save(),
+        bootstrapAdmin: serializeBootstrapAdmin(createdBootstrapAdmin),
+      });
     }
 
     await Promise.all([

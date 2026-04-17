@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
 import {
+  assertSummerCrashStudentApiAccess,
+} from "@/lib/server/summer-crash";
+import {
   getLiveSessionErrorStatus,
   normalizeStudentLiveSessionResponseInput,
   submitStudentLiveSessionResponse,
@@ -19,6 +22,20 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   });
   if (!auth.ok) {
     return auth.response;
+  }
+
+  const accessCheck = await assertSummerCrashStudentApiAccess({
+    schoolKey: auth.schoolKey,
+    studentId: String(auth.session.user.id || "").trim(),
+    target: {
+      kind: "locked-student-content",
+    },
+  });
+  if (!accessCheck.allowed) {
+    return NextResponse.json(
+      { success: false, message: accessCheck.message },
+      { status: 403 },
+    );
   }
 
   try {

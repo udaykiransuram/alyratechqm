@@ -8,6 +8,12 @@ import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
 import { authOptions } from "@/lib/auth";
+import {
+  SUMMER_CRASH_COURSE_ACCESS_LOCK_MESSAGE,
+  getSummerCrashCourseAccessForStudent,
+} from "@/lib/server/summer-crash";
+import { SUMMER_CRASH_HOME_PATH } from "@/lib/summer-crash/constants";
+import { isSummerCrashSession } from "@/lib/summer-crash/shared";
 import { getStudentCourseDetail } from "@/lib/server/student-courses";
 
 
@@ -35,6 +41,23 @@ export default async function StudentCoursePage({
     redirect("/auth/signin");
   }
 
+  if (
+    isSummerCrashSession({
+      accountType: session.user.accountType,
+      role: session.user.role,
+      schoolKey,
+    })
+  ) {
+    const { courseAccess } = await getSummerCrashCourseAccessForStudent({
+      schoolKey,
+      studentId,
+    });
+
+    if (!courseAccess.isUnlocked) {
+      redirect(SUMMER_CRASH_HOME_PATH);
+    }
+  }
+
   const { courseId } = await params;
 
   let course = null;
@@ -55,6 +78,10 @@ export default async function StudentCoursePage({
       error instanceof Error ? error.message : "Failed to load course.";
   }
 
+  if (loadError === SUMMER_CRASH_COURSE_ACCESS_LOCK_MESSAGE) {
+    redirect(SUMMER_CRASH_HOME_PATH);
+  }
+
   if (!course) {
     return (
       <div className="app-student-page-shell">
@@ -67,7 +94,25 @@ export default async function StudentCoursePage({
           description="We couldn't open this course right now."
           actions={
             <Button asChild variant="outline" size="lg" className="app-student-action-secondary">
-              <AppPrefetchLink href="/student/courses">Back to Courses</AppPrefetchLink>
+              <AppPrefetchLink
+                href={
+                  isSummerCrashSession({
+                    accountType: session.user.accountType,
+                    role: session.user.role,
+                    schoolKey,
+                  })
+                    ? SUMMER_CRASH_HOME_PATH
+                    : "/student/courses"
+                }
+              >
+                {isSummerCrashSession({
+                  accountType: session.user.accountType,
+                  role: session.user.role,
+                  schoolKey,
+                })
+                  ? "Back to Summer Home"
+                  : "Back to Courses"}
+              </AppPrefetchLink>
             </Button>
           }
         >

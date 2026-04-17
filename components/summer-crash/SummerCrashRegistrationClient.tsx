@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
@@ -11,14 +11,17 @@ import {
   getClientRequestErrorMessage,
 } from "@/lib/client/api";
 import { performCredentialSignIn } from "@/lib/client/next-auth-client";
-import { setStudentPortalSignInPath } from "@/lib/client/student-portal-signin-path";
+import { setSchoolSelectionCookies } from "@/lib/client/school";
 import {
+  SUMMER_CRASH_DISPLAY_NAME,
   SUMMER_CRASH_HELP_PATH,
-  SUMMER_CRASH_REGISTER_PATH,
-  SUMMER_CRASH_SIGNIN_PATH,
-  SUMMER_CRASH_WELCOME_PATH,
   SUMMER_CRASH_SCHOOL_KEY,
+  SUMMER_CRASH_SIGNIN_PATH,
 } from "@/lib/summer-crash/constants";
+import {
+  buildSummerCrashWelcomeHref,
+  formatSummerCrashPrice,
+} from "@/lib/summer-crash/shared";
 
 type SummerCrashRegistrationClientProps = {
   title: string;
@@ -28,6 +31,9 @@ type SummerCrashRegistrationClientProps = {
     className: string;
   }>;
   isActive: boolean;
+  price: number;
+  currency: string;
+  entrySource?: "diagnostic" | "direct_registration";
 };
 
 type SummerCrashRegisterResponse = {
@@ -43,6 +49,8 @@ type SummerCrashRegisterResponse = {
     autoSignInAllowed?: boolean;
     bootstrapPassword?: string;
     signInPath?: string;
+    destinationHref?: string;
+    entrySource?: "diagnostic" | "direct_registration";
   };
 };
 
@@ -60,17 +68,16 @@ export default function SummerCrashRegistrationClient({
   supportContact,
   classBands,
   isActive,
+  price,
+  currency,
+  entrySource = "direct_registration",
 }: SummerCrashRegistrationClientProps) {
   const [form, setForm] = useState(INITIAL_FORM_STATE);
-  const [step, setStep] = useState<1 | 2>(1);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [summerId, setSummerId] = useState("");
+  const [nextHref, setNextHref] = useState("");
   const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setStudentPortalSignInPath(SUMMER_CRASH_SIGNIN_PATH);
-  }, []);
 
   const selectedClassBand = useMemo(
     () =>
@@ -78,7 +85,28 @@ export default function SummerCrashRegistrationClient({
     [classBands, form.classBand],
   );
 
-  const handleNextStep = () => {
+  const isDiagnosticEntry = entrySource === "diagnostic";
+  const hasPaidCourseAccess = Number(price) > 0;
+  const priceLabel = formatSummerCrashPrice(price, currency);
+  const pageBadge = isDiagnosticEntry
+    ? "Free Diagnostic"
+    : hasPaidCourseAccess
+      ? "Course Registration"
+      : "Free Registration";
+  const pageDescription = isDiagnosticEntry
+    ? hasPaidCourseAccess
+      ? "Register once and we will open the class-matched free diagnostic test right after sign-in. Summer lessons unlock after payment."
+      : "Register once and we will open the class-matched free diagnostic test right after sign-in."
+    : hasPaidCourseAccess
+      ? "Register once and enter the summer home without using the normal school portal. The free diagnostic stays open, and lessons unlock after payment."
+      : "Register once and enter the summer learning space without using the normal school portal.";
+  const submitLabel = isDiagnosticEntry
+    ? "Register & Continue"
+    : hasPaidCourseAccess
+      ? "Register"
+      : "Register Free";
+
+  const handleRegister = () => {
     if (!form.studentName.trim()) {
       setErrorMessage("Enter the student's name to continue.");
       return;
@@ -89,11 +117,6 @@ export default function SummerCrashRegistrationClient({
       return;
     }
 
-    setErrorMessage("");
-    setStep(2);
-  };
-
-  const handleRegister = () => {
     if (!form.guardianName.trim()) {
       setErrorMessage("Enter the parent or guardian name to continue.");
       return;
@@ -128,55 +151,65 @@ export default function SummerCrashRegistrationClient({
                 phone: form.phone,
                 classBand: form.classBand,
                 sourceSchoolName: form.sourceSchoolName,
+                entrySource,
               }),
+              schoolKey: SUMMER_CRASH_SCHOOL_KEY,
               includeSchoolQuery: false,
               fallbackMessage:
                 "We couldn't complete Summer Crash Course registration.",
             },
           );
 
-          if (!response?.success || !response.registration?.summerId) {
-            throw new Error(
-              response?.message ||
-                "We couldn't complete Summer Crash Course registration.",
-            );
-          }
+          const registration = response?.registration;
+          const resolvedSummerId = String(registration?.summerId || "")
+            .trim()
+            .toUpperCase();
+          const destinationHref =
+            String(registration?.destinationHref || "").trim() ||
+            "/student/crash-course";
+          const signInHref = `${
+            String(registration?.signInPath || SUMMER_CRASH_SIGNIN_PATH).trim() ||
+            SUMMER_CRASH_SIGNIN_PATH
+          }?phone=${encodeURIComponent(form.phone)}&summerId=${encodeURIComponent(
+            resolvedSummerId,
+          )}&next=${encodeURIComponent(destinationHref)}`;
+          const welcomeHref = buildSummerCrashWelcomeHref(destinationHref);
 
-          const nextSummerId = String(
-            response.registration.summerId || "",
-          ).trim();
-          setSummerId(nextSummerId);
-          setSuccessMessage(
-            `Registration completed for ${response.registration.studentName || form.studentName}.`,
-          );
+          setSummerId(resolvedSummerId);
+          setNextHref(signInHref);
 
           if (
-            response.registration.autoSignInAllowed &&
-            response.registration.bootstrapPassword
+            registration?.autoSignInAllowed &&
+            resolvedSummerId &&
+            registration.bootstrapPassword
           ) {
-            setStudentPortalSignInPath(
-              response.registration.signInPath || SUMMER_CRASH_SIGNIN_PATH,
-            );
-
-            const signInResult = await performCredentialSignIn({
+            const result = await performCredentialSignIn({
               provider: "school-user",
-              callbackUrl: SUMMER_CRASH_WELCOME_PATH,
+              callbackUrl: welcomeHref,
               credentials: {
-                identifier: nextSummerId,
-                password: String(
-                  response.registration.bootstrapPassword || "",
-                ),
+                identifier: resolvedSummerId,
+                password: registration.bootstrapPassword,
                 schoolKey: SUMMER_CRASH_SCHOOL_KEY,
               },
             });
 
-            if (signInResult?.ok) {
-              window.location.assign(
-                signInResult.url || SUMMER_CRASH_WELCOME_PATH,
+            if (result?.ok) {
+              setSchoolSelectionCookies(
+                SUMMER_CRASH_SCHOOL_KEY,
+                SUMMER_CRASH_DISPLAY_NAME,
               );
+              window.location.assign(result.url || welcomeHref);
               return;
             }
           }
+
+          setSuccessMessage(
+            isDiagnosticEntry
+              ? "Registration is done. Continue to summer sign-in to start the free diagnostic."
+              : hasPaidCourseAccess
+                ? "Registration is done. Continue to summer sign-in to open the summer home and unlock the course after payment."
+                : "Registration is done. Continue to summer sign-in to open the learning space.",
+          );
         } catch (error) {
           setErrorMessage(
             getClientRequestErrorMessage(
@@ -192,13 +225,12 @@ export default function SummerCrashRegistrationClient({
   return (
     <div className="public-flow-surface space-y-6">
       <div className="space-y-2 text-center">
-        <div className="public-flow-badge mx-auto w-fit">Free Registration</div>
+        <div className="public-flow-badge mx-auto w-fit">{pageBadge}</div>
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
           {title}
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          Register once. Later sign-ins use the parent phone number only inside
-          the summer portal.
+          {pageDescription}
         </p>
       </div>
 
@@ -229,28 +261,38 @@ export default function SummerCrashRegistrationClient({
 
       {summerId ? (
         <div className="public-flow-card space-y-4">
-          <div>
-            <p className="public-flow-label">Sign-in phone</p>
-            <p className="mt-2 text-lg font-semibold text-foreground">
-              {form.phone}
+          <div className="space-y-1">
+            <p className="text-lg font-semibold text-foreground">
+              Registration saved
+            </p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Sign in with the parent phone number below. The Summer ID stays as
+              a backup if support ever needs it.
             </p>
           </div>
-          <div className="rounded-[1.2rem] border border-border/70 bg-background/75 p-4">
-            <p className="public-flow-label">Backup Summer ID</p>
-            <p className="mt-2 text-base font-semibold tracking-[0.08em] text-foreground">
-              {summerId}
-            </p>
+          <div className="flex flex-wrap gap-2">
+            <span className="app-meta-chip">{form.phone}</span>
+            <span className="app-meta-chip">{form.classBand}</span>
+            {hasPaidCourseAccess ? (
+              <span className="app-meta-chip">{priceLabel}</span>
+            ) : null}
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
-            Use the parent phone number on the summer sign-in page. The first
-            sign-in uses the phone digits once and then asks the student to set
-            a new password. The Summer ID is now only a backup reference.
+            Backup ID:{" "}
+            <span className="font-semibold tracking-[0.06em] text-foreground">
+              {summerId}
+            </span>
+          </p>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {isDiagnosticEntry
+              ? "After sign-in, the student can start the free diagnostic right away."
+              : hasPaidCourseAccess
+                ? "After sign-in, the student goes to the summer home. The diagnostic stays free there, and the course unlocks after payment."
+                : "After sign-in, the student goes straight to the summer learning space."}
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              href={`${SUMMER_CRASH_SIGNIN_PATH}?phone=${encodeURIComponent(
-                form.phone,
-              )}&summerId=${encodeURIComponent(summerId)}`}
+              href={nextHref || SUMMER_CRASH_SIGNIN_PATH}
               className="public-flow-button-primary w-full justify-center sm:flex-1"
             >
               Continue to Sign In
@@ -259,226 +301,176 @@ export default function SummerCrashRegistrationClient({
               href={SUMMER_CRASH_HELP_PATH}
               className="public-flow-button-secondary w-full justify-center sm:flex-1"
             >
-              Sign-in Help
+              Need Help?
             </Link>
           </div>
         </div>
       ) : null}
 
       {!summerId && isActive ? (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="public-flow-stat-card">
-              <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                Step
-              </p>
-              <p className="mt-2 text-xl font-semibold text-foreground">
-                {step} of 2
-              </p>
-            </div>
-            <div className="public-flow-stat-card">
-              <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                Selected batch
-              </p>
-              <p className="mt-2 text-lg font-semibold text-foreground">
+        <form
+          className="space-y-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleRegister();
+          }}
+        >
+          <div className="public-flow-card-soft space-y-3">
+            <p className="text-base font-semibold text-foreground">
+              Simple sign-in for parents and students
+            </p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Use the parent phone number later to sign in. The Summer ID stays
+              only as a backup reference.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="app-meta-chip">
+                {isDiagnosticEntry
+                  ? "Free diagnostic first"
+                  : hasPaidCourseAccess
+                    ? "Course unlock after payment"
+                    : "Course first, diagnostic later"}
+              </span>
+              <span className="app-meta-chip">
                 {selectedClassBand?.classBand || "Choose class band"}
-              </p>
+              </span>
+              {hasPaidCourseAccess ? (
+                <span className="app-meta-chip">{priceLabel}</span>
+              ) : null}
             </div>
           </div>
 
-          {step === 1 ? (
-            <div className="space-y-5">
-              <div className="public-flow-section">
-                <div className="flex items-center gap-3">
-                  <span className="public-flow-step">1</span>
-                  <div>
-                    <p className="text-lg font-semibold text-foreground">
-                      Student details
-                    </p>
-                    <p className="public-flow-helper">
-                      Start with the student name and class band.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="public-flow-label" htmlFor="studentName">
-                    Student name
-                  </label>
-                  <Input
-                    id="studentName"
-                    value={form.studentName}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        studentName: event.target.value,
-                      }))
-                    }
-                    className="public-flow-input"
-                    placeholder="Enter the student's full name"
-                  />
-                </div>
-
-                <div>
-                  <label className="public-flow-label" htmlFor="classBand">
-                    Class band / program
-                  </label>
-                  <select
-                    id="classBand"
-                    value={form.classBand}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        classBand: event.target.value,
-                      }))
-                    }
-                    className="public-flow-input"
-                  >
-                    <option value="">Choose class band</option>
-                    {classBands.map((option) => (
-                      <option key={option.classBand} value={option.classBand}>
-                        {option.classBand}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    className="public-flow-label"
-                    htmlFor="sourceSchoolName"
-                  >
-                    Current school name (optional)
-                  </label>
-                  <Input
-                    id="sourceSchoolName"
-                    value={form.sourceSchoolName}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        sourceSchoolName: event.target.value,
-                      }))
-                    }
-                    className="public-flow-input"
-                    placeholder="School name"
-                  />
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                className="public-flow-button-primary w-full justify-center"
-                onClick={handleNextStep}
-              >
-                Continue
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              <div className="public-flow-section">
-                <div className="flex items-center gap-3">
-                  <span className="public-flow-step">2</span>
-                  <div>
-                    <p className="text-lg font-semibold text-foreground">
-                      Parent contact
-                    </p>
-                    <p className="public-flow-helper">
-                      Add the parent name and phone number for access and
-                      recovery.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="public-flow-label" htmlFor="guardianName">
-                    Parent / guardian name
-                  </label>
-                  <Input
-                    id="guardianName"
-                    value={form.guardianName}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        guardianName: event.target.value,
-                      }))
-                    }
-                    className="public-flow-input"
-                    placeholder="Enter parent or guardian name"
-                  />
-                </div>
-
-                <div>
-                  <label className="public-flow-label" htmlFor="phone">
-                    Phone / WhatsApp number
-                  </label>
-                  <Input
-                    id="phone"
-                    value={form.phone}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        phone: event.target.value,
-                      }))
-                    }
-                    className="public-flow-input"
-                    inputMode="tel"
-                    placeholder="Enter active phone number"
-                  />
-                </div>
-
-                <label className="public-flow-card-soft flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={form.consent}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        consent: event.target.checked,
-                      }))
-                    }
-                    className="mt-1 h-4 w-4"
-                  />
-                  <span className="text-sm leading-6 text-muted-foreground">
-                    I confirm that these student and parent details are correct
-                    and may be used for the Summer Crash Course access flow.
-                  </span>
+          <div className="public-flow-card space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="public-flow-label" htmlFor="studentName">
+                  Student name
                 </label>
+                <Input
+                  id="studentName"
+                  value={form.studentName}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      studentName: event.target.value,
+                    }))
+                  }
+                  className="public-flow-input"
+                  placeholder="Enter the student's full name"
+                />
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="public-flow-button-secondary w-full justify-center sm:flex-1"
-                  onClick={() => {
-                    setErrorMessage("");
-                    setStep(1);
-                  }}
+              <div>
+                <label className="public-flow-label" htmlFor="classBand">
+                  Class band / program
+                </label>
+                <select
+                  id="classBand"
+                  value={form.classBand}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      classBand: event.target.value,
+                    }))
+                  }
+                  className="public-flow-input"
                 >
-                  Back
-                </Button>
-                <Button
-                  type="button"
-                  disabled={isPending}
-                  className="public-flow-button-primary w-full justify-center sm:flex-1"
-                  onClick={handleRegister}
-                >
-                  {isPending ? "Registering..." : "Register Free"}
-                </Button>
+                  <option value="">Choose class band</option>
+                  {classBands.map((option) => (
+                    <option key={option.classBand} value={option.classBand}>
+                      {option.classBand}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="public-flow-label" htmlFor="guardianName">
+                  Parent / guardian name
+                </label>
+                <Input
+                  id="guardianName"
+                  value={form.guardianName}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      guardianName: event.target.value,
+                    }))
+                  }
+                  className="public-flow-input"
+                  placeholder="Enter parent or guardian name"
+                />
+              </div>
+
+              <div>
+                <label className="public-flow-label" htmlFor="phone">
+                  Phone / WhatsApp number
+                </label>
+                <Input
+                  id="phone"
+                  value={form.phone}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      phone: event.target.value,
+                    }))
+                  }
+                  className="public-flow-input"
+                  inputMode="tel"
+                  placeholder="Enter active phone number"
+                />
               </div>
             </div>
-          )}
-        </>
+
+            <div>
+              <label className="public-flow-label" htmlFor="sourceSchoolName">
+                Current school name (optional)
+              </label>
+              <Input
+                id="sourceSchoolName"
+                value={form.sourceSchoolName}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    sourceSchoolName: event.target.value,
+                  }))
+                }
+                className="public-flow-input"
+                placeholder="School name"
+              />
+            </div>
+
+            <label className="public-flow-card-soft flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={form.consent}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    consent: event.target.checked,
+                  }))
+                }
+                className="mt-1 h-4 w-4"
+              />
+              <span className="text-sm leading-6 text-muted-foreground">
+                I confirm that these student and parent details are correct and
+                may be used for the Summer Crash Course access flow.
+              </span>
+            </label>
+
+            <Button
+              type="submit"
+              disabled={isPending}
+              className="public-flow-button-primary w-full justify-center"
+            >
+              {isPending ? "Registering..." : submitLabel}
+            </Button>
+          </div>
+        </form>
       ) : null}
 
       <div className="public-flow-card-soft space-y-2 text-center">
-        <p className="text-sm text-muted-foreground">
-          Already registered?
-        </p>
+        <p className="text-sm text-muted-foreground">Already registered?</p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link href={SUMMER_CRASH_SIGNIN_PATH} className="public-flow-text-link">
             Go to Sign In

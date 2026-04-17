@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
         academicSectionId: auth.session.user.studentAcademicSectionId,
       },
       newPassword: String(body?.newPassword || ""),
+      nextDestinationHref:
+        typeof body?.nextDestinationHref === "string"
+          ? body.nextDestinationHref
+          : null,
     });
 
     return NextResponse.json({
@@ -55,4 +59,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

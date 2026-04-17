@@ -3,8 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { connectDB } from "@/lib/db";
 import Registration from "@/models/Registration";
+import SummerCrashPayment from "@/models/SummerCrashPayment";
 
 export const runtime = "nodejs";
+
+type CashfreeWebhookPayload = {
+  order_status?: string;
+  order_id?: string;
+  cf_payment_id?: string;
+  payment_id?: string;
+  transaction_id?: string;
+  event_id?: string;
+};
 
 function generateHallTicket(orderId: string) {
   const random = Math.floor(100 + Math.random() * 900);
@@ -70,6 +80,168 @@ function safeEqualBase64(left: string, right: string) {
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
+function normalizeSummerCrashWebhookStatus(orderStatus: unknown) {
+  const normalized = String(orderStatus || "").trim().toUpperCase();
+  if (normalized === "PAID") {
+    return "paid" as const;
+  }
+  if (
+    normalized === "FAILED" ||
+    normalized === "EXPIRED" ||
+    normalized === "CANCELLED" ||
+    normalized === "USER_DROPPED"
+  ) {
+    return "failed" as const;
+  }
+  return null;
+}
+
+async function handleSummerCrashPaymentWebhook(params: {
+  orderId: string;
+  eventId: string;
+  paymentId: string;
+  normalizedStatus: "paid" | "failed" | null;
+}) {
+  const payment = await SummerCrashPayment.findOne({
+    orderId: params.orderId,
+  });
+
+  if (!payment) {
+    return null;
+  }
+
+  const processedEventIds = Array.isArray(payment.processedWebhookEventIds)
+    ? payment.processedWebhookEventIds
+    : [];
+  if (processedEventIds.includes(params.eventId)) {
+    return NextResponse.json({
+      status: "ignored",
+      message: "Duplicate webhook event ignored",
+    });
+  }
+
+  if (!params.normalizedStatus) {
+    return NextResponse.json({ status: "ignored" });
+  }
+
+  const updateDoc: Record<string, unknown> = {
+    $addToSet: { processedWebhookEventIds: params.eventId },
+    $set: {
+      status: params.normalizedStatus,
+      ...(params.paymentId ? { cashfreePaymentId: params.paymentId } : {}),
+      ...(params.normalizedStatus === "paid" && !payment.paidAt
+        ? { paidAt: new Date() }
+        : {}),
+    },
+  };
+
+  const updated = await SummerCrashPayment.findOneAndUpdate(
+    { _id: payment._id },
+    updateDoc,
+    { new: true },
+  );
+
+  if (!updated) {
+    return NextResponse.json(
+      { status: "error", message: "Failed to update summer payment state" },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    status: params.normalizedStatus === "paid" ? "success" : "failed",
+  });
+}
+
+async function handleTalentTestRegistrationWebhook(params: {
+  orderId: string;
+  eventId: string;
+  paymentId: string;
+  orderStatus: string;
+}) {
+  if (params.orderStatus !== "PAID") {
+    return NextResponse.json({ status: "ignored" });
+  }
+
+  const registration = await Registration.findOne({ orderId: params.orderId });
+  if (!registration) {
+    return NextResponse.json(
+      { status: "error", message: "Registration not found" },
+      { status: 404 },
+    );
+  }
+
+  const processedEventIds = Array.isArray(registration.processedWebhookEventIds)
+    ? registration.processedWebhookEventIds
+    : [];
+  if (processedEventIds.includes(params.eventId)) {
+    return NextResponse.json({
+      status: "ignored",
+      message: "Duplicate webhook event ignored",
+    });
+  }
+
+  const alreadyPaid =
+    String(registration.status || "").toLowerCase() === "paid" &&
+    Boolean(registration.hallTicket);
+
+  const hallTicket = alreadyPaid
+    ? String(registration.hallTicket || "")
+    : generateHallTicket(params.orderId);
+
+  const updateDoc: Record<string, unknown> = {
+    $addToSet: { processedWebhookEventIds: params.eventId },
+    $set: {
+      status: "paid",
+      hallTicket,
+      ...(registration.paidAt ? {} : { paidAt: new Date() }),
+      ...(params.paymentId ? { cashfreePaymentId: params.paymentId } : {}),
+    },
+  };
+
+  const updated = await Registration.findOneAndUpdate(
+    { _id: registration._id },
+    updateDoc,
+    { new: true },
+  );
+
+  if (!updated) {
+    return NextResponse.json(
+      { status: "error", message: "Failed to update registration state" },
+      { status: 500 },
+    );
+  }
+
+  let hallTicketWhatsappSent = false;
+  const canSendWhatsApp =
+    process.env.WHATSAPP_PHONE_NUMBER_ID &&
+    (process.env.WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN);
+  if (canSendWhatsApp && !updated.hallTicketWhatsappSent) {
+    try {
+      await sendWhatsAppCloudAPI(
+        String(updated.phone || ""),
+        `Registration successful.\nYour Hall Ticket: ${hallTicket}\nThank you for registering for the Talent Test.`,
+      );
+      hallTicketWhatsappSent = true;
+    } catch (waError) {
+      console.error("WhatsApp send error:", waError);
+    }
+  } else if (!canSendWhatsApp) {
+    console.warn("WhatsApp env not configured; skipping WhatsApp notification");
+  }
+
+  await Registration.updateOne(
+    { orderId: params.orderId },
+    {
+      hallTicket,
+      hallTicketWhatsappSent:
+        updated.hallTicketWhatsappSent || hallTicketWhatsappSent,
+    },
+  );
+
+  return NextResponse.json({ status: "success", hallTicket });
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!process.env.CASHFREE_WEBHOOK_SECRET) {
@@ -94,103 +266,39 @@ export async function POST(req: NextRequest) {
       return new NextResponse("Invalid signature", { status: 403 });
     }
 
-    const payload = JSON.parse(rawBody) as {
-      order_status?: string;
-      order_id?: string;
-      cf_payment_id?: string;
-      payment_id?: string;
-      transaction_id?: string;
-      event_id?: string;
-    };
+    const payload = JSON.parse(rawBody) as CashfreeWebhookPayload;
+    const orderId = String(payload.order_id || "").trim();
 
-    if (payload.order_status === "PAID" && payload.order_id) {
-      const orderId = payload.order_id;
-      const eventId = resolveWebhookEventId(payload as Record<string, unknown>, signature);
-      const paymentId = String(
-        payload.cf_payment_id || payload.payment_id || payload.transaction_id || "",
-      ).trim();
-
-      await connectDB();
-      const registration = await Registration.findOne({ orderId });
-      if (!registration) {
-        return NextResponse.json(
-          { status: "error", message: "Registration not found" },
-          { status: 404 },
-        );
-      }
-
-      const processedEventIds = Array.isArray(registration.processedWebhookEventIds)
-        ? registration.processedWebhookEventIds
-        : [];
-      if (processedEventIds.includes(eventId)) {
-        return NextResponse.json({
-          status: "ignored",
-          message: "Duplicate webhook event ignored",
-        });
-      }
-
-      const alreadyPaid =
-        String(registration.status || "").toLowerCase() === "paid" &&
-        Boolean(registration.hallTicket);
-
-      const hallTicket = alreadyPaid
-        ? String(registration.hallTicket || "")
-        : generateHallTicket(orderId);
-
-      const updateDoc: Record<string, unknown> = {
-        $addToSet: { processedWebhookEventIds: eventId },
-        $set: {
-          status: "paid",
-          hallTicket,
-          ...(registration.paidAt ? {} : { paidAt: new Date() }),
-          ...(paymentId ? { cashfreePaymentId: paymentId } : {}),
-        },
-      };
-
-      const updated = await Registration.findOneAndUpdate(
-        { _id: registration._id },
-        updateDoc,
-        { new: true },
-      );
-
-      if (!updated) {
-        return NextResponse.json(
-          { status: "error", message: "Failed to update registration state" },
-          { status: 500 },
-        );
-      }
-
-      let hallTicketWhatsappSent = false;
-      const canSendWhatsApp =
-        process.env.WHATSAPP_PHONE_NUMBER_ID &&
-        (process.env.WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN);
-      if (canSendWhatsApp && !updated.hallTicketWhatsappSent) {
-        try {
-          await sendWhatsAppCloudAPI(
-            String(updated.phone || ""),
-            `Registration successful.\nYour Hall Ticket: ${hallTicket}\nThank you for registering for the Talent Test.`,
-          );
-          hallTicketWhatsappSent = true;
-        } catch (waError) {
-          console.error("WhatsApp send error:", waError);
-        }
-      } else if (!canSendWhatsApp) {
-        console.warn("WhatsApp env not configured; skipping WhatsApp notification");
-      }
-
-      await Registration.updateOne(
-        { orderId },
-        {
-          hallTicket,
-          hallTicketWhatsappSent:
-            updated.hallTicketWhatsappSent || hallTicketWhatsappSent,
-        },
-      );
-
-      return NextResponse.json({ status: "success", hallTicket });
+    if (!orderId) {
+      return NextResponse.json({ status: "ignored" });
     }
 
-    return NextResponse.json({ status: "ignored" });
+    const eventId = resolveWebhookEventId(
+      payload as Record<string, unknown>,
+      signature,
+    );
+    const paymentId = String(
+      payload.cf_payment_id || payload.payment_id || payload.transaction_id || "",
+    ).trim();
+
+    await connectDB();
+
+    const summerResponse = await handleSummerCrashPaymentWebhook({
+      orderId,
+      eventId,
+      paymentId,
+      normalizedStatus: normalizeSummerCrashWebhookStatus(payload.order_status),
+    });
+    if (summerResponse) {
+      return summerResponse;
+    }
+
+    return handleTalentTestRegistrationWebhook({
+      orderId,
+      eventId,
+      paymentId,
+      orderStatus: String(payload.order_status || "").trim().toUpperCase(),
+    });
   } catch (error: unknown) {
     console.error("Webhook error:", error);
     return NextResponse.json(

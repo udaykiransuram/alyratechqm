@@ -6,6 +6,9 @@ import { NextRequest } from "next/server";
 import { requireTenantSession } from "@/lib/api-auth";
 import { readStudentNotificationSignalVersion } from "@/lib/redis";
 import { enforceRequestBudget } from "@/lib/server/request-governor";
+import {
+  assertSummerCrashStudentApiAccess,
+} from "@/lib/server/summer-crash";
 import { subscribeStudentNotifications } from "@/lib/server/student-notifications-stream";
 
 const STUDENT_NOTIFICATION_STREAM_HEARTBEAT_MS = 15_000;
@@ -14,6 +17,19 @@ const STUDENT_NOTIFICATION_STREAM_POLL_MS = 30_000;
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, { allowRoles: ["student"] });
   if (!auth.ok) return auth.response;
+  const accessCheck = await assertSummerCrashStudentApiAccess({
+    schoolKey: auth.schoolKey,
+    studentId: auth.session.user.id,
+    target: {
+      kind: "locked-student-content",
+    },
+  });
+  if (!accessCheck.allowed) {
+    return Response.json(
+      { success: false, message: accessCheck.message },
+      { status: 403 },
+    );
+  }
 
   const schoolKey = auth.schoolKey;
   const studentId = auth.session.user.id;

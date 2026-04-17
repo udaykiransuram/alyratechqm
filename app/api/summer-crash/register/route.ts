@@ -29,6 +29,10 @@ export async function POST(req: NextRequest) {
           phone: String(body?.phone || ""),
           classBand: String(body?.classBand || ""),
           sourceSchoolName: String(body?.sourceSchoolName || ""),
+          entrySource:
+            String(body?.entrySource || "").trim() === "diagnostic"
+              ? "diagnostic"
+              : "direct_registration",
         });
 
         return NextResponse.json({
@@ -45,6 +49,8 @@ export async function POST(req: NextRequest) {
               ? result.bootstrapPassword
               : "",
             signInPath: result.signInPath,
+            destinationHref: result.destinationHref,
+            entrySource: result.entrySource,
           },
         });
       } catch (error) {

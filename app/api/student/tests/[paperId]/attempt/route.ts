@@ -7,6 +7,10 @@ import {
   startStudentExamAttempt,
 } from "@/lib/exam-runtime";
 import { recordOpsFailure } from "@/lib/ops-runtime";
+import {
+  assertSummerCrashStudentApiAccess,
+  recordSummerCrashDiagnosticStarted,
+} from "@/lib/server/summer-crash";
 import { scheduleStudentDashboardCacheInvalidation } from "@/lib/server/student-dashboard-cache";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +27,20 @@ export async function POST(
   if (!auth.ok) return auth.response;
 
   const { paperId } = await params;
+  const accessCheck = await assertSummerCrashStudentApiAccess({
+    schoolKey: auth.schoolKey,
+    studentId: auth.session.user.id,
+    target: {
+      kind: "diagnostic-test",
+      paperId,
+    },
+  });
+  if (!accessCheck.allowed) {
+    return NextResponse.json(
+      { success: false, message: accessCheck.message },
+      { status: 403 },
+    );
+  }
 
   try {
     const result = await startStudentExamAttempt(
@@ -34,6 +52,12 @@ export async function POST(
         academicSectionId: auth.session.user.studentAcademicSectionId,
       },
     );
+
+    await recordSummerCrashDiagnosticStarted({
+      schoolKey: auth.schoolKey,
+      studentId: auth.session.user.id,
+      paperId,
+    }).catch(() => undefined);
 
     scheduleStudentDashboardCacheInvalidation({
       schoolKey: auth.schoolKey,
@@ -77,6 +101,20 @@ export async function PATCH(
   if (!auth.ok) return auth.response;
 
   const { paperId } = await params;
+  const accessCheck = await assertSummerCrashStudentApiAccess({
+    schoolKey: auth.schoolKey,
+    studentId: auth.session.user.id,
+    target: {
+      kind: "diagnostic-test",
+      paperId,
+    },
+  });
+  if (!accessCheck.allowed) {
+    return NextResponse.json(
+      { success: false, message: accessCheck.message },
+      { status: 403 },
+    );
+  }
   const body = await req.json().catch(() => ({}));
 
   try {

@@ -6,6 +6,10 @@ import {
   submitStudentExamAttempt,
 } from "@/lib/exam-runtime";
 import { recordOpsFailure } from "@/lib/ops-runtime";
+import {
+  assertSummerCrashStudentApiAccess,
+  recordSummerCrashDiagnosticSubmitted,
+} from "@/lib/server/summer-crash";
 import { scheduleStudentDashboardCacheInvalidation } from "@/lib/server/student-dashboard-cache";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +26,20 @@ export async function POST(
   if (!auth.ok) return auth.response;
 
   const { paperId } = await params;
+  const accessCheck = await assertSummerCrashStudentApiAccess({
+    schoolKey: auth.schoolKey,
+    studentId: auth.session.user.id,
+    target: {
+      kind: "diagnostic-test",
+      paperId,
+    },
+  });
+  if (!accessCheck.allowed) {
+    return NextResponse.json(
+      { success: false, message: accessCheck.message },
+      { status: 403 },
+    );
+  }
   const body = await req.json().catch(() => ({}));
 
   try {
@@ -34,6 +52,18 @@ export async function POST(
       baseLastSavedAt:
         typeof body?.baseLastSavedAt === "string" ? body.baseLastSavedAt : null,
     });
+
+    await recordSummerCrashDiagnosticSubmitted({
+      schoolKey: auth.schoolKey,
+      studentId: auth.session.user.id,
+      paperId,
+      responseId:
+        typeof result?.attempt?._id === "string" ? result.attempt._id : null,
+      score:
+        typeof result?.attempt?.totalMarksAwarded === "number"
+          ? result.attempt.totalMarksAwarded
+          : null,
+    }).catch(() => undefined);
 
     scheduleStudentDashboardCacheInvalidation({
       schoolKey: auth.schoolKey,

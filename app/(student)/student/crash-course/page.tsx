@@ -3,17 +3,31 @@ import { getServerSession } from "next-auth";
 
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import SummerCrashPaymentCard from "@/components/summer-crash/SummerCrashPaymentCard";
 import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
 import { getSummerCrashStudentState } from "@/lib/server/summer-crash";
 import { SUMMER_CRASH_SIGNIN_PATH, SUMMER_CRASH_WELCOME_PATH } from "@/lib/summer-crash/constants";
-import { isSummerCrashSession } from "@/lib/summer-crash/shared";
+import {
+  formatSummerCrashPrice,
+  isSummerCrashSession,
+} from "@/lib/summer-crash/shared";
 
 export const runtime = "nodejs";
 
-export default async function StudentSummerCrashHomePage() {
+type StudentSummerCrashHomePageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function getSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? String(value[0] || "") : String(value || "");
+}
+
+export default async function StudentSummerCrashHomePage({
+  searchParams,
+}: StudentSummerCrashHomePageProps) {
   const session = await getServerSession(authOptions);
 
   if (
@@ -44,10 +58,20 @@ export default async function StudentSummerCrashHomePage() {
   if (state.requiresPasswordSetup) {
     redirect(SUMMER_CRASH_WELCOME_PATH);
   }
+  const resolvedSearchParams = await searchParams;
+  const submitted = getSearchParam(resolvedSearchParams?.submitted) === "1";
+  const mode = getSearchParam(resolvedSearchParams?.mode);
 
-  if (state.courses.length === 1) {
-    redirect(`/student/courses/${state.courses[0]._id}`);
+  if (submitted && mode === "diagnostic" && state.diagnostic?.reportHref) {
+    redirect(state.diagnostic.reportHref);
   }
+
+  const priceLabel = formatSummerCrashPrice(
+    state.courseAccess.price,
+    state.courseAccess.currency,
+  );
+  const isCourseLocked =
+    state.courseAccess.requiresPayment && !state.courseAccess.isUnlocked;
 
   return (
     <div className="app-student-page-shell app-course-page">
@@ -58,9 +82,11 @@ export default async function StudentSummerCrashHomePage() {
         variant="overview"
         density="compact"
         description={
-          state.courses.length > 0
-            ? "Open the assigned summer courses from here."
-            : "Your summer lessons will appear here as soon as they are assigned."
+          isCourseLocked
+            ? "Take the free diagnostic first. Summer lessons unlock here after payment."
+            : state.courses.length > 0 || state.diagnostic
+              ? "Open the assigned summer courses and the free diagnostic from here."
+              : "Your summer lessons will appear here as soon as they are assigned."
         }
       >
         <StudentPortalNav />
@@ -72,7 +98,14 @@ export default async function StudentSummerCrashHomePage() {
             <CardTitle>Assigned Summer Courses</CardTitle>
           </CardHeader>
           <CardContent className="app-section-body space-y-3">
-            {state.courses.length === 0 ? (
+            {isCourseLocked ? (
+              <div className="rounded-[1.25rem] border border-dashed border-border/70 p-5 text-sm leading-6 text-muted-foreground">
+                Summer lessons unlock after payment. Once the payment is confirmed,
+                the assigned course cards will appear here automatically.
+              </div>
+            ) : null}
+
+            {!isCourseLocked && state.courses.length === 0 ? (
               <div className="rounded-[1.25rem] border border-dashed border-border/70 p-5 text-sm leading-6 text-muted-foreground">
                 No summer course is assigned to this student yet.
               </div>
@@ -119,6 +152,92 @@ export default async function StudentSummerCrashHomePage() {
         </Card>
 
         <div className="space-y-4">
+          {state.diagnostic ? (
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Free Diagnostic</CardTitle>
+              </CardHeader>
+              <CardContent className="app-section-body space-y-3">
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {state.diagnostic.available
+                    ? state.diagnostic.title
+                    : "The diagnostic for this class band is not ready right now."}
+                </p>
+                {state.diagnostic.available ? (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="app-meta-chip">
+                        {state.diagnostic.totalMarks} marks
+                      </span>
+                      <span className="app-meta-chip">
+                        {state.diagnostic.duration} min
+                      </span>
+                      <span className="app-meta-chip">
+                        {state.diagnostic.status}
+                      </span>
+                    </div>
+                    {state.diagnostic.percent !== null ? (
+                      <p className="text-sm font-medium text-foreground">
+                        Latest score: {state.diagnostic.score} ({state.diagnostic.percent}%)
+                      </p>
+                    ) : null}
+                    <Button asChild className="app-button-primary w-full">
+                      <AppPrefetchLink
+                        href={
+                          state.diagnostic.status === "submitted" &&
+                          state.diagnostic.reportHref
+                            ? state.diagnostic.reportHref
+                            : state.diagnostic.launchHref
+                        }
+                      >
+                        {state.diagnostic.status === "submitted"
+                          ? "View Report"
+                          : state.diagnostic.status === "started"
+                            ? "Resume Diagnostic"
+                            : "Take Free Diagnostic"}
+                      </AppPrefetchLink>
+                    </Button>
+                  </>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {isCourseLocked ? (
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Unlock Summer Course</CardTitle>
+              </CardHeader>
+              <CardContent className="app-section-body space-y-3">
+                <p className="text-sm leading-6 text-muted-foreground">
+                  The diagnostic stays free. Course lessons unlock for this student
+                  after the Summer Crash Course payment is confirmed.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="app-meta-chip">{priceLabel}</span>
+                  <span className="app-meta-chip">
+                    {state.courseAccess.latestPaymentStatus === "pending"
+                      ? "Payment pending"
+                      : state.courseAccess.latestPaymentStatus === "failed"
+                        ? "Retry payment"
+                        : "Course locked"}
+                  </span>
+                </div>
+                {state.courseAccess.latestPaymentStatus === "pending" ? (
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    If you already completed the payment, refresh the status in a
+                    few seconds.
+                  </p>
+                ) : null}
+                <SummerCrashPaymentCard
+                  price={state.courseAccess.price}
+                  currency={state.courseAccess.currency}
+                  latestPaymentStatus={state.courseAccess.latestPaymentStatus}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Summer ID</CardTitle>

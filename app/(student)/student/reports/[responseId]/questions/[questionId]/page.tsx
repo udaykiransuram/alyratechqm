@@ -11,7 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
+import {
+  assertSummerCrashStudentPageAccess,
+} from "@/lib/server/summer-crash";
 import { getStudentReportQuestionDetail } from "@/lib/server/student-report-questions";
+import {
+  SUMMER_CRASH_HOME_PATH,
+} from "@/lib/summer-crash/constants";
+import { buildSummerCrashStudentReportHref } from "@/lib/summer-crash/shared";
 import { isStudentResultReleasedForPaper } from "@/lib/student-tests";
 import { sanitizeRichTextHtml } from "@/lib/security/html-sanitize";
 
@@ -48,11 +55,28 @@ export default async function StudentReportQuestionPage({
     redirect("/auth/signin");
   }
 
+  const accessCheck = await assertSummerCrashStudentPageAccess({
+    schoolKey,
+    studentId,
+    target: {
+      kind: "diagnostic-report",
+      responseId,
+    },
+  });
+  if (!accessCheck.allowed) {
+    redirect(accessCheck.policy.redirectHref);
+  }
+
   const rawReturnTo = Array.isArray(resolvedSearchParams?.returnTo)
     ? resolvedSearchParams.returnTo[0]
     : resolvedSearchParams?.returnTo;
   const reportPath = `/student/reports/${encodeURIComponent(responseId)}`;
-  const backHref = getSafeReturnToPath(rawReturnTo) || reportPath;
+  const restrictedReportHref =
+    buildSummerCrashStudentReportHref(responseId) || reportPath;
+  const backHref =
+    accessCheck.policy.applies && !accessCheck.policy.isUnlocked
+      ? restrictedReportHref
+      : getSafeReturnToPath(rawReturnTo) || reportPath;
   const reportQuestion = await getStudentReportQuestionDetail({
     schoolKey,
     studentId,
@@ -85,7 +109,11 @@ export default async function StudentReportQuestionPage({
   }
 
   if (paper.onlineEnabled && !isStudentResultReleasedForPaper(paper, new Date())) {
-    redirect(backHref);
+    redirect(
+      accessCheck.policy.applies && !accessCheck.policy.isUnlocked
+        ? restrictedReportHref || SUMMER_CRASH_HOME_PATH
+        : backHref,
+    );
   }
 
   const {

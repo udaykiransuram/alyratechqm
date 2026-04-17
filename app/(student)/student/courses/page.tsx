@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ListPaginationLinks from "@/components/ui/list-pagination-links";
 import { authOptions } from "@/lib/auth";
+import { getSummerCrashCourseAccessForStudent } from "@/lib/server/summer-crash";
+import { SUMMER_CRASH_HOME_PATH } from "@/lib/summer-crash/constants";
+import { isSummerCrashSession } from "@/lib/summer-crash/shared";
 import { listStudentCoursesPage } from "@/lib/server/student-courses";
 
 export const runtime = "nodejs";
@@ -120,6 +123,23 @@ export default async function StudentCoursesPage({ searchParams }: StudentCourse
 
   if (!schoolKey || !studentId) {
     redirect("/auth/signin");
+  }
+
+  if (
+    isSummerCrashSession({
+      accountType: session.user.accountType,
+      role: session.user.role,
+      schoolKey,
+    })
+  ) {
+    const { courseAccess } = await getSummerCrashCourseAccessForStudent({
+      schoolKey,
+      studentId,
+    });
+
+    if (!courseAccess.isUnlocked) {
+      redirect(SUMMER_CRASH_HOME_PATH);
+    }
   }
 
   let courseList: Awaited<ReturnType<typeof listStudentCoursesPage>> = {

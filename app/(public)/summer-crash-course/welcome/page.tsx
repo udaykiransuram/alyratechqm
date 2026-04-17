@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 
 import SummerCrashWelcomeClient from "@/components/summer-crash/SummerCrashWelcomeClient";
 import { authOptions } from "@/lib/auth";
+import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { getSummerCrashStudentState } from "@/lib/server/summer-crash";
 import {
   SUMMER_CRASH_SIGNIN_PATH,
@@ -15,8 +16,21 @@ export const metadata: Metadata = {
   description: "Complete the first Summer Crash Course sign-in setup.",
 };
 
-export default async function SummerCrashWelcomePage() {
-  const session = await getServerSession(authOptions);
+type SummerCrashWelcomePageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function getSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? String(value[0] || "") : String(value || "");
+}
+
+export default async function SummerCrashWelcomePage({
+  searchParams,
+}: SummerCrashWelcomePageProps) {
+  const [session, resolvedSearchParams] = await Promise.all([
+    getServerSession(authOptions),
+    searchParams,
+  ]);
 
   if (
     !session ||
@@ -37,9 +51,12 @@ export default async function SummerCrashWelcomePage() {
       academicSectionId: session.user.studentAcademicSectionId,
     },
   });
+  const nextDestinationHref = getSafeReturnToPath(
+    getSearchParam(resolvedSearchParams?.next),
+  );
 
   if (!state.requiresPasswordSetup) {
-    redirect(state.destinationHref);
+    redirect(nextDestinationHref || state.destinationHref);
   }
 
   return (
@@ -57,6 +74,7 @@ export default async function SummerCrashWelcomePage() {
               ? state.courses[0].title
               : "Summer Crash Course"
           }
+          nextDestinationHref={nextDestinationHref}
         />
       </div>
     </div>

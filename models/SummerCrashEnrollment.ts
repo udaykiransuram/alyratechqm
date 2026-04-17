@@ -3,6 +3,21 @@ import mongoose, { Document, Model, Schema, Types } from "mongoose";
 import { getModelRegistry } from "@/lib/mongoose-models";
 import { SUMMER_CRASH_SCHOOL_KEY } from "@/lib/summer-crash/constants";
 
+export type SummerCrashEnrollmentStatus =
+  | "registered"
+  | "setup_pending"
+  | "active"
+  | "archived";
+
+export type SummerCrashEnrollmentEntrySource =
+  | "diagnostic"
+  | "direct_registration";
+
+export type SummerCrashEnrollmentDiagnosticStatus =
+  | "registered"
+  | "started"
+  | "submitted";
+
 export interface ISummerCrashEnrollment extends Document {
   campaignId: Types.ObjectId;
   summerSchoolKey: string;
@@ -16,7 +31,15 @@ export interface ISummerCrashEnrollment extends Document {
   classBand: string;
   classBandNormalized: string;
   sourceSchoolName?: string;
-  status: "registered" | "setup_pending" | "active" | "archived";
+  status: SummerCrashEnrollmentStatus;
+  entrySource?: SummerCrashEnrollmentEntrySource;
+  diagnosticQuestionPaperId?: string;
+  diagnosticResponseId?: string | null;
+  diagnosticStatus?: SummerCrashEnrollmentDiagnosticStatus;
+  diagnosticStartedAt?: Date | null;
+  diagnosticCompletedAt?: Date | null;
+  diagnosticScore?: number | null;
+  diagnosticPercent?: number | null;
   joinedAt?: Date | null;
   firstAccessAt?: Date | null;
 }
@@ -93,6 +116,48 @@ const SummerCrashEnrollmentSchema = new Schema<ISummerCrashEnrollment>(
       trim: true,
       default: undefined,
     },
+    entrySource: {
+      type: String,
+      enum: ["diagnostic", "direct_registration"],
+      default: undefined,
+      index: true,
+    },
+    diagnosticQuestionPaperId: {
+      type: String,
+      trim: true,
+      default: undefined,
+      index: true,
+    },
+    diagnosticResponseId: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    diagnosticStatus: {
+      type: String,
+      enum: ["registered", "started", "submitted"],
+      default: undefined,
+      index: true,
+    },
+    diagnosticStartedAt: {
+      type: Date,
+      default: null,
+    },
+    diagnosticCompletedAt: {
+      type: Date,
+      default: null,
+    },
+    diagnosticScore: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    diagnosticPercent: {
+      type: Number,
+      default: null,
+      min: 0,
+      max: 100,
+    },
     status: {
       type: String,
       enum: ["registered", "setup_pending", "active", "archived"],
@@ -131,6 +196,16 @@ SummerCrashEnrollmentSchema.index(
     status: 1,
   },
   { name: "summer_crash_enrollment_lookup_phone" },
+);
+
+SummerCrashEnrollmentSchema.index(
+  {
+    campaignId: 1,
+    classBandNormalized: 1,
+    diagnosticStatus: 1,
+    updatedAt: -1,
+  },
+  { name: "summer_crash_enrollment_diagnostic_results" },
 );
 
 const modelRegistry = getModelRegistry();

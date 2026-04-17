@@ -2,14 +2,16 @@
 
 import { usePathname } from "next/navigation";
 
+import { useStudentPortalAccess } from "@/components/student/StudentPortalAccessContext";
 import StudentPortalNav from "@/components/student/StudentPortalNav";
 import StudentPortalSidebar from "@/components/student/StudentPortalSidebar";
 import { shouldHideStudentChrome } from "@/components/student/student-route-chrome";
 
 export default function StudentPortalChrome() {
   const pathname = usePathname();
+  const { restrictedMode } = useStudentPortalAccess();
 
-  if (shouldHideStudentChrome(pathname)) {
+  if (restrictedMode || shouldHideStudentChrome(pathname)) {
     return null;
   }
 

@@ -3,6 +3,10 @@ import { expect, test } from "@playwright/test";
 
 import { isHiddenPublicSchoolKey } from "../../../lib/public-school/shared";
 import {
+  buildSummerCrashDiagnosticHref,
+  buildSummerCrashStudentReportHref,
+  buildSummerCrashWelcomeHref,
+  formatSummerCrashPrice,
   isSummerCrashSession,
   maskSummerCrashId,
   normalizeSummerCrashClassBandKey,
@@ -15,8 +19,15 @@ import {
   SUMMER_CRASH_DEFAULT_CLASS_BANDS,
   SUMMER_CRASH_SCHOOL_KEY,
 } from "../../../lib/summer-crash/constants";
+import { deriveSummerCrashCourseAccessState } from "../../../lib/summer-crash/course-access";
+import {
+  canAccessSummerCrashPortalTarget,
+  getDefaultSummerCrashPortalAccessPolicy,
+  isSummerCrashPortalRestricted,
+} from "../../../lib/summer-crash/portal-access";
 import SummerCrashCampaign from "../../../models/SummerCrashCampaign";
 import SummerCrashEnrollment from "../../../models/SummerCrashEnrollment";
+import SummerCrashPayment from "../../../models/SummerCrashPayment";
 
 test.describe("Summer crash course helpers @desktop", () => {
   test("normalizes summer-specific identifiers and detects the hidden summer school", async () => {
@@ -78,6 +89,22 @@ test.describe("Summer crash course helpers @desktop", () => {
     ).toBe("SC111222");
   });
 
+  test("builds safe diagnostic, welcome, and report routes for the summer flow", async () => {
+    expect(buildSummerCrashDiagnosticHref("paper_123")).toBe(
+      "/student/tests/paper_123?returnTo=%2Fstudent%2Fcrash-course%3Fsubmitted%3D1%26mode%3Ddiagnostic",
+    );
+    expect(buildSummerCrashWelcomeHref("/student/crash-course")).toBe(
+      "/summer-crash-course/welcome?next=%2Fstudent%2Fcrash-course",
+    );
+    expect(buildSummerCrashWelcomeHref("https://example.com")).toBe(
+      "/summer-crash-course/welcome",
+    );
+    expect(buildSummerCrashStudentReportHref("response_123")).toBe(
+      "/student/reports/response_123?returnTo=%2Fstudent%2Fcrash-course",
+    );
+    expect(formatSummerCrashPrice(1499, "INR")).toBe("₹1,499");
+  });
+
   test("keeps the summer session check scoped to the dedicated summer school", async () => {
     expect(
       isSummerCrashSession({
@@ -109,6 +136,13 @@ test.describe("Summer crash course helpers @desktop", () => {
     expect(
       campaign.classMappings.map((mapping) => mapping.classBand),
     ).toEqual([...SUMMER_CRASH_DEFAULT_CLASS_BANDS]);
+    expect(
+      campaign.classMappings.every(
+        (mapping) =>
+          Object.prototype.hasOwnProperty.call(mapping.toObject?.() || mapping, "diagnosticQuestionPaperId") ||
+          "diagnosticQuestionPaperId" in mapping,
+      ),
+    ).toBe(true);
 
     const campaignIndexes = SummerCrashCampaign.schema.indexes();
     const enrollmentIndexes = SummerCrashEnrollment.schema.indexes();
@@ -139,5 +173,150 @@ test.describe("Summer crash course helpers @desktop", () => {
           fields.status === 1,
       ),
     ).toBe(true);
+
+    expect(
+      enrollmentIndexes.some(
+        ([fields]) =>
+          fields.campaignId === 1 &&
+          fields.classBandNormalized === 1 &&
+          fields.diagnosticStatus === 1,
+      ),
+    ).toBe(true);
+
+    const paymentIndexes = SummerCrashPayment.schema.indexes();
+    expect(
+      paymentIndexes.some(
+        ([fields]) =>
+          fields.campaignId === 1 &&
+          fields.phoneDigits === 1 &&
+          fields.classBandNormalized === 1 &&
+          fields.studentNameNormalized === 1,
+      ),
+    ).toBe(true);
+  });
+
+  test("derives summer course access state from payment status snapshots", async () => {
+    expect(
+      deriveSummerCrashCourseAccessState({
+        price: 0,
+        currency: "INR",
+      }),
+    ).toEqual({
+      requiresPayment: false,
+      isUnlocked: true,
+      latestPaymentStatus: "none",
+      price: 0,
+      currency: "INR",
+    });
+
+    expect(
+      deriveSummerCrashCourseAccessState({
+        price: 1999,
+        currency: "INR",
+      }),
+    ).toEqual({
+      requiresPayment: true,
+      isUnlocked: false,
+      latestPaymentStatus: "none",
+      price: 1999,
+      currency: "INR",
+    });
+
+    expect(
+      deriveSummerCrashCourseAccessState({
+        price: 1999,
+        currency: "INR",
+        paymentStatuses: ["pending"],
+      }),
+    ).toMatchObject({
+      requiresPayment: true,
+      isUnlocked: false,
+      latestPaymentStatus: "pending",
+    });
+
+    expect(
+      deriveSummerCrashCourseAccessState({
+        price: 1999,
+        currency: "INR",
+        paymentStatuses: ["failed"],
+      }),
+    ).toMatchObject({
+      requiresPayment: true,
+      isUnlocked: false,
+      latestPaymentStatus: "failed",
+    });
+
+    expect(
+      deriveSummerCrashCourseAccessState({
+        price: 1999,
+        currency: "INR",
+        paymentStatuses: ["failed", "paid"],
+      }),
+    ).toMatchObject({
+      requiresPayment: true,
+      isUnlocked: true,
+      latestPaymentStatus: "paid",
+    });
+  });
+
+  test("limits unpaid summer portal access to crash home, diagnostic, and its report only", async () => {
+    const unrestrictedPolicy = getDefaultSummerCrashPortalAccessPolicy();
+
+    expect(isSummerCrashPortalRestricted(unrestrictedPolicy)).toBe(false);
+    expect(
+      canAccessSummerCrashPortalTarget(unrestrictedPolicy, {
+        kind: "locked-student-content",
+      }),
+    ).toBe(true);
+
+    const restrictedPolicy = {
+      applies: true,
+      isUnlocked: false,
+      requiresPayment: true,
+      allowedDiagnosticPaperId: "paper_123",
+      allowedDiagnosticResponseId: "response_456",
+      redirectHref: "/student/crash-course",
+    } as const;
+
+    expect(isSummerCrashPortalRestricted(restrictedPolicy)).toBe(true);
+    expect(
+      canAccessSummerCrashPortalTarget(restrictedPolicy, {
+        kind: "crash-course",
+      }),
+    ).toBe(true);
+    expect(
+      canAccessSummerCrashPortalTarget(restrictedPolicy, {
+        kind: "session-heartbeat",
+      }),
+    ).toBe(true);
+    expect(
+      canAccessSummerCrashPortalTarget(restrictedPolicy, {
+        kind: "diagnostic-test",
+        paperId: "paper_123",
+      }),
+    ).toBe(true);
+    expect(
+      canAccessSummerCrashPortalTarget(restrictedPolicy, {
+        kind: "diagnostic-report",
+        responseId: "response_456",
+      }),
+    ).toBe(true);
+    expect(
+      canAccessSummerCrashPortalTarget(restrictedPolicy, {
+        kind: "diagnostic-test",
+        paperId: "paper_other",
+      }),
+    ).toBe(false);
+    expect(
+      canAccessSummerCrashPortalTarget(restrictedPolicy, {
+        kind: "diagnostic-report",
+        responseId: "response_other",
+      }),
+    ).toBe(false);
+    expect(
+      canAccessSummerCrashPortalTarget(restrictedPolicy, {
+        kind: "locked-student-content",
+      }),
+    ).toBe(false);
   });
 });

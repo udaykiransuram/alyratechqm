@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
+import { useStudentPortalAccess } from "@/components/student/StudentPortalAccessContext";
 import {
   isStudentPortalItemActive,
   STUDENT_PORTAL_ITEMS,
@@ -28,7 +29,13 @@ export default function StudentPortalNav({
 }: {
   variant?: StudentPortalNavVariant;
 }) {
+  const { restrictedMode } = useStudentPortalAccess();
   const pathname = usePathname() || "/student";
+
+  if (restrictedMode) {
+    return null;
+  }
+
   const items =
     variant === "mobile"
       ? MOBILE_NAV_ORDER.map(

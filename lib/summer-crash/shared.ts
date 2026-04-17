@@ -1,7 +1,9 @@
 import {
   SUMMER_CRASH_HOME_PATH,
   SUMMER_CRASH_SCHOOL_KEY,
+  SUMMER_CRASH_WELCOME_PATH,
 } from "@/lib/summer-crash/constants";
+import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 
 export type SummerCrashLookupMatch = {
   studentName?: string | null;
@@ -41,6 +43,29 @@ export function normalizeSummerCrashClassBandKey(value: unknown): string {
   return normalizeSummerCrashLookupText(value);
 }
 
+export function formatSummerCrashPrice(price: unknown, currency: unknown): string {
+  const numericPrice = Number(price);
+  const normalizedCurrency = String(currency || "INR")
+    .trim()
+    .toUpperCase();
+
+  if (!Number.isFinite(numericPrice)) {
+    return normalizedCurrency ? `${normalizedCurrency} 0` : "0";
+  }
+
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: normalizedCurrency || "INR",
+      maximumFractionDigits: Number.isInteger(numericPrice) ? 0 : 2,
+    }).format(numericPrice);
+  } catch {
+    return normalizedCurrency
+      ? `${normalizedCurrency} ${numericPrice}`
+      : String(numericPrice);
+  }
+}
+
 export function maskSummerCrashId(value: unknown): string {
   const summerId = String(value || "").trim().toUpperCase();
   if (summerId.length <= 4) {
@@ -59,6 +84,49 @@ export function resolveSummerCrashDestinationHref(
   }
 
   return homeHref;
+}
+
+export function buildSummerCrashDiagnosticReturnToPath() {
+  return `${SUMMER_CRASH_HOME_PATH}?submitted=1&mode=diagnostic`;
+}
+
+export function buildSummerCrashDiagnosticHref(paperId: unknown) {
+  const normalizedPaperId = String(paperId || "").trim();
+  if (!normalizedPaperId) {
+    return SUMMER_CRASH_HOME_PATH;
+  }
+
+  const searchParams = new URLSearchParams({
+    returnTo: buildSummerCrashDiagnosticReturnToPath(),
+  });
+
+  return `/student/tests/${encodeURIComponent(normalizedPaperId)}?${searchParams.toString()}`;
+}
+
+export function buildSummerCrashWelcomeHref(nextHref?: string | null) {
+  const safeNextHref = getSafeReturnToPath(nextHref);
+  if (!safeNextHref) {
+    return SUMMER_CRASH_WELCOME_PATH;
+  }
+
+  const searchParams = new URLSearchParams({
+    next: safeNextHref,
+  });
+
+  return `${SUMMER_CRASH_WELCOME_PATH}?${searchParams.toString()}`;
+}
+
+export function buildSummerCrashStudentReportHref(responseId: unknown) {
+  const normalizedResponseId = String(responseId || "").trim();
+  if (!normalizedResponseId) {
+    return "";
+  }
+
+  const searchParams = new URLSearchParams({
+    returnTo: SUMMER_CRASH_HOME_PATH,
+  });
+
+  return `/student/reports/${encodeURIComponent(normalizedResponseId)}?${searchParams.toString()}`;
 }
 
 export function normalizeSummerCrashLookupMatches(

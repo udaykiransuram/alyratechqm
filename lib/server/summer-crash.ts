@@ -1,19 +1,34 @@
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
+import { cache } from "react";
 
 import { buildArchiveFilter, buildRestoreUpdate } from "@/lib/archive";
 import type { StudentCourseSummary } from "@/lib/courses/types";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
+import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { listStudentCoursesPage } from "@/lib/server/student-courses";
+import { paperRequiresManualReview, paperSupportsOnlineDelivery } from "@/lib/student-tests";
 import {
-  maskSummerCrashId,
+  buildSummerCrashDiagnosticHref,
+  buildSummerCrashStudentReportHref,
   normalizeSummerCrashClassBandKey,
   normalizeSummerCrashNameKey,
   normalizeSummerCrashPhone,
   normalizeSummerCrashText,
-  resolveSummerCrashDestinationHref,
 } from "@/lib/summer-crash/shared";
+import {
+  deriveSummerCrashCourseAccessState,
+  type SummerCrashCourseAccessState,
+  type SummerCrashPaymentStatus,
+} from "@/lib/summer-crash/course-access";
+import {
+  canAccessSummerCrashPortalTarget,
+  getDefaultSummerCrashPortalAccessPolicy,
+  SUMMER_CRASH_PORTAL_ACCESS_LOCK_MESSAGE,
+  type SummerCrashPortalAccessPolicy,
+  type SummerCrashPortalAccessTarget,
+} from "@/lib/summer-crash/portal-access";
 import { provisionTenant } from "@/lib/tenant-provision";
 import {
   getDefaultStudentPassword,
@@ -24,15 +39,22 @@ import SummerCrashCampaign, {
   type ISummerCrashCampaign,
   type ISummerCrashCampaignClassMapping,
 } from "@/models/SummerCrashCampaign";
-import SummerCrashEnrollment from "@/models/SummerCrashEnrollment";
+import SummerCrashEnrollment, {
+  type SummerCrashEnrollmentDiagnosticStatus,
+  type SummerCrashEnrollmentEntrySource,
+} from "@/models/SummerCrashEnrollment";
+import SummerCrashPayment from "@/models/SummerCrashPayment";
 import School from "@/models/School";
 import {
+  SUMMER_CRASH_CURRENCY,
   SUMMER_CRASH_DEFAULT_CLASS_BANDS,
   SUMMER_CRASH_DISPLAY_NAME,
+  SUMMER_CRASH_HOME_PATH,
+  SUMMER_CRASH_PRICE,
   SUMMER_CRASH_SCHOOL_KEY,
   SUMMER_CRASH_SIGNIN_PATH,
   SUMMER_CRASH_SUPPORT_CONTACT,
-  SUMMER_CRASH_WELCOME_PATH,
+  SUMMER_CRASH_WHATSAPP_GROUP_URL,
   isSummerCrashSchoolKey,
 } from "@/lib/summer-crash/constants";
 
@@ -40,9 +62,22 @@ const SUMMER_CRASH_SUMMER_ID_PREFIX = "SC";
 const SUMMER_CRASH_SUMMER_ID_MIN = 100000;
 const SUMMER_CRASH_SUMMER_ID_MAX = 999999;
 
+type SummerCrashQuestionPaperSummary = {
+  _id: string;
+  title: string;
+  totalMarks: number;
+  duration: number;
+  classId: string;
+  className: string;
+  onlineEnabled: boolean;
+  assignedSectionCount: number;
+  supportsInstantResults: boolean;
+};
+
 export type SummerCrashPublicClassBand = {
   classBand: string;
   className: string;
+  diagnosticQuestionPaperId?: string;
 };
 
 export type SummerCrashLookupMatch = {
@@ -53,6 +88,22 @@ export type SummerCrashLookupMatch = {
   maskedSummerId: string;
 };
 
+export type SummerCrashDiagnosticState = {
+  questionPaperId: string;
+  title: string;
+  duration: number;
+  totalMarks: number;
+  status: SummerCrashEnrollmentDiagnosticStatus;
+  launchHref: string;
+  reportHref: string;
+  score: number | null;
+  percent: number | null;
+  available: boolean;
+};
+
+export const SUMMER_CRASH_COURSE_ACCESS_LOCK_MESSAGE =
+  "Summer Crash Course lessons unlock after payment.";
+
 export type SummerCrashStudentState = {
   title: string;
   supportContact: string;
@@ -61,15 +112,46 @@ export type SummerCrashStudentState = {
   classBand: string;
   summerId: string;
   requiresPasswordSetup: boolean;
+  courseAccess: SummerCrashCourseAccessState;
   courses: StudentCourseSummary[];
   destinationHref: string;
+  diagnostic: SummerCrashDiagnosticState | null;
 };
+
+type SummerCrashQuestionPaperDoc = {
+  _id?: unknown;
+  title?: unknown;
+  totalMarks?: unknown;
+  duration?: unknown;
+  class?: { _id?: unknown; name?: unknown } | unknown;
+  onlineEnabled?: unknown;
+  assignedAcademicSections?: unknown[];
+  sections?: unknown[];
+};
+
+type SummerCrashPaymentLookupContext = {
+  _id?: unknown;
+  summerId?: unknown;
+  studentName?: unknown;
+  phoneDigits?: unknown;
+  phone?: unknown;
+  classBand?: unknown;
+};
+
+function normalizeEntrySource(
+  value: unknown,
+): SummerCrashEnrollmentEntrySource {
+  return String(value || "").trim() === "diagnostic"
+    ? "diagnostic"
+    : "direct_registration";
+}
 
 function buildDefaultSummerCrashClassMappings() {
   return SUMMER_CRASH_DEFAULT_CLASS_BANDS.map((classBand, index) => ({
     classBand,
     className: classBand,
     courseIds: [],
+    diagnosticQuestionPaperId: undefined,
     sortOrder: index,
   }));
 }
@@ -82,7 +164,7 @@ function sortSummerCrashClassMappings(
   });
 }
 
-function normalizeSummerCrashClassMappings(
+export function normalizeSummerCrashClassMappings(
   mappings: ISummerCrashCampaignClassMapping[] | undefined,
 ) {
   const normalized = sortSummerCrashClassMappings(mappings)
@@ -98,6 +180,8 @@ function normalizeSummerCrashClassMappings(
             .filter(Boolean),
         ),
       ),
+      diagnosticQuestionPaperId:
+        String(mapping?.diagnosticQuestionPaperId || "").trim() || undefined,
       sortOrder:
         Number.isFinite(Number(mapping?.sortOrder))
           ? Number(mapping?.sortOrder)
@@ -108,7 +192,7 @@ function normalizeSummerCrashClassMappings(
   return normalized.length > 0 ? normalized : buildDefaultSummerCrashClassMappings();
 }
 
-function resolveSummerCrashClassMapping(
+export function resolveSummerCrashClassMapping(
   campaign: Pick<ISummerCrashCampaign, "classMappings">,
   classBand: string,
 ) {
@@ -157,7 +241,7 @@ async function generateUniqueSummerCrashId(UserModel: any) {
   throw new Error("We couldn't generate a Summer ID right now.");
 }
 
-async function ensureSummerCrashSchoolProvisioned() {
+export async function ensureSummerCrashSchoolProvisioned() {
   await connectDB();
 
   let school = await School.findOne({ key: SUMMER_CRASH_SCHOOL_KEY })
@@ -191,8 +275,10 @@ async function ensureSummerCrashSchoolProvisioned() {
   return school;
 }
 
-async function getOrCreateSummerCrashCampaign() {
+export async function getOrCreateSummerCrashCampaign() {
   await ensureSummerCrashSchoolProvisioned();
+
+  const legacyTitle = "Summer Crash Course";
 
   let campaign = await SummerCrashCampaign.findOne({
     summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
@@ -205,6 +291,9 @@ async function getOrCreateSummerCrashCampaign() {
         title: SUMMER_CRASH_DISPLAY_NAME,
         summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
         supportContact: SUMMER_CRASH_SUPPORT_CONTACT || undefined,
+        price: SUMMER_CRASH_PRICE,
+        currency: SUMMER_CRASH_CURRENCY,
+        whatsappGroupUrl: SUMMER_CRASH_WHATSAPP_GROUP_URL || undefined,
         classMappings: buildDefaultSummerCrashClassMappings(),
       });
     } catch (error) {
@@ -221,6 +310,21 @@ async function getOrCreateSummerCrashCampaign() {
         summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
       });
     }
+  }
+
+  if (!campaign) {
+    throw new Error("We couldn't prepare the Summer Crash Course right now.");
+  }
+
+  if (
+    String(campaign.title || "").trim().toLowerCase() ===
+    legacyTitle.toLowerCase()
+  ) {
+    await SummerCrashCampaign.updateOne(
+      { _id: campaign._id },
+      { $set: { title: SUMMER_CRASH_DISPLAY_NAME } },
+    );
+    campaign = await SummerCrashCampaign.findById(campaign._id);
   }
 
   if (!campaign) {
@@ -317,6 +421,170 @@ async function findSummerCrashEnrollmentByStudentId(studentId: string) {
     .lean();
 }
 
+async function loadSummerCrashQuestionPaperSummary(
+  paperId: string,
+): Promise<SummerCrashQuestionPaperSummary | null> {
+  const normalizedPaperId = String(paperId || "").trim();
+  if (!normalizedPaperId) {
+    return null;
+  }
+
+  const { QuestionPaper: QuestionPaperModel } = await getTenantModels(
+    SUMMER_CRASH_SCHOOL_KEY,
+    ["QuestionPaper"],
+  );
+
+  const paper = (await QuestionPaperModel.findOne({
+    _id: normalizedPaperId,
+    ...buildArchiveFilter(false),
+  })
+    .select(
+      "title totalMarks duration class onlineEnabled assignedAcademicSections sections",
+    )
+    .populate("class", "name")
+    .populate({
+      path: "sections.questions.question",
+      select: "_id type options answerIndexes matrixOptions matrixAnswers",
+    })
+    .lean()) as SummerCrashQuestionPaperDoc | null;
+
+  if (!paper?._id) {
+    return null;
+  }
+
+  const classId = String(
+    (paper.class as { _id?: unknown } | null | undefined)?._id ||
+      paper.class ||
+      "",
+  ).trim();
+  const className = normalizeSummerCrashText(
+    (paper.class as { name?: unknown } | null | undefined)?.name,
+  );
+  const assignedSectionCount = Array.isArray(paper.assignedAcademicSections)
+    ? paper.assignedAcademicSections.length
+    : 0;
+  const supportsInstantResults =
+    Boolean(paper.onlineEnabled) &&
+    assignedSectionCount === 0 &&
+    paperSupportsOnlineDelivery(paper) &&
+    !paperRequiresManualReview(paper);
+
+  return {
+    _id: String(paper._id),
+    title: normalizeSummerCrashText(paper.title) || "Untitled Paper",
+    totalMarks: Number(paper.totalMarks || 0),
+    duration: Number(paper.duration || 0),
+    classId,
+    className,
+    onlineEnabled: Boolean(paper.onlineEnabled),
+    assignedSectionCount,
+    supportsInstantResults,
+  };
+}
+
+async function resolveSummerCrashRegistrationDestination(params: {
+  campaign: Pick<ISummerCrashCampaign, "classMappings">;
+  classBand: string;
+  entrySource: SummerCrashEnrollmentEntrySource;
+}) {
+  if (params.entrySource !== "diagnostic") {
+    return SUMMER_CRASH_HOME_PATH;
+  }
+
+  const mapping = resolveSummerCrashClassMapping(
+    params.campaign,
+    params.classBand,
+  );
+  const diagnosticQuestionPaperId = String(
+    mapping?.diagnosticQuestionPaperId || "",
+  ).trim();
+
+  if (!diagnosticQuestionPaperId) {
+    throw new Error(
+      "The free diagnostic test is not ready for this class band yet.",
+    );
+  }
+
+  const paperSummary = await loadSummerCrashQuestionPaperSummary(
+    diagnosticQuestionPaperId,
+  );
+
+  if (!paperSummary?.supportsInstantResults) {
+    throw new Error(
+      "The free diagnostic test is not available for this class band right now.",
+    );
+  }
+
+  const expectedClassName = normalizeSummerCrashClassBandKey(
+    mapping?.className || mapping?.classBand || "",
+  );
+  const paperClassName = normalizeSummerCrashClassBandKey(
+    paperSummary.className,
+  );
+
+  if (expectedClassName && paperClassName && expectedClassName !== paperClassName) {
+    throw new Error(
+      "The selected free diagnostic test does not match this class band.",
+    );
+  }
+
+  return buildSummerCrashDiagnosticHref(paperSummary._id);
+}
+
+async function buildSummerCrashDiagnosticState(params: {
+  campaign: Pick<ISummerCrashCampaign, "classMappings">;
+  classBand: string;
+  enrollment: {
+    diagnosticQuestionPaperId?: unknown;
+    diagnosticResponseId?: unknown;
+    diagnosticStatus?: unknown;
+    diagnosticScore?: unknown;
+    diagnosticPercent?: unknown;
+  } | null;
+}) {
+  const mapping = resolveSummerCrashClassMapping(
+    params.campaign,
+    params.classBand,
+  );
+  const diagnosticQuestionPaperId = String(
+    mapping?.diagnosticQuestionPaperId ||
+      params.enrollment?.diagnosticQuestionPaperId ||
+      "",
+  ).trim();
+
+  if (!diagnosticQuestionPaperId) {
+    return null;
+  }
+
+  const paperSummary = await loadSummerCrashQuestionPaperSummary(
+    diagnosticQuestionPaperId,
+  );
+  const diagnosticResponseId = String(
+    params.enrollment?.diagnosticResponseId || "",
+  ).trim();
+  const score = Number(params.enrollment?.diagnosticScore);
+  const percent = Number(params.enrollment?.diagnosticPercent);
+  const status = String(
+    params.enrollment?.diagnosticStatus || "registered",
+  ).trim() as SummerCrashEnrollmentDiagnosticStatus;
+
+  return {
+    questionPaperId: diagnosticQuestionPaperId,
+    title: paperSummary?.title || "Free Diagnostic Test",
+    duration: Number(paperSummary?.duration || 0),
+    totalMarks: Number(paperSummary?.totalMarks || 0),
+    status:
+      status === "started" || status === "submitted" ? status : "registered",
+    launchHref: buildSummerCrashDiagnosticHref(diagnosticQuestionPaperId),
+    reportHref: diagnosticResponseId
+      ? buildSummerCrashStudentReportHref(diagnosticResponseId)
+      : "",
+    score: Number.isFinite(score) ? score : null,
+    percent: Number.isFinite(percent) ? percent : null,
+    available: Boolean(paperSummary?.supportsInstantResults),
+  } satisfies SummerCrashDiagnosticState;
+}
+
 export async function getSummerCrashPublicConfig() {
   const campaign = await getOrCreateSummerCrashCampaign();
 
@@ -326,13 +594,291 @@ export async function getSummerCrashPublicConfig() {
     supportContact:
       normalizeSummerCrashText(campaign.supportContact) ||
       SUMMER_CRASH_SUPPORT_CONTACT,
+    price:
+      typeof campaign.price === "number" ? campaign.price : SUMMER_CRASH_PRICE,
+    currency: String(campaign.currency || SUMMER_CRASH_CURRENCY || "INR")
+      .trim()
+      .toUpperCase(),
+    whatsappGroupUrl:
+      normalizeSummerCrashText(campaign.whatsappGroupUrl) ||
+      SUMMER_CRASH_WHATSAPP_GROUP_URL,
     classBands: normalizeSummerCrashClassMappings(campaign.classMappings).map(
       (mapping) => ({
         classBand: mapping.classBand,
         className: mapping.className,
+        diagnosticQuestionPaperId: mapping.diagnosticQuestionPaperId,
       }),
     ) satisfies SummerCrashPublicClassBand[],
   };
+}
+
+export async function getSummerCrashCampaignForPayment() {
+  const campaign = await getOrCreateSummerCrashCampaign();
+
+  return {
+    campaign,
+    classBands: normalizeSummerCrashClassMappings(campaign.classMappings),
+    price:
+      typeof campaign.price === "number" ? campaign.price : SUMMER_CRASH_PRICE,
+    currency: String(campaign.currency || SUMMER_CRASH_CURRENCY || "INR")
+      .trim()
+      .toUpperCase(),
+    whatsappGroupUrl:
+      normalizeSummerCrashText(campaign.whatsappGroupUrl) ||
+      SUMMER_CRASH_WHATSAPP_GROUP_URL,
+  };
+}
+
+function buildSummerCrashPaymentMatchQuery(params: {
+  campaignId: unknown;
+  enrollment: SummerCrashPaymentLookupContext | null;
+}) {
+  const conditions: Array<Record<string, unknown>> = [];
+  const enrollmentId = String(params.enrollment?._id || "").trim();
+  const summerId = String(params.enrollment?.summerId || "")
+    .trim()
+    .toUpperCase();
+  const phoneDigits = normalizeSummerCrashPhone(
+    params.enrollment?.phoneDigits || params.enrollment?.phone,
+  );
+  const classBandNormalized = normalizeSummerCrashClassBandKey(
+    params.enrollment?.classBand,
+  );
+  const studentName = normalizeSummerCrashText(params.enrollment?.studentName);
+  const studentNameNormalized = normalizeSummerCrashNameKey(studentName);
+
+  if (enrollmentId) {
+    conditions.push({ enrollmentId });
+  }
+
+  if (summerId) {
+    conditions.push({ summerId });
+  }
+
+  if (phoneDigits && classBandNormalized && studentNameNormalized) {
+    conditions.push({
+      phoneDigits,
+      classBandNormalized,
+      studentNameNormalized,
+    });
+  }
+
+  if (phoneDigits && classBandNormalized && studentName) {
+    conditions.push({
+      phoneDigits,
+      classBandNormalized,
+      studentName,
+    });
+  }
+
+  const uniqueConditions = Array.from(
+    new Map(conditions.map((condition) => [JSON.stringify(condition), condition])).values(),
+  );
+
+  if (uniqueConditions.length === 0) {
+    return null;
+  }
+
+  const baseQuery = {
+    campaignId: params.campaignId,
+    summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
+  };
+
+  if (uniqueConditions.length === 1) {
+    return {
+      ...baseQuery,
+      ...uniqueConditions[0],
+    };
+  }
+
+  return {
+    ...baseQuery,
+    $or: uniqueConditions,
+  };
+}
+
+async function resolveSummerCrashCourseAccessState(params: {
+  campaign: Pick<ISummerCrashCampaign, "_id" | "price" | "currency">;
+  enrollment: SummerCrashPaymentLookupContext | null;
+}) {
+  const baseAccess = deriveSummerCrashCourseAccessState({
+    price: params.campaign.price,
+    currency: params.campaign.currency,
+  });
+
+  if (!baseAccess.requiresPayment) {
+    return baseAccess;
+  }
+
+  const paymentQuery = buildSummerCrashPaymentMatchQuery({
+    campaignId: params.campaign._id,
+    enrollment: params.enrollment,
+  });
+
+  if (!paymentQuery) {
+    return baseAccess;
+  }
+
+  const payments = await SummerCrashPayment.find(paymentQuery)
+    .select("status")
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .lean();
+
+  return deriveSummerCrashCourseAccessState({
+    price: params.campaign.price,
+    currency: params.campaign.currency,
+    paymentStatuses: payments.map((payment) => payment?.status),
+  });
+}
+
+export async function getSummerCrashCourseAccessForStudent(params: {
+  schoolKey: string;
+  studentId: string;
+}) {
+  if (!isSummerCrashSchoolKey(params.schoolKey)) {
+    throw new Error("Summer Crash Course access is only available for summer accounts.");
+  }
+
+  const campaign = await getOrCreateSummerCrashCampaign();
+  const enrollment = await findSummerCrashEnrollmentByStudentId(params.studentId);
+  const courseAccess = await resolveSummerCrashCourseAccessState({
+    campaign,
+    enrollment,
+  });
+
+  return {
+    campaign,
+    enrollment,
+    courseAccess,
+  };
+}
+
+type SummerCrashPortalAccessEnrollment = {
+  _id?: unknown;
+  summerId?: unknown;
+  studentName?: unknown;
+  phoneDigits?: unknown;
+  phone?: unknown;
+  classBand?: unknown;
+  diagnosticQuestionPaperId?: unknown;
+  diagnosticResponseId?: unknown;
+} | null;
+
+export type SummerCrashPortalAccessCheck = {
+  policy: SummerCrashPortalAccessPolicy;
+  allowed: boolean;
+  message: string | null;
+};
+
+const getSummerCrashPortalAccessPolicyCached = cache(
+  async (
+    schoolKey: string,
+    studentId: string,
+  ): Promise<SummerCrashPortalAccessPolicy> => {
+    const normalizedSchoolKey = String(schoolKey || "").trim();
+    const normalizedStudentId = String(studentId || "").trim();
+
+    if (
+      !normalizedStudentId ||
+      !isSummerCrashSchoolKey(normalizedSchoolKey)
+    ) {
+      return getDefaultSummerCrashPortalAccessPolicy();
+    }
+
+    const campaign = await getOrCreateSummerCrashCampaign();
+    const enrollment = (await SummerCrashEnrollment.findOne({
+      summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
+      summerStudentId: normalizedStudentId,
+      status: { $ne: "archived" },
+    })
+      .select(
+        "_id summerId studentName phoneDigits phone classBand diagnosticQuestionPaperId diagnosticResponseId",
+      )
+      .sort({ updatedAt: -1 })
+      .lean()) as SummerCrashPortalAccessEnrollment;
+
+    const courseAccess = await resolveSummerCrashCourseAccessState({
+      campaign,
+      enrollment,
+    });
+
+    const classBand = normalizeSummerCrashText(enrollment?.classBand);
+    const mapping = classBand
+      ? resolveSummerCrashClassMapping(campaign, classBand)
+      : null;
+    const allowedDiagnosticPaperId =
+      String(
+        enrollment?.diagnosticQuestionPaperId ||
+          mapping?.diagnosticQuestionPaperId ||
+          "",
+      ).trim() || null;
+    const allowedDiagnosticResponseId =
+      String(enrollment?.diagnosticResponseId || "").trim() || null;
+
+    return {
+      applies: true,
+      isUnlocked: courseAccess.isUnlocked,
+      requiresPayment: courseAccess.requiresPayment,
+      allowedDiagnosticPaperId,
+      allowedDiagnosticResponseId,
+      redirectHref: SUMMER_CRASH_HOME_PATH,
+    };
+  },
+);
+
+export async function getSummerCrashPortalAccessPolicy(params: {
+  schoolKey: string;
+  studentId: string;
+}) {
+  return getSummerCrashPortalAccessPolicyCached(
+    String(params.schoolKey || "").trim(),
+    String(params.studentId || "").trim(),
+  );
+}
+
+function buildSummerCrashPortalAccessCheck(params: {
+  policy: SummerCrashPortalAccessPolicy;
+  target: SummerCrashPortalAccessTarget;
+}): SummerCrashPortalAccessCheck {
+  const allowed = canAccessSummerCrashPortalTarget(params.policy, params.target);
+
+  return {
+    policy: params.policy,
+    allowed,
+    message: allowed ? null : SUMMER_CRASH_PORTAL_ACCESS_LOCK_MESSAGE,
+  };
+}
+
+export async function assertSummerCrashStudentPageAccess(params: {
+  schoolKey: string;
+  studentId: string;
+  target: SummerCrashPortalAccessTarget;
+}) {
+  const policy = await getSummerCrashPortalAccessPolicy({
+    schoolKey: params.schoolKey,
+    studentId: params.studentId,
+  });
+
+  return buildSummerCrashPortalAccessCheck({
+    policy,
+    target: params.target,
+  });
+}
+
+export async function assertSummerCrashStudentApiAccess(params: {
+  schoolKey: string;
+  studentId: string;
+  target: SummerCrashPortalAccessTarget;
+}) {
+  const policy = await getSummerCrashPortalAccessPolicy({
+    schoolKey: params.schoolKey,
+    studentId: params.studentId,
+  });
+
+  return buildSummerCrashPortalAccessCheck({
+    policy,
+    target: params.target,
+  });
 }
 
 export async function registerSummerCrashStudent(input: {
@@ -341,12 +887,14 @@ export async function registerSummerCrashStudent(input: {
   phone: string;
   classBand: string;
   sourceSchoolName?: string;
+  entrySource?: SummerCrashEnrollmentEntrySource;
 }) {
   const studentName = normalizeSummerCrashText(input.studentName);
   const guardianName = normalizeSummerCrashText(input.guardianName);
   const phoneDigits = normalizeSummerCrashPhone(input.phone);
   const classBand = normalizeSummerCrashText(input.classBand);
   const sourceSchoolName = normalizeSummerCrashText(input.sourceSchoolName);
+  const entrySource = normalizeEntrySource(input.entrySource);
 
   if (!studentName) {
     throw new Error("Student name is required.");
@@ -386,7 +934,7 @@ export async function registerSummerCrashStudent(input: {
     phoneDigits,
     studentNameNormalized,
     classBandNormalized,
-  });
+  }).lean();
 
   const defaultPassword = getDefaultStudentPassword(phoneDigits);
   if (!defaultPassword) {
@@ -444,6 +992,41 @@ export async function registerSummerCrashStudent(input: {
     passwordHash: studentRecord.passwordHash,
   });
 
+  const nextEnrollmentPatch: Record<string, unknown> = {
+    summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
+    summerStudentId: studentRecord._id,
+    summerId,
+    studentName,
+    studentNameNormalized,
+    guardianName,
+    phone: phoneDigits,
+    phoneDigits,
+    classBand,
+    classBandNormalized,
+    sourceSchoolName: sourceSchoolName || undefined,
+    status: requiresPasswordSetup ? "setup_pending" : "active",
+  };
+
+  if (!existingEnrollment?.entrySource) {
+    nextEnrollmentPatch.entrySource = entrySource;
+  }
+
+  if (
+    entrySource === "diagnostic" &&
+    !String(existingEnrollment?.diagnosticStatus || "").trim()
+  ) {
+    nextEnrollmentPatch.diagnosticStatus = "registered";
+  }
+
+  if (
+    entrySource === "diagnostic" &&
+    String(classMapping.diagnosticQuestionPaperId || "").trim()
+  ) {
+    nextEnrollmentPatch.diagnosticQuestionPaperId = String(
+      classMapping.diagnosticQuestionPaperId,
+    ).trim();
+  }
+
   const updatedEnrollment = await SummerCrashEnrollment.findOneAndUpdate(
     {
       campaignId: campaign._id,
@@ -452,20 +1035,7 @@ export async function registerSummerCrashStudent(input: {
       classBandNormalized,
     },
     {
-      $set: {
-        summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
-        summerStudentId: studentRecord._id,
-        summerId,
-        studentName,
-        studentNameNormalized,
-        guardianName,
-        phone: phoneDigits,
-        phoneDigits,
-        classBand,
-        classBandNormalized,
-        sourceSchoolName: sourceSchoolName || undefined,
-        status: requiresPasswordSetup ? "setup_pending" : "active",
-      },
+      $set: nextEnrollmentPatch,
       $setOnInsert: {
         joinedAt: new Date(),
       },
@@ -476,6 +1046,12 @@ export async function registerSummerCrashStudent(input: {
       runValidators: true,
     },
   ).lean();
+
+  const destinationHref = await resolveSummerCrashRegistrationDestination({
+    campaign,
+    classBand,
+    entrySource,
+  });
 
   return {
     campaignTitle:
@@ -492,6 +1068,8 @@ export async function registerSummerCrashStudent(input: {
     autoSignInAllowed: requiresPasswordSetup,
     bootstrapPassword: requiresPasswordSetup ? defaultPassword : "",
     signInPath: SUMMER_CRASH_SIGNIN_PATH,
+    destinationHref,
+    entrySource,
     enrollment: updatedEnrollment,
   };
 }
@@ -523,13 +1101,19 @@ export async function lookupSummerCrashIdsByPhone(phone: string) {
     supportContact:
       normalizeSummerCrashText(campaign.supportContact) ||
       SUMMER_CRASH_SUPPORT_CONTACT,
-    matches: (Array.isArray(matches) ? matches : []).map((match) => ({
-      studentName: normalizeSummerCrashText(match?.studentName),
-      guardianName: normalizeSummerCrashText(match?.guardianName),
-      classBand: normalizeSummerCrashText(match?.classBand),
-      summerId: String(match?.summerId || "").trim().toUpperCase(),
-      maskedSummerId: maskSummerCrashId(match?.summerId),
-    })) satisfies SummerCrashLookupMatch[],
+    matches: (Array.isArray(matches) ? matches : []).map((match) => {
+      const summerId = String(match?.summerId || "").trim().toUpperCase();
+      return {
+        studentName: normalizeSummerCrashText(match?.studentName),
+        guardianName: normalizeSummerCrashText(match?.guardianName),
+        classBand: normalizeSummerCrashText(match?.classBand),
+        summerId,
+        maskedSummerId:
+          summerId.length <= 4
+            ? summerId
+            : `${summerId.slice(0, 2)}••${summerId.slice(-2)}`,
+      };
+    }) satisfies SummerCrashLookupMatch[],
   };
 }
 
@@ -545,7 +1129,11 @@ export async function getSummerCrashStudentState(params: {
     throw new Error("Summer Crash Course access is only available for summer accounts.");
   }
 
-  const campaign = await getOrCreateSummerCrashCampaign();
+  const { campaign, enrollment, courseAccess } =
+    await getSummerCrashCourseAccessForStudent({
+      schoolKey: params.schoolKey,
+      studentId: params.studentId,
+    });
   const { User: UserModel } = await getTenantModels(params.schoolKey, ["User"]);
   const studentRecord = await UserModel.findById(params.studentId).select(
     "name fatherName mobileNumber passwordHash rollNumber role",
@@ -555,27 +1143,37 @@ export async function getSummerCrashStudentState(params: {
     throw new Error("Summer Crash Course student account not found.");
   }
 
-  const enrollment = await findSummerCrashEnrollmentByStudentId(params.studentId);
   const classBand = normalizeSummerCrashText(enrollment?.classBand);
   const requiresPasswordSetup = await isUsingDefaultStudentPassword({
     mobileNumber: studentRecord.mobileNumber,
     passwordHash: studentRecord.passwordHash,
   });
-  const courseList = await listStudentCoursesPage({
-    schoolKey: params.schoolKey,
-    studentId: params.studentId,
-    studentPlacement: params.studentPlacement,
-    page: 1,
-    limit: 60,
-    includeOptions: false,
-  });
-  const courses = classBand
-    ? filterCoursesBySummerCrashMapping({
+  const courseList = courseAccess.isUnlocked
+    ? await listStudentCoursesPage({
+        schoolKey: params.schoolKey,
+        studentId: params.studentId,
+        studentPlacement: params.studentPlacement,
+        page: 1,
+        limit: 60,
+        includeOptions: false,
+      })
+    : null;
+  const courses = !courseList
+    ? []
+    : classBand
+      ? filterCoursesBySummerCrashMapping({
+          campaign,
+          classBand,
+          courses: courseList.items,
+        })
+      : courseList.items;
+  const diagnostic = classBand
+    ? await buildSummerCrashDiagnosticState({
         campaign,
         classBand,
-        courses: courseList.items,
+        enrollment,
       })
-    : courseList.items;
+    : null;
 
   if (enrollment?._id && !enrollment.firstAccessAt) {
     await SummerCrashEnrollment.updateOne(
@@ -601,18 +1199,16 @@ export async function getSummerCrashStudentState(params: {
     guardianName:
       normalizeSummerCrashText(enrollment?.guardianName) ||
       normalizeSummerCrashText(studentRecord.fatherName),
-    classBand:
-      classBand ||
-      normalizeSummerCrashText(enrollment?.classBand),
+    classBand: classBand || normalizeSummerCrashText(enrollment?.classBand),
     summerId:
       String(enrollment?.summerId || studentRecord.rollNumber || "")
         .trim()
         .toUpperCase(),
     requiresPasswordSetup,
+    courseAccess,
     courses,
-    destinationHref: requiresPasswordSetup
-      ? SUMMER_CRASH_WELCOME_PATH
-      : resolveSummerCrashDestinationHref(courses.map((course) => course._id)),
+    destinationHref: SUMMER_CRASH_HOME_PATH,
+    diagnostic,
   } satisfies SummerCrashStudentState;
 }
 
@@ -624,6 +1220,7 @@ export async function completeSummerCrashSetup(params: {
     academicSectionId?: string | null;
   };
   newPassword: string;
+  nextDestinationHref?: string | null;
 }) {
   if (!isSummerCrashSchoolKey(params.schoolKey)) {
     throw new Error("Summer Crash Course setup is only available for summer accounts.");
@@ -647,7 +1244,12 @@ export async function completeSummerCrashSetup(params: {
   });
 
   if (!usesDefaultPassword) {
-    return getSummerCrashStudentState(params);
+    const existingState = await getSummerCrashStudentState(params);
+    const safeNextDestination = getSafeReturnToPath(params.nextDestinationHref);
+    return {
+      ...existingState,
+      destinationHref: safeNextDestination || existingState.destinationHref,
+    };
   }
 
   if (defaultPassword && newPassword === defaultPassword) {
@@ -680,5 +1282,131 @@ export async function completeSummerCrashSetup(params: {
     },
   ).catch(() => undefined);
 
-  return getSummerCrashStudentState(params);
+  const state = await getSummerCrashStudentState(params);
+  const safeNextDestination = getSafeReturnToPath(params.nextDestinationHref);
+  return {
+    ...state,
+    destinationHref: safeNextDestination || state.destinationHref,
+  };
+}
+
+export async function recordSummerCrashDiagnosticStarted(params: {
+  schoolKey: string;
+  studentId: string;
+  paperId: string;
+}) {
+  if (!isSummerCrashSchoolKey(params.schoolKey)) {
+    return;
+  }
+
+  const campaign = await getOrCreateSummerCrashCampaign();
+  const enrollment = await findSummerCrashEnrollmentByStudentId(params.studentId);
+  if (!enrollment) {
+    return;
+  }
+
+  const classBand = normalizeSummerCrashText(enrollment.classBand);
+  const mapping = resolveSummerCrashClassMapping(campaign, classBand);
+  const diagnosticQuestionPaperId = String(
+    mapping?.diagnosticQuestionPaperId || "",
+  ).trim();
+
+  if (!diagnosticQuestionPaperId || diagnosticQuestionPaperId !== params.paperId) {
+    return;
+  }
+
+  const paperSummary = await loadSummerCrashQuestionPaperSummary(params.paperId);
+  if (!paperSummary?.supportsInstantResults) {
+    return;
+  }
+
+  const update: Record<string, unknown> = {
+    diagnosticQuestionPaperId: params.paperId,
+    diagnosticStartedAt: enrollment.diagnosticStartedAt || new Date(),
+  };
+
+  if (enrollment.diagnosticStatus !== "submitted") {
+    update.diagnosticStatus = "started";
+  }
+
+  if (!enrollment.entrySource) {
+    update.entrySource = "diagnostic";
+  }
+
+  await SummerCrashEnrollment.updateOne(
+    {
+      _id: enrollment._id,
+    },
+    {
+      $set: update,
+    },
+  ).catch(() => undefined);
+}
+
+export async function recordSummerCrashDiagnosticSubmitted(params: {
+  schoolKey: string;
+  studentId: string;
+  paperId: string;
+  responseId?: string | null;
+  score?: number | null;
+}) {
+  if (!isSummerCrashSchoolKey(params.schoolKey)) {
+    return;
+  }
+
+  const campaign = await getOrCreateSummerCrashCampaign();
+  const enrollment = await findSummerCrashEnrollmentByStudentId(params.studentId);
+  if (!enrollment) {
+    return;
+  }
+
+  const classBand = normalizeSummerCrashText(enrollment.classBand);
+  const mapping = resolveSummerCrashClassMapping(campaign, classBand);
+  const diagnosticQuestionPaperId = String(
+    mapping?.diagnosticQuestionPaperId || "",
+  ).trim();
+
+  if (!diagnosticQuestionPaperId || diagnosticQuestionPaperId !== params.paperId) {
+    return;
+  }
+
+  const paperSummary = await loadSummerCrashQuestionPaperSummary(params.paperId);
+  if (!paperSummary?.supportsInstantResults) {
+    return;
+  }
+
+  const numericScore = Number(params.score);
+  const diagnosticScore = Number.isFinite(numericScore) ? numericScore : null;
+  const diagnosticPercent =
+    diagnosticScore !== null && paperSummary.totalMarks > 0
+      ? Number(
+          Math.max(
+            0,
+            Math.min(100, (diagnosticScore / paperSummary.totalMarks) * 100),
+          ).toFixed(2),
+        )
+      : null;
+
+  const update: Record<string, unknown> = {
+    diagnosticQuestionPaperId: params.paperId,
+    diagnosticStatus: "submitted",
+    diagnosticStartedAt: enrollment.diagnosticStartedAt || new Date(),
+    diagnosticCompletedAt: new Date(),
+    diagnosticResponseId: String(params.responseId || "").trim() || null,
+    diagnosticScore,
+    diagnosticPercent,
+  };
+
+  if (!enrollment.entrySource) {
+    update.entrySource = "diagnostic";
+  }
+
+  await SummerCrashEnrollment.updateOne(
+    {
+      _id: enrollment._id,
+    },
+    {
+      $set: update,
+    },
+  ).catch(() => undefined);
 }

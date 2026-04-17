@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
+import {
+  assertSummerCrashStudentApiAccess,
+} from "@/lib/server/summer-crash";
 import { listReleasedStudentAccountReports } from "@/lib/student-account/data";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +16,19 @@ export async function GET(req: NextRequest) {
 
   const schoolKey = auth.schoolKey as string;
   const studentId = auth.session.user.id;
+  const accessCheck = await assertSummerCrashStudentApiAccess({
+    schoolKey,
+    studentId,
+    target: {
+      kind: "locked-student-content",
+    },
+  });
+  if (!accessCheck.allowed) {
+    return NextResponse.json(
+      { success: false, message: accessCheck.message },
+      { status: 403 },
+    );
+  }
 
   try {
     const reports = await listReleasedStudentAccountReports({
@@ -35,4 +51,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-

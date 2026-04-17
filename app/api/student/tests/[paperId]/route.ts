@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
 import {
+  assertSummerCrashStudentApiAccess,
+} from "@/lib/server/summer-crash";
+import {
   buildExamRuntimeErrorPayload,
   isExamRuntimeEnabled,
 } from "@/lib/exam-runtime";
@@ -23,6 +26,20 @@ export async function GET(
 
   const schoolKey = auth.schoolKey as string;
   const studentId = auth.session.user.id;
+  const accessCheck = await assertSummerCrashStudentApiAccess({
+    schoolKey,
+    studentId,
+    target: {
+      kind: "diagnostic-test",
+      paperId,
+    },
+  });
+  if (!accessCheck.allowed) {
+    return NextResponse.json(
+      { success: false, message: accessCheck.message },
+      { status: 403 },
+    );
+  }
 
   try {
     const result = await getStudentTestDetailData({

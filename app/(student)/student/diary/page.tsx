@@ -11,6 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ListPaginationLinks from "@/components/ui/list-pagination-links";
 import { authOptions } from "@/lib/auth";
 import { formatDiaryDateLabel, getTodayDiaryEntryDate } from "@/lib/diary/shared";
+import {
+  assertSummerCrashStudentPageAccess,
+} from "@/lib/server/summer-crash";
 import { listStudentDiaryEntriesPage } from "@/lib/server/diary";
 
 export const runtime = "nodejs";
@@ -103,6 +106,17 @@ export default async function StudentDiaryPage({
 
   if (!schoolKey || !studentId) {
     redirect("/auth/signin");
+  }
+
+  const accessCheck = await assertSummerCrashStudentPageAccess({
+    schoolKey,
+    studentId,
+    target: {
+      kind: "locked-student-content",
+    },
+  });
+  if (!accessCheck.allowed) {
+    redirect(accessCheck.policy.redirectHref);
   }
 
   const resolvedSearchParams = await searchParams;

@@ -11,11 +11,14 @@ import {
   SUMMER_CRASH_SIGNIN_PATH,
   SUMMER_CRASH_WELCOME_PATH,
 } from "@/lib/summer-crash/constants";
-import { isSummerCrashSession } from "@/lib/summer-crash/shared";
+import {
+  formatSummerCrashPrice,
+  isSummerCrashSession,
+} from "@/lib/summer-crash/shared";
 
 export const metadata: Metadata = {
   title: "Summer Crash Course",
-  description: "Free Summer Crash Course registration and student sign-in.",
+  description: "Summer Crash Course registration and student sign-in.",
 };
 
 export default async function SummerCrashCourseLandingPage() {
@@ -35,33 +38,45 @@ export default async function SummerCrashCourseLandingPage() {
     redirect(SUMMER_CRASH_WELCOME_PATH);
   }
 
+  const hasPaidCourseAccess = Number(config.price) > 0;
+  const priceLabel = formatSummerCrashPrice(config.price, config.currency);
+
   return (
     <div className="public-flow-page">
       <div className="public-flow-shell">
         <section className="public-flow-hero text-center">
           <div className="public-flow-badge mx-auto mb-4 w-fit">
-            Free Summer Access
+            Limited Summer Seats
           </div>
           <h1 className="mx-auto max-w-4xl text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
             {config.title}
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-            A separate summer-only learning space for students. No school picker,
-            no teacher portal, no extra confusion.
+            A separate summer-only learning space for students. Parents can
+            either start with the free diagnostic or register directly for the
+            summer course without touching the normal school portal.
+            {hasPaidCourseAccess
+              ? ` The diagnostic stays free, and course lessons unlock after payment (${priceLabel}).`
+              : " The full summer experience is currently free."}
           </p>
 
           <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
             <Link
-              href={SUMMER_CRASH_REGISTER_PATH}
+              href={`${SUMMER_CRASH_REGISTER_PATH}?entry=diagnostic`}
               className="public-flow-button-primary inline-flex min-w-[13rem] items-center justify-center"
             >
-              Register Free
+              Take Free Diagnostic Test
             </Link>
             <Link
-              href={SUMMER_CRASH_SIGNIN_PATH}
+              href={`${SUMMER_CRASH_REGISTER_PATH}?entry=direct_registration`}
               className="public-flow-button-secondary inline-flex min-w-[13rem] items-center justify-center"
             >
-              Sign In
+              Register for Summer Course
+            </Link>
+          </div>
+          <div className="mt-4">
+            <Link href={SUMMER_CRASH_SIGNIN_PATH} className="public-flow-text-link">
+              Already registered? Sign In
             </Link>
           </div>
         </section>
@@ -100,7 +115,12 @@ export default async function SummerCrashCourseLandingPage() {
             </h2>
             <ul className="space-y-3 text-sm leading-6 text-muted-foreground">
               <li>Phone-first summer-only sign-in with no school picker.</li>
-              <li>Free access to crash-course lessons matched to the selected class band.</li>
+              <li>
+                {hasPaidCourseAccess
+                  ? `Free diagnostic first, then course lessons unlock after payment (${priceLabel}).`
+                  : "Free access to crash-course lessons matched to the selected class band."}
+              </li>
+              <li>Optional free diagnostic test with instant result-ready public flow.</li>
               <li>First login asks the student to create a new password once.</li>
               <li>Backup Summer ID available only for help and support when needed.</li>
             </ul>

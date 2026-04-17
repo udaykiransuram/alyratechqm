@@ -9,8 +9,11 @@ import {
   fetchApiJson,
   getClientRequestErrorMessage,
 } from "@/lib/client/api";
+import { setSchoolSelectionCookies } from "@/lib/client/school";
 import { setStudentPortalSignInPath } from "@/lib/client/student-portal-signin-path";
 import {
+  SUMMER_CRASH_DISPLAY_NAME,
+  SUMMER_CRASH_SCHOOL_KEY,
   SUMMER_CRASH_SIGNIN_PATH,
 } from "@/lib/summer-crash/constants";
 
@@ -22,6 +25,7 @@ type SummerCrashWelcomeClientProps = {
   classBand: string;
   summerId: string;
   courseTitle: string;
+  nextDestinationHref?: string | null;
 };
 
 type SummerCrashCompleteSetupResponse = {
@@ -40,6 +44,7 @@ export default function SummerCrashWelcomeClient({
   classBand,
   summerId,
   courseTitle,
+  nextDestinationHref = null,
 }: SummerCrashWelcomeClientProps) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -48,6 +53,10 @@ export default function SummerCrashWelcomeClient({
 
   useEffect(() => {
     setStudentPortalSignInPath(SUMMER_CRASH_SIGNIN_PATH);
+    setSchoolSelectionCookies(
+      SUMMER_CRASH_SCHOOL_KEY,
+      SUMMER_CRASH_DISPLAY_NAME,
+    );
   }, []);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -77,7 +86,10 @@ export default function SummerCrashWelcomeClient({
               },
               body: JSON.stringify({
                 newPassword,
+                nextDestinationHref,
               }),
+              schoolKey: SUMMER_CRASH_SCHOOL_KEY,
+              includeSchoolQuery: false,
               fallbackMessage:
                 "We couldn't finish the Summer Crash Course setup.",
             },
@@ -108,12 +120,13 @@ export default function SummerCrashWelcomeClient({
   return (
     <div className="public-flow-surface space-y-6">
       <div className="space-y-2 text-center">
-        <div className="public-flow-badge mx-auto w-fit">Welcome</div>
+        <div className="public-flow-badge mx-auto w-fit">One quick step</div>
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-          {title}
+          Set your password
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          Set a new password once before entering the summer course.
+          {studentName}, create a password once to enter{" "}
+          {courseTitle || title || "Summer Crash Course"}.
         </p>
       </div>
 
@@ -121,60 +134,38 @@ export default function SummerCrashWelcomeClient({
         <FeedbackNotice variant="error">{errorMessage}</FeedbackNotice>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="public-flow-card space-y-3">
-          <div>
-            <p className="public-flow-label">Student</p>
-            <p className="mt-2 text-lg font-semibold text-foreground">
-              {studentName}
-            </p>
-          </div>
-          <div>
-            <p className="public-flow-label">Class band</p>
-            <p className="mt-2 text-base font-medium text-foreground">
-              {classBand}
-            </p>
-          </div>
-          <div>
-            <p className="public-flow-label">Backup Summer ID</p>
-            <p className="mt-2 text-2xl font-bold tracking-[0.08em] text-foreground">
-              {summerId}
-            </p>
-          </div>
-          {guardianName ? (
-            <div>
-              <p className="public-flow-label">Parent / guardian</p>
-              <p className="mt-2 text-base font-medium text-foreground">
-                {guardianName}
-              </p>
-            </div>
-          ) : null}
+      <div className="public-flow-card-soft space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <span className="app-meta-chip">{classBand}</span>
+          <span className="app-meta-chip">
+            {courseTitle || "Summer Crash Course"}
+          </span>
         </div>
-
-        <div className="public-flow-card-soft space-y-3">
-          <div>
-            <p className="public-flow-label">Assigned course</p>
-            <p className="mt-2 text-lg font-semibold text-foreground">
-              {courseTitle || "Summer Crash Course"}
-            </p>
-          </div>
-          <p className="text-sm leading-6 text-muted-foreground">
-            After the password is updated, the student goes directly into the
-            summer learning space. Later sign-ins use the parent phone number
-            and password.
+        {guardianName ? (
+          <p className="text-sm font-medium text-foreground">
+            Parent: {guardianName}
           </p>
-          {supportContact ? (
-            <p className="text-sm font-medium text-foreground">
-              Support: {supportContact}
-            </p>
-          ) : null}
-        </div>
+        ) : null}
+        <p className="text-sm leading-6 text-muted-foreground">
+          Later sign-ins use the parent phone number and this new password.
+        </p>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Backup ID:{" "}
+          <span className="font-semibold tracking-[0.06em] text-foreground">
+            {summerId}
+          </span>
+        </p>
+        {supportContact ? (
+          <p className="text-sm font-medium text-foreground">
+            Support: {supportContact}
+          </p>
+        ) : null}
       </div>
 
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form className="public-flow-card space-y-5" onSubmit={handleSubmit}>
         <div>
           <label className="public-flow-label" htmlFor="newPassword">
-            New password
+            Create password
           </label>
           <Input
             id="newPassword"
@@ -213,7 +204,7 @@ export default function SummerCrashWelcomeClient({
           disabled={isPending}
           className="public-flow-button-primary w-full justify-center"
         >
-          {isPending ? "Saving..." : "Continue to Summer Course"}
+          {isPending ? "Saving..." : "Continue to Summer Home"}
         </Button>
       </form>
     </div>

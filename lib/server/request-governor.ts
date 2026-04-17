@@ -159,6 +159,29 @@ export const REQUEST_GOVERNOR_POLICIES = {
         "Payment setup is temporarily unavailable. Please retry shortly.",
     },
   },
+  summerCrashPay: {
+    id: "summer-crash-pay",
+    label: "Summer crash course payment session",
+    scope: "ip",
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 6,
+    maxConcurrent: 2,
+    failMode: "closed",
+    costClass: "payment",
+    retryAfterSeconds: 5 * 60,
+    alertThresholds: {
+      rate_limited: 3,
+      unavailable: 1,
+    },
+    messages: {
+      rateLimited:
+        "Too many Summer Crash Course payment attempts were made from this network. Please wait a few minutes and retry.",
+      concurrencyLimited:
+        "Summer Crash Course payment is temporarily busy. Please retry in a moment.",
+      unavailable:
+        "Summer Crash Course payment is temporarily unavailable. Please retry shortly.",
+    },
+  },
   parseExtract: {
     id: "parse-extract",
     label: "PDF parse extract",

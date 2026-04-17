@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 
 import StudentDiaryDetailClient from "@/components/student/diary/StudentDiaryDetailClient";
 import { authOptions } from "@/lib/auth";
+import {
+  assertSummerCrashStudentPageAccess,
+} from "@/lib/server/summer-crash";
 import { getStudentDiaryDetail } from "@/lib/server/diary";
 
 
@@ -29,6 +32,17 @@ export default async function StudentDiaryDetailPage({
 
   if (!schoolKey || !studentId) {
     redirect("/auth/signin");
+  }
+
+  const accessCheck = await assertSummerCrashStudentPageAccess({
+    schoolKey,
+    studentId,
+    target: {
+      kind: "locked-student-content",
+    },
+  });
+  if (!accessCheck.allowed) {
+    redirect(accessCheck.policy.redirectHref);
   }
 
   const entry = await getStudentDiaryDetail({

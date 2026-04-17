@@ -9,6 +9,9 @@ import {
   buildExamRuntimeErrorPayload,
   isExamRuntimeEnabled,
 } from "@/lib/exam-runtime";
+import {
+  assertSummerCrashStudentPageAccess,
+} from "@/lib/server/summer-crash";
 import { listStudentTestsData } from "@/lib/server/student-tests";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
@@ -42,6 +45,17 @@ export default async function StudentTestsPage({
 
   if (!schoolKey || !studentId) {
     redirect("/auth/signin");
+  }
+
+  const accessCheck = await assertSummerCrashStudentPageAccess({
+    schoolKey,
+    studentId,
+    target: {
+      kind: "locked-student-content",
+    },
+  });
+  if (!accessCheck.allowed) {
+    redirect(accessCheck.policy.redirectHref);
   }
 
   let initialTests: StudentTest[] = [];

@@ -35,8 +35,10 @@ import {
 } from "@/components/navigation/SiteHeaderShared";
 import { Button } from "@/components/ui/button";
 import { performNextAuthSignOutAndRedirect } from "@/lib/client/next-auth-client";
+import { isSummerCrashSchoolKey } from "@/lib/summer-crash/constants";
 
-const schoolSidebarGroups: SidebarGroup[] = [
+function getSchoolSidebarGroups(isSummerSchool: boolean): SidebarGroup[] {
+  const groups: SidebarGroup[] = [
   {
     title: "Overview",
     items: [
@@ -45,6 +47,15 @@ const schoolSidebarGroups: SidebarGroup[] = [
         icon: Layers,
         children: [{ href: "/workspace", label: "Home" }],
       },
+      ...(isSummerSchool
+        ? [
+            {
+              label: "Public Tests",
+              icon: BarChart2,
+              children: [{ href: "/workspace/public-tests", label: "Public Tests" }],
+            },
+          ]
+        : []),
     ],
   },
   {
@@ -216,7 +227,10 @@ const schoolSidebarGroups: SidebarGroup[] = [
       },
     ],
   },
-];
+  ];
+
+  return groups;
+}
 
 export default function WorkspaceSiteHeader() {
   const pathname = usePathname() || "/workspace";
@@ -230,6 +244,9 @@ export default function WorkspaceSiteHeader() {
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const currentSchool = useCurrentSchoolInfo(true);
+  const schoolSidebarGroups = getSchoolSidebarGroups(
+    isSummerCrashSchoolKey(currentSchool.key),
+  );
   const activePath = pendingPath || pathname;
 
   useEffect(() => {

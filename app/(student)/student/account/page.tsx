@@ -6,6 +6,9 @@ import {
   getStudentAccountBootstrapData,
 } from "@/lib/student-account/data";
 import { authOptions } from "@/lib/auth";
+import {
+  assertSummerCrashStudentPageAccess,
+} from "@/lib/server/summer-crash";
 
 
 export default async function StudentAccountPage() {
@@ -23,6 +26,17 @@ export default async function StudentAccountPage() {
   const studentId = String(session.user.id || "").trim();
   if (!schoolKey || !studentId) {
     redirect("/auth/signin");
+  }
+
+  const accessCheck = await assertSummerCrashStudentPageAccess({
+    schoolKey,
+    studentId,
+    target: {
+      kind: "locked-student-content",
+    },
+  });
+  if (!accessCheck.allowed) {
+    redirect(accessCheck.policy.redirectHref);
   }
 
   const bootstrapData = await getStudentAccountBootstrapData({

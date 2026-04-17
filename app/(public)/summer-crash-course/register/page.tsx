@@ -10,14 +10,30 @@ import { isSummerCrashSession } from "@/lib/summer-crash/shared";
 
 export const metadata: Metadata = {
   title: "Register | Summer Crash Course",
-  description: "Register a student for the free Summer Crash Course.",
+  description:
+    "Register a student for the Summer Crash Course and the free diagnostic flow.",
 };
 
-export default async function SummerCrashRegisterPage() {
-  const [session, config] = await Promise.all([
+type SummerCrashRegisterPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function getSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? String(value[0] || "") : String(value || "");
+}
+
+export default async function SummerCrashRegisterPage({
+  searchParams,
+}: SummerCrashRegisterPageProps) {
+  const [session, config, resolvedSearchParams] = await Promise.all([
     getServerSession(authOptions),
     getSummerCrashPublicConfig(),
+    searchParams,
   ]);
+  const entrySource =
+    getSearchParam(resolvedSearchParams?.entry) === "diagnostic"
+      ? "diagnostic"
+      : "direct_registration";
 
   if (
     session &&
@@ -33,7 +49,10 @@ export default async function SummerCrashRegisterPage() {
   return (
     <div className="public-flow-page public-register-page">
       <div className="public-flow-shell-narrow">
-        <SummerCrashRegistrationClient {...config} />
+        <SummerCrashRegistrationClient
+          {...config}
+          entrySource={entrySource}
+        />
       </div>
     </div>
   );

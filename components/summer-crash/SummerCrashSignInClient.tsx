@@ -12,15 +12,17 @@ import {
   getClientRequestErrorMessage,
 } from "@/lib/client/api";
 import { performCredentialSignIn } from "@/lib/client/next-auth-client";
+import { setSchoolSelectionCookies } from "@/lib/client/school";
 import { setStudentPortalSignInPath } from "@/lib/client/student-portal-signin-path";
 import {
+  SUMMER_CRASH_DISPLAY_NAME,
   SUMMER_CRASH_HELP_PATH,
   SUMMER_CRASH_REGISTER_PATH,
   SUMMER_CRASH_SIGNIN_PATH,
-  SUMMER_CRASH_WELCOME_PATH,
   SUMMER_CRASH_SCHOOL_KEY,
 } from "@/lib/summer-crash/constants";
 import {
+  buildSummerCrashWelcomeHref,
   normalizeSummerCrashLookupMatches,
   resolveSummerCrashSelectedSummerId,
   type NormalizedSummerCrashLookupMatch,
@@ -30,6 +32,7 @@ import {
 type SummerCrashSignInClientProps = {
   phone?: string;
   summerId?: string;
+  nextHref?: string;
   pageError?: string;
 };
 
@@ -48,6 +51,7 @@ async function fetchSummerCrashLookupMatches(phone: string) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ phone }),
+      schoolKey: SUMMER_CRASH_SCHOOL_KEY,
       includeSchoolQuery: false,
       fallbackMessage:
         "We couldn't find any Summer Crash Course students for that phone number.",
@@ -103,6 +107,7 @@ function getSummerCrashAuthErrorMessage(error: string | null | undefined) {
 export default function SummerCrashSignInClient({
   phone: initialPhone = "",
   summerId = "",
+  nextHref = "",
   pageError = "",
 }: SummerCrashSignInClientProps) {
   const [phone, setPhone] = useState(String(initialPhone || "").trim());
@@ -230,7 +235,7 @@ export default function SummerCrashSignInClient({
       void (async () => {
         const result = await performCredentialSignIn({
           provider: "school-user",
-          callbackUrl: SUMMER_CRASH_WELCOME_PATH,
+          callbackUrl: buildSummerCrashWelcomeHref(nextHref),
           credentials: {
             identifier: selectedSummerId,
             password,
@@ -243,8 +248,12 @@ export default function SummerCrashSignInClient({
           return;
         }
 
+        setSchoolSelectionCookies(
+          SUMMER_CRASH_SCHOOL_KEY,
+          SUMMER_CRASH_DISPLAY_NAME,
+        );
         setStudentPortalSignInPath(SUMMER_CRASH_SIGNIN_PATH);
-        window.location.assign(result.url || SUMMER_CRASH_WELCOME_PATH);
+        window.location.assign(result.url || buildSummerCrashWelcomeHref(nextHref));
       })().catch(() => {
         setSubmitError("We couldn't complete Summer Crash Course sign-in.");
       });

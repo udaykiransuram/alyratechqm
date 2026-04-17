@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
+import {
+  assertSummerCrashStudentPageAccess,
+} from "@/lib/server/summer-crash";
 import { listStudentLiveSessions } from "@/lib/server/live-sessions";
 
 export const runtime = "nodejs";
@@ -64,6 +67,17 @@ export default async function StudentLiveClassesPage({
 
   if (!schoolKey || !studentId) {
     redirect("/auth/signin");
+  }
+
+  const accessCheck = await assertSummerCrashStudentPageAccess({
+    schoolKey,
+    studentId,
+    target: {
+      kind: "locked-student-content",
+    },
+  });
+  if (!accessCheck.allowed) {
+    redirect(accessCheck.policy.redirectHref);
   }
 
   const resolvedSearchParams = await searchParams;

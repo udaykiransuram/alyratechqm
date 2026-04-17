@@ -4,14 +4,18 @@ import { getModelRegistry } from "@/lib/mongoose-models";
 import {
   SUMMER_CRASH_DEFAULT_CLASS_BANDS,
   SUMMER_CRASH_DISPLAY_NAME,
+  SUMMER_CRASH_CURRENCY,
+  SUMMER_CRASH_PRICE,
   SUMMER_CRASH_SCHOOL_KEY,
   SUMMER_CRASH_SUPPORT_CONTACT,
+  SUMMER_CRASH_WHATSAPP_GROUP_URL,
 } from "@/lib/summer-crash/constants";
 
 export interface ISummerCrashCampaignClassMapping {
   classBand: string;
   className: string;
   courseIds: string[];
+  diagnosticQuestionPaperId?: string;
   sortOrder: number;
 }
 
@@ -20,6 +24,9 @@ export interface ISummerCrashCampaign extends Document {
   title: string;
   summerSchoolKey: string;
   supportContact?: string;
+  price: number;
+  currency: string;
+  whatsappGroupUrl?: string;
   classMappings: ISummerCrashCampaignClassMapping[];
 }
 
@@ -39,6 +46,11 @@ const SummerCrashCampaignClassMappingSchema =
       courseIds: {
         type: [String],
         default: [],
+      },
+      diagnosticQuestionPaperId: {
+        type: String,
+        trim: true,
+        default: undefined,
       },
       sortOrder: {
         type: Number,
@@ -73,6 +85,22 @@ const SummerCrashCampaignSchema = new Schema<ISummerCrashCampaign>(
       default: SUMMER_CRASH_SUPPORT_CONTACT || undefined,
       trim: true,
     },
+    price: {
+      type: Number,
+      default: SUMMER_CRASH_PRICE,
+      min: 0,
+    },
+    currency: {
+      type: String,
+      default: SUMMER_CRASH_CURRENCY,
+      trim: true,
+      uppercase: true,
+    },
+    whatsappGroupUrl: {
+      type: String,
+      default: SUMMER_CRASH_WHATSAPP_GROUP_URL || undefined,
+      trim: true,
+    },
     classMappings: {
       type: [SummerCrashCampaignClassMappingSchema],
       default: () =>
@@ -80,6 +108,7 @@ const SummerCrashCampaignSchema = new Schema<ISummerCrashCampaign>(
           classBand,
           className: classBand,
           courseIds: [],
+          diagnosticQuestionPaperId: undefined,
           sortOrder: index,
         })),
     },
@@ -102,4 +131,3 @@ const SummerCrashCampaign: Model<ISummerCrashCampaign> =
   );
 
 export default SummerCrashCampaign;
-

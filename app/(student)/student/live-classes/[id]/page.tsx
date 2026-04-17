@@ -5,6 +5,9 @@ import StudentLiveSessionCompanionClient from "@/components/live-sessions/Studen
 import PageHero from "@/components/layout/PageHero";
 import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { authOptions } from "@/lib/auth";
+import {
+  assertSummerCrashStudentPageAccess,
+} from "@/lib/server/summer-crash";
 import { getStudentLiveSessionById } from "@/lib/server/live-sessions";
 
 export const runtime = "nodejs";
@@ -54,6 +57,17 @@ export default async function StudentLiveClassDetailPage({
 
   if (!schoolKey || !studentId) {
     redirect("/auth/signin");
+  }
+
+  const accessCheck = await assertSummerCrashStudentPageAccess({
+    schoolKey,
+    studentId,
+    target: {
+      kind: "locked-student-content",
+    },
+  });
+  if (!accessCheck.allowed) {
+    redirect(accessCheck.policy.redirectHref);
   }
 
   const { id } = await params;
