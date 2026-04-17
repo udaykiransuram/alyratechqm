@@ -1,0 +1,64 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Alyra Tech Secure access portal" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img [ref=e6]
+        - generic [ref=e10]:
+          - paragraph [ref=e11]: Alyra Tech
+          - paragraph [ref=e12]: Secure access portal
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - img [ref=e15]
+          - generic [ref=e18]: Secure access
+        - generic [ref=e19]:
+          - img [ref=e20]
+          - generic [ref=e25]: School Access
+        - link "Administrator Sign In" [ref=e26] [cursor=pointer]:
+          - /url: /auth/company-signin
+          - generic [ref=e27]: Administrator Sign In
+  - main [ref=e28]:
+    - generic [ref=e31]:
+      - generic [ref=e34]:
+        - img [ref=e36]
+        - generic [ref=e41]:
+          - paragraph [ref=e42]: School sign in
+          - heading "Sign in to your school" [level=1] [ref=e43]
+      - generic [ref=e44]:
+        - generic "Choose sign-in portal" [ref=e46]:
+          - generic [ref=e47]:
+            - img [ref=e48]
+            - text: School
+          - link "Company" [ref=e53] [cursor=pointer]:
+            - /url: /auth/company-signin
+            - img [ref=e54]
+            - text: Company
+        - generic [ref=e59]:
+          - paragraph [ref=e60]: Sign in
+          - heading "Sign in" [level=2] [ref=e61]
+        - generic [ref=e62]:
+          - generic [ref=e63]:
+            - text: School
+            - paragraph [ref=e65]: Choose the school first so roll numbers and staff records resolve against the correct directory.
+          - generic [ref=e66]:
+            - text: Email / Roll No
+            - textbox "Email / Roll No" [ref=e67]:
+              - /placeholder: Email or roll number
+            - paragraph [ref=e68]: Students use roll number. Staff use email.
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - generic [ref=e71]: Password
+              - button "Show" [ref=e72] [cursor=pointer]
+            - generic [ref=e73]:
+              - textbox "Password" [ref=e74]:
+                - /placeholder: Enter password
+              - button "Show password" [ref=e75] [cursor=pointer]:
+                - img [ref=e76]
+          - button "Continue securely" [ref=e79] [cursor=pointer]
+        - paragraph [ref=e80]:
+          - text: Need administrator access?
+          - link "Use company sign in" [ref=e81] [cursor=pointer]:
+            - /url: /auth/company-signin
+  - region "Notifications (F8)":
+    - list
+  - alert [ref=e82]
