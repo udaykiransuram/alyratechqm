@@ -36,6 +36,8 @@ export const SUMMER_CRASH_PUBLIC_TESTS_PATH = "/workspace/public-tests";
 export const SUMMER_CRASH_SUCCESS_PATH = "/summer-crash-course/success";
 export const SUMMER_CRASH_FAILURE_PATH = "/summer-crash-course/failure";
 export const SUMMER_CRASH_PAYMENT_PATH = "/summer-crash-course/payment";
+export const SUMMER_CRASH_DIAGNOSTIC_SUBMITTED_PATH =
+  "/student/crash-course/diagnostic-submitted";
 
 export const SUMMER_CRASH_DEFAULT_CLASS_BANDS = [
   "Class 5",

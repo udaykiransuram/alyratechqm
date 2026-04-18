@@ -56,10 +56,15 @@ export default async function StudentTestPage({
   const rawReturnTo = Array.isArray(resolvedSearchParams?.returnTo)
     ? resolvedSearchParams.returnTo[0]
     : resolvedSearchParams?.returnTo;
+  const safeReturnTo = getSafeReturnToPath(rawReturnTo);
   const returnToPath =
     accessCheck.policy.applies && !accessCheck.policy.isUnlocked
-      ? SUMMER_CRASH_HOME_PATH
-      : getSafeReturnToPath(rawReturnTo) || "/student/tests";
+      ? safeReturnTo || SUMMER_CRASH_HOME_PATH
+      : safeReturnTo || "/student/tests";
+  const isSummerCrashDiagnostic =
+    accessCheck.policy.applies && !accessCheck.policy.isUnlocked;
+  const autoStart = isSummerCrashDiagnostic;
+  const allowStartWithoutFullscreen = isSummerCrashDiagnostic;
 
   let initialData: StudentTestDetailResponse | null = null;
   let initialLoadError: string | null = null;
@@ -90,6 +95,8 @@ export default async function StudentTestPage({
       initialData={initialData}
       initialLoadError={initialLoadError}
       returnToPath={returnToPath}
+      autoStart={autoStart}
+      allowStartWithoutFullscreen={allowStartWithoutFullscreen}
     />
   );
 }

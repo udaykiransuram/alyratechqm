@@ -6,10 +6,7 @@ import SummerCrashSignInClient from "@/components/summer-crash/SummerCrashSignIn
 import { authOptions } from "@/lib/auth";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { SUMMER_CRASH_WELCOME_PATH } from "@/lib/summer-crash/constants";
-import {
-  buildSummerCrashWelcomeHref,
-  isSummerCrashSession,
-} from "@/lib/summer-crash/shared";
+import { isSummerCrashSession } from "@/lib/summer-crash/shared";
 
 export const metadata: Metadata = {
   title: "Sign In | Summer Crash Course",
@@ -43,7 +40,7 @@ export default async function SummerCrashSignInPage({
       schoolKey: session.user.schoolKey,
     })
   ) {
-    redirect(nextHref ? buildSummerCrashWelcomeHref(nextHref) : SUMMER_CRASH_WELCOME_PATH);
+    redirect(nextHref || SUMMER_CRASH_WELCOME_PATH);
   }
 
   return (

@@ -18,10 +18,7 @@ import {
   SUMMER_CRASH_SCHOOL_KEY,
   SUMMER_CRASH_SIGNIN_PATH,
 } from "@/lib/summer-crash/constants";
-import {
-  buildSummerCrashWelcomeHref,
-  formatSummerCrashPrice,
-} from "@/lib/summer-crash/shared";
+import { formatSummerCrashPrice } from "@/lib/summer-crash/shared";
 
 type SummerCrashRegistrationClientProps = {
   title: string;
@@ -173,8 +170,6 @@ export default function SummerCrashRegistrationClient({
           }?phone=${encodeURIComponent(form.phone)}&summerId=${encodeURIComponent(
             resolvedSummerId,
           )}&next=${encodeURIComponent(destinationHref)}`;
-          const welcomeHref = buildSummerCrashWelcomeHref(destinationHref);
-
           setSummerId(resolvedSummerId);
           setNextHref(signInHref);
 
@@ -185,7 +180,7 @@ export default function SummerCrashRegistrationClient({
           ) {
             const result = await performCredentialSignIn({
               provider: "school-user",
-              callbackUrl: welcomeHref,
+              callbackUrl: destinationHref,
               credentials: {
                 identifier: resolvedSummerId,
                 password: registration.bootstrapPassword,
@@ -198,7 +193,7 @@ export default function SummerCrashRegistrationClient({
                 SUMMER_CRASH_SCHOOL_KEY,
                 SUMMER_CRASH_DISPLAY_NAME,
               );
-              window.location.assign(result.url || welcomeHref);
+              window.location.assign(result.url || destinationHref);
               return;
             }
           }

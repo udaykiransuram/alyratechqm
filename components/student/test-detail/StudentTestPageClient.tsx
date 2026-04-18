@@ -33,6 +33,8 @@ type StudentTestPageClientProps = {
   initialData: StudentTestDetailResponse | null;
   initialLoadError?: string | null;
   returnToPath?: string;
+  autoStart?: boolean;
+  allowStartWithoutFullscreen?: boolean;
 };
 
 function getBackLabel(href: string) {
@@ -48,6 +50,8 @@ export default function StudentTestPageClient({
   initialData,
   initialLoadError = null,
   returnToPath = "/student/tests",
+  autoStart = false,
+  allowStartWithoutFullscreen = false,
 }: StudentTestPageClientProps) {
   const testsHref = returnToPath || "/student/tests";
   const backLabel = getBackLabel(testsHref);
@@ -56,6 +60,8 @@ export default function StudentTestPageClient({
     initialData,
     initialLoadError,
     returnToPath: testsHref,
+    autoStart,
+    allowStartWithoutFullscreen,
   });
 
   if (runtime.loading) {
@@ -115,7 +121,18 @@ export default function StudentTestPageClient({
   }
 
   const shouldShowFullscreenGate =
-    runtime.attemptStarted && (runtime.isExamLocked || !runtime.isFullscreen);
+    runtime.fullscreenRequired &&
+    runtime.attemptStarted &&
+    (runtime.isExamLocked || !runtime.isFullscreen);
+
+  if (autoStart && !runtime.attemptStarted) {
+    return (
+      <PageLoadingState
+        title="Starting test"
+        description="Preparing your diagnostic."
+      />
+    );
+  }
 
   return (
     <div ref={runtime.examContainerRef} className="min-h-[100dvh]">

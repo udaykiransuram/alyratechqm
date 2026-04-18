@@ -22,7 +22,6 @@ import {
   SUMMER_CRASH_SCHOOL_KEY,
 } from "@/lib/summer-crash/constants";
 import {
-  buildSummerCrashWelcomeHref,
   normalizeSummerCrashLookupMatches,
   resolveSummerCrashSelectedSummerId,
   type NormalizedSummerCrashLookupMatch,
@@ -235,7 +234,7 @@ export default function SummerCrashSignInClient({
       void (async () => {
         const result = await performCredentialSignIn({
           provider: "school-user",
-          callbackUrl: buildSummerCrashWelcomeHref(nextHref),
+          callbackUrl: nextHref || "/student/crash-course",
           credentials: {
             identifier: selectedSummerId,
             password,
@@ -253,7 +252,7 @@ export default function SummerCrashSignInClient({
           SUMMER_CRASH_DISPLAY_NAME,
         );
         setStudentPortalSignInPath(SUMMER_CRASH_SIGNIN_PATH);
-        window.location.assign(result.url || buildSummerCrashWelcomeHref(nextHref));
+        window.location.assign(result.url || nextHref || "/student/crash-course");
       })().catch(() => {
         setSubmitError("We couldn't complete Summer Crash Course sign-in.");
       });

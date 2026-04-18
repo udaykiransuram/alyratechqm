@@ -1,4 +1,5 @@
 import {
+  SUMMER_CRASH_DIAGNOSTIC_SUBMITTED_PATH,
   SUMMER_CRASH_HOME_PATH,
   SUMMER_CRASH_SCHOOL_KEY,
   SUMMER_CRASH_WELCOME_PATH,
@@ -95,7 +96,7 @@ export function resolveSummerCrashDestinationHref(
 }
 
 export function buildSummerCrashDiagnosticReturnToPath() {
-  return `${SUMMER_CRASH_HOME_PATH}?submitted=1&mode=diagnostic`;
+  return SUMMER_CRASH_DIAGNOSTIC_SUBMITTED_PATH;
 }
 
 export function buildSummerCrashDiagnosticHref(paperId: unknown) {

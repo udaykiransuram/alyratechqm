@@ -53,6 +53,8 @@ type UseStudentTestRuntimeArgs = {
   initialData: StudentTestDetailResponse | null;
   initialLoadError?: string | null;
   returnToPath?: string;
+  autoStart?: boolean;
+  allowStartWithoutFullscreen?: boolean;
 };
 
 function shouldRetainQuestionState(
@@ -126,12 +128,17 @@ export function useStudentTestRuntime({
   initialData,
   initialLoadError = null,
   returnToPath = "/student/tests",
+  autoStart = false,
+  allowStartWithoutFullscreen = false,
 }: UseStudentTestRuntimeArgs) {
   const router = useRouter();
   const initialPaper = initialData?.paper || null;
   const initialAttempt = initialData?.attempt || null;
   const initialFullscreen = false;
-  const initialExamLocked = shouldLockExamUntilFullscreen(initialAttempt);
+  const fullscreenRequired = !allowStartWithoutFullscreen;
+  const initialExamLocked = fullscreenRequired
+    ? shouldLockExamUntilFullscreen(initialAttempt)
+    : false;
   const initialHydration = useMemo(() => {
     const answers = buildAnswerMap(initialAttempt, initialPaper);
     const payload = buildSectionAnswersPayloadFromState(initialPaper, answers);
@@ -198,6 +205,7 @@ export function useStudentTestRuntime({
   const isFullscreenRef = useRef(initialFullscreen);
   const isExamLockedRef = useRef(initialExamLocked);
   const requiresResumeRef = useRef(false);
+  const autoStartTriggeredRef = useRef(false);
   const wasFullscreenRef = useRef(false);
   const hasSeenFocusRef = useRef(false);
   const fullscreenTransitionUntilRef = useRef(0);
@@ -223,12 +231,15 @@ export function useStudentTestRuntime({
   }, []);
 
   const canRequireFullscreenResume = useCallback(() => {
+    if (!fullscreenRequired) {
+      return false;
+    }
     if (!attemptStarted || attemptLocked) {
       return false;
     }
 
     return fullscreenTransitionUntilRef.current <= Date.now();
-  }, [attemptLocked, attemptStarted]);
+  }, [attemptLocked, attemptStarted, fullscreenRequired]);
 
   const requireFullscreenResume = useCallback(() => {
     if (!canRequireFullscreenResume()) {
@@ -246,17 +257,20 @@ export function useStudentTestRuntime({
 
     isFullscreenRef.current = nextIsFullscreen;
     setIsFullscreen(nextIsFullscreen);
-    if (!nextIsFullscreen && canRequireFullscreenResume()) {
+    if (!nextIsFullscreen && fullscreenRequired && canRequireFullscreenResume()) {
       requiresResumeRef.current = true;
       if (!isExamLockedRef.current) {
         isExamLockedRef.current = true;
         setIsExamLocked(true);
       }
     }
-  }, [canRequireFullscreenResume]);
+  }, [canRequireFullscreenResume, fullscreenRequired]);
 
 
   const computeExamLockState = useCallback((nextAttempt: StudentAttempt | null) => {
+    if (!fullscreenRequired) {
+      return false;
+    }
     const nextAttemptStarted = Boolean(nextAttempt?._id && nextAttempt?.startedAt);
     const nextAttemptLocked =
       nextAttempt?.status === "submitted" || nextAttempt?.status === "auto_submitted";
@@ -274,7 +288,7 @@ export function useStudentTestRuntime({
       document.fullscreenElement === examContainerRef.current;
 
     return !isNowFullscreen || requiresResumeRef.current;
-  }, []);
+  }, [fullscreenRequired]);
 
   const enforceFullscreenLock = useCallback(() => {
     if (typeof document === "undefined") {
@@ -1047,25 +1061,27 @@ export function useStudentTestRuntime({
     setRecoveryNotice(null);
 
     try {
-      if (!isFullscreenActive()) {
-        await requestFullscreenForExamInternal();
-      }
+      if (fullscreenRequired) {
+        if (!isFullscreenActive()) {
+          await requestFullscreenForExamInternal();
+        }
 
-      if (
-        typeof document === "undefined" ||
-        !document.fullscreenElement ||
-        (examContainerRef.current &&
-          document.fullscreenElement !== examContainerRef.current)
-      ) {
-        const isAnyFullscreen = Boolean(document?.fullscreenElement);
-        const isExamFullscreen =
-          Boolean(document?.fullscreenElement) &&
-          document.fullscreenElement === examContainerRef.current;
-        const message = isAnyFullscreen && !isExamFullscreen
-          ? "The test must be the fullscreen element. Close other fullscreen views and try again."
-          : "Please enter fullscreen to start the test. Fullscreen is required for the entire test.";
-        setActionError(message);
-        return;
+        if (
+          typeof document === "undefined" ||
+          !document.fullscreenElement ||
+          (examContainerRef.current &&
+            document.fullscreenElement !== examContainerRef.current)
+        ) {
+          const isAnyFullscreen = Boolean(document?.fullscreenElement);
+          const isExamFullscreen =
+            Boolean(document?.fullscreenElement) &&
+            document.fullscreenElement === examContainerRef.current;
+          const message = isAnyFullscreen && !isExamFullscreen
+            ? "The test must be the fullscreen element. Close other fullscreen views and try again."
+            : "Please enter fullscreen to start the test. Fullscreen is required for the entire test.";
+          setActionError(message);
+          return;
+        }
       }
 
       requiresResumeRef.current = false;
@@ -1110,6 +1126,17 @@ export function useStudentTestRuntime({
 
   saveAttemptRef.current = runSaveAttempt;
   submitAttemptRef.current = runSubmitAttempt;
+
+  useEffect(() => {
+    if (!autoStart || autoStartTriggeredRef.current) {
+      return;
+    }
+    if (!paper || attemptStarted || isStarting || isSubmitting || loadError) {
+      return;
+    }
+    autoStartTriggeredRef.current = true;
+    void startAttempt();
+  }, [autoStart, attemptStarted, isStarting, isSubmitting, loadError, paper, startAttempt]);
 
   useEffect(() => {
     if (!deadlineAt || !attemptStarted || attemptLocked) return;
@@ -1648,6 +1675,7 @@ export function useStudentTestRuntime({
     startAttempt,
     saveAttempt,
     submitAttempt,
+    fullscreenRequired,
     jumpToQuestion,
     toggleFullscreen,
     requestFullscreenForExam,

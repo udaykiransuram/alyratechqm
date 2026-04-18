@@ -469,12 +469,14 @@ async function loadSummerCrashQuestionPaperSummary(
   const supportsOnlineDelivery = paperSupportsOnlineDelivery(paper);
   const requiresManualReview = paperRequiresManualReview(paper);
   const questionCount = Array.isArray(paper.sections)
-    ? paper.sections.reduce((sum, section: any) => {
-        const count = Array.isArray(section?.questions)
-          ? section.questions.length
-          : 0;
-        return sum + count;
-      }, 0)
+    ? Number(
+        paper.sections.reduce((sum, section: any) => {
+          const count = Array.isArray(section?.questions)
+            ? section.questions.length
+            : 0;
+          return sum + count;
+        }, 0),
+      )
     : 0;
   const supportsInstantResults =
     Boolean(paper.onlineEnabled) &&
@@ -984,9 +986,10 @@ export async function registerSummerCrashStudent(input: {
         )
       : null;
 
+  const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
   if (!studentRecord) {
     summerId = summerId || (await generateUniqueSummerCrashId(UserModel));
-    const passwordHash = await bcrypt.hash(defaultPassword, 10);
     studentRecord = await UserModel.create({
       name: studentName,
       fatherName: guardianName,
@@ -1010,6 +1013,7 @@ export async function registerSummerCrashStudent(input: {
           fatherName: guardianName,
           mobileNumber: phoneDigits,
           class: classDoc._id,
+          passwordHash,
         },
       },
     );
@@ -1022,10 +1026,7 @@ export async function registerSummerCrashStudent(input: {
     throw new Error("We couldn't prepare the Summer Crash Course account.");
   }
 
-  const requiresPasswordSetup = await isUsingDefaultStudentPassword({
-    mobileNumber: studentRecord.mobileNumber,
-    passwordHash: studentRecord.passwordHash,
-  });
+  const requiresPasswordSetup = false;
 
   const nextEnrollmentPatch: Record<string, unknown> = {
     summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
@@ -1039,7 +1040,7 @@ export async function registerSummerCrashStudent(input: {
     classBand,
     classBandNormalized,
     sourceSchoolName: sourceSchoolName || undefined,
-    status: requiresPasswordSetup ? "setup_pending" : "active",
+    status: "active",
   };
 
   if (!existingEnrollment?.entrySource) {
@@ -1100,8 +1101,8 @@ export async function registerSummerCrashStudent(input: {
     sourceSchoolName,
     summerId,
     studentId: String(studentRecord._id),
-    autoSignInAllowed: requiresPasswordSetup,
-    bootstrapPassword: requiresPasswordSetup ? defaultPassword : "",
+    autoSignInAllowed: true,
+    bootstrapPassword: defaultPassword,
     signInPath: SUMMER_CRASH_SIGNIN_PATH,
     destinationHref,
     entrySource,
@@ -1179,10 +1180,7 @@ export async function getSummerCrashStudentState(params: {
   }
 
   const classBand = normalizeSummerCrashText(enrollment?.classBand);
-  const requiresPasswordSetup = await isUsingDefaultStudentPassword({
-    mobileNumber: studentRecord.mobileNumber,
-    passwordHash: studentRecord.passwordHash,
-  });
+  const requiresPasswordSetup = false;
   const courseList = courseAccess.isUnlocked
     ? await listStudentCoursesPage({
         schoolKey: params.schoolKey,
@@ -1219,7 +1217,7 @@ export async function getSummerCrashStudentState(params: {
       {
         $set: {
           firstAccessAt: new Date(),
-          status: requiresPasswordSetup ? "setup_pending" : "active",
+          status: "active",
         },
       },
     ).catch(() => undefined);
