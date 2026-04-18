@@ -168,6 +168,7 @@ export default function StudentTestPageClient({
           paperSubjects={runtime.paperSubjects}
           paperSubjectLabel={runtime.paperSubjectLabel}
           paperClassLabel={runtime.paperClassLabel}
+          fullscreenRequired={runtime.fullscreenRequired}
           deadlineAt={runtime.deadlineAt}
           answeredCount={runtime.answeredCount}
           questionList={runtime.questionList}

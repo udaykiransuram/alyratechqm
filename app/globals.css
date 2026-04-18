@@ -6862,6 +6862,10 @@
     min-height: 100dvh;
   }
 
+  .app-exam-focus-shell-standard {
+    --app-exam-sticky-top: 0px;
+  }
+
   .app-exam-focus-shell-fullscreen {
     max-width: none;
     width: 100%;
@@ -6906,6 +6910,12 @@
       0 24px 40px -34px hsl(var(--app-shadow-deep) / 0.15),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
     backdrop-filter: blur(10px);
+  }
+
+  .app-exam-focus-topbar-static {
+    position: static;
+    top: auto;
+    z-index: auto;
   }
 
   .app-exam-focus-topbar-main {
@@ -8177,6 +8187,15 @@
 
     .app-exam-subject-breakdown-stats {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 1279px) {
+    .app-exam-nav-row {
+      position: static;
+      bottom: auto;
+      z-index: auto;
+      backdrop-filter: none;
     }
   }
 

@@ -427,6 +427,7 @@ const ExamTopbar = memo(function ExamTopbar({
     <div
       className={cn(
         "app-exam-focus-topbar",
+        !isFullscreen && "app-exam-focus-topbar-static",
         isFullscreen && "app-exam-focus-topbar-fullscreen",
       )}
     >
@@ -1698,6 +1699,7 @@ type StudentTestActiveAttemptViewProps = {
   paperSubjects: Array<{ _id: string; name: string }>;
   paperSubjectLabel: string;
   paperClassLabel: string;
+  fullscreenRequired: boolean;
   deadlineAt: string | null;
   answeredCount: number;
   questionList: StudentQuestionListItem[];
@@ -1740,6 +1742,7 @@ export default function StudentTestActiveAttemptView({
   paperSubjects,
   paperSubjectLabel,
   paperClassLabel,
+  fullscreenRequired,
   deadlineAt,
   answeredCount,
   questionList,
@@ -1940,7 +1943,8 @@ export default function StudentTestActiveAttemptView({
   const showCurrentSectionChip = Boolean(
     currentSection && hasMultipleSections,
   );
-  const isExamInteractionLocked = isExamLocked || !isFullscreen;
+  const isExamInteractionLocked =
+    isExamLocked || (fullscreenRequired && !isFullscreen);
   const flushDescriptiveAnswer = useCallback(() => {
     descriptiveEditorRef.current?.flush();
   }, []);
@@ -2071,8 +2075,9 @@ export default function StudentTestActiveAttemptView({
   return (
     <div
       className={cn(
-        "app-page-shell app-exam-focus-shell max-w-[96rem] px-3 pt-3 sm:px-4 sm:pt-4 xl:py-4",
+        "app-page-shell app-exam-focus-shell max-w-[96rem] px-3 sm:px-4 xl:py-4",
         showMobileExamDrawer ? "pb-28 sm:pb-32" : "pb-16 sm:pb-20",
+        !isFullscreen && "app-exam-focus-shell-standard",
         isFullscreen && "app-exam-focus-shell-fullscreen",
       )}
     >

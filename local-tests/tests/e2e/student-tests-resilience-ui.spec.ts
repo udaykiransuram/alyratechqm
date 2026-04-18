@@ -688,3 +688,176 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
     await expect(page).toHaveURL(/callbackUrl=/);
   });
 });
+
+test.describe("Student test UI resilience (network mocked) @mobile", () => {
+  test("keeps auto-start phone flows interactive when fullscreen is optional", async ({
+    page,
+  }) => {
+    await setStudentSession(page);
+
+    const paper = buildPaper();
+    let attempt: StudentAttempt | null = null;
+    let saveCount = 0;
+
+    await routeRunnerApis(page, {
+      paper,
+      getAttempt: () => attempt,
+      onStart: async (route) => {
+        attempt = buildAttempt();
+        await route.fulfill(
+          json({
+            success: true,
+            attempt,
+            status: attempt.status,
+            remainingTimeMs: 25 * 60 * 1000,
+            deadlineAt: isoFromNow(25),
+          }),
+        );
+      },
+      onSave: async (route, body) => {
+        saveCount += 1;
+        attempt = {
+          ...(attempt ?? buildAttempt()),
+          lastSavedAt: isoFromNow(-1),
+          sectionAnswers: Array.isArray(body?.sectionAnswers)
+            ? body.sectionAnswers
+            : [],
+        };
+
+        await route.fulfill(
+          json({
+            success: true,
+            attempt,
+            status: attempt.status,
+            remainingTimeMs: 24 * 60 * 1000,
+            deadlineAt: isoFromNow(24),
+          }),
+        );
+      },
+    });
+
+    await navigateToAppRoute(page, "/student/tests/paper-1?autoStart=1");
+
+    await expect(page.getByText("2 + 2 = ?")).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole("heading", { name: "Fullscreen required" }),
+    ).toHaveCount(0);
+
+    const firstOption = page.locator(".app-exam-option").first();
+    await firstOption.click();
+    await expect(firstOption).toHaveClass(/app-exam-option-selected/);
+
+    await expect
+      .poll(() =>
+        page
+          .locator(".app-exam-focus-topbar")
+          .evaluate((element) => getComputedStyle(element).position),
+      )
+      .toBe("static");
+
+    await expect
+      .poll(() =>
+        page
+          .locator(".app-exam-focus-shell")
+          .evaluate((element) => getComputedStyle(element).paddingTop),
+      )
+      .toBe("0px");
+
+    await expect
+      .poll(() =>
+        page
+          .locator(".app-exam-nav-row")
+          .evaluate((element) => getComputedStyle(element).position),
+      )
+      .toBe("static");
+
+    await page.getByRole("button", { name: "Next" }).click();
+    await expect(page.getByText("3 + 3 = ?")).toBeVisible();
+    await expect.poll(() => saveCount).toBe(1);
+  });
+
+  test("keeps sub-xl laptop layouts interactive when the bottom helper bar is visible", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await setStudentSession(page);
+
+    const paper = buildPaper();
+    let attempt: StudentAttempt | null = null;
+    let saveCount = 0;
+
+    await routeRunnerApis(page, {
+      paper,
+      getAttempt: () => attempt,
+      onStart: async (route) => {
+        attempt = buildAttempt();
+        await route.fulfill(
+          json({
+            success: true,
+            attempt,
+            status: attempt.status,
+            remainingTimeMs: 25 * 60 * 1000,
+            deadlineAt: isoFromNow(25),
+          }),
+        );
+      },
+      onSave: async (route, body) => {
+        saveCount += 1;
+        attempt = {
+          ...(attempt ?? buildAttempt()),
+          lastSavedAt: isoFromNow(-1),
+          sectionAnswers: Array.isArray(body?.sectionAnswers)
+            ? body.sectionAnswers
+            : [],
+        };
+
+        await route.fulfill(
+          json({
+            success: true,
+            attempt,
+            status: attempt.status,
+            remainingTimeMs: 24 * 60 * 1000,
+            deadlineAt: isoFromNow(24),
+          }),
+        );
+      },
+    });
+
+    await navigateToAppRoute(page, "/student/tests/paper-1?autoStart=1");
+
+    await expect(page.getByText("2 + 2 = ?")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".app-exam-mobile-nav-bar")).toBeVisible();
+
+    const firstOption = page.locator(".app-exam-option").first();
+    await firstOption.click();
+    await expect(firstOption).toHaveClass(/app-exam-option-selected/);
+
+    await expect
+      .poll(() =>
+        page
+          .locator(".app-exam-focus-topbar")
+          .evaluate((element) => getComputedStyle(element).position),
+      )
+      .toBe("static");
+
+    await expect
+      .poll(() =>
+        page
+          .locator(".app-exam-focus-shell")
+          .evaluate((element) => getComputedStyle(element).paddingTop),
+      )
+      .toBe("0px");
+
+    await expect
+      .poll(() =>
+        page
+          .locator(".app-exam-nav-row")
+          .evaluate((element) => getComputedStyle(element).position),
+      )
+      .toBe("static");
+
+    await page.getByRole("button", { name: "Next" }).click();
+    await expect(page.getByText("3 + 3 = ?")).toBeVisible();
+    await expect.poll(() => saveCount).toBe(1);
+  });
+});

@@ -55,11 +55,7 @@ export default function StudentTestFullscreenGateView({
               type="button"
               size="lg"
               className="w-full"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                void onResumeFullscreen();
-              }}
+              onClick={() => void onResumeFullscreen()}
             >
               Resume in fullscreen
             </Button>
