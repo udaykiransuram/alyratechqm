@@ -268,8 +268,8 @@ export default function SummerCrashSignInClient({
           Sign in to Summer Crash Course
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          Enter the parent phone number first. If more than one student is linked,
-          pick the student and continue with the password.
+          Start with the parent phone number. If more than one student is linked,
+          choose the student and continue with the password.
         </p>
       </div>
 
@@ -282,7 +282,7 @@ export default function SummerCrashSignInClient({
           <span className="public-flow-step">1</span>
           <div>
             <p className="text-lg font-semibold text-foreground">
-              Find the student account
+              Find the student
             </p>
             <p className="public-flow-helper">
               Use the phone or WhatsApp number shared during summer registration.
@@ -333,7 +333,7 @@ export default function SummerCrashSignInClient({
               <p className="public-flow-helper">
                 {matches.length === 1
                   ? "The linked student account is ready below."
-                  : "Select the student who should enter the summer course."}
+                  : "Choose the child who should enter the summer course."}
               </p>
             </div>
           </div>
@@ -399,8 +399,8 @@ export default function SummerCrashSignInClient({
                   Enter password
                 </p>
                 <p className="public-flow-helper">
-                  Sign in for {selectedMatch.studentName}. Summer ID stays only
-                  as a backup reference.
+                  Sign in for {selectedMatch.studentName}. Keep the backup ID
+                  only if support asks for it.
                 </p>
               </div>
             </div>
@@ -448,8 +448,8 @@ export default function SummerCrashSignInClient({
                 </button>
               </div>
               <p className="public-flow-helper mt-2">
-                First sign-in uses the saved phone digits once, then the student
-                creates a new password.
+                On the first sign-in, use the saved phone digits once. After
+                that, use the new password.
               </p>
             </div>
 

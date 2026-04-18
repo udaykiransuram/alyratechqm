@@ -83,7 +83,7 @@ export default async function StudentSummerCrashHomePage({
         density="compact"
         description={
           isCourseLocked
-            ? "Take the free diagnostic first. Summer lessons unlock here after payment."
+            ? "The free diagnostic is ready now. Lessons will open here after payment."
             : state.courses.length > 0 || state.diagnostic
               ? "Open the assigned summer courses and the free diagnostic from here."
               : "Your summer lessons will appear here as soon as they are assigned."
@@ -95,19 +95,19 @@ export default async function StudentSummerCrashHomePage({
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem]">
         <Card className="app-surface overflow-hidden">
           <CardHeader className="app-section-header">
-            <CardTitle>Assigned Summer Courses</CardTitle>
+            <CardTitle>Your Summer Lessons</CardTitle>
           </CardHeader>
           <CardContent className="app-section-body space-y-3">
             {isCourseLocked ? (
               <div className="rounded-[1.25rem] border border-dashed border-border/70 p-5 text-sm leading-6 text-muted-foreground">
-                Summer lessons unlock after payment. Once the payment is confirmed,
-                the assigned course cards will appear here automatically.
+                Lessons will appear here automatically after the payment is
+                confirmed for this student.
               </div>
             ) : null}
 
             {!isCourseLocked && state.courses.length === 0 ? (
               <div className="rounded-[1.25rem] border border-dashed border-border/70 p-5 text-sm leading-6 text-muted-foreground">
-                No summer course is assigned to this student yet.
+                No summer lessons are assigned to this student yet.
               </div>
             ) : null}
 
@@ -155,7 +155,7 @@ export default async function StudentSummerCrashHomePage({
           {state.diagnostic ? (
             <Card className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
-                <CardTitle>Free Diagnostic</CardTitle>
+                <CardTitle>Free Diagnostic Test</CardTitle>
               </CardHeader>
               <CardContent className="app-section-body space-y-3">
                 <p className="text-sm leading-6 text-muted-foreground">
@@ -206,27 +206,26 @@ export default async function StudentSummerCrashHomePage({
           {isCourseLocked ? (
             <Card className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
-                <CardTitle>Unlock Summer Course</CardTitle>
+                <CardTitle>Unlock Lessons</CardTitle>
               </CardHeader>
               <CardContent className="app-section-body space-y-3">
                 <p className="text-sm leading-6 text-muted-foreground">
-                  The diagnostic stays free. Course lessons unlock for this student
-                  after the Summer Crash Course payment is confirmed.
+                  The free diagnostic stays open. To start lessons, complete the
+                  course payment for this student.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <span className="app-meta-chip">{priceLabel}</span>
                   <span className="app-meta-chip">
                     {state.courseAccess.latestPaymentStatus === "pending"
-                      ? "Payment pending"
+                      ? "Checking payment"
                       : state.courseAccess.latestPaymentStatus === "failed"
-                        ? "Retry payment"
-                        : "Course locked"}
+                        ? "Payment needs retry"
+                        : "Lessons locked"}
                   </span>
                 </div>
                 {state.courseAccess.latestPaymentStatus === "pending" ? (
                   <p className="text-sm leading-6 text-muted-foreground">
-                    If you already completed the payment, refresh the status in a
-                    few seconds.
+                    Already paid? Refresh the status after a few seconds.
                   </p>
                 ) : null}
                 <SummerCrashPaymentCard
@@ -240,14 +239,15 @@ export default async function StudentSummerCrashHomePage({
 
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
-              <CardTitle>Summer ID</CardTitle>
+              <CardTitle>Backup ID</CardTitle>
             </CardHeader>
             <CardContent className="app-section-body">
               <p className="text-2xl font-bold tracking-[0.08em] text-foreground">
                 {state.summerId}
               </p>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Keep this ID safe for summer-only sign in.
+                Most families sign in with the parent phone number. Keep this ID
+                only in case support asks for it.
               </p>
             </CardContent>
           </Card>

@@ -125,8 +125,7 @@ export default function SummerCrashWelcomeClient({
           Set your password
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          {studentName}, create a password once to enter{" "}
-          {courseTitle || title || "Summer Crash Course"}.
+          {studentName}, create a password once to open your summer account.
         </p>
       </div>
 
@@ -150,7 +149,7 @@ export default function SummerCrashWelcomeClient({
           Later sign-ins use the parent phone number and this new password.
         </p>
         <p className="text-sm leading-6 text-muted-foreground">
-          Backup ID:{" "}
+          Backup ID (only if support asks):{" "}
           <span className="font-semibold tracking-[0.06em] text-foreground">
             {summerId}
           </span>
@@ -204,7 +203,7 @@ export default function SummerCrashWelcomeClient({
           disabled={isPending}
           className="public-flow-button-primary w-full justify-center"
         >
-          {isPending ? "Saving..." : "Continue to Summer Home"}
+          {isPending ? "Saving..." : "Save and Continue"}
         </Button>
       </form>
     </div>

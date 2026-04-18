@@ -95,10 +95,10 @@ export default function SummerCrashRegistrationClient({
       : "Free Registration";
   const pageDescription = isDiagnosticEntry
     ? hasPaidCourseAccess
-      ? "Register once and we will open the class-matched free diagnostic test right after sign-in. Summer lessons unlock after payment."
-      : "Register once and we will open the class-matched free diagnostic test right after sign-in."
+      ? "Register once to open the class-matched free diagnostic after sign-in. Lessons unlock later after payment."
+      : "Register once to open the class-matched free diagnostic after sign-in."
     : hasPaidCourseAccess
-      ? "Register once and enter the summer home without using the normal school portal. The free diagnostic stays open, and lessons unlock after payment."
+      ? "Register once and go to the summer home after sign-in. The free diagnostic stays open there, and lessons unlock after payment."
       : "Register once and enter the summer learning space without using the normal school portal.";
   const submitLabel = isDiagnosticEntry
     ? "Register & Continue"
@@ -205,10 +205,10 @@ export default function SummerCrashRegistrationClient({
 
           setSuccessMessage(
             isDiagnosticEntry
-              ? "Registration is done. Continue to summer sign-in to start the free diagnostic."
+              ? "Registration complete. Continue to sign in and start the free diagnostic."
               : hasPaidCourseAccess
-                ? "Registration is done. Continue to summer sign-in to open the summer home and unlock the course after payment."
-                : "Registration is done. Continue to summer sign-in to open the learning space.",
+                ? "Registration complete. Continue to sign in, open the summer home, and unlock lessons after payment."
+                : "Registration complete. Continue to sign in and open the learning space.",
           );
         } catch (error) {
           setErrorMessage(
@@ -263,11 +263,11 @@ export default function SummerCrashRegistrationClient({
         <div className="public-flow-card space-y-4">
           <div className="space-y-1">
             <p className="text-lg font-semibold text-foreground">
-              Registration saved
+              Registration complete
             </p>
             <p className="text-sm leading-6 text-muted-foreground">
-              Sign in with the parent phone number below. The Summer ID stays as
-              a backup if support ever needs it.
+              Sign in with the parent phone number below. Keep the backup ID
+              only if support ever asks for it.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -287,7 +287,7 @@ export default function SummerCrashRegistrationClient({
             {isDiagnosticEntry
               ? "After sign-in, the student can start the free diagnostic right away."
               : hasPaidCourseAccess
-                ? "After sign-in, the student goes to the summer home. The diagnostic stays free there, and the course unlocks after payment."
+                ? "After sign-in, the student goes to the summer home. The free diagnostic stays open there, and lessons unlock after payment."
                 : "After sign-in, the student goes straight to the summer learning space."}
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -317,11 +317,11 @@ export default function SummerCrashRegistrationClient({
         >
           <div className="public-flow-card-soft space-y-3">
             <p className="text-base font-semibold text-foreground">
-              Simple sign-in for parents and students
+              Easy sign-in for families
             </p>
             <p className="text-sm leading-6 text-muted-foreground">
-              Use the parent phone number later to sign in. The Summer ID stays
-              only as a backup reference.
+              Use the parent phone number later to sign in. Keep the backup ID
+              only if support ever asks for it.
             </p>
             <div className="flex flex-wrap gap-2">
               <span className="app-meta-chip">

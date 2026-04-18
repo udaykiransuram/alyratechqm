@@ -22,6 +22,13 @@ export const DEFAULT_BENCHMARK_VIEW_SETTINGS: BenchmarkViewSettings = {
 const TIE_EPSILON = 0.001;
 
 function toNumeric(value: any) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
 }

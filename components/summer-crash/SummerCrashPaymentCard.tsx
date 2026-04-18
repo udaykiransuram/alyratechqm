@@ -106,7 +106,7 @@ export default function SummerCrashPaymentCard({
   const amountLabel = formatSummerCrashPrice(price, currency);
   const primaryLabel =
     latestPaymentStatus === "pending"
-      ? `Retry Payment ${amountLabel}`
+      ? `Try Payment Again ${amountLabel}`
       : `Pay ${amountLabel}`;
 
   return (
@@ -136,7 +136,7 @@ export default function SummerCrashPaymentCard({
             className="w-full"
             onClick={() => window.location.reload()}
           >
-            Refresh payment status
+            Check payment status
           </Button>
         ) : null}
       </div>

@@ -165,12 +165,12 @@ export default function SummerCrashLookupClient({
                   ) : null}
                 </div>
                 <div className="sm:text-right">
-                  <p className="public-flow-label">Backup Summer ID</p>
+                  <p className="public-flow-label">Backup ID</p>
                   <p className="mt-2 text-xl font-bold tracking-[0.08em] text-foreground">
                     {match.summerId}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Masked view: {match.maskedSummerId}
+                    Masked reference: {match.maskedSummerId}
                   </p>
                 </div>
               </div>

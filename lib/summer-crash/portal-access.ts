@@ -17,7 +17,7 @@ export type SummerCrashPortalAccessTarget =
   | { kind: "locked-student-content" };
 
 export const SUMMER_CRASH_PORTAL_ACCESS_LOCK_MESSAGE =
-  "Before payment, only the free diagnostic test and its report are available.";
+  "Only the free diagnostic test and its report are available until payment is completed.";
 
 export function getDefaultSummerCrashPortalAccessPolicy(): SummerCrashPortalAccessPolicy {
   return {

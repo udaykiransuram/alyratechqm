@@ -52,11 +52,11 @@ export default async function SummerCrashCourseLandingPage() {
             {config.title}
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-            A separate summer-only learning space for students. Parents can
-            either start with the free diagnostic or register directly for the
-            summer course without touching the normal school portal.
+            A separate summer-only learning space for students. Families can
+            start with the free diagnostic test or register straight for the
+            summer lessons without entering the normal school portal.
             {hasPaidCourseAccess
-              ? ` The diagnostic stays free, and course lessons unlock after payment (${priceLabel}).`
+              ? ` The free test stays open, and lessons unlock after payment (${priceLabel}).`
               : " The full summer experience is currently free."}
           </p>
 
@@ -114,15 +114,15 @@ export default async function SummerCrashCourseLandingPage() {
               What students get
             </h2>
             <ul className="space-y-3 text-sm leading-6 text-muted-foreground">
-              <li>Phone-first summer-only sign-in with no school picker.</li>
+              <li>Phone-number sign-in with no school picker.</li>
               <li>
                 {hasPaidCourseAccess
-                  ? `Free diagnostic first, then course lessons unlock after payment (${priceLabel}).`
-                  : "Free access to crash-course lessons matched to the selected class band."}
+                  ? `Take the free diagnostic first, then unlock lessons after payment (${priceLabel}).`
+                  : "Free access to lessons matched to the selected class band."}
               </li>
-              <li>Optional free diagnostic test with instant result-ready public flow.</li>
+              <li>Free diagnostic test with instant-result flow.</li>
               <li>First login asks the student to create a new password once.</li>
-              <li>Backup Summer ID available only for help and support when needed.</li>
+              <li>Backup ID is kept only for support and recovery.</li>
             </ul>
           </div>
 
