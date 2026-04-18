@@ -21,7 +21,6 @@
     "verify:extended": "npm run verify:full && npm run verify:student-tests:preflight",
     "backfill:exam-runtime-snapshots": "TS_NODE_TRANSPILE_ONLY=1 node --env-file-if-exists=.env --env-file-if-exists=.env.local --loader ts-node/esm --loader ./scripts/alias-loader.mjs scripts/backfill-exam-runtime-snapshots.ts",
     "backfill:question-paper-subjects": "TS_NODE_TRANSPILE_ONLY=1 node --env-file-if-exists=.env --env-file-if-exists=.env.local --loader ts-node/esm --loader ./scripts/alias-loader.mjs scripts/backfill-question-paper-subject-ids.ts",
-    "backfill:question-types": "TS_NODE_TRANSPILE_ONLY=1 node --env-file-if-exists=.env --env-file-if-exists=.env.local --loader ts-node/esm --loader ./scripts/alias-loader.mjs scripts/backfill-question-types.ts",
     "repair:student-login": "TS_NODE_TRANSPILE_ONLY=1 node --env-file-if-exists=.env --env-file-if-exists=.env.local --loader ts-node/esm --loader ./scripts/alias-loader.mjs scripts/repair-student-login.ts",
     "reset:student-passwords-to-phone": "TS_NODE_TRANSPILE_ONLY=1 node --env-file-if-exists=.env --env-file-if-exists=.env.local --loader ts-node/esm --loader ./scripts/alias-loader.mjs scripts/reset-student-passwords-to-roll-numbers.ts",
     "reset:student-passwords-to-roll": "TS_NODE_TRANSPILE_ONLY=1 node --env-file-if-exists=.env --env-file-if-exists=.env.local --loader ts-node/esm --loader ./scripts/alias-loader.mjs scripts/reset-student-passwords-to-roll-numbers.ts",

@@ -117,6 +117,16 @@ type QuestionPaperDoc = {
   sections?: unknown[];
 };
 
+export type DiagnosticPaperValidationDetails = {
+  ok: boolean;
+  issues: string[];
+  missingQuestionIds: string[];
+  missingTypeQuestionIds: string[];
+  unsupportedTypes: string[];
+  hasMissingSectionNames: boolean;
+  questionCount: number;
+};
+
 type CampaignClassDoc = {
   _id?: unknown;
   name?: unknown;
@@ -216,23 +226,37 @@ function getDiagnosticPaperIssues(params: {
   const questionCount = getPaperQuestionCount(params.paper);
   let missingQuestionRefs = 0;
   let missingQuestionTypes = 0;
+  const missingQuestionIds: string[] = [];
+  const missingTypeQuestionIds: string[] = [];
+  const unsupportedTypes = new Set<string>();
+  let hasMissingSectionNames = false;
 
   if (Array.isArray(params.paper.sections)) {
     params.paper.sections.forEach((section: any) => {
+      const sectionName = String(section?.name || "").trim();
+      if (!sectionName) {
+        hasMissingSectionNames = true;
+      }
       (Array.isArray(section?.questions) ? section.questions : []).forEach(
         (entry: any) => {
           const question = entry?.question;
           if (!question) {
             missingQuestionRefs += 1;
+            missingQuestionIds.push(String(entry?.question || ""));
             return;
           }
           if (typeof question !== "object") {
             missingQuestionRefs += 1;
+            missingQuestionIds.push(String(question || ""));
             return;
           }
           const typeValue = String((question as any)?.type || "").trim();
           if (!typeValue) {
             missingQuestionTypes += 1;
+            missingTypeQuestionIds.push(String((question as any)?._id || ""));
+          }
+          if (typeValue && !isOnlineQuestionType(typeValue)) {
+            unsupportedTypes.add(typeValue);
           }
         },
       );
@@ -259,7 +283,6 @@ function getDiagnosticPaperIssues(params: {
 
   if (!paperSupportsOnlineDelivery(params.paper)) {
     const lookup = buildPaperQuestionLookup(params.paper);
-    const unsupportedTypes = new Set<string>();
     let hasMissingType = false;
     let hasInvalidMatrix = false;
 
@@ -279,6 +302,9 @@ function getDiagnosticPaperIssues(params: {
     }
 
     if (questionCount > 0 && lookup.size === 0) {
+      issues.push("section names are missing");
+    }
+    if (hasMissingSectionNames) {
       issues.push("section names are missing");
     }
     if (missingQuestionRefs > 0) {
@@ -308,7 +334,14 @@ function getDiagnosticPaperIssues(params: {
     issues.push("paper has no questions");
   }
 
-  return issues;
+  return {
+    issues,
+    missingQuestionIds: missingQuestionIds.filter(Boolean),
+    missingTypeQuestionIds: missingTypeQuestionIds.filter(Boolean),
+    unsupportedTypes: Array.from(unsupportedTypes).filter(Boolean),
+    hasMissingSectionNames,
+    questionCount,
+  };
 }
 
 async function loadDiagnosticPaperForDisplay(params: {
@@ -346,17 +379,97 @@ async function loadDiagnosticPaperForDisplay(params: {
     };
   }
 
-  const issues = getDiagnosticPaperIssues({
+  const issueResult = getDiagnosticPaperIssues({
     paper,
     expectedClassName: params.expectedClassName,
   });
-  const issueText = issues.length
-    ? `The saved paper is no longer valid for public diagnostic use. (${issues.join(", ")})`
+  const issueText = issueResult.issues.length
+    ? `The saved paper is no longer valid for public diagnostic use. (${issueResult.issues.join(", ")})`
     : null;
 
   return {
     summary: serializeQuestionPaperSummary(paper),
     issue: issueText,
+  };
+}
+
+export async function diagnoseDiagnosticPaper(params: {
+  paperId: string;
+  expectedClassName: string;
+}): Promise<DiagnosticPaperValidationDetails> {
+  const normalizedPaperId = String(params.paperId || "").trim();
+  if (!normalizedPaperId) {
+    return {
+      ok: false,
+      issues: ["missing paper id"],
+      missingQuestionIds: [],
+      missingTypeQuestionIds: [],
+      unsupportedTypes: [],
+      hasMissingSectionNames: false,
+      questionCount: 0,
+    };
+  }
+
+  const { QuestionPaper: QuestionPaperModel } = await getTenantModels(
+    SUMMER_CRASH_SCHOOL_KEY,
+    ["QuestionPaper"],
+  );
+
+  const paper = (await QuestionPaperModel.findOne({
+    _id: normalizedPaperId,
+    ...buildArchiveFilter(false),
+  })
+    .select("title class onlineEnabled assignedAcademicSections sections")
+    .populate("class", "name")
+    .populate({
+      path: "sections.questions.question",
+      select: "_id type options answerIndexes matrixOptions matrixAnswers answerText",
+    })
+    .lean()) as QuestionPaperDoc | null;
+
+  if (!paper?._id) {
+    return {
+      ok: false,
+      issues: ["paper not found"],
+      missingQuestionIds: [],
+      missingTypeQuestionIds: [],
+      unsupportedTypes: [],
+      hasMissingSectionNames: false,
+      questionCount: 0,
+    };
+  }
+
+  const issueResult = getDiagnosticPaperIssues({
+    paper,
+    expectedClassName: params.expectedClassName,
+  });
+
+  const eligibilityIssues: string[] = [];
+  const assignedSectionCount = Array.isArray(paper.assignedAcademicSections)
+    ? paper.assignedAcademicSections.length
+    : 0;
+  if (!paper.onlineEnabled) {
+    eligibilityIssues.push("online mode is off");
+  }
+  if (assignedSectionCount > 0) {
+    eligibilityIssues.push("assigned sections are set");
+  }
+  if (paperRequiresManualReview(paper)) {
+    eligibilityIssues.push("manual review required");
+  }
+
+  const issues = Array.from(
+    new Set([...issueResult.issues, ...eligibilityIssues].filter(Boolean)),
+  );
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    missingQuestionIds: issueResult.missingQuestionIds,
+    missingTypeQuestionIds: issueResult.missingTypeQuestionIds,
+    unsupportedTypes: issueResult.unsupportedTypes,
+    hasMissingSectionNames: issueResult.hasMissingSectionNames,
+    questionCount: issueResult.questionCount,
   };
 }
 

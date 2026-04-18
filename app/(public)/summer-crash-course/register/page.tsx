@@ -48,8 +48,8 @@ export default async function SummerCrashRegisterPage({
       : "direct_registration";
 
   return (
-    <div className="public-flow-page public-register-page">
-      <div className="public-flow-shell-narrow">
+    <div className="public-flow-page public-register-page public-summer-register-page">
+      <div className="public-flow-shell">
         <SummerCrashRegistrationClient
           {...config}
           entrySource={entrySource}

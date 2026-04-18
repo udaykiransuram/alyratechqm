@@ -92,6 +92,10 @@ export default function PublicTestsPageClient({
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isSaving, startSaveTransition] = useTransition();
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [diagnosticDetails, setDiagnosticDetails] = useState<
+    Record<string, any> | null
+  >(null);
 
   useEffect(() => {
     setConfig(initialData.config);
@@ -223,6 +227,44 @@ export default function PublicTestsPageClient({
         }
       })();
     });
+  };
+
+  const handleDiagnose = async (card: WorkspacePublicTestsConfig["classBandCards"][number]) => {
+    if (!card.diagnosticQuestionPaperId) {
+      setErrorMessage("Select a diagnostic paper first.");
+      return;
+    }
+    setErrorMessage("");
+    setSuccessMessage("");
+    setIsDiagnosing(true);
+    setDiagnosticDetails(null);
+
+    try {
+      const response = await fetchApiJson<any>(
+        `/api/workspace/public-tests/diagnose?paperId=${encodeURIComponent(
+          card.diagnosticQuestionPaperId,
+        )}&classBand=${encodeURIComponent(card.classBand)}`,
+        {
+          fallbackMessage: "We couldn't diagnose this diagnostic paper.",
+        },
+      );
+
+      if (!response?.diagnostic) {
+        throw new Error(response?.message || "We couldn't diagnose this paper.");
+      }
+
+      setDiagnosticDetails(response);
+      setSuccessMessage("Diagnostic details loaded.");
+    } catch (error) {
+      setErrorMessage(
+        getClientRequestErrorMessage(
+          error,
+          "We couldn't diagnose this diagnostic paper.",
+        ),
+      );
+    } finally {
+      setIsDiagnosing(false);
+    }
   };
 
   const handleFilterChange = (
@@ -467,7 +509,57 @@ export default function PublicTestsPageClient({
                         Create Question
                       </AppPrefetchLink>
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="app-button-compact"
+                      onClick={() => handleDiagnose(card)}
+                      disabled={isDiagnosing}
+                    >
+                      {isDiagnosing ? "Diagnosing..." : "Validate Paper"}
+                    </Button>
                   </div>
+
+                  {diagnosticDetails &&
+                  diagnosticDetails?.paperId === card.diagnosticQuestionPaperId &&
+                  diagnosticDetails?.classBand === card.classBand ? (
+                    <div className="mt-4 rounded-xl border border-border/70 bg-muted/10 p-4 text-xs text-muted-foreground">
+                      <p className="text-sm font-semibold text-foreground">
+                        Validation details
+                      </p>
+                      <p className="mt-2">
+                        Status: {diagnosticDetails.diagnostic.ok ? "Ready" : "Needs attention"}
+                      </p>
+                      {diagnosticDetails.diagnostic.issues?.length ? (
+                        <ul className="mt-2 list-disc space-y-1 pl-4">
+                          {diagnosticDetails.diagnostic.issues.map((issue: string) => (
+                            <li key={issue}>{issue}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {diagnosticDetails.diagnostic.missingQuestionIds?.length ? (
+                        <div className="mt-3">
+                          <p className="font-semibold text-foreground">
+                            Missing question references
+                          </p>
+                          <p className="mt-1 break-all">
+                            {diagnosticDetails.diagnostic.missingQuestionIds.join(", ")}
+                          </p>
+                        </div>
+                      ) : null}
+                      {diagnosticDetails.diagnostic.missingTypeQuestionIds?.length ? (
+                        <div className="mt-3">
+                          <p className="font-semibold text-foreground">
+                            Missing question types
+                          </p>
+                          <p className="mt-1 break-all">
+                            {diagnosticDetails.diagnostic.missingTypeQuestionIds.join(", ")}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}
