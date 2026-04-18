@@ -7,7 +7,7 @@ import PageHero from '@/components/layout/PageHero';
 import PageShell from '@/components/layout/PageShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import FilePickerField from '@/components/ui/file-picker-field';
+import BulkUploadPanel from '@/components/workspace/BulkUploadPanel';
 import { useToast } from '@/components/ui/use-toast';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
 
@@ -24,6 +24,10 @@ export default function ImportQuestionsPage() {
   const [uploadResult, setUploadResult] = useState<any>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [bulkTestId, setBulkTestId] = useState<string | null>(null);
+  const [convertFeedback, setConvertFeedback] = useState<{
+    message: string;
+    variant: 'success' | 'error' | 'info' | 'warning';
+  } | null>(null);
 
   const { toast } = useToast();
 
@@ -34,16 +38,19 @@ export default function ImportQuestionsPage() {
     setUploadResult(null);
     setUploadError(null);
     setBulkTestId(null);
+    setConvertFeedback(null);
   };
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!file) {
+      const message = 'Choose an Excel file before converting.';
       toast({
         title: 'No file selected',
-        description: 'Choose an Excel file before converting.',
+        description: message,
         variant: 'destructive',
       });
+      setConvertFeedback({ message, variant: 'error' });
       return;
     }
 
@@ -74,29 +81,37 @@ export default function ImportQuestionsPage() {
     if (contentType && contentType.includes('application/json')) {
       const data = await res.json();
       if (!res.ok) {
-        toast({
-          title: 'Conversion failed',
-          description: data?.error || 'Unable to convert the uploaded file.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      setPayload(data);
+      const message = data?.error || 'Unable to convert the uploaded file.';
       toast({
-        title: 'Conversion complete',
-        description: 'Review the generated files before uploading them.',
+        title: 'Conversion failed',
+        description: message,
+        variant: 'destructive',
       });
+      setConvertFeedback({ message, variant: 'error' });
       return;
     }
 
+    setPayload(data);
+    toast({
+      title: 'Conversion complete',
+      description: 'Review the generated files before uploading them.',
+    });
+    setConvertFeedback({
+      message: 'Conversion complete. Review the generated files below.',
+      variant: 'success',
+    });
+    return;
+  }
+
     const rawText = await res.text().catch(() => '');
     const snippet = rawText.replace(/\s+/g, ' ').slice(0, 140);
+    const message = `Status ${res.status}. ${snippet || 'The server returned a non-JSON response.'}`;
     toast({
       title: 'Unexpected response',
-      description: `Status ${res.status}. ${snippet || 'The server returned a non-JSON response.'}`,
+      description: message,
       variant: 'destructive',
     });
+    setConvertFeedback({ message, variant: 'error' });
   }
 
   function dl(filename: string, content: string, type: string) {
@@ -262,45 +277,46 @@ export default function ImportQuestionsPage() {
             ]}
           />
 
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <CardTitle>1. Upload Excel</CardTitle>
-            </CardHeader>
-            <CardContent className="app-section-body space-y-5">
-              <div className="space-y-2">
-                <Button variant="outline" asChild>
-                  <a href="/api/convert/template">Download Excel Template</a>
-                </Button>
-                <p className="text-sm text-muted-foreground">
-                  The template includes tag columns (Chapter Name, Topic, Competency, Difficulty, Template ID).
-                  Any extra columns you add will also be imported as tag types.
-                </p>
+          <BulkUploadPanel
+            title="1. Upload Excel"
+            description="Convert a spreadsheet of questions into the import-ready format."
+            inputId="questionImportFile"
+            accept=".xlsx,.xls"
+            loading={uploading}
+            loadingLabel="Converting..."
+            onFileChange={handleFileChange}
+            onDownloadTemplate={() => {
+              window.location.href = '/api/convert/template';
+            }}
+            templateLabel="Download Excel Template"
+            feedback={convertFeedback}
+            tips={[
+              'Template includes tag columns like Chapter Name, Topic, Competency, Difficulty, Template ID.',
+              'Any extra columns you add will also be imported as tag types.',
+            ]}
+          >
+            <form
+              onSubmit={handleSubmit}
+              className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"
+            >
+              <div className="app-field-group">
+                <div className="app-field-label">Selected file</div>
+                <div className="text-sm text-muted-foreground">
+                  {file?.name || 'No file selected yet.'}
+                </div>
               </div>
+              <Button type="submit" disabled={!file || uploading} className="md:min-w-[120px]">
+                Convert
+              </Button>
+            </form>
 
-              <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                <div className="app-field-group">
-                  <FilePickerField
-                    id="questionImportFile"
-                    label="Excel File"
-                    accept=".xlsx,.xls"
-                    onChange={handleFileChange}
-                    selectedFileName={file?.name || null}
-                    placeholder="Excel workbook"
-                  />
-                </div>
-                <Button type="submit" disabled={!file} className="md:min-w-[120px]">
-                  Convert
-                </Button>
-              </form>
-
-              {payload.testId && (
-                <div className="app-feedback app-feedback-info">
-                  Generated Test ID:{' '}
-                  <span className="font-mono font-medium text-foreground">{payload.testId}</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            {payload.testId && (
+              <div className="app-feedback app-feedback-info">
+                Generated Test ID:{' '}
+                <span className="font-mono font-medium text-foreground">{payload.testId}</span>
+              </div>
+            )}
+          </BulkUploadPanel>
 
           {hasData && (
             <Card className="app-surface overflow-hidden">

@@ -429,6 +429,20 @@ export default function PublicTestsPageClient({
                       Only online papers without section scoping or manual
                       review appear here.
                     </p>
+                    {card.candidatePapers.length === 0 ? (
+                      <div className="mt-3 rounded-xl border border-amber-200/70 bg-amber-50/60 p-3 text-xs text-amber-900">
+                        <p className="font-semibold">No eligible papers found.</p>
+                        <p className="mt-1 text-amber-900/80">
+                          To appear here, a paper must:
+                        </p>
+                        <ul className="mt-2 list-disc space-y-1 pl-4 text-amber-900/80">
+                          <li>Be online enabled.</li>
+                          <li>Have no assigned sections (open to full class).</li>
+                          <li>Not require manual review.</li>
+                          <li>Use only online-supported question types.</li>
+                        </ul>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex flex-wrap gap-2">

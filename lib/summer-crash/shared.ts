@@ -40,7 +40,15 @@ export function normalizeSummerCrashNameKey(value: unknown): string {
 }
 
 export function normalizeSummerCrashClassBandKey(value: unknown): string {
-  return normalizeSummerCrashLookupText(value);
+  const normalized = normalizeSummerCrashLookupText(value);
+  const digits = normalized.match(/\d+/g);
+  if (digits && digits.length > 0) {
+    const n = Number.parseInt(digits[0], 10);
+    if (Number.isFinite(n)) {
+      return `class ${n}`;
+    }
+  }
+  return normalized;
 }
 
 export function formatSummerCrashPrice(price: unknown, currency: unknown): string {

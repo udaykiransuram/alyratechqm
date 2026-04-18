@@ -1057,9 +1057,14 @@ export function useStudentTestRuntime({
         (examContainerRef.current &&
           document.fullscreenElement !== examContainerRef.current)
       ) {
-        setActionError(
-          "Please enter fullscreen to start the test. Fullscreen is required for the entire test.",
-        );
+        const isAnyFullscreen = Boolean(document?.fullscreenElement);
+        const isExamFullscreen =
+          Boolean(document?.fullscreenElement) &&
+          document.fullscreenElement === examContainerRef.current;
+        const message = isAnyFullscreen && !isExamFullscreen
+          ? "The test must be the fullscreen element. Close other fullscreen views and try again."
+          : "Please enter fullscreen to start the test. Fullscreen is required for the entire test.";
+        setActionError(message);
         return;
       }
 

@@ -9,7 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
 import { getSummerCrashStudentState } from "@/lib/server/summer-crash";
-import { SUMMER_CRASH_SIGNIN_PATH, SUMMER_CRASH_WELCOME_PATH } from "@/lib/summer-crash/constants";
+import {
+  SUMMER_CRASH_HOME_PATH,
+  SUMMER_CRASH_SIGNIN_PATH,
+  SUMMER_CRASH_WELCOME_PATH,
+} from "@/lib/summer-crash/constants";
 import {
   formatSummerCrashPrice,
   isSummerCrashSession,
@@ -72,6 +76,119 @@ export default async function StudentSummerCrashHomePage({
   );
   const isCourseLocked =
     state.courseAccess.requiresPayment && !state.courseAccess.isUnlocked;
+
+  if (
+    isCourseLocked &&
+    state.diagnostic?.available &&
+    state.diagnostic.launchHref
+  ) {
+    redirect(state.diagnostic.launchHref);
+  }
+
+  if (isCourseLocked) {
+    return (
+      <div className="app-student-page-shell app-course-page">
+        <PageHero
+          className="app-learning-hero"
+          eyebrow="Summer Crash Course"
+          title="Free Diagnostic"
+          variant="overview"
+          density="compact"
+          description="Only the free diagnostic is available until payment is completed."
+          actions={
+            state.diagnostic?.available ? (
+              <Button asChild className="app-button-primary">
+                <AppPrefetchLink href={state.diagnostic.launchHref}>
+                  Start Free Diagnostic
+                </AppPrefetchLink>
+              </Button>
+            ) : undefined
+          }
+        >
+          <StudentPortalNav />
+        </PageHero>
+
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem]">
+          <Card className="app-surface overflow-hidden">
+            <CardHeader className="app-section-header">
+              <CardTitle>Free Diagnostic Test</CardTitle>
+            </CardHeader>
+            <CardContent className="app-section-body space-y-3">
+              <p className="text-sm leading-6 text-muted-foreground">
+                {state.diagnostic?.available
+                  ? state.diagnostic.title
+                  : "The diagnostic for this class band is not ready right now."}
+              </p>
+              {state.diagnostic?.available ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="app-meta-chip">
+                      {state.diagnostic.totalMarks} marks
+                    </span>
+                    <span className="app-meta-chip">
+                      {state.diagnostic.duration} min
+                    </span>
+                    <span className="app-meta-chip">
+                      {state.diagnostic.status}
+                    </span>
+                  </div>
+                  <Button asChild className="app-button-primary w-full">
+                    <AppPrefetchLink href={state.diagnostic.launchHref}>
+                      {state.diagnostic.status === "started"
+                        ? "Resume Diagnostic"
+                        : "Start Free Diagnostic"}
+                    </AppPrefetchLink>
+                  </Button>
+                </>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <div className="space-y-4">
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Unlock Lessons</CardTitle>
+              </CardHeader>
+              <CardContent className="app-section-body space-y-3">
+                <p className="text-sm leading-6 text-muted-foreground">
+                  The free diagnostic stays open. To start lessons, complete the
+                  course payment for this student.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="app-meta-chip">{priceLabel}</span>
+                  <span className="app-meta-chip">
+                    {state.courseAccess.latestPaymentStatus === "pending"
+                      ? "Checking payment"
+                      : state.courseAccess.latestPaymentStatus === "failed"
+                        ? "Payment needs retry"
+                        : "Lessons locked"}
+                  </span>
+                </div>
+                <SummerCrashPaymentCard
+                  price={state.courseAccess.price}
+                  currency={state.courseAccess.currency}
+                  latestPaymentStatus={state.courseAccess.latestPaymentStatus}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Need help?</CardTitle>
+              </CardHeader>
+              <CardContent className="app-section-body">
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {state.supportContact
+                    ? `Support: ${state.supportContact}`
+                    : "Contact the support team if you need help with access."}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-student-page-shell app-course-page">

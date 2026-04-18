@@ -72,6 +72,9 @@ type SummerCrashQuestionPaperSummary = {
   onlineEnabled: boolean;
   assignedSectionCount: number;
   supportsInstantResults: boolean;
+  supportsOnlineDelivery: boolean;
+  requiresManualReview: boolean;
+  questionCount: number;
 };
 
 export type SummerCrashPublicClassBand = {
@@ -463,11 +466,21 @@ async function loadSummerCrashQuestionPaperSummary(
   const assignedSectionCount = Array.isArray(paper.assignedAcademicSections)
     ? paper.assignedAcademicSections.length
     : 0;
+  const supportsOnlineDelivery = paperSupportsOnlineDelivery(paper);
+  const requiresManualReview = paperRequiresManualReview(paper);
+  const questionCount = Array.isArray(paper.sections)
+    ? paper.sections.reduce((sum, section: any) => {
+        const count = Array.isArray(section?.questions)
+          ? section.questions.length
+          : 0;
+        return sum + count;
+      }, 0)
+    : 0;
   const supportsInstantResults =
     Boolean(paper.onlineEnabled) &&
     assignedSectionCount === 0 &&
-    paperSupportsOnlineDelivery(paper) &&
-    !paperRequiresManualReview(paper);
+    supportsOnlineDelivery &&
+    !requiresManualReview;
 
   return {
     _id: String(paper._id),
@@ -479,6 +492,9 @@ async function loadSummerCrashQuestionPaperSummary(
     onlineEnabled: Boolean(paper.onlineEnabled),
     assignedSectionCount,
     supportsInstantResults,
+    supportsOnlineDelivery,
+    requiresManualReview,
+    questionCount,
   };
 }
 
@@ -510,8 +526,27 @@ async function resolveSummerCrashRegistrationDestination(params: {
   );
 
   if (!paperSummary?.supportsInstantResults) {
+    const issues: string[] = [];
+    if (!paperSummary) {
+      issues.push("paper not found");
+    } else {
+      if (!paperSummary.onlineEnabled) issues.push("online mode is off");
+      if (paperSummary.assignedSectionCount > 0) {
+        issues.push("assigned sections are set");
+      }
+      if (!paperSummary.supportsOnlineDelivery) {
+        issues.push("unsupported question types");
+      }
+      if (paperSummary.requiresManualReview) {
+        issues.push("manual review required");
+      }
+      if (paperSummary.questionCount === 0) {
+        issues.push("paper has no questions");
+      }
+    }
+    const detail = issues.length > 0 ? ` (${issues.join(", ")})` : "";
     throw new Error(
-      "The free diagnostic test is not available for this class band right now.",
+      `The free diagnostic test is not available for this class band right now.${detail}`,
     );
   }
 
