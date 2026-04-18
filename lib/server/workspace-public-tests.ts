@@ -41,6 +41,7 @@ export type WorkspacePublicTestClassBandCard = {
   mappedPaper: WorkspacePublicTestPaperOption | null;
   candidatePapers: WorkspacePublicTestPaperOption[];
   mappingStatus: "ready" | "missing" | "invalid";
+  mappedPaperIssue?: string | null;
 };
 
 export type WorkspacePublicTestsConfig = {
@@ -186,6 +187,112 @@ function serializeQuestionPaperSummary(paper: QuestionPaperDoc) {
     totalMarks: Number(paper.totalMarks || 0),
     updatedAt: serializeDate(paper.updatedAt),
   } satisfies QuestionPaperSummary;
+}
+
+function getPaperQuestionCount(paper: QuestionPaperDoc) {
+  if (!Array.isArray(paper.sections)) {
+    return 0;
+  }
+
+  return Number(
+    paper.sections.reduce((sum, section: any) => {
+      const count = Array.isArray(section?.questions)
+        ? section.questions.length
+        : 0;
+      return sum + count;
+    }, 0),
+  );
+}
+
+function getDiagnosticPaperIssues(params: {
+  paper: QuestionPaperDoc;
+  expectedClassName: string;
+}) {
+  const issues: string[] = [];
+  const paperClassName = normalizeSummerCrashText(
+    (params.paper.class as { name?: unknown } | null | undefined)?.name,
+  );
+
+  if (
+    normalizeSummerCrashClassBandKey(paperClassName) !==
+    normalizeSummerCrashClassBandKey(params.expectedClassName)
+  ) {
+    issues.push("class band mismatch");
+  }
+
+  if (!params.paper.onlineEnabled) {
+    issues.push("online mode is off");
+  }
+
+  if (
+    Array.isArray(params.paper.assignedAcademicSections) &&
+    params.paper.assignedAcademicSections.length > 0
+  ) {
+    issues.push("assigned sections are set");
+  }
+
+  if (!paperSupportsOnlineDelivery(params.paper)) {
+    issues.push("unsupported question types");
+  }
+
+  if (paperRequiresManualReview(params.paper)) {
+    issues.push("manual review required");
+  }
+
+  if (getPaperQuestionCount(params.paper) === 0) {
+    issues.push("paper has no questions");
+  }
+
+  return issues;
+}
+
+async function loadDiagnosticPaperForDisplay(params: {
+  paperId: string;
+  expectedClassName: string;
+}) {
+  const normalizedPaperId = String(params.paperId || "").trim();
+  if (!normalizedPaperId) {
+    return null;
+  }
+
+  const { QuestionPaper: QuestionPaperModel } = await getTenantModels(
+    SUMMER_CRASH_SCHOOL_KEY,
+    ["QuestionPaper"],
+  );
+
+  const paper = (await QuestionPaperModel.findOne({
+    _id: normalizedPaperId,
+    ...buildArchiveFilter(false),
+  })
+    .select(
+      "title class duration totalMarks updatedAt onlineEnabled assignedAcademicSections sections",
+    )
+    .populate("class", "name")
+    .populate({
+      path: "sections.questions.question",
+      select: "_id type options answerIndexes matrixOptions matrixAnswers",
+    })
+    .lean()) as QuestionPaperDoc | null;
+
+  if (!paper?._id) {
+    return {
+      summary: null,
+      issue: "The saved paper could not be found.",
+    };
+  }
+
+  const issues = getDiagnosticPaperIssues({
+    paper,
+    expectedClassName: params.expectedClassName,
+  });
+  const issueText = issues.length
+    ? `The saved paper is no longer valid for public diagnostic use. (${issues.join(", ")})`
+    : null;
+
+  return {
+    summary: serializeQuestionPaperSummary(paper),
+    issue: issueText,
+  };
 }
 
 async function loadCampaignClasses() {
@@ -405,7 +512,7 @@ export async function getWorkspacePublicTestsConfig(
     const diagnosticQuestionPaperId = String(
       mapping.diagnosticQuestionPaperId || "",
     ).trim();
-    const mappedPaper =
+    let mappedPaper =
       candidatePapers.find((paper) => paper._id === diagnosticQuestionPaperId) ||
       null;
     const mappingStatus =
@@ -414,6 +521,18 @@ export async function getWorkspacePublicTestsConfig(
         : mappedPaper
           ? "ready"
           : "invalid";
+    let mappedPaperIssue: string | null = null;
+
+    if (!mappedPaper && diagnosticQuestionPaperId) {
+      const paperDetails = await loadDiagnosticPaperForDisplay({
+        paperId: diagnosticQuestionPaperId,
+        expectedClassName: mapping.className,
+      });
+      if (paperDetails?.summary) {
+        mappedPaper = paperDetails.summary;
+      }
+      mappedPaperIssue = paperDetails?.issue || null;
+    }
 
     return {
       classBand: mapping.classBand,
@@ -422,6 +541,7 @@ export async function getWorkspacePublicTestsConfig(
       mappedPaper,
       candidatePapers,
       mappingStatus,
+      mappedPaperIssue,
     } satisfies WorkspacePublicTestClassBandCard;
   });
 

@@ -390,12 +390,18 @@ export default function PublicTestsPageClient({
                       {card.mappedPaper
                         ? card.mappedPaper.title
                         : card.mappingStatus === "invalid"
-                          ? "The saved paper is no longer valid for public diagnostic use."
+                          ? card.mappedPaperIssue ||
+                            "The saved paper is no longer valid for public diagnostic use."
                           : "No paper mapped yet."}
                     </p>
                     {card.mappedPaper ? (
                       <p className="mt-1 text-xs text-muted-foreground">
                         {card.mappedPaper.totalMarks} marks • {card.mappedPaper.duration} min
+                      </p>
+                    ) : null}
+                    {card.mappingStatus === "invalid" && card.mappedPaperIssue ? (
+                      <p className="mt-2 text-xs text-rose-600">
+                        {card.mappedPaperIssue}
                       </p>
                     ) : null}
                   </div>
