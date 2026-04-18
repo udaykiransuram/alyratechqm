@@ -488,62 +488,64 @@ export async function getWorkspacePublicTestsConfig(
     classIds,
   );
 
-  const classBandCards = normalizedMappings.map((mapping) => {
-    const classDocs = classDocsByName.get(
-      normalizeSummerCrashClassBandKey(mapping.className),
-    ) || [];
-    const candidatePapers = Array.from(
-      new Map(
-        classDocs
-          .flatMap((classDoc) => {
-            const classId = String(classDoc?._id || "").trim();
-            return classId ? eligiblePapersByClassId.get(classId) || [] : [];
-          })
-          .map((paper) => [paper._id, paper]),
-      ).values(),
-    ).sort((left, right) => {
-      const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
-      const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
-      if (leftTime !== rightTime) {
-        return rightTime - leftTime;
-      }
-      return left.title.localeCompare(right.title);
-    });
-    const diagnosticQuestionPaperId = String(
-      mapping.diagnosticQuestionPaperId || "",
-    ).trim();
-    let mappedPaper =
-      candidatePapers.find((paper) => paper._id === diagnosticQuestionPaperId) ||
-      null;
-    const mappingStatus =
-      !diagnosticQuestionPaperId
-        ? "missing"
-        : mappedPaper
-          ? "ready"
-          : "invalid";
-    let mappedPaperIssue: string | null = null;
-
-    if (!mappedPaper && diagnosticQuestionPaperId) {
-      const paperDetails = await loadDiagnosticPaperForDisplay({
-        paperId: diagnosticQuestionPaperId,
-        expectedClassName: mapping.className,
+  const classBandCards = await Promise.all(
+    normalizedMappings.map(async (mapping) => {
+      const classDocs = classDocsByName.get(
+        normalizeSummerCrashClassBandKey(mapping.className),
+      ) || [];
+      const candidatePapers = Array.from(
+        new Map(
+          classDocs
+            .flatMap((classDoc) => {
+              const classId = String(classDoc?._id || "").trim();
+              return classId ? eligiblePapersByClassId.get(classId) || [] : [];
+            })
+            .map((paper) => [paper._id, paper]),
+        ).values(),
+      ).sort((left, right) => {
+        const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+        const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+        if (leftTime !== rightTime) {
+          return rightTime - leftTime;
+        }
+        return left.title.localeCompare(right.title);
       });
-      if (paperDetails?.summary) {
-        mappedPaper = paperDetails.summary;
-      }
-      mappedPaperIssue = paperDetails?.issue || null;
-    }
+      const diagnosticQuestionPaperId = String(
+        mapping.diagnosticQuestionPaperId || "",
+      ).trim();
+      let mappedPaper =
+        candidatePapers.find((paper) => paper._id === diagnosticQuestionPaperId) ||
+        null;
+      const mappingStatus =
+        !diagnosticQuestionPaperId
+          ? "missing"
+          : mappedPaper
+            ? "ready"
+            : "invalid";
+      let mappedPaperIssue: string | null = null;
 
-    return {
-      classBand: mapping.classBand,
-      className: mapping.className,
-      diagnosticQuestionPaperId,
-      mappedPaper,
-      candidatePapers,
-      mappingStatus,
-      mappedPaperIssue,
-    } satisfies WorkspacePublicTestClassBandCard;
-  });
+      if (!mappedPaper && diagnosticQuestionPaperId) {
+        const paperDetails = await loadDiagnosticPaperForDisplay({
+          paperId: diagnosticQuestionPaperId,
+          expectedClassName: mapping.className,
+        });
+        if (paperDetails?.summary) {
+          mappedPaper = paperDetails.summary;
+        }
+        mappedPaperIssue = paperDetails?.issue || null;
+      }
+
+      return {
+        classBand: mapping.classBand,
+        className: mapping.className,
+        diagnosticQuestionPaperId,
+        mappedPaper,
+        candidatePapers,
+        mappingStatus,
+        mappedPaperIssue,
+      } satisfies WorkspacePublicTestClassBandCard;
+    }),
+  );
 
   return {
     title: normalizeSummerCrashText(campaign.title),
