@@ -205,17 +205,22 @@ async function loadCampaignClasses() {
     .select("_id name")
     .lean()) as CampaignClassDoc[];
 
-  const classByName = new Map(
-    classDocs.map((classDoc) => [
-      normalizeSummerCrashClassBandKey(classDoc.name),
-      classDoc,
-    ]),
-  );
+  const classDocsByName = new Map<string, CampaignClassDoc[]>();
+  for (const classDoc of classDocs) {
+    const normalizedClassName = normalizeSummerCrashClassBandKey(classDoc.name);
+    if (!normalizedClassName) {
+      continue;
+    }
+
+    const existingDocs = classDocsByName.get(normalizedClassName) || [];
+    existingDocs.push(classDoc);
+    classDocsByName.set(normalizedClassName, existingDocs);
+  }
 
   return {
     campaign,
     normalizedMappings,
-    classByName,
+    classDocsByName,
   };
 }
 
@@ -360,24 +365,43 @@ export async function getWorkspacePublicTestsConfig(
   assertSummerPublicTestsSchoolKey(schoolKey);
   await connectDB();
 
-  const { campaign, normalizedMappings, classByName } = await loadCampaignClasses();
-  const classIds = normalizedMappings
-    .map((mapping) =>
-      String(classByName.get(normalizeSummerCrashClassBandKey(mapping.className))?._id || ""),
-    )
-    .filter(Boolean);
+  const { campaign, normalizedMappings, classDocsByName } = await loadCampaignClasses();
+  const classIds = Array.from(
+    new Set(
+      normalizedMappings.flatMap((mapping) =>
+        (classDocsByName.get(
+          normalizeSummerCrashClassBandKey(mapping.className),
+        ) || [])
+          .map((classDoc) => String(classDoc?._id || "").trim())
+          .filter(Boolean),
+      ),
+    ),
+  );
   const eligiblePapersByClassId = await loadEligibleDiagnosticPapersByClassId(
     classIds,
   );
 
   const classBandCards = normalizedMappings.map((mapping) => {
-    const classDoc = classByName.get(
+    const classDocs = classDocsByName.get(
       normalizeSummerCrashClassBandKey(mapping.className),
-    );
-    const classId = String(classDoc?._id || "").trim();
-    const candidatePapers = classId
-      ? eligiblePapersByClassId.get(classId) || []
-      : [];
+    ) || [];
+    const candidatePapers = Array.from(
+      new Map(
+        classDocs
+          .flatMap((classDoc) => {
+            const classId = String(classDoc?._id || "").trim();
+            return classId ? eligiblePapersByClassId.get(classId) || [] : [];
+          })
+          .map((paper) => [paper._id, paper]),
+      ).values(),
+    ).sort((left, right) => {
+      const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+      const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+      if (leftTime !== rightTime) {
+        return rightTime - leftTime;
+      }
+      return left.title.localeCompare(right.title);
+    });
     const diagnosticQuestionPaperId = String(
       mapping.diagnosticQuestionPaperId || "",
     ).trim();

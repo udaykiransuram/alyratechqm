@@ -12,10 +12,10 @@ import { paperRequiresManualReview, paperSupportsOnlineDelivery } from "@/lib/st
 import {
   buildSummerCrashDiagnosticHref,
   buildSummerCrashStudentReportHref,
-  buildSummerCrashWelcomeHref,
   normalizeSummerCrashClassBandKey,
   normalizeSummerCrashNameKey,
   normalizeSummerCrashPhone,
+  resolveSummerCrashPostRegistrationHref,
   normalizeSummerCrashText,
 } from "@/lib/summer-crash/shared";
 import {
@@ -1100,9 +1100,11 @@ export async function registerSummerCrashStudent(input: {
     classBand,
     entrySource,
   });
-  const nextDestinationHref = requiresPasswordSetup
-    ? buildSummerCrashWelcomeHref(destinationHref)
-    : destinationHref;
+  const nextDestinationHref = resolveSummerCrashPostRegistrationHref({
+    destinationHref,
+    entrySource,
+    requiresPasswordSetup,
+  });
 
   return {
     campaignTitle:

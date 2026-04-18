@@ -126,6 +126,25 @@ export function buildSummerCrashWelcomeHref(nextHref?: string | null) {
   return `${SUMMER_CRASH_WELCOME_PATH}?${searchParams.toString()}`;
 }
 
+export function resolveSummerCrashPostRegistrationHref(params: {
+  destinationHref?: string | null;
+  entrySource?: "diagnostic" | "direct_registration" | null;
+  requiresPasswordSetup?: boolean;
+}) {
+  const safeDestinationHref =
+    getSafeReturnToPath(params.destinationHref) || SUMMER_CRASH_HOME_PATH;
+
+  if (!params.requiresPasswordSetup) {
+    return safeDestinationHref;
+  }
+
+  if (params.entrySource === "diagnostic") {
+    return safeDestinationHref;
+  }
+
+  return buildSummerCrashWelcomeHref(safeDestinationHref);
+}
+
 export function buildSummerCrashStudentReportHref(responseId: unknown) {
   const normalizedResponseId = String(responseId || "").trim();
   if (!normalizedResponseId) {

@@ -13,6 +13,7 @@ import {
   normalizeSummerCrashLookupMatches,
   normalizeSummerCrashNameKey,
   normalizeSummerCrashPhone,
+  resolveSummerCrashPostRegistrationHref,
   resolveSummerCrashSelectedSummerId,
 } from "../../../lib/summer-crash/shared";
 import {
@@ -110,6 +111,34 @@ test.describe("Summer crash course helpers @desktop", () => {
       "/student/reports/response_123?returnTo=%2Fstudent%2Fcrash-course",
     );
     expect(formatSummerCrashPrice(1499, "INR")).toBe("₹1,499");
+  });
+
+  test("sends diagnostic registrations straight into the test while keeping course-first registration on setup", async () => {
+    const diagnosticHref = buildSummerCrashDiagnosticHref("paper_123");
+
+    expect(
+      resolveSummerCrashPostRegistrationHref({
+        destinationHref: diagnosticHref,
+        entrySource: "diagnostic",
+        requiresPasswordSetup: true,
+      }),
+    ).toBe(diagnosticHref);
+
+    expect(
+      resolveSummerCrashPostRegistrationHref({
+        destinationHref: "/student/crash-course",
+        entrySource: "direct_registration",
+        requiresPasswordSetup: true,
+      }),
+    ).toBe("/summer-crash-course/welcome?next=%2Fstudent%2Fcrash-course");
+
+    expect(
+      resolveSummerCrashPostRegistrationHref({
+        destinationHref: diagnosticHref,
+        entrySource: "diagnostic",
+        requiresPasswordSetup: false,
+      }),
+    ).toBe(diagnosticHref);
   });
 
   test("keeps the summer session check scoped to the dedicated summer school", async () => {
