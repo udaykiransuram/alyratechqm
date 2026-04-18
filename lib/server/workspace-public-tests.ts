@@ -214,6 +214,30 @@ function getDiagnosticPaperIssues(params: {
     (params.paper.class as { name?: unknown } | null | undefined)?.name,
   );
   const questionCount = getPaperQuestionCount(params.paper);
+  let missingQuestionRefs = 0;
+  let missingQuestionTypes = 0;
+
+  if (Array.isArray(params.paper.sections)) {
+    params.paper.sections.forEach((section: any) => {
+      (Array.isArray(section?.questions) ? section.questions : []).forEach(
+        (entry: any) => {
+          const question = entry?.question;
+          if (!question) {
+            missingQuestionRefs += 1;
+            return;
+          }
+          if (typeof question !== "object") {
+            missingQuestionRefs += 1;
+            return;
+          }
+          const typeValue = String((question as any)?.type || "").trim();
+          if (!typeValue) {
+            missingQuestionTypes += 1;
+          }
+        },
+      );
+    });
+  }
 
   if (
     normalizeSummerCrashClassBandKey(paperClassName) !==
@@ -257,7 +281,12 @@ function getDiagnosticPaperIssues(params: {
     if (questionCount > 0 && lookup.size === 0) {
       issues.push("section names are missing");
     }
+    if (missingQuestionRefs > 0) {
+      issues.push("some questions are missing from the bank");
+    }
     if (hasMissingType) {
+      issues.push("some questions have no type");
+    } else if (missingQuestionTypes > 0) {
       issues.push("some questions have no type");
     }
     if (unsupportedTypes.size > 0) {

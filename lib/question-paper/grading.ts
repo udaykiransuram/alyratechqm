@@ -118,9 +118,24 @@ function getQuestionSpec(
     getMaxMatrixIndex(rawMatrixAnswers) + 1,
   );
 
+  const rawType = String(questionDoc?.type || "").trim();
+  let inferredType = rawType;
+  if (!inferredType) {
+    if (matrixOptions.length > 0 || rawMatrixAnswers.length > 0) {
+      inferredType = "matrix-match";
+    } else if (options.length > 0) {
+      const answerCount = Array.isArray(questionDoc?.answerIndexes)
+        ? questionDoc.answerIndexes.length
+        : 0;
+      inferredType = answerCount > 1 ? "multiple" : "single";
+    } else if (String((questionDoc as any)?.answerText || "").trim()) {
+      inferredType = "descriptive";
+    }
+  }
+
   return {
     questionId,
-    type: String(questionDoc?.type || "").trim(),
+    type: inferredType,
     sectionName,
     marks: Number(entry?.marks || 0),
     negativeMarks: Number(entry?.negativeMarks || 0),
