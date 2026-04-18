@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
