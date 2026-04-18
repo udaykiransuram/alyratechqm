@@ -1,5 +1,6 @@
 // app/api/convert/route.ts
 import * as XLSX from "xlsx";
+import { randomUUID } from "crypto";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx";
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenantSession } from "@/lib/api-auth";
@@ -384,10 +385,18 @@ export async function POST(req: NextRequest) {
       },
     );
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err?.message ?? "Internal error" }), {
-      status: 500,
-      headers: { "content-type": "application/json" }
-    });
+    const errorId = randomUUID();
+    console.error("[convert-import] failed", { errorId, error: err });
+    return new Response(
+      JSON.stringify({
+        error: err?.message ?? "Internal error",
+        errorId,
+      }),
+      {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      },
+    );
   }
 }
 
