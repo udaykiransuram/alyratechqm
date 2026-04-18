@@ -30,7 +30,6 @@ export const SUMMER_CRASH_HOME_PATH = "/student/crash-course";
 export const SUMMER_CRASH_SIGNIN_PATH = "/summer-crash-course/signin";
 export const SUMMER_CRASH_REGISTER_PATH = "/summer-crash-course/register";
 export const SUMMER_CRASH_HELP_PATH = "/summer-crash-course/help";
-export const SUMMER_CRASH_WELCOME_PATH = "/summer-crash-course/welcome";
 export const SUMMER_AUTHOR_SIGNIN_PATH = "/summer-author/signin";
 export const SUMMER_CRASH_PUBLIC_TESTS_PATH = "/workspace/public-tests";
 export const SUMMER_CRASH_SUCCESS_PATH = "/summer-crash-course/success";

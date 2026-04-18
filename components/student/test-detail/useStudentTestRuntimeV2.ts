@@ -123,6 +123,14 @@ function isFullscreenActive() {
   return Boolean(document.fullscreenElement);
 }
 
+function countPaperQuestions(paper: StudentPaper | null) {
+  return (Array.isArray(paper?.sections) ? paper.sections : []).reduce(
+    (total, section) =>
+      total + (Array.isArray(section?.questions) ? section.questions.length : 0),
+    0,
+  );
+}
+
 export function useStudentTestRuntime({
   paperId,
   initialData,
@@ -134,6 +142,7 @@ export function useStudentTestRuntime({
   const router = useRouter();
   const initialPaper = initialData?.paper || null;
   const initialAttempt = initialData?.attempt || null;
+  const initialPaperHydrated = initialPaper?.questionsHydrated !== false;
   const initialFullscreen = false;
   const fullscreenRequired = !allowStartWithoutFullscreen;
   const initialExamLocked = fullscreenRequired
@@ -155,6 +164,10 @@ export function useStudentTestRuntime({
     initialHydration.answers,
   );
   const [loading, setLoading] = useState(() => !initialPaper && !initialLoadError);
+  const [isHydratingQuestions, setIsHydratingQuestions] = useState(false);
+  const [questionHydrationError, setQuestionHydrationError] = useState<string | null>(
+    null,
+  );
   const [loadError, setLoadError] = useState<string | null>(initialLoadError);
   const [actionError, setActionError] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState(
@@ -181,9 +194,10 @@ export function useStudentTestRuntime({
   const attemptLastSavedAtRef = useRef<string | null>(
     initialAttempt?.lastSavedAt || null,
   );
+  const paperRef = useRef<StudentPaper | null>(initialPaper);
   const lastSavedSignatureRef = useRef<string>(initialHydration.signature);
   const skipInitialFetchRef = useRef(Boolean(initialPaper || initialLoadError));
-  const skipMountRefreshRef = useRef(Boolean(initialPaper));
+  const skipMountRefreshRef = useRef(Boolean(initialPaper && initialPaperHydrated));
   const hasUnsavedChangesRef = useRef(false);
   const saveInFlightRef = useRef(false);
   const saveQueuedRef = useRef(false);
@@ -200,6 +214,7 @@ export function useStudentTestRuntime({
   const currentIndexRef = useRef(0);
   const isOfflineRef = useRef(false);
   const answeredQuestionIdsRef = useRef<Set<string>>(new Set());
+  const recoveryNoticeRef = useRef<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
   const [isExamLocked, setIsExamLocked] = useState(initialExamLocked);
   const isFullscreenRef = useRef(initialFullscreen);
@@ -212,6 +227,10 @@ export function useStudentTestRuntime({
   const lastFrameTimeRef = useRef<number | null>(null);
   const rafIdRef = useRef<number | null>(null);
   const lastIntervalTickRef = useRef<number | null>(null);
+  const loadTestRef = useRef<(mode?: "blocking" | "background") => Promise<void>>(
+    async () => {},
+  );
+  const isHydratingQuestionsRef = useRef(false);
   const attemptLocked =
     attempt?.status === "submitted" || attempt?.status === "auto_submitted";
   const attemptStarted = Boolean(attempt?._id && attempt?.startedAt);
@@ -509,8 +528,16 @@ export function useStudentTestRuntime({
       : `Autosave ${Math.round(autosaveIntervalMs / 1000)}s`;
 
   useEffect(() => {
+    paperRef.current = paper;
+  }, [paper]);
+
+  useEffect(() => {
     answersRef.current = answers;
   }, [answers]);
+
+  useEffect(() => {
+    isHydratingQuestionsRef.current = isHydratingQuestions;
+  }, [isHydratingQuestions]);
 
   useEffect(() => {
     attemptLastSavedAtRef.current = attempt?.lastSavedAt || null;
@@ -527,6 +554,10 @@ export function useStudentTestRuntime({
   useEffect(() => {
     isOfflineRef.current = isOffline;
   }, [isOffline]);
+
+  useEffect(() => {
+    recoveryNoticeRef.current = recoveryNotice;
+  }, [recoveryNotice]);
 
   function clearSaveRetryTimer(resetState = true) {
     if (saveRetryTimerRef.current !== null) {
@@ -693,15 +724,39 @@ export function useStudentTestRuntime({
   useEffect(() => {
     let mounted = true;
 
-    async function loadTest() {
+    async function loadTest(mode?: "blocking" | "background") {
+      const hasExistingPaper = Boolean(paperRef.current);
+      const shouldHydrateInBackground =
+        (mode || (hasExistingPaper ? "background" : "blocking")) ===
+        "background";
+
+      if (
+        shouldHydrateInBackground &&
+        paperRef.current?.questionsHydrated !== false
+      ) {
+        return;
+      }
+
+      if (shouldHydrateInBackground && isHydratingQuestionsRef.current) {
+        return;
+      }
+
       try {
-        setLoading(true);
-        setLoadError(null);
-        setActionError(null);
-        const data = await fetchApiJson<any>(`/api/student/tests/${paperId}`, {
-          cache: "no-store",
-          fallbackMessage: "We couldn't load the online test.",
-        });
+        if (shouldHydrateInBackground) {
+          setIsHydratingQuestions(true);
+          setQuestionHydrationError(null);
+        } else {
+          setLoading(true);
+          setLoadError(null);
+          setActionError(null);
+        }
+        const data = await fetchApiJson<any>(
+          `/api/student/tests/${paperId}?delivery=full`,
+          {
+            cache: "no-store",
+            fallbackMessage: "We couldn't load the online test.",
+          },
+        );
         if (!mounted) return;
 
         const nextPaper = data.paper || null;
@@ -752,6 +807,32 @@ export function useStudentTestRuntime({
           }
         }
 
+        if (hasExistingPaper && nextPaper) {
+          const currentPayload = buildSectionAnswersPayloadFromState(
+            nextPaper,
+            answersRef.current,
+          );
+          const currentSignature = JSON.stringify(currentPayload);
+
+          if (
+            currentSignature !== nextSignature &&
+            currentSignature !== lastSavedSignatureRef.current
+          ) {
+            nextAnswers = buildAnswerMap(
+              {
+                ...(nextAttempt || {}),
+                sectionAnswers: currentPayload,
+              } as StudentAttempt,
+              nextPaper,
+            );
+            nextPayload = currentPayload;
+            nextSignature = currentSignature;
+            nextRecoveryNotice =
+              nextRecoveryNotice || recoveryNoticeRef.current;
+          }
+        }
+
+        const nextQuestionCount = countPaperQuestions(nextPaper);
         setIsExamLockedIfChanged(computeExamLockState(nextAttempt));
         setPaper(nextPaper);
         setAttempt(nextAttempt);
@@ -762,13 +843,23 @@ export function useStudentTestRuntime({
         lastSavedSignatureRef.current = serverSignature;
         setDeadlineAt(data.deadlineAt || null);
         setRecoveryNotice(nextRecoveryNotice);
-        setCurrentIndex(0);
+        setCurrentIndex((previousIndex) => {
+          const nextIndex = Math.min(
+            previousIndex,
+            Math.max(0, nextQuestionCount - 1),
+          );
+          currentIndexRef.current = nextIndex;
+          return nextIndex;
+        });
 
-        clearSaveRetryTimer();
-        clearSubmitRetryTimer();
-        saveRetryDelayMsRef.current = 3000;
-        submitRetryDelayMsRef.current = 3000;
-        submitRetryAutoRef.current = false;
+        if (!shouldHydrateInBackground) {
+          clearSaveRetryTimer();
+          clearSubmitRetryTimer();
+          saveRetryDelayMsRef.current = 3000;
+          submitRetryDelayMsRef.current = 3000;
+          submitRetryAutoRef.current = false;
+        }
+        setQuestionHydrationError(null);
 
         if (paperId) {
           if (nextAttemptStarted && !nextAttemptLocked) {
@@ -786,12 +877,27 @@ export function useStudentTestRuntime({
         }
       } catch (error: any) {
         if (!mounted) return;
-        setLoadError(error?.message || "We couldn't load the online test.");
-        setPaper(null);
+        const message = error?.message || "We couldn't load the online test.";
+        if (shouldHydrateInBackground && hasExistingPaper) {
+          setQuestionHydrationError(message);
+        } else {
+          setLoadError(message);
+          setPaper(null);
+        }
       } finally {
-        if (mounted) setLoading(false);
+        if (!mounted) {
+          return;
+        }
+
+        if (shouldHydrateInBackground) {
+          setIsHydratingQuestions(false);
+        } else {
+          setLoading(false);
+        }
       }
     }
+
+    loadTestRef.current = loadTest;
 
     if (skipMountRefreshRef.current) {
       skipMountRefreshRef.current = false;
@@ -1051,7 +1157,7 @@ export function useStudentTestRuntime({
     }
   }
 
-  async function startAttempt() {
+  const startAttempt = useCallback(async () => {
     if (!paper || attemptStarted || isStarting || isSubmitting) {
       return;
     }
@@ -1076,9 +1182,10 @@ export function useStudentTestRuntime({
           const isExamFullscreen =
             Boolean(document?.fullscreenElement) &&
             document.fullscreenElement === examContainerRef.current;
-          const message = isAnyFullscreen && !isExamFullscreen
-            ? "The test must be the fullscreen element. Close other fullscreen views and try again."
-            : "Please enter fullscreen to start the test. Fullscreen is required for the entire test.";
+          const message =
+            isAnyFullscreen && !isExamFullscreen
+              ? "The test must be the fullscreen element. Close other fullscreen views and try again."
+              : "Please enter fullscreen to start the test. Fullscreen is required for the entire test.";
           setActionError(message);
           return;
         }
@@ -1122,7 +1229,19 @@ export function useStudentTestRuntime({
     } finally {
       setIsStarting(false);
     }
-  }
+  }, [
+    attemptStarted,
+    computeExamLockState,
+    enforceFullscreenLock,
+    fullscreenRequired,
+    isStarting,
+    isSubmitting,
+    paper,
+    paperId,
+    requestFullscreenForExamInternal,
+    setIsExamLockedIfChanged,
+    startFullscreenTransition,
+  ]);
 
   saveAttemptRef.current = runSaveAttempt;
   submitAttemptRef.current = runSubmitAttempt;
@@ -1607,11 +1726,17 @@ export function useStudentTestRuntime({
 
       currentIndexRef.current = nextIndex;
       setCurrentIndex(nextIndex);
+      if (
+        questionList[nextIndex]?.question.contentReady === false &&
+        !isHydratingQuestionsRef.current
+      ) {
+        void loadTestRef.current("background");
+      }
       if (!isOfflineRef.current && hasUnsavedChangesRef.current) {
         void saveAttemptRef.current();
       }
     },
-    [questionList.length],
+    [questionList],
   );
 
   const toggleFullscreen = useCallback(async () => {
@@ -1636,10 +1761,16 @@ export function useStudentTestRuntime({
     await submitAttemptRef.current(auto);
   }, []);
 
+  const retryQuestionHydration = useCallback(async () => {
+    await loadTestRef.current("background");
+  }, []);
+
   return {
     paper,
     attempt,
     loading,
+    isHydratingQuestions,
+    questionHydrationError,
     loadError,
     actionError,
     testStatus,
@@ -1680,6 +1811,7 @@ export function useStudentTestRuntime({
     toggleFullscreen,
     requestFullscreenForExam,
     resumeFullscreenLock,
+    retryQuestionHydration,
     updateSingleChoice,
     updateMultipleChoice,
     updateDescriptiveAnswer,

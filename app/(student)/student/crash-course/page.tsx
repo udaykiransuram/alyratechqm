@@ -11,7 +11,6 @@ import { authOptions } from "@/lib/auth";
 import { getSummerCrashStudentState } from "@/lib/server/summer-crash";
 import {
   SUMMER_CRASH_SIGNIN_PATH,
-  SUMMER_CRASH_WELCOME_PATH,
 } from "@/lib/summer-crash/constants";
 import {
   formatSummerCrashPrice,
@@ -58,9 +57,6 @@ export default async function StudentSummerCrashHomePage({
     },
   });
 
-  if (state.requiresPasswordSetup) {
-    redirect(SUMMER_CRASH_WELCOME_PATH);
-  }
   const resolvedSearchParams = await searchParams;
   const submitted = getSearchParam(resolvedSearchParams?.submitted) === "1";
   const mode = getSearchParam(resolvedSearchParams?.mode);

@@ -31,6 +31,7 @@ const STUDENT_TEST_CACHE_PRUNE_INTERVAL_MS = Math.max(
 const STUDENT_USER_CACHE_NAMESPACE = "student-user";
 const STUDENT_PAPER_RUNTIME_CACHE_NAMESPACE = "student-paper-runtime";
 const STUDENT_PAPER_DELIVERY_CACHE_NAMESPACE = "student-paper-delivery";
+const STUDENT_PAPER_BOOTSTRAP_CACHE_NAMESPACE = "student-paper-bootstrap";
 const STUDENT_CLASS_PAPER_LIST_CACHE_NAMESPACE = "student-class-paper-list";
 const STUDENT_CLASS_PAPER_ASSIGNMENTS_CACHE_NAMESPACE =
   "student-class-paper-assignments";
@@ -172,6 +173,9 @@ export function invalidateStudentTestResourceCache(params: {
     invalidateStudentTestResourceCacheByPrefix(
       `${STUDENT_PAPER_DELIVERY_CACHE_NAMESPACE}::${schoolKey}::${paperId}`,
     );
+    invalidateStudentTestResourceCacheByPrefix(
+      `${STUDENT_PAPER_BOOTSTRAP_CACHE_NAMESPACE}::${schoolKey}::${paperId}`,
+    );
   }
 
   const classId = String(params.classId || "").trim();
@@ -195,6 +199,7 @@ export function invalidateStudentTestResourceCache(params: {
     sharedCacheKeys.push(
       createCacheKey(STUDENT_PAPER_RUNTIME_CACHE_NAMESPACE, schoolKey, paperId),
       createCacheKey(STUDENT_PAPER_DELIVERY_CACHE_NAMESPACE, schoolKey, paperId),
+      createCacheKey(STUDENT_PAPER_BOOTSTRAP_CACHE_NAMESPACE, schoolKey, paperId),
     );
   }
 
@@ -443,6 +448,90 @@ async function loadOnlinePaperDeliveryByIdUncached(
     .lean();
 }
 
+async function loadOnlinePaperBootstrapByIdUncached(
+  {
+    QuestionPaper: QuestionPaperModel,
+    Question: QuestionModel,
+    Class: ClassModel,
+    Subject: SubjectModel,
+    AcademicSection: AcademicSectionModel,
+  }: {
+    QuestionPaper: any;
+    Question: any;
+    Class: any;
+    Subject: any;
+    AcademicSection: any;
+  },
+  paperId: string,
+) {
+  const paper = await QuestionPaperModel.findOne({
+    _id: paperId,
+    onlineEnabled: true,
+    ...buildArchiveFilter(false),
+  })
+    .select(
+      "title instructions class subject subjectIds duration passingMarks examDate onlineEnabled onlineStartsAt onlineEndsAt totalMarks assignedAcademicSections sections.name sections.description sections.instructions sections.defaultMarks sections.defaultNegativeMarks sections.marks sections.questions.marks sections.questions.negativeMarks sections.questions.question",
+    )
+    .populate({ path: "class", model: ClassModel, select: "name" })
+    .populate({ path: "subject", model: SubjectModel, select: "name" })
+    .populate({ path: "subjectIds", model: SubjectModel, select: "name" })
+    .populate({
+      path: "assignedAcademicSections",
+      model: AcademicSectionModel,
+      select: "name class",
+      populate: { path: "class", model: ClassModel, select: "name" },
+    })
+    .populate({
+      path: "sections.questions.question",
+      model: QuestionModel,
+      select: "type subject",
+      populate: { path: "subject", model: SubjectModel, select: "name" },
+    })
+    .lean();
+
+  if (!paper) {
+    return null;
+  }
+
+  const firstQuestionId = (() => {
+    for (const section of Array.isArray(paper.sections) ? paper.sections : []) {
+      for (const entry of Array.isArray(section?.questions) ? section.questions : []) {
+        const questionId = String(entry?.question?._id || entry?.question || "").trim();
+        if (questionId) {
+          return questionId;
+        }
+      }
+    }
+
+    return "";
+  })();
+
+  if (!firstQuestionId) {
+    return paper;
+  }
+
+  const firstQuestion = await QuestionModel.findById(firstQuestionId)
+    .select("content options type matrixOptions subject")
+    .populate({ path: "subject", model: SubjectModel, select: "name" })
+    .lean();
+
+  if (!firstQuestion) {
+    return paper;
+  }
+
+  outer: for (const section of Array.isArray(paper.sections) ? paper.sections : []) {
+    for (const entry of Array.isArray(section?.questions) ? section.questions : []) {
+      const questionId = String(entry?.question?._id || entry?.question || "").trim();
+      if (questionId === firstQuestionId) {
+        entry.question = firstQuestion;
+        break outer;
+      }
+    }
+  }
+
+  return paper;
+}
+
 export async function loadOnlinePaperById(
   models: {
     QuestionPaper: any;
@@ -458,6 +547,24 @@ export async function loadOnlinePaperById(
     createCacheKey(STUDENT_PAPER_DELIVERY_CACHE_NAMESPACE, schoolKey, paperId),
     PAPER_DELIVERY_TTL_MS,
     () => loadOnlinePaperDeliveryByIdUncached(models, paperId),
+  );
+}
+
+export async function loadOnlinePaperBootstrapById(
+  models: {
+    QuestionPaper: any;
+    Question: any;
+    Class: any;
+    Subject: any;
+    AcademicSection: any;
+  },
+  schoolKey: string,
+  paperId: string,
+) {
+  return getCachedResource(
+    createCacheKey(STUDENT_PAPER_BOOTSTRAP_CACHE_NAMESPACE, schoolKey, paperId),
+    PAPER_DELIVERY_TTL_MS,
+    () => loadOnlinePaperBootstrapByIdUncached(models, paperId),
   );
 }
 

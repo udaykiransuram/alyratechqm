@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import SummerCrashRegistrationClient from "@/components/summer-crash/SummerCrashRegistrationClient";
 import { authOptions } from "@/lib/auth";
 import { getSummerCrashPublicConfig } from "@/lib/server/summer-crash";
-import { SUMMER_CRASH_WELCOME_PATH } from "@/lib/summer-crash/constants";
+import { SUMMER_CRASH_HOME_PATH } from "@/lib/summer-crash/constants";
 import { isSummerCrashSession } from "@/lib/summer-crash/shared";
 
 export const metadata: Metadata = {
@@ -39,7 +39,7 @@ export default async function SummerCrashRegisterPage({
       schoolKey: session.user.schoolKey,
     })
   ) {
-    redirect(SUMMER_CRASH_WELCOME_PATH);
+    redirect(SUMMER_CRASH_HOME_PATH);
   }
 
   const entrySource =

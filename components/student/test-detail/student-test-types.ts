@@ -1,6 +1,7 @@
 export type StudentQuestion = {
   _id: string;
   content: string;
+  contentReady?: boolean;
   type: "single" | "multiple" | "descriptive" | "matrix-match";
   subject?: { _id: string; name: string } | null;
   options: Array<{ content: string }>;
@@ -12,6 +13,7 @@ export type StudentPaper = {
   _id: string;
   title: string;
   instructions: string;
+  questionsHydrated?: boolean;
   duration: number;
   passingMarks: number;
   totalMarks: number;

@@ -925,6 +925,7 @@ export async function registerSummerCrashStudent(input: {
   phone: string;
   classBand: string;
   sourceSchoolName?: string;
+  password: string;
   entrySource?: SummerCrashEnrollmentEntrySource;
 }) {
   const studentName = normalizeSummerCrashText(input.studentName);
@@ -932,6 +933,7 @@ export async function registerSummerCrashStudent(input: {
   const phoneDigits = normalizeSummerCrashPhone(input.phone);
   const classBand = normalizeSummerCrashText(input.classBand);
   const sourceSchoolName = normalizeSummerCrashText(input.sourceSchoolName);
+  const password = String(input.password || "");
   const entrySource = normalizeEntrySource(input.entrySource);
 
   if (!studentName) {
@@ -948,6 +950,10 @@ export async function registerSummerCrashStudent(input: {
 
   if (!classBand) {
     throw new Error("Choose a class band to continue.");
+  }
+
+  if (!password.trim()) {
+    throw new Error("Create a password to continue.");
   }
 
   const campaign = await getOrCreateSummerCrashCampaign();
@@ -979,6 +985,19 @@ export async function registerSummerCrashStudent(input: {
     throw new Error("We couldn't create the account without a valid phone number.");
   }
 
+  if (password === defaultPassword) {
+    throw new Error("Choose a password that is different from the phone number digits.");
+  }
+
+  const passwordValidation = validatePasswordInput({
+    role: "student",
+    mobileNumber: phoneDigits,
+    password,
+  });
+  if (!passwordValidation.ok) {
+    throw new Error(passwordValidation.message);
+  }
+
   let summerId = String(existingEnrollment?.summerId || "").trim().toUpperCase();
   let studentRecord: any =
     existingEnrollment?.summerStudentId
@@ -988,9 +1007,10 @@ export async function registerSummerCrashStudent(input: {
       : null;
   const hasExistingStudentRecord = Boolean(studentRecord?._id);
   let usesDefaultPassword = !hasExistingStudentRecord;
+  let autoSignInAllowed = true;
 
   if (!studentRecord) {
-    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
     summerId = summerId || (await generateUniqueSummerCrashId(UserModel));
     studentRecord = await UserModel.create({
       name: studentName,
@@ -1017,8 +1037,12 @@ export async function registerSummerCrashStudent(input: {
       class: classDoc._id,
     };
 
-    if (usesDefaultPassword && existingMobileNumber !== phoneDigits) {
-      nextStudentUpdate.passwordHash = await bcrypt.hash(defaultPassword, 10);
+    if (usesDefaultPassword) {
+      nextStudentUpdate.passwordHash = await bcrypt.hash(password, 10);
+    } else {
+      autoSignInAllowed = await bcrypt
+        .compare(password, String(studentRecord.passwordHash || ""))
+        .catch(() => false);
     }
 
     await UserModel.updateOne(
@@ -1038,8 +1062,6 @@ export async function registerSummerCrashStudent(input: {
     throw new Error("We couldn't prepare the Summer Crash Course account.");
   }
 
-  const requiresPasswordSetup = !hasExistingStudentRecord || usesDefaultPassword;
-
   const nextEnrollmentPatch: Record<string, unknown> = {
     summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
     summerStudentId: studentRecord._id,
@@ -1052,7 +1074,7 @@ export async function registerSummerCrashStudent(input: {
     classBand,
     classBandNormalized,
     sourceSchoolName: sourceSchoolName || undefined,
-    status: requiresPasswordSetup ? "setup_pending" : "active",
+    status: "active",
   };
 
   if (!existingEnrollment?.entrySource) {
@@ -1103,7 +1125,6 @@ export async function registerSummerCrashStudent(input: {
   const nextDestinationHref = resolveSummerCrashPostRegistrationHref({
     destinationHref,
     entrySource,
-    requiresPasswordSetup,
   });
 
   return {
@@ -1118,8 +1139,8 @@ export async function registerSummerCrashStudent(input: {
     sourceSchoolName,
     summerId,
     studentId: String(studentRecord._id),
-    autoSignInAllowed: requiresPasswordSetup,
-    bootstrapPassword: requiresPasswordSetup ? defaultPassword : "",
+    autoSignInAllowed,
+    signInPassword: autoSignInAllowed ? password : "",
     signInPath: SUMMER_CRASH_SIGNIN_PATH,
     destinationHref: nextDestinationHref,
     entrySource,

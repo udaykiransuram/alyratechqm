@@ -906,7 +906,10 @@ type ExamQuestionPanelProps = {
   currentSection: SectionNavigationGroup | null;
   hasMultipleSections: boolean;
   paperSubjectLabel: string;
+  isHydratingQuestions: boolean;
+  questionHydrationError: string | null;
   onJumpToQuestion: (index: number) => Promise<void>;
+  onRetryQuestionHydration: () => Promise<void>;
   onUpdateMultipleChoice: (questionId: string, optionIndex: number) => void;
   onUpdateSingleChoice: (questionId: string, optionIndex: number) => void;
   onUpdateDescriptiveAnswer: (question: StudentQuestion, value: string) => void;
@@ -929,7 +932,10 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
   currentSection,
   hasMultipleSections,
   paperSubjectLabel,
+  isHydratingQuestions,
+  questionHydrationError,
   onJumpToQuestion,
+  onRetryQuestionHydration,
   onUpdateMultipleChoice,
   onUpdateSingleChoice,
   onUpdateDescriptiveAnswer,
@@ -1015,12 +1021,59 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
   const isSingleQuestionActionRow = totalQuestions <= 1;
   const showQuestionNavigationRow =
     totalQuestions > 1 || showClearAnswerAction;
+  const currentQuestionContentReady =
+    currentQuestion?.question.contentReady !== false;
 
   if (!currentQuestion || !currentAnswer) {
     return (
       <Card className="app-surface">
         <CardContent className="app-empty-state py-10">
           No questions are available in this paper.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!currentQuestionContentReady) {
+    return (
+      <Card className="app-surface app-exam-question-card overflow-hidden">
+        <CardHeader className="app-section-header">
+          <div className="app-exam-question-header">
+            <div className="app-exam-question-header-copy">
+              {showQuestionEyebrow ? (
+                <p className="app-spotlight-label">
+                  {currentQuestion.sectionName}
+                </p>
+              ) : null}
+              <CardTitle className="app-exam-question-title">
+                {currentQuestionTitle}
+              </CardTitle>
+            </div>
+            <div className="app-exam-question-meta">
+              <div className="app-meta-chip">{currentQuestionPositionLabel}</div>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="app-section-body app-exam-question-body">
+          <div className="flex min-h-[18rem] flex-col items-center justify-center gap-4 rounded-[calc(var(--app-radius-xl)-0.35rem)] border border-dashed border-border/70 bg-muted/20 px-6 py-8 text-center">
+            {isHydratingQuestions ? <Spinner /> : null}
+            <div className="space-y-2">
+              <p className="text-base font-semibold text-foreground">
+                {questionHydrationError
+                  ? "This question could not load yet."
+                  : "Loading this question..."}
+              </p>
+              <p className="app-copy-muted max-w-xl">
+                {questionHydrationError ||
+                  "The test opened with the first question first. The rest of the paper is still loading in the background."}
+              </p>
+            </div>
+            {questionHydrationError ? (
+              <Button type="button" variant="secondary" onClick={() => void onRetryQuestionHydration()}>
+                Try Again
+              </Button>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
     );
@@ -1717,6 +1770,8 @@ type StudentTestActiveAttemptViewProps = {
   recoveryNotice: string | null;
   pendingSubmitRetry: boolean;
   saveRetryPending: boolean;
+  isHydratingQuestions: boolean;
+  questionHydrationError: string | null;
   actionError: string | null;
   answeredQuestionIds: Set<string>;
   currentQuestion: StudentQuestionListItem | null;
@@ -1725,6 +1780,7 @@ type StudentTestActiveAttemptViewProps = {
   onToggleFullscreen: () => Promise<void>;
   onSubmitAttempt: (auto?: boolean) => Promise<void>;
   onJumpToQuestion: (index: number) => Promise<void>;
+  onRetryQuestionHydration: () => Promise<void>;
   onUpdateMultipleChoice: (questionId: string, optionIndex: number) => void;
   onUpdateSingleChoice: (questionId: string, optionIndex: number) => void;
   onUpdateDescriptiveAnswer: (question: StudentQuestion, value: string) => void;
@@ -1760,6 +1816,8 @@ export default function StudentTestActiveAttemptView({
   recoveryNotice,
   pendingSubmitRetry,
   saveRetryPending,
+  isHydratingQuestions,
+  questionHydrationError,
   actionError,
   answeredQuestionIds,
   currentQuestion,
@@ -1768,6 +1826,7 @@ export default function StudentTestActiveAttemptView({
   onToggleFullscreen,
   onSubmitAttempt,
   onJumpToQuestion,
+  onRetryQuestionHydration,
   onUpdateMultipleChoice,
   onUpdateSingleChoice,
   onUpdateDescriptiveAnswer,
@@ -2169,7 +2228,10 @@ export default function StudentTestActiveAttemptView({
             currentSection={currentSection}
             hasMultipleSections={hasMultipleSections}
             paperSubjectLabel={paperSubjectLabel}
+            isHydratingQuestions={isHydratingQuestions}
+            questionHydrationError={questionHydrationError}
             onJumpToQuestion={handleJumpToQuestion}
+            onRetryQuestionHydration={onRetryQuestionHydration}
             onUpdateMultipleChoice={onUpdateMultipleChoice}
             onUpdateSingleChoice={onUpdateSingleChoice}
             onUpdateDescriptiveAnswer={onUpdateDescriptiveAnswer}

@@ -7,9 +7,9 @@ import { authOptions } from "@/lib/auth";
 import { getSummerCrashPublicConfig } from "@/lib/server/summer-crash";
 import {
   SUMMER_CRASH_HELP_PATH,
+  SUMMER_CRASH_HOME_PATH,
   SUMMER_CRASH_REGISTER_PATH,
   SUMMER_CRASH_SIGNIN_PATH,
-  SUMMER_CRASH_WELCOME_PATH,
 } from "@/lib/summer-crash/constants";
 import {
   formatSummerCrashPrice,
@@ -35,7 +35,7 @@ export default async function SummerCrashCourseLandingPage() {
       schoolKey: session.user.schoolKey,
     })
   ) {
-    redirect(SUMMER_CRASH_WELCOME_PATH);
+    redirect(SUMMER_CRASH_HOME_PATH);
   }
 
   const hasPaidCourseAccess = Number(config.price) > 0;
@@ -121,7 +121,7 @@ export default async function SummerCrashCourseLandingPage() {
                   : "Free access to lessons matched to the selected class band."}
               </li>
               <li>Free diagnostic test with instant-result flow.</li>
-              <li>First login asks the student to create a new password once.</li>
+              <li>Registration includes password setup for future sign-ins.</li>
               <li>Backup ID is kept only for support and recovery.</li>
             </ul>
           </div>

@@ -10,7 +10,6 @@ import { getSummerCrashStudentState } from "@/lib/server/summer-crash";
 import {
   SUMMER_CRASH_HOME_PATH,
   SUMMER_CRASH_SIGNIN_PATH,
-  SUMMER_CRASH_WELCOME_PATH,
 } from "@/lib/summer-crash/constants";
 import { isSummerCrashSession } from "@/lib/summer-crash/shared";
 
@@ -43,10 +42,6 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
       academicSectionId: session.user.studentAcademicSectionId,
     },
   });
-
-  if (state.requiresPasswordSetup) {
-    redirect(SUMMER_CRASH_WELCOME_PATH);
-  }
 
   const reportHref = state.diagnostic?.reportHref || "";
   const scoreLabel =

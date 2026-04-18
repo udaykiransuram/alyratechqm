@@ -8,6 +8,7 @@ import {
 import { serializePaperSubjects } from "@/lib/question-paper/subjects";
 import {
   getStudentTestModels,
+  loadOnlinePaperBootstrapById,
   loadOnlinePaperById,
   loadOnlinePapersByIds,
   loadOnlinePapersForClass,
@@ -17,6 +18,7 @@ import {
   autoSubmitExpiredAttemptIfNeeded,
   autoSubmitExpiredAttemptsForPapers,
   buildStudentPlacementSnapshot,
+  collectStudentPaperQuestionIds,
   deriveStudentTestStatus,
   getAttemptDeadlineMs,
   getPaperWindowStart,
@@ -53,6 +55,7 @@ type StudentTestDetailDataParams = {
   paperId: string;
   studentPlacement?: StudentPlacementInput | null;
   now?: Date;
+  deliveryMode?: "bootstrap" | "full";
 };
 
 type StudentTestDataError = Error & {
@@ -261,14 +264,27 @@ export async function getStudentTestDetailData(
 ){
   const now = params.now || new Date();
   const studentPlacement = buildStudentPlacementSnapshot(params.studentPlacement);
+  const deliveryMode =
+    params.deliveryMode === "bootstrap" ? "bootstrap" : "full";
 
   if (await isExamRuntimeEnabled()) {
-    return getStudentExamRuntimeDetail(
+    const runtimeDetail = await getStudentExamRuntimeDetail(
       params.schoolKey,
       params.studentId,
       params.paperId,
       studentPlacement,
     );
+
+    if (deliveryMode !== "bootstrap" || !runtimeDetail.paper) {
+      return runtimeDetail;
+    }
+
+    return {
+      ...runtimeDetail,
+      paper: sanitizePaperForStudent(runtimeDetail.paper, {
+        hydratedQuestionIds: collectStudentPaperQuestionIds(runtimeDetail.paper, 1),
+      }),
+    };
   }
 
   const models = await getStudentTestModels(params.schoolKey);
@@ -276,7 +292,9 @@ export async function getStudentTestDetailData(
     models;
 
   const [paperResult, attemptResult] = await Promise.all([
-    loadOnlinePaperById(models, params.schoolKey, params.paperId),
+    deliveryMode === "bootstrap"
+      ? loadOnlinePaperBootstrapById(models, params.schoolKey, params.paperId)
+      : loadOnlinePaperById(models, params.schoolKey, params.paperId),
     QuestionPaperResponseModel.findOne({
       paper: params.paperId,
       student: params.studentId,
@@ -351,7 +369,12 @@ export async function getStudentTestDetailData(
 
     return {
       success: true,
-      paper: sanitizePaperForStudent(paper),
+      paper:
+        deliveryMode === "bootstrap"
+          ? sanitizePaperForStudent(paper, {
+              hydratedQuestionIds: collectStudentPaperQuestionIds(paper, 1),
+            })
+          : sanitizePaperForStudent(paper),
       attempt: null,
       status: deriveStudentTestStatus(paper, null, now),
       remainingTimeMs: null,
@@ -363,7 +386,12 @@ export async function getStudentTestDetailData(
 
   return {
     success: true,
-    paper: sanitizePaperForStudent(paper),
+    paper:
+      deliveryMode === "bootstrap"
+        ? sanitizePaperForStudent(paper, {
+            hydratedQuestionIds: collectStudentPaperQuestionIds(paper, 1),
+          })
+        : sanitizePaperForStudent(paper),
     attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),
     status: deriveStudentTestStatus(paper, attempt, now),
     remainingTimeMs: getRemainingTimeMs(paper, attempt, now),

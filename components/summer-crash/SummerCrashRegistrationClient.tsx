@@ -44,7 +44,7 @@ type SummerCrashRegisterResponse = {
     classBand?: string;
     summerId?: string;
     autoSignInAllowed?: boolean;
-    bootstrapPassword?: string;
+    signInPassword?: string;
     signInPath?: string;
     destinationHref?: string;
     entrySource?: "diagnostic" | "direct_registration";
@@ -57,6 +57,8 @@ const INITIAL_FORM_STATE = {
   sourceSchoolName: "",
   guardianName: "",
   phone: "",
+  password: "",
+  confirmPassword: "",
   consent: false,
 };
 
@@ -121,6 +123,16 @@ export default function SummerCrashRegistrationClient({
       return;
     }
 
+    if (!form.password.trim()) {
+      setErrorMessage("Create a password to continue.");
+      return;
+    }
+
+    if (form.password !== form.confirmPassword) {
+      setErrorMessage("The password confirmation does not match.");
+      return;
+    }
+
     if (!form.consent) {
       setErrorMessage("Please confirm that the details are correct.");
       return;
@@ -143,6 +155,7 @@ export default function SummerCrashRegistrationClient({
                 phone: form.phone,
                 classBand: form.classBand,
                 sourceSchoolName: form.sourceSchoolName,
+                password: form.password,
                 entrySource,
               }),
               schoolKey: SUMMER_CRASH_SCHOOL_KEY,
@@ -169,14 +182,14 @@ export default function SummerCrashRegistrationClient({
           if (
             registration?.autoSignInAllowed &&
             resolvedSummerId &&
-            registration.bootstrapPassword
+            registration.signInPassword
           ) {
             const result = await performCredentialSignIn({
               provider: "school-user",
               callbackUrl: destinationHref,
               credentials: {
                 identifier: resolvedSummerId,
-                password: registration.bootstrapPassword,
+                password: registration.signInPassword,
                 schoolKey: SUMMER_CRASH_SCHOOL_KEY,
               },
             });
@@ -250,8 +263,8 @@ export default function SummerCrashRegistrationClient({
               Easy sign-in for families
             </p>
             <p className="text-sm leading-6 text-muted-foreground">
-              Use the parent phone number later to sign in. Keep the backup ID
-              only if support ever asks for it.
+              Use the parent phone number and this password later to sign in.
+              Keep the backup ID only if support ever asks for it.
             </p>
             <div className="flex flex-wrap gap-2">
               <span className="app-meta-chip">
@@ -348,6 +361,51 @@ export default function SummerCrashRegistrationClient({
                   className="public-flow-input"
                   inputMode="tel"
                   placeholder="Enter active phone number"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="public-flow-label" htmlFor="password">
+                  Create password
+                </label>
+                <Input
+                  id="password"
+                  value={form.password}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      password: event.target.value,
+                    }))
+                  }
+                  className="public-flow-input"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Create password"
+                />
+                <p className="public-flow-helper mt-2">
+                  Choose a password with at least 6 characters.
+                </p>
+              </div>
+
+              <div>
+                <label className="public-flow-label" htmlFor="confirmPassword">
+                  Confirm password
+                </label>
+                <Input
+                  id="confirmPassword"
+                  value={form.confirmPassword}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      confirmPassword: event.target.value,
+                    }))
+                  }
+                  className="public-flow-input"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Re-enter password"
                 />
               </div>
             </div>

@@ -2,7 +2,6 @@ import {
   SUMMER_CRASH_DIAGNOSTIC_SUBMITTED_PATH,
   SUMMER_CRASH_HOME_PATH,
   SUMMER_CRASH_SCHOOL_KEY,
-  SUMMER_CRASH_WELCOME_PATH,
 } from "@/lib/summer-crash/constants";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 
@@ -113,36 +112,11 @@ export function buildSummerCrashDiagnosticHref(paperId: unknown) {
   return `/student/tests/${encodeURIComponent(normalizedPaperId)}?${searchParams.toString()}`;
 }
 
-export function buildSummerCrashWelcomeHref(nextHref?: string | null) {
-  const safeNextHref = getSafeReturnToPath(nextHref);
-  if (!safeNextHref) {
-    return SUMMER_CRASH_WELCOME_PATH;
-  }
-
-  const searchParams = new URLSearchParams({
-    next: safeNextHref,
-  });
-
-  return `${SUMMER_CRASH_WELCOME_PATH}?${searchParams.toString()}`;
-}
-
 export function resolveSummerCrashPostRegistrationHref(params: {
   destinationHref?: string | null;
   entrySource?: "diagnostic" | "direct_registration" | null;
-  requiresPasswordSetup?: boolean;
 }) {
-  const safeDestinationHref =
-    getSafeReturnToPath(params.destinationHref) || SUMMER_CRASH_HOME_PATH;
-
-  if (!params.requiresPasswordSetup) {
-    return safeDestinationHref;
-  }
-
-  if (params.entrySource === "diagnostic") {
-    return safeDestinationHref;
-  }
-
-  return buildSummerCrashWelcomeHref(safeDestinationHref);
+  return getSafeReturnToPath(params.destinationHref) || SUMMER_CRASH_HOME_PATH;
 }
 
 export function buildSummerCrashStudentReportHref(responseId: unknown) {

@@ -235,13 +235,132 @@ export function isStudentEligibleForPaper(paper: any, student: any) {
   );
 }
 
-export function sanitizePaperForStudent(paper: any) {
+export function collectStudentPaperQuestionIds(
+  paper: any,
+  limit = Number.POSITIVE_INFINITY,
+) {
+  const questionIds: string[] = [];
+  const safeLimit =
+    Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : Number.POSITIVE_INFINITY;
+
+  for (const section of Array.isArray(paper?.sections) ? paper.sections : []) {
+    for (const entry of Array.isArray(section?.questions) ? section.questions : []) {
+      const questionId = normalizeId(entry?.question?._id || entry?.question);
+      if (!questionId) {
+        continue;
+      }
+
+      questionIds.push(questionId);
+      if (questionIds.length >= safeLimit) {
+        return questionIds;
+      }
+    }
+  }
+
+  return questionIds;
+}
+
+function sanitizeStudentQuestionForDelivery(
+  question: any,
+  includeContent: boolean,
+) {
+  const normalizedQuestion = question || {};
+  const matrixOptions = Array.isArray(normalizedQuestion?.matrixOptions)
+    ? normalizedQuestion.matrixOptions
+    : [];
+
+  return {
+    _id: normalizeId(normalizedQuestion?._id || normalizedQuestion),
+    content: includeContent ? String(normalizedQuestion?.content || "") : "",
+    contentReady: includeContent,
+    type: String(normalizedQuestion?.type || ""),
+    subject: normalizedQuestion?.subject
+      ? {
+          _id: normalizeId(
+            normalizedQuestion.subject?._id || normalizedQuestion.subject,
+          ),
+          name: String(normalizedQuestion.subject?.name || ""),
+        }
+      : null,
+    options: includeContent
+      ? Array.isArray(normalizedQuestion?.options)
+        ? normalizedQuestion.options.map((option: any) => ({
+            content: String(option?.content || ""),
+          }))
+        : []
+      : [],
+    matrixOptions: includeContent
+      ? matrixOptions.map((option: any) => ({
+          left: String(option?.left || ""),
+          right: String(option?.right || ""),
+        }))
+      : [],
+    matrixRows: includeContent
+      ? matrixOptions
+          .map((option: any) => String(option?.left || "").trim())
+          .filter(Boolean)
+      : [],
+    matrixColumns: includeContent
+      ? matrixOptions
+          .map((option: any) => String(option?.right || "").trim())
+          .filter(Boolean)
+      : [],
+  };
+}
+
+export function sanitizePaperForStudent(
+  paper: any,
+  options?: {
+    hydratedQuestionIds?: Iterable<string> | null;
+  },
+) {
   const paperSubjects = serializePaperSubjects(paper);
+  const hydratedQuestionIds = options?.hydratedQuestionIds
+    ? new Set(
+        Array.from(options.hydratedQuestionIds)
+          .map((questionId) => normalizeId(questionId))
+          .filter(Boolean),
+      )
+    : null;
+  let totalQuestionCount = 0;
+  let hydratedQuestionCount = 0;
+
+  const sanitizedSections = (Array.isArray(paper?.sections) ? paper.sections : []).map(
+    (section: any) => ({
+      name: String(section?.name || ""),
+      description: sanitizeRichTextToPlainText(section?.description),
+      instructions: sanitizeRichTextToPlainText(section?.instructions),
+      defaultMarks: deriveSectionDefaultMarks(section, 1),
+      defaultNegativeMarks: deriveSectionDefaultNegativeMarks(section, 0),
+      marks: Number(section?.marks || 0),
+      questions: (Array.isArray(section?.questions) ? section.questions : []).map(
+        (entry: any) => {
+          const question = entry?.question || {};
+          const questionId = normalizeId(question?._id || question);
+          const includeContent =
+            !hydratedQuestionIds || hydratedQuestionIds.has(questionId);
+
+          totalQuestionCount += 1;
+          if (includeContent) {
+            hydratedQuestionCount += 1;
+          }
+
+          return {
+            question: sanitizeStudentQuestionForDelivery(question, includeContent),
+            marks: Number(entry?.marks || 0),
+            negativeMarks: Number(entry?.negativeMarks || 0),
+          };
+        },
+      ),
+    }),
+  );
 
   return {
     _id: String(paper?._id || ""),
     title: String(paper?.title || ""),
     instructions: sanitizeRichTextToPlainText(paper?.instructions),
+    questionsHydrated:
+      hydratedQuestionIds === null || totalQuestionCount === hydratedQuestionCount,
     duration: Number(paper?.duration || 0),
     passingMarks: Number(paper?.passingMarks || 0),
     totalMarks: Number(paper?.totalMarks || 0),
@@ -269,54 +388,7 @@ export function sanitizePaperForStudent(paper: any) {
               : null,
         }))
       : [],
-    sections: (Array.isArray(paper?.sections) ? paper.sections : []).map(
-      (section: any) => ({
-        name: String(section?.name || ""),
-        description: sanitizeRichTextToPlainText(section?.description),
-        instructions: sanitizeRichTextToPlainText(section?.instructions),
-        defaultMarks: deriveSectionDefaultMarks(section, 1),
-        defaultNegativeMarks: deriveSectionDefaultNegativeMarks(section, 0),
-        marks: Number(section?.marks || 0),
-        questions: (Array.isArray(section?.questions) ? section.questions : []).map(
-          (entry: any) => {
-            const question = entry?.question || {};
-            const matrixOptions = Array.isArray(question?.matrixOptions)
-              ? question.matrixOptions
-              : [];
-            return {
-              question: {
-                _id: normalizeId(question?._id || question),
-                content: String(question?.content || ""),
-                type: String(question?.type || ""),
-                subject: question?.subject
-                  ? {
-                      _id: normalizeId(question.subject?._id || question.subject),
-                      name: String(question.subject?.name || ""),
-                    }
-                  : null,
-                options: Array.isArray(question?.options)
-                  ? question.options.map((option: any) => ({
-                      content: String(option?.content || ""),
-                    }))
-                  : [],
-                matrixOptions: matrixOptions.map((option: any) => ({
-                  left: String(option?.left || ""),
-                  right: String(option?.right || ""),
-                })),
-                matrixRows: matrixOptions
-                  .map((option: any) => String(option?.left || "").trim())
-                  .filter(Boolean),
-                matrixColumns: matrixOptions
-                  .map((option: any) => String(option?.right || "").trim())
-                  .filter(Boolean),
-              },
-              marks: Number(entry?.marks || 0),
-              negativeMarks: Number(entry?.negativeMarks || 0),
-            };
-          },
-        ),
-      }),
-    ),
+    sections: sanitizedSections,
   };
 }
 

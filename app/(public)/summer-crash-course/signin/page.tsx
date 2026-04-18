@@ -5,12 +5,12 @@ import { getServerSession } from "next-auth";
 import SummerCrashSignInClient from "@/components/summer-crash/SummerCrashSignInClient";
 import { authOptions } from "@/lib/auth";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
-import { SUMMER_CRASH_WELCOME_PATH } from "@/lib/summer-crash/constants";
+import { SUMMER_CRASH_HOME_PATH } from "@/lib/summer-crash/constants";
 import { isSummerCrashSession } from "@/lib/summer-crash/shared";
 
 export const metadata: Metadata = {
   title: "Sign In | Summer Crash Course",
-  description: "Phone-first Summer Crash Course student sign-in.",
+  description: "Parent phone sign-in for Summer Crash Course students.",
 };
 
 type SummerCrashSignInPageProps = {
@@ -40,7 +40,7 @@ export default async function SummerCrashSignInPage({
       schoolKey: session.user.schoolKey,
     })
   ) {
-    redirect(nextHref || SUMMER_CRASH_WELCOME_PATH);
+    redirect(nextHref || SUMMER_CRASH_HOME_PATH);
   }
 
   return (

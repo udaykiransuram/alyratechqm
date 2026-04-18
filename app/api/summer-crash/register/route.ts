@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
           phone: String(body?.phone || ""),
           classBand: String(body?.classBand || ""),
           sourceSchoolName: String(body?.sourceSchoolName || ""),
+          password: String(body?.password || ""),
           entrySource:
             String(body?.entrySource || "").trim() === "diagnostic"
               ? "diagnostic"
@@ -45,8 +46,8 @@ export async function POST(req: NextRequest) {
             classBand: result.classBand,
             summerId: result.summerId,
             autoSignInAllowed: result.autoSignInAllowed,
-            bootstrapPassword: result.autoSignInAllowed
-              ? result.bootstrapPassword
+            signInPassword: result.autoSignInAllowed
+              ? result.signInPassword
               : "",
             signInPath: result.signInPath,
             destinationHref: result.destinationHref,

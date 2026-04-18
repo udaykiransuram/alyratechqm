@@ -81,26 +81,26 @@ function getSummerCrashAuthErrorMessage(error: string | null | undefined) {
   }
 
   if (normalized === "StudentRollNumberNotFound") {
-    return "We couldn't find that Summer Crash Course student account anymore. Search by phone again.";
+    return "We couldn't find that student account anymore. Search with the parent phone number again.";
   }
 
   if (normalized === "StudentSignInFailed") {
-    return "We couldn't sign in with that password. If this is the first sign-in, use the saved phone digits once and then create a new password.";
+    return "That password does not match. Check it once and try again.";
   }
 
   if (normalized === "StudentAlreadySignedIn") {
-    return "This Summer Crash Course account is already active on another device or browser.";
+    return "This account is already active on another device or browser.";
   }
 
   if (normalized === "StudentSignInRateLimited") {
-    return "Too many Summer Crash Course sign-in attempts were made. Please wait a little and retry.";
+    return "Too many sign-in attempts were made. Please wait a little and try again.";
   }
 
   if (normalized === "SchoolNotFound") {
-    return "Summer Crash Course sign-in is not ready yet. Please try again shortly.";
+    return "Summer sign-in is not ready yet. Please try again shortly.";
   }
 
-  return "We couldn't complete Summer Crash Course sign-in.";
+  return "We couldn't complete sign-in right now.";
 }
 
 export default function SummerCrashSignInClient({
@@ -262,13 +262,13 @@ export default function SummerCrashSignInClient({
   return (
     <div className="public-flow-surface space-y-6">
       <div className="space-y-2 text-center">
-        <div className="public-flow-badge mx-auto w-fit">Summer Sign In</div>
+        <div className="public-flow-badge mx-auto w-fit">Parent Sign In</div>
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-          Sign in to Summer Crash Course
+          Welcome back
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          Start with the parent phone number. If more than one student is linked,
-          choose the student and continue with the password.
+          Enter the parent phone number used during registration. If more than
+          one child is linked, choose the student and enter the password.
         </p>
       </div>
 
@@ -281,10 +281,10 @@ export default function SummerCrashSignInClient({
           <span className="public-flow-step">1</span>
           <div>
             <p className="text-lg font-semibold text-foreground">
-              Find the student
+              Enter phone number
             </p>
             <p className="public-flow-helper">
-              Use the phone or WhatsApp number shared during summer registration.
+              Use the same parent or WhatsApp number shared during registration.
             </p>
           </div>
         </div>
@@ -292,7 +292,7 @@ export default function SummerCrashSignInClient({
         <form className="space-y-5" onSubmit={handleLookupSubmit}>
           <div>
             <label className="public-flow-label" htmlFor="summerPhone">
-              Parent phone / WhatsApp number
+              Parent phone number
             </label>
             <Input
               id="summerPhone"
@@ -305,7 +305,7 @@ export default function SummerCrashSignInClient({
                 setSubmitError("");
               }}
               className="public-flow-input"
-              placeholder="Enter registered phone number"
+              placeholder="Enter parent phone number"
               inputMode="tel"
               autoComplete="tel"
             />
@@ -316,7 +316,7 @@ export default function SummerCrashSignInClient({
             disabled={isLookupPending}
             className="public-flow-button-secondary w-full justify-center"
           >
-            {isLookupPending ? "Finding student..." : "Find Student"}
+            {isLookupPending ? "Checking..." : "Continue"}
           </Button>
         </form>
       </div>
@@ -327,12 +327,12 @@ export default function SummerCrashSignInClient({
             <span className="public-flow-step">2</span>
             <div>
               <p className="text-lg font-semibold text-foreground">
-                {matches.length === 1 ? "Student found" : "Choose the student"}
+                {matches.length === 1 ? "Child found" : "Choose your child"}
               </p>
               <p className="public-flow-helper">
                 {matches.length === 1
                   ? "The linked student account is ready below."
-                  : "Choose the child who should enter the summer course."}
+                  : "Choose the child who should open the summer course."}
               </p>
             </div>
           </div>
@@ -374,10 +374,10 @@ export default function SummerCrashSignInClient({
                     </div>
                     <div className="sm:text-right">
                       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        {isSelected ? "Selected" : "Tap to select"}
+                        {isSelected ? "Selected" : "Choose"}
                       </p>
-                      <p className="mt-2 text-sm font-medium text-foreground">
-                        Backup ID: {match.maskedSummerId}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Support ID: {match.maskedSummerId}
                       </p>
                     </div>
                   </div>
@@ -398,8 +398,8 @@ export default function SummerCrashSignInClient({
                   Enter password
                 </p>
                 <p className="public-flow-helper">
-                  Sign in for {selectedMatch.studentName}. Keep the backup ID
-                  only if support asks for it.
+                  Use the password created during registration for{" "}
+                  {selectedMatch.studentName}.
                 </p>
               </div>
             </div>
@@ -411,8 +411,8 @@ export default function SummerCrashSignInClient({
               <p className="mt-1 text-sm text-muted-foreground">
                 {selectedMatch.classBand || "Summer Crash Course"}
               </p>
-              <p className="mt-2 text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                Backup ID: {selectedMatch.maskedSummerId}
+              <p className="mt-2 text-xs text-muted-foreground">
+                Support ID: {selectedMatch.maskedSummerId}
               </p>
             </div>
 
@@ -447,8 +447,7 @@ export default function SummerCrashSignInClient({
                 </button>
               </div>
               <p className="public-flow-helper mt-2">
-                On the first sign-in, use the saved phone digits once. After
-                that, use the new password.
+                Use the same password that was created during registration.
               </p>
             </div>
 
@@ -463,20 +462,20 @@ export default function SummerCrashSignInClient({
         </form>
       ) : matches.length > 1 ? (
         <FeedbackNotice variant="info">
-          Choose the student account above to continue.
+          Choose your child above to continue.
         </FeedbackNotice>
       ) : null}
 
       <div className="public-flow-card-soft space-y-3 text-center">
         <p className="text-sm leading-6 text-muted-foreground">
-          Need help?
+          Need help signing in?
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link href={SUMMER_CRASH_REGISTER_PATH} className="public-flow-text-link">
-            Register Free
+            Register
           </Link>
           <Link href={SUMMER_CRASH_HELP_PATH} className="public-flow-text-link">
-            Sign-in Help
+            Get Sign-In Help
           </Link>
         </div>
       </div>

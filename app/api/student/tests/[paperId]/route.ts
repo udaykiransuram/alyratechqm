@@ -23,6 +23,7 @@ export async function GET(
   });
   if (!auth.ok) return auth.response;
   const { paperId } = await params;
+  const delivery = req.nextUrl.searchParams.get("delivery");
 
   const schoolKey = auth.schoolKey as string;
   const studentId = auth.session.user.id;
@@ -51,6 +52,7 @@ export async function GET(
         academicSectionId: auth.session.user.studentAcademicSectionId,
       },
       now: new Date(),
+      deliveryMode: delivery === "bootstrap" ? "bootstrap" : "full",
     });
     return NextResponse.json(result);
   } catch (error: any) {

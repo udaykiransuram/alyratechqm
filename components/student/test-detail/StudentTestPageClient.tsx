@@ -186,6 +186,8 @@ export default function StudentTestPageClient({
           recoveryNotice={runtime.recoveryNotice}
           pendingSubmitRetry={runtime.pendingSubmitRetry}
           saveRetryPending={runtime.saveRetryPending}
+          isHydratingQuestions={runtime.isHydratingQuestions}
+          questionHydrationError={runtime.questionHydrationError}
           actionError={runtime.actionError}
           answeredQuestionIds={runtime.answeredQuestionIds}
           currentQuestion={runtime.currentQuestion}
@@ -194,6 +196,7 @@ export default function StudentTestPageClient({
           onToggleFullscreen={runtime.toggleFullscreen}
           onSubmitAttempt={runtime.submitAttempt}
           onJumpToQuestion={runtime.jumpToQuestion}
+          onRetryQuestionHydration={runtime.retryQuestionHydration}
           onUpdateMultipleChoice={runtime.updateMultipleChoice}
           onUpdateSingleChoice={runtime.updateSingleChoice}
           onUpdateDescriptiveAnswer={runtime.updateDescriptiveAnswer}

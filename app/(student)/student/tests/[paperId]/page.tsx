@@ -84,6 +84,7 @@ export default async function StudentTestPage({
           academicSectionId: session.user.studentAcademicSectionId,
         },
         now: new Date(),
+        deliveryMode: "bootstrap",
       });
     } catch (error) {
       initialLoadError =

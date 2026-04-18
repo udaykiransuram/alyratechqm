@@ -5,7 +5,6 @@ import { isHiddenPublicSchoolKey } from "../../../lib/public-school/shared";
 import {
   buildSummerCrashDiagnosticHref,
   buildSummerCrashStudentReportHref,
-  buildSummerCrashWelcomeHref,
   formatSummerCrashPrice,
   isSummerCrashSession,
   maskSummerCrashId,
@@ -97,15 +96,9 @@ test.describe("Summer crash course helpers @desktop", () => {
     ).toBe("SC111222");
   });
 
-  test("builds safe diagnostic, welcome, and report routes for the summer flow", async () => {
+  test("builds safe diagnostic and report routes for the summer flow", async () => {
     expect(buildSummerCrashDiagnosticHref("paper_123")).toBe(
       "/student/tests/paper_123?returnTo=%2Fstudent%2Fcrash-course%2Fdiagnostic-submitted&autoStart=1",
-    );
-    expect(buildSummerCrashWelcomeHref("/student/crash-course")).toBe(
-      "/summer-crash-course/welcome?next=%2Fstudent%2Fcrash-course",
-    );
-    expect(buildSummerCrashWelcomeHref("https://example.com")).toBe(
-      "/summer-crash-course/welcome",
     );
     expect(buildSummerCrashStudentReportHref("response_123")).toBe(
       "/student/reports/response_123?returnTo=%2Fstudent%2Fcrash-course",
@@ -113,14 +106,13 @@ test.describe("Summer crash course helpers @desktop", () => {
     expect(formatSummerCrashPrice(1499, "INR")).toBe("₹1,499");
   });
 
-  test("sends diagnostic registrations straight into the test while keeping course-first registration on setup", async () => {
+  test("sends both diagnostic and direct summer registrations to the real destination", async () => {
     const diagnosticHref = buildSummerCrashDiagnosticHref("paper_123");
 
     expect(
       resolveSummerCrashPostRegistrationHref({
         destinationHref: diagnosticHref,
         entrySource: "diagnostic",
-        requiresPasswordSetup: true,
       }),
     ).toBe(diagnosticHref);
 
@@ -128,15 +120,13 @@ test.describe("Summer crash course helpers @desktop", () => {
       resolveSummerCrashPostRegistrationHref({
         destinationHref: "/student/crash-course",
         entrySource: "direct_registration",
-        requiresPasswordSetup: true,
       }),
-    ).toBe("/summer-crash-course/welcome?next=%2Fstudent%2Fcrash-course");
+    ).toBe("/student/crash-course");
 
     expect(
       resolveSummerCrashPostRegistrationHref({
         destinationHref: diagnosticHref,
         entrySource: "diagnostic",
-        requiresPasswordSetup: false,
       }),
     ).toBe(diagnosticHref);
   });
