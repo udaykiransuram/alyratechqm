@@ -233,7 +233,11 @@ export default function PublicTestsPageClient({
   };
 
   const handleDiagnose = async (card: WorkspacePublicTestsConfig["classBandCards"][number]) => {
-    if (!card.diagnosticQuestionPaperId) {
+    const selectedPaperId = String(
+      mappingValues[card.classBand] || card.diagnosticQuestionPaperId || "",
+    ).trim();
+
+    if (!selectedPaperId) {
       setErrorMessage("Select a diagnostic paper first.");
       return;
     }
@@ -245,7 +249,7 @@ export default function PublicTestsPageClient({
     try {
       const response = await fetchApiJson<any>(
         `/api/workspace/public-tests/diagnose?paperId=${encodeURIComponent(
-          card.diagnosticQuestionPaperId,
+          selectedPaperId,
         )}&classBand=${encodeURIComponent(card.classBand)}`,
         {
           fallbackMessage: "We couldn't diagnose this diagnostic paper.",
@@ -523,7 +527,12 @@ export default function PublicTestsPageClient({
                   </div>
 
                   {diagnosticDetails &&
-                  diagnosticDetails?.paperId === card.diagnosticQuestionPaperId &&
+                  diagnosticDetails?.paperId ===
+                    String(
+                      mappingValues[card.classBand] ||
+                        card.diagnosticQuestionPaperId ||
+                        "",
+                    ).trim() &&
                   diagnosticDetails?.classBand === card.classBand ? (
                     <div className="mt-4 rounded-xl border border-border/70 bg-muted/10 p-4 text-xs text-muted-foreground">
                       <p className="text-sm font-semibold text-foreground">

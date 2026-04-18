@@ -65,3 +65,17 @@ export function canAccessSummerCrashPortalTarget(
       return false;
   }
 }
+
+export function isSummerCrashConfiguredDiagnosticPaper(
+  policy: SummerCrashPortalAccessPolicy,
+  paperId?: string | null,
+) {
+  const normalizedPaperId = String(paperId || "").trim();
+
+  return Boolean(
+    policy.applies &&
+      policy.allowedDiagnosticPaperId &&
+      normalizedPaperId &&
+      policy.allowedDiagnosticPaperId === normalizedPaperId,
+  );
+}

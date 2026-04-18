@@ -8,6 +8,7 @@ import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import {
   assertSummerCrashStudentPageAccess,
 } from "@/lib/server/summer-crash";
+import { isSummerCrashConfiguredDiagnosticPaper } from "@/lib/summer-crash/portal-access";
 import { SUMMER_CRASH_HOME_PATH } from "@/lib/summer-crash/constants";
 import { getStudentTestDetailData } from "@/lib/server/student-tests";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
@@ -51,6 +52,10 @@ export default async function StudentTestPage({
   if (!accessCheck.allowed) {
     redirect(accessCheck.policy.redirectHref);
   }
+  const skipOnlineDeliveryValidation = isSummerCrashConfiguredDiagnosticPaper(
+    accessCheck.policy,
+    paperId,
+  );
 
   const resolvedSearchParams = await searchParams;
   const rawAutoStart = Array.isArray(resolvedSearchParams?.autoStart)
@@ -85,6 +90,7 @@ export default async function StudentTestPage({
         },
         now: new Date(),
         deliveryMode: "bootstrap",
+        skipOnlineDeliveryValidation,
       });
     } catch (error) {
       initialLoadError =

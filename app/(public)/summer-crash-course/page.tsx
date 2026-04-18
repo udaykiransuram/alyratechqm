@@ -140,32 +140,41 @@ export default async function SummerCrashCourseLandingPage() {
         </section>
 
         <section className="public-summer-grid">
-          <div className="public-flow-card">
+          <div className="public-flow-card public-summer-card">
             <h2 className="text-2xl font-semibold text-foreground">
               What students get
             </h2>
-            <ul className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
-              <li>Phone-number sign-in with no school picker.</li>
-              <li>
-                {hasPaidCourseAccess
+            <div className="public-summer-feature-grid">
+              {[
+                "Phone-number sign-in with no school picker.",
+                hasPaidCourseAccess
                   ? `Take the free diagnostic first, then unlock lessons after payment (${priceLabel}).`
-                  : "Free access to lessons matched to the selected class band."}
-              </li>
-              <li>Daily micro-lessons with worked examples and practice.</li>
-              <li>Instant-result diagnostic test to pinpoint weak areas.</li>
-              <li>Parent-ready progress updates after every session.</li>
-            </ul>
+                  : "Free access to lessons matched to the selected class band.",
+                "Daily micro-lessons with worked examples and practice.",
+                "Instant-result diagnostic test to pinpoint weak areas.",
+                "Parent-ready progress updates after every session.",
+              ].map((item) => (
+                <div key={item} className="public-summer-feature">
+                  <div className="public-summer-feature-dot" />
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {item}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="public-flow-card-soft">
+          <div className="public-flow-card-soft public-summer-card">
             <h2 className="text-2xl font-semibold text-foreground">
               Available class bands
             </h2>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="public-summer-band-grid">
               {config.classBands.map((band) => (
-                <span key={band.classBand} className="public-flow-band">
-                  {band.classBand}
-                </span>
+                <div key={band.classBand} className="public-summer-band">
+                  <span className="text-sm font-semibold text-foreground">
+                    {band.classBand}
+                  </span>
+                </div>
               ))}
             </div>
             <div className="pt-4">

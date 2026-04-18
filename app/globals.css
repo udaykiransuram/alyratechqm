@@ -6896,6 +6896,7 @@
 
   .app-exam-focus-topbar {
     @apply sticky z-20 space-y-1.5 rounded-[1rem] border px-3 py-2 sm:px-3.5 sm:py-2.5;
+    margin-bottom: 0.9rem;
     top: var(--app-exam-sticky-top);
     border-color: hsl(var(--border) / 0.78);
     background:
@@ -7111,6 +7112,7 @@
     .app-exam-focus-topbar {
       gap: 0.5rem;
       padding: 0.6rem;
+      margin-bottom: 0.75rem;
     }
 
     .app-exam-focus-topbar-main {
@@ -7166,6 +7168,17 @@
 
     .app-exam-timer-card {
       padding: 0.45rem 0.6rem;
+    }
+
+    .app-exam-timer-card-main {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: start;
+      row-gap: 0.3rem;
+    }
+
+    .app-exam-timer-card-value {
+      text-align: left;
+      min-width: 0;
     }
 
     .app-exam-timer-card-kicker {
@@ -8302,7 +8315,7 @@
 
     .app-exam-question-body {
       gap: 0.75rem;
-      padding-bottom: calc(6.25rem + env(safe-area-inset-bottom));
+      padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
     }
 
     .app-exam-question-header {
@@ -14012,6 +14025,41 @@ html[data-public-home-flagship="true"] ::selection {
 
   .public-summer-grid {
     @apply grid gap-4 lg:grid-cols-[1.15fr_0.85fr];
+  }
+
+  .public-summer-card {
+    @apply relative overflow-hidden;
+  }
+
+  .public-summer-feature-grid {
+    @apply mt-5 grid gap-3;
+  }
+
+  .public-summer-feature {
+    @apply flex gap-3 rounded-xl border px-4 py-3;
+    border-color: hsl(var(--public-border) / 0.6);
+    background: hsl(var(--public-surface) / 0.92);
+  }
+
+  .public-summer-feature-dot {
+    @apply mt-1 h-2.5 w-2.5 shrink-0 rounded-full;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--public-brand-start)) 0%,
+      hsl(var(--public-accent)) 100%
+    );
+    box-shadow: 0 0 0 4px hsl(var(--public-accent) / 0.12);
+  }
+
+  .public-summer-band-grid {
+    @apply mt-5 grid gap-2 sm:grid-cols-2;
+  }
+
+  .public-summer-band {
+    @apply rounded-2xl border px-4 py-3 text-center;
+    border-color: hsl(var(--public-border) / 0.7);
+    background: hsl(var(--public-surface) / 0.9);
+    box-shadow: 0 10px 24px -18px hsl(var(--public-shadow) / 0.2);
   }
 
   .public-summer-steps {

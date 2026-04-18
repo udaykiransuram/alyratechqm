@@ -2801,6 +2801,9 @@ export async function deleteExamRuntimeDataForSchool(schoolKey: string) {
 async function ensureActiveExamSnapshotForPaperId(
   schoolKey: string,
   paperId: string,
+  options?: {
+    skipOnlineDeliveryValidation?: boolean;
+  },
 ) {
   const normalizedPaperId = String(paperId || "").trim();
   if (!normalizedPaperId) {
@@ -2835,7 +2838,11 @@ async function ensureActiveExamSnapshotForPaperId(
         schoolKey,
         normalizedPaperId,
       );
-      if (!sourcePaper || !paperSupportsOnlineDelivery(sourcePaper)) {
+      if (
+        !sourcePaper ||
+        (!options?.skipOnlineDeliveryValidation &&
+          !paperSupportsOnlineDelivery(sourcePaper))
+      ) {
         await disableExamPaperSnapshotsForPaperId(schoolKey, normalizedPaperId);
         return null;
       }
@@ -3750,6 +3757,9 @@ export async function getStudentExamRuntimeDetail(
   studentId: string,
   paperId: string,
   studentContext?: StudentEligibilityContext,
+  options?: {
+    skipOnlineDeliveryValidation?: boolean;
+  },
 ) {
   const now = new Date();
   let modelsPromise: Promise<Awaited<ReturnType<typeof getStudentTestModels>>> | null =
@@ -3813,7 +3823,11 @@ export async function getStudentExamRuntimeDetail(
             useCache: true,
           });
         })(),
-    ensureActiveExamSnapshotForPaperId(schoolKey, paperId),
+    ensureActiveExamSnapshotForPaperId(schoolKey, paperId, {
+      skipOnlineDeliveryValidation: Boolean(
+        options?.skipOnlineDeliveryValidation,
+      ),
+    }),
   ]);
   if (!student) {
     throwExamRuntimeError({
@@ -3866,7 +3880,10 @@ export async function getStudentExamRuntimeDetail(
     });
   }
 
-  if (!paperSupportsOnlineDelivery(paper)) {
+  if (
+    !options?.skipOnlineDeliveryValidation &&
+    !paperSupportsOnlineDelivery(paper)
+  ) {
     throwExamRuntimeError({
       message:
         "This paper cannot be delivered online because it contains unsupported question types.",
@@ -3940,6 +3957,9 @@ function buildLegacyAttemptSubmittedResponse(
 async function loadLegacyStudentExamMutationContext(
   schoolKey: string,
   paperId: string,
+  options?: {
+    skipOnlineDeliveryValidation?: boolean;
+  },
 ) {
   const models = await getStudentTestModels(schoolKey);
   const paper = await loadOnlinePaperRuntimeById(models, schoolKey, paperId);
@@ -3953,7 +3973,10 @@ async function loadLegacyStudentExamMutationContext(
     });
   }
 
-  if (!paperSupportsOnlineDelivery(paper)) {
+  if (
+    !options?.skipOnlineDeliveryValidation &&
+    !paperSupportsOnlineDelivery(paper)
+  ) {
     throwExamRuntimeError({
       message:
         "This paper cannot be delivered online because it contains unsupported question types.",
@@ -3987,12 +4010,16 @@ async function startStudentLegacyAttempt(
   studentId: string,
   paperId: string,
   studentContext?: StudentEligibilityContext,
+  options?: {
+    skipOnlineDeliveryValidation?: boolean;
+  },
 ) {
   return withAttemptLock(schoolKey, paperId, studentId, async () => {
     const now = new Date();
     const { models, paper } = await loadLegacyStudentExamMutationContext(
       schoolKey,
       paperId,
+      options,
     );
     const {
       QuestionPaperResponse: QuestionPaperResponseModel,
@@ -4083,8 +4110,10 @@ async function saveStudentLegacyAttempt(params: {
   schoolKey: string;
   studentId: string;
   paperId: string;
+  attemptId?: string | null;
   sectionAnswers: unknown;
   baseLastSavedAt?: string | null;
+  skipOnlineDeliveryValidation?: boolean;
 }) {
   return withAttemptLock(
     params.schoolKey,
@@ -4110,6 +4139,9 @@ async function saveStudentLegacyAttempt(params: {
       const { models, paper } = await loadLegacyStudentExamMutationContext(
         params.schoolKey,
         params.paperId,
+        {
+          skipOnlineDeliveryValidation: params.skipOnlineDeliveryValidation,
+        },
       );
       const { QuestionPaperResponse: QuestionPaperResponseModel } = models;
 
@@ -4267,8 +4299,10 @@ async function submitStudentLegacyAttempt(params: {
   schoolKey: string;
   studentId: string;
   paperId: string;
+  attemptId?: string | null;
   sectionAnswers?: unknown;
   baseLastSavedAt?: string | null;
+  skipOnlineDeliveryValidation?: boolean;
 }) {
   return withAttemptLock(
     params.schoolKey,
@@ -4279,6 +4313,9 @@ async function submitStudentLegacyAttempt(params: {
       const { models, paper } = await loadLegacyStudentExamMutationContext(
         params.schoolKey,
         params.paperId,
+        {
+          skipOnlineDeliveryValidation: params.skipOnlineDeliveryValidation,
+        },
       );
       const { QuestionPaperResponse: QuestionPaperResponseModel } = models;
 
@@ -4381,6 +4418,9 @@ export async function startStudentExamAttempt(
   studentId: string,
   paperId: string,
   studentContext?: StudentEligibilityContext,
+  options?: {
+    skipOnlineDeliveryValidation?: boolean;
+  },
 ) {
   if (await isExamRuntimeEnabled()) {
     return startStudentExamRuntimeAttempt(
@@ -4388,10 +4428,17 @@ export async function startStudentExamAttempt(
       studentId,
       paperId,
       studentContext,
+      options,
     );
   }
 
-  return startStudentLegacyAttempt(schoolKey, studentId, paperId, studentContext);
+  return startStudentLegacyAttempt(
+    schoolKey,
+    studentId,
+    paperId,
+    studentContext,
+    options,
+  );
 }
 
 export async function saveStudentExamAttempt(params: {
@@ -4401,6 +4448,7 @@ export async function saveStudentExamAttempt(params: {
   attemptId?: string | null;
   sectionAnswers: unknown;
   baseLastSavedAt?: string | null;
+  skipOnlineDeliveryValidation?: boolean;
 }) {
   if (await isExamRuntimeEnabled()) {
     return saveStudentExamRuntimeAttempt(params);
@@ -4416,6 +4464,7 @@ export async function submitStudentExamAttempt(params: {
   attemptId?: string | null;
   sectionAnswers?: unknown;
   baseLastSavedAt?: string | null;
+  skipOnlineDeliveryValidation?: boolean;
 }) {
   if (await isExamRuntimeEnabled()) {
     return submitStudentExamRuntimeAttempt(params);
@@ -4429,6 +4478,9 @@ export async function startStudentExamRuntimeAttempt(
   studentId: string,
   paperId: string,
   studentContext?: StudentEligibilityContext,
+  options?: {
+    skipOnlineDeliveryValidation?: boolean;
+  },
 ) {
   return withAttemptLock(schoolKey, paperId, studentId, async () => {
     const now = new Date();
@@ -4609,7 +4661,10 @@ export async function startStudentExamRuntimeAttempt(
       });
     }
 
-    if (!paperSupportsOnlineDelivery(paper)) {
+    if (
+      !options?.skipOnlineDeliveryValidation &&
+      !paperSupportsOnlineDelivery(paper)
+    ) {
       throwExamRuntimeError({
         message:
           "This paper cannot be delivered online because it contains unsupported question types.",
@@ -4649,7 +4704,15 @@ export async function startStudentExamRuntimeAttempt(
       });
     }
 
-    const snapshot = await ensureActiveExamSnapshotForPaperId(schoolKey, paperId);
+    const snapshot = await ensureActiveExamSnapshotForPaperId(
+      schoolKey,
+      paperId,
+      {
+        skipOnlineDeliveryValidation: Boolean(
+          options?.skipOnlineDeliveryValidation,
+        ),
+      },
+    );
     if (!snapshot) {
       throwExamRuntimeError({
         message: "Online test snapshot is not ready yet.",

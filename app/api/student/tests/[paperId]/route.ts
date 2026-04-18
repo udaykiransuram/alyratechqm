@@ -9,6 +9,7 @@ import {
   isExamRuntimeEnabled,
 } from "@/lib/exam-runtime";
 import { getStudentTestDetailData } from "@/lib/server/student-tests";
+import { isSummerCrashConfiguredDiagnosticPaper } from "@/lib/summer-crash/portal-access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,6 +42,10 @@ export async function GET(
       { status: 403 },
     );
   }
+  const skipOnlineDeliveryValidation = isSummerCrashConfiguredDiagnosticPaper(
+    accessCheck.policy,
+    paperId,
+  );
 
   try {
     const result = await getStudentTestDetailData({
@@ -53,6 +58,7 @@ export async function GET(
       },
       now: new Date(),
       deliveryMode: delivery === "bootstrap" ? "bootstrap" : "full",
+      skipOnlineDeliveryValidation,
     });
     return NextResponse.json(result);
   } catch (error: any) {

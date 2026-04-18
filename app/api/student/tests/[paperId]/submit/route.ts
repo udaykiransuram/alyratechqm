@@ -11,6 +11,7 @@ import {
   recordSummerCrashDiagnosticSubmitted,
 } from "@/lib/server/summer-crash";
 import { scheduleStudentDashboardCacheInvalidation } from "@/lib/server/student-dashboard-cache";
+import { isSummerCrashConfiguredDiagnosticPaper } from "@/lib/summer-crash/portal-access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -40,6 +41,10 @@ export async function POST(
       { status: 403 },
     );
   }
+  const skipOnlineDeliveryValidation = isSummerCrashConfiguredDiagnosticPaper(
+    accessCheck.policy,
+    paperId,
+  );
   const body = await req.json().catch(() => ({}));
 
   try {
@@ -51,6 +56,7 @@ export async function POST(
       sectionAnswers: body?.sectionAnswers,
       baseLastSavedAt:
         typeof body?.baseLastSavedAt === "string" ? body.baseLastSavedAt : null,
+      skipOnlineDeliveryValidation,
     });
 
     await recordSummerCrashDiagnosticSubmitted({

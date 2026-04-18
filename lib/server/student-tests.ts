@@ -56,6 +56,7 @@ type StudentTestDetailDataParams = {
   studentPlacement?: StudentPlacementInput | null;
   now?: Date;
   deliveryMode?: "bootstrap" | "full";
+  skipOnlineDeliveryValidation?: boolean;
 };
 
 type StudentTestDataError = Error & {
@@ -273,6 +274,11 @@ export async function getStudentTestDetailData(
       params.studentId,
       params.paperId,
       studentPlacement,
+      {
+        skipOnlineDeliveryValidation: Boolean(
+          params.skipOnlineDeliveryValidation,
+        ),
+      },
     );
 
     if (deliveryMode !== "bootstrap" || !runtimeDetail.paper) {
@@ -312,7 +318,10 @@ export async function getStudentTestDetailData(
     });
   }
 
-  if (!paperSupportsOnlineDelivery(paper)) {
+  if (
+    !params.skipOnlineDeliveryValidation &&
+    !paperSupportsOnlineDelivery(paper)
+  ) {
     throwStudentTestDataError({
       message:
         "This paper cannot be delivered online because it contains unsupported question types.",

@@ -12,6 +12,7 @@ import {
   recordSummerCrashDiagnosticStarted,
 } from "@/lib/server/summer-crash";
 import { scheduleStudentDashboardCacheInvalidation } from "@/lib/server/student-dashboard-cache";
+import { isSummerCrashConfiguredDiagnosticPaper } from "@/lib/summer-crash/portal-access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,6 +42,10 @@ export async function POST(
       { status: 403 },
     );
   }
+  const skipOnlineDeliveryValidation = isSummerCrashConfiguredDiagnosticPaper(
+    accessCheck.policy,
+    paperId,
+  );
 
   try {
     const result = await startStudentExamAttempt(
@@ -50,6 +55,9 @@ export async function POST(
       {
         classId: auth.session.user.studentClassId,
         academicSectionId: auth.session.user.studentAcademicSectionId,
+      },
+      {
+        skipOnlineDeliveryValidation,
       },
     );
 
@@ -115,6 +123,10 @@ export async function PATCH(
       { status: 403 },
     );
   }
+  const skipOnlineDeliveryValidation = isSummerCrashConfiguredDiagnosticPaper(
+    accessCheck.policy,
+    paperId,
+  );
   const body = await req.json().catch(() => ({}));
 
   try {
@@ -126,6 +138,7 @@ export async function PATCH(
       sectionAnswers: body?.sectionAnswers ?? [],
       baseLastSavedAt:
         typeof body?.baseLastSavedAt === "string" ? body.baseLastSavedAt : null,
+      skipOnlineDeliveryValidation,
     });
 
     return NextResponse.json(result);

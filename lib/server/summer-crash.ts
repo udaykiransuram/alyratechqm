@@ -8,7 +8,6 @@ import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { listStudentCoursesPage } from "@/lib/server/student-courses";
-import { paperRequiresManualReview, paperSupportsOnlineDelivery } from "@/lib/student-tests";
 import {
   buildSummerCrashDiagnosticHref,
   buildSummerCrashStudentReportHref,
@@ -70,12 +69,6 @@ type SummerCrashQuestionPaperSummary = {
   duration: number;
   classId: string;
   className: string;
-  onlineEnabled: boolean;
-  assignedSectionCount: number;
-  supportsInstantResults: boolean;
-  supportsOnlineDelivery: boolean;
-  requiresManualReview: boolean;
-  questionCount: number;
 };
 
 export type SummerCrashPublicClassBand = {
@@ -442,14 +435,8 @@ async function loadSummerCrashQuestionPaperSummary(
     _id: normalizedPaperId,
     ...buildArchiveFilter(false),
   })
-    .select(
-      "title totalMarks duration class onlineEnabled assignedAcademicSections sections",
-    )
+    .select("title totalMarks duration class")
     .populate("class", "name")
-    .populate({
-      path: "sections.questions.question",
-      select: "_id type options answerIndexes matrixOptions matrixAnswers",
-    })
     .lean()) as SummerCrashQuestionPaperDoc | null;
 
   if (!paper?._id) {
@@ -464,27 +451,6 @@ async function loadSummerCrashQuestionPaperSummary(
   const className = normalizeSummerCrashText(
     (paper.class as { name?: unknown } | null | undefined)?.name,
   );
-  const assignedSectionCount = Array.isArray(paper.assignedAcademicSections)
-    ? paper.assignedAcademicSections.length
-    : 0;
-  const supportsOnlineDelivery = paperSupportsOnlineDelivery(paper);
-  const requiresManualReview = paperRequiresManualReview(paper);
-  const questionCount = Array.isArray(paper.sections)
-    ? Number(
-        paper.sections.reduce((sum, section: any) => {
-          const count = Array.isArray(section?.questions)
-            ? section.questions.length
-            : 0;
-          return sum + count;
-        }, 0),
-      )
-    : 0;
-  const supportsInstantResults =
-    Boolean(paper.onlineEnabled) &&
-    assignedSectionCount === 0 &&
-    supportsOnlineDelivery &&
-    !requiresManualReview;
-
   return {
     _id: String(paper._id),
     title: normalizeSummerCrashText(paper.title) || "Untitled Paper",
@@ -492,12 +458,6 @@ async function loadSummerCrashQuestionPaperSummary(
     duration: Number(paper.duration || 0),
     classId,
     className,
-    onlineEnabled: Boolean(paper.onlineEnabled),
-    assignedSectionCount,
-    supportsInstantResults,
-    supportsOnlineDelivery,
-    requiresManualReview,
-    questionCount,
   };
 }
 
@@ -523,50 +483,7 @@ async function resolveSummerCrashRegistrationDestination(params: {
       "The free diagnostic test is not ready for this class band yet.",
     );
   }
-
-  const paperSummary = await loadSummerCrashQuestionPaperSummary(
-    diagnosticQuestionPaperId,
-  );
-
-  if (!paperSummary?.supportsInstantResults) {
-    const issues: string[] = [];
-    if (!paperSummary) {
-      issues.push("paper not found");
-    } else {
-      if (!paperSummary.onlineEnabled) issues.push("online mode is off");
-      if (paperSummary.assignedSectionCount > 0) {
-        issues.push("assigned sections are set");
-      }
-      if (!paperSummary.supportsOnlineDelivery) {
-        issues.push("unsupported question types");
-      }
-      if (paperSummary.requiresManualReview) {
-        issues.push("manual review required");
-      }
-      if (paperSummary.questionCount === 0) {
-        issues.push("paper has no questions");
-      }
-    }
-    const detail = issues.length > 0 ? ` (${issues.join(", ")})` : "";
-    throw new Error(
-      `The free diagnostic test is not available for this class band right now.${detail}`,
-    );
-  }
-
-  const expectedClassName = normalizeSummerCrashClassBandKey(
-    mapping?.className || mapping?.classBand || "",
-  );
-  const paperClassName = normalizeSummerCrashClassBandKey(
-    paperSummary.className,
-  );
-
-  if (expectedClassName && paperClassName && expectedClassName !== paperClassName) {
-    throw new Error(
-      "The selected free diagnostic test does not match this class band.",
-    );
-  }
-
-  return buildSummerCrashDiagnosticHref(paperSummary._id);
+  return buildSummerCrashDiagnosticHref(diagnosticQuestionPaperId);
 }
 
 async function buildSummerCrashDiagnosticState(params: {
@@ -619,7 +536,7 @@ async function buildSummerCrashDiagnosticState(params: {
       : "",
     score: Number.isFinite(score) ? score : null,
     percent: Number.isFinite(percent) ? percent : null,
-    available: Boolean(paperSummary?.supportsInstantResults),
+    available: Boolean(paperSummary?._id),
   } satisfies SummerCrashDiagnosticState;
 }
 
@@ -1395,15 +1312,12 @@ export async function recordSummerCrashDiagnosticStarted(params: {
   const classBand = normalizeSummerCrashText(enrollment.classBand);
   const mapping = resolveSummerCrashClassMapping(campaign, classBand);
   const diagnosticQuestionPaperId = String(
-    mapping?.diagnosticQuestionPaperId || "",
+    enrollment.diagnosticQuestionPaperId ||
+      mapping?.diagnosticQuestionPaperId ||
+      "",
   ).trim();
 
   if (!diagnosticQuestionPaperId || diagnosticQuestionPaperId !== params.paperId) {
-    return;
-  }
-
-  const paperSummary = await loadSummerCrashQuestionPaperSummary(params.paperId);
-  if (!paperSummary?.supportsInstantResults) {
     return;
   }
 
@@ -1450,7 +1364,9 @@ export async function recordSummerCrashDiagnosticSubmitted(params: {
   const classBand = normalizeSummerCrashText(enrollment.classBand);
   const mapping = resolveSummerCrashClassMapping(campaign, classBand);
   const diagnosticQuestionPaperId = String(
-    mapping?.diagnosticQuestionPaperId || "",
+    enrollment.diagnosticQuestionPaperId ||
+      mapping?.diagnosticQuestionPaperId ||
+      "",
   ).trim();
 
   if (!diagnosticQuestionPaperId || diagnosticQuestionPaperId !== params.paperId) {
@@ -1458,18 +1374,16 @@ export async function recordSummerCrashDiagnosticSubmitted(params: {
   }
 
   const paperSummary = await loadSummerCrashQuestionPaperSummary(params.paperId);
-  if (!paperSummary?.supportsInstantResults) {
-    return;
-  }
+  const paperTotalMarks = Number(paperSummary?.totalMarks || 0);
 
   const numericScore = Number(params.score);
   const diagnosticScore = Number.isFinite(numericScore) ? numericScore : null;
   const diagnosticPercent =
-    diagnosticScore !== null && paperSummary.totalMarks > 0
+    diagnosticScore !== null && paperTotalMarks > 0
       ? Number(
           Math.max(
             0,
-            Math.min(100, (diagnosticScore / paperSummary.totalMarks) * 100),
+            Math.min(100, (diagnosticScore / paperTotalMarks) * 100),
           ).toFixed(2),
         )
       : null;

@@ -367,7 +367,8 @@ async function loadDiagnosticPaperForDisplay(params: {
     .populate("class", "name")
     .populate({
       path: "sections.questions.question",
-      select: "_id type options answerIndexes matrixOptions matrixAnswers",
+      select:
+        "_id type options answerIndexes matrixOptions matrixAnswers answerText",
     })
     .lean()) as QuestionPaperDoc | null;
 
@@ -529,7 +530,8 @@ async function loadEligibleDiagnosticPapersByClassId(classIds: string[]) {
     .populate("class", "name")
     .populate({
       path: "sections.questions.question",
-      select: "_id type options answerIndexes matrixOptions matrixAnswers",
+      select:
+        "_id type options answerIndexes matrixOptions matrixAnswers answerText",
     })
     .lean()) as QuestionPaperDoc[];
 
@@ -598,7 +600,8 @@ async function validateDiagnosticQuestionPaperAssignment(params: {
     .populate("class", "name")
     .populate({
       path: "sections.questions.question",
-      select: "_id type options answerIndexes matrixOptions matrixAnswers",
+      select:
+        "_id type options answerIndexes matrixOptions matrixAnswers answerText",
     })
     .lean()) as QuestionPaperDoc | null;
 
