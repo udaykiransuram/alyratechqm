@@ -160,21 +160,96 @@ function WeakAreaBars({
   );
 }
 
+function SummarySnapshot({
+  report,
+}: {
+  report: SummerCrashDiagnosticParentReport;
+}) {
+  const summaryItems = [
+    {
+      label: "Score",
+      value:
+        report.totalMarks > 0
+          ? `${report.score} / ${report.totalMarks}`
+          : String(report.score),
+      meta: `${report.percent}% overall`,
+      className:
+        "border-sky-200/80 bg-sky-50/80 text-sky-950 shadow-[0_18px_34px_-34px_rgba(14,116,144,0.32)]",
+      valueClassName: "text-sky-900",
+      metaClassName: "text-sky-900/75",
+    },
+    {
+      label: "Correct",
+      value: String(report.overview.correct),
+      meta: `${report.overview.answered} answered`,
+      className:
+        "border-emerald-200/80 bg-emerald-50/80 text-emerald-950 shadow-[0_18px_34px_-34px_rgba(5,150,105,0.32)]",
+      valueClassName: "text-emerald-900",
+      metaClassName: "text-emerald-900/75",
+    },
+    {
+      label: "Incorrect",
+      value: String(report.overview.incorrect),
+      meta: "Need more support",
+      className:
+        "border-amber-200/80 bg-amber-50/85 text-amber-950 shadow-[0_18px_34px_-34px_rgba(217,119,6,0.32)]",
+      valueClassName: "text-amber-900",
+      metaClassName: "text-amber-900/75",
+    },
+    {
+      label: "Skipped",
+      value: String(report.overview.unattempted),
+      meta: "Needs revision",
+      className:
+        "border-slate-200/80 bg-slate-50/90 text-slate-900 shadow-[0_18px_34px_-34px_rgba(51,65,85,0.22)]",
+      valueClassName: "text-slate-900",
+      metaClassName: "text-slate-600",
+    },
+  ] as const;
+
+  return (
+    <section
+      aria-label="Diagnostic summary"
+      className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+    >
+      {summaryItems.map((item) => (
+        <div
+          key={item.label}
+          className={`rounded-[1.45rem] border px-4 py-4 ${item.className}`}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] opacity-80">
+            {item.label}
+          </p>
+          <p className={`mt-2 text-2xl font-semibold leading-tight ${item.valueClassName}`}>
+            {item.value}
+          </p>
+          <p className={`mt-1 text-sm leading-5 ${item.metaClassName}`}>
+            {item.meta}
+          </p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function JoinCard({ report }: { report: SummerCrashDiagnosticParentReport }) {
   const priceLabel = formatSummerCrashPrice(
     report.courseAccess.price,
     report.courseAccess.currency,
   );
+  const summerCourseHref = report.courseAccess.isUnlocked
+    ? SUMMER_CRASH_HOME_PATH
+    : `${SUMMER_CRASH_HOME_PATH}#summer-unlock-lessons`;
 
   if (report.courseAccess.isUnlocked) {
     return (
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
-          <CardTitle>What to do after this report</CardTitle>
+          <CardTitle>Summer course is ready</CardTitle>
         </CardHeader>
         <CardContent className="app-section-body space-y-4">
           <p className="text-sm leading-6 text-muted-foreground">
-            Review the weak areas in this report first. Keep this page parent-focused, then continue from the Summer home later if needed.
+            Review the weak areas in this report first, then open the Summer course and begin with the topics that need support most.
           </p>
           <div className="space-y-2 rounded-[1.25rem] border border-sky-200/80 bg-sky-50/80 px-4 py-4 text-sm text-sky-950">
             <div className="flex items-start gap-3">
@@ -183,12 +258,12 @@ function JoinCard({ report }: { report: SummerCrashDiagnosticParentReport }) {
             </div>
             <div className="flex items-start gap-3">
               <BookOpen className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>The Summer course can be opened separately from the Summer home, not directly from this report.</p>
+              <p>Open the Summer course next and start from the weakest areas shown in this report.</p>
             </div>
           </div>
-          <Button asChild variant="outline" className="w-full">
-            <AppPrefetchLink href={SUMMER_CRASH_HOME_PATH}>
-              Back to Summer Home
+          <Button asChild className="app-button-primary w-full">
+            <AppPrefetchLink href={summerCourseHref}>
+              Open Summer Course
             </AppPrefetchLink>
           </Button>
         </CardContent>
@@ -199,7 +274,7 @@ function JoinCard({ report }: { report: SummerCrashDiagnosticParentReport }) {
   return (
     <Card className="app-surface overflow-hidden">
       <CardHeader className="app-section-header">
-        <CardTitle>Want help with these weak areas?</CardTitle>
+        <CardTitle>Join Summer Course</CardTitle>
       </CardHeader>
       <CardContent className="app-section-body space-y-4">
         <p className="text-sm leading-6 text-muted-foreground">
@@ -246,7 +321,13 @@ export default function SummerCrashDiagnosticParentReport({
   report: SummerCrashDiagnosticParentReport;
   defaultBackHref: string;
 }) {
-  const hasLockedJoinCta = !report.courseAccess.isUnlocked;
+  const isCourseUnlocked = report.courseAccess.isUnlocked;
+  const courseActionHref = isCourseUnlocked
+    ? SUMMER_CRASH_HOME_PATH
+    : `${SUMMER_CRASH_HOME_PATH}#summer-unlock-lessons`;
+  const courseActionLabel = isCourseUnlocked
+    ? "Open Summer Course"
+    : "Join Summer Course";
 
   return (
     <div className="app-student-page-shell">
@@ -265,14 +346,12 @@ export default function SummerCrashDiagnosticParentReport({
                 Back to Summer Home
               </AppPrefetchLink>
             </Button>
-            {hasLockedJoinCta ? (
-              <Button asChild className="app-button-primary">
-                <AppPrefetchLink href={`${SUMMER_CRASH_HOME_PATH}#summer-unlock-lessons`}>
-                  Join Summer Course
-                  <ArrowRight className="h-4 w-4" />
-                </AppPrefetchLink>
-              </Button>
-            ) : null}
+            <Button asChild className="app-button-primary">
+              <AppPrefetchLink href={courseActionHref}>
+                {courseActionLabel}
+                <ArrowRight className="h-4 w-4" />
+              </AppPrefetchLink>
+            </Button>
           </div>
         }
         meta={
@@ -287,35 +366,19 @@ export default function SummerCrashDiagnosticParentReport({
             ) : null}
           </>
         }
-        stats={[
-          {
-            label: "Score",
-            value:
-              report.totalMarks > 0
-                ? `${report.score} / ${report.totalMarks}`
-                : String(report.score),
-            meta: `${report.percent}% overall`,
-          },
-          {
-            label: "Correct",
-            value: String(report.overview.correct),
-            meta: `${report.overview.answered} answered`,
-          },
-          {
-            label: "Incorrect",
-            value: String(report.overview.incorrect),
-            meta: "Need more support",
-          },
-          {
-            label: "Skipped",
-            value: String(report.overview.unattempted),
-            meta: "Needs revision",
-          },
-        ]}
       />
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-w-0 space-y-5">
+      <div className="space-y-5">
+        <SummarySnapshot report={report} />
+
+        {!isCourseUnlocked ? (
+          <div id="summer-join-card" className="scroll-mt-24 lg:hidden">
+            <JoinCard report={report} />
+          </div>
+        ) : null}
+
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="min-w-0 space-y-5">
           <Card className="app-surface overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>At a glance</CardTitle>
@@ -588,30 +651,34 @@ export default function SummerCrashDiagnosticParentReport({
               ))}
             </CardContent>
           </Card>
-        </div>
-
-        <div className="space-y-5 lg:sticky lg:top-24">
-          <div id="summer-join-card" className="scroll-mt-24">
-            <JoinCard report={report} />
           </div>
 
-          <Card className="app-surface overflow-hidden">
-            <CardHeader className="app-section-header">
-              <CardTitle>Need help?</CardTitle>
-            </CardHeader>
-            <CardContent className="app-section-body space-y-3">
-              <p className="text-sm leading-6 text-muted-foreground">
-                {report.supportContact
-                  ? `Support: ${report.supportContact}`
-                  : "If you need help with payment or access, contact the support team."}
-              </p>
-              <Button asChild variant="outline" className="w-full">
-                <AppPrefetchLink href={defaultBackHref}>
-                  Back to Summer Home
-                </AppPrefetchLink>
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="space-y-5 lg:sticky lg:top-24">
+            <div
+              id={isCourseUnlocked ? "summer-join-card" : undefined}
+              className={isCourseUnlocked ? "scroll-mt-24" : "hidden lg:block"}
+            >
+              <JoinCard report={report} />
+            </div>
+
+            <Card className="app-surface overflow-hidden">
+              <CardHeader className="app-section-header">
+                <CardTitle>Need help?</CardTitle>
+              </CardHeader>
+              <CardContent className="app-section-body space-y-3">
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {report.supportContact
+                    ? `Support: ${report.supportContact}`
+                    : "If you need help with payment or access, contact the support team."}
+                </p>
+                <Button asChild variant="outline" className="w-full">
+                  <AppPrefetchLink href={defaultBackHref}>
+                    Back to Summer Home
+                  </AppPrefetchLink>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
