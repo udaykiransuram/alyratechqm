@@ -87,7 +87,15 @@ export async function POST(req: NextRequest) {
     const colClass = findCol(headers, ["class"]) ?? findCol(headers, ["grade"]);
     if (!colSubject || !colClass) return json400({ error: "Missing required columns: Subject and Class." });
 
-    const colQuestion = findCol(headers, ["question", "text"]) ?? findCol(headers, ["question"]) ?? findCol(headers, ["stem"]);
+    const colQuestion =
+      findCol(headers, ["question", "text"], ["number"]) ??
+      findCol(headers, ["question"], ["number"]) ??
+      findCol(headers, ["stem"]);
+    const colQuestionNumber =
+      findCol(headers, ["question", "number"]) ??
+      findCol(headers, ["q", "no"]) ??
+      findCol(headers, ["q", "number"]) ??
+      findCol(headers, ["q#", "no"]);
     const colOptA = findCol(headers, ["option", "a"]);
     const colOptB = findCol(headers, ["option", "b"]);
     const colOptC = findCol(headers, ["option", "c"]);
@@ -115,12 +123,6 @@ export async function POST(req: NextRequest) {
       "grade",
       "code",
       "question",
-      "question-number",
-      "question-no",
-      "q-no",
-      "q-number",
-      "qno",
-      "question-text",
       "text",
       "stem",
       "option-a",
@@ -255,10 +257,7 @@ export async function POST(req: NextRequest) {
       }
 
       const questionNumberRaw =
-        row[findCol(headers, ["question", "number"]) ?? ""] ??
-        row[findCol(headers, ["q", "no"]) ?? ""] ??
-        row[findCol(headers, ["q#", "no"]) ?? ""] ??
-        "";
+        colQuestionNumber ? row[colQuestionNumber] : "";
       const questionNumberTag = String(questionNumberRaw || rowNum - 1).trim();
       const questionTextTag = qText;
 
@@ -421,11 +420,13 @@ function pruneTagPairs(
 }
 
 // Fuzzy header finder: first header containing ALL tokens (case-insensitive)
-function findCol(headers: string[], tokens: string[]): string | null {
+function findCol(headers: string[], tokens: string[], excludeTokens: string[] = []): string | null {
   const lower = headers.map((h) => h.toLowerCase());
   for (let i = 0; i < headers.length; i++) {
     const hed = lower[i];
-    if (tokens.every((tk) => hed.includes(tk))) return headers[i];
+    if (tokens.every((tk) => hed.includes(tk)) && excludeTokens.every((tk) => !hed.includes(tk))) {
+      return headers[i];
+    }
   }
   return null;
 }

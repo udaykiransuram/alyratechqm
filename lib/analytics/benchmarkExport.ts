@@ -80,8 +80,6 @@ const QUESTION_IMPORT_TAG_EXCLUDE = new Set([
   "correct-letter",
   "correct-text",
   "question",
-  "question-text",
-  "question-number",
   "testid",
 ]);
 
@@ -185,6 +183,8 @@ function buildBenchmarkQuestionImportRows(benchmarkData: any) {
       tagTypes.add(key);
     });
   });
+  tagTypes.add("question-number");
+  tagTypes.add("question-text");
 
   const tagHeaders = Array.from(tagTypes)
     .sort((left, right) => left.localeCompare(right))
@@ -226,6 +226,14 @@ function buildBenchmarkQuestionImportRows(benchmarkData: any) {
       if (!tagValuesByType.has(key)) tagValuesByType.set(key, []);
       tagValuesByType.get(key)?.push(value);
     });
+    tagValuesByType.set(
+      "question-number",
+      [String(row?.questionNumber ?? "")].filter(Boolean),
+    );
+    tagValuesByType.set(
+      "question-text",
+      [toPlainText(row?.questionText || question?.content || "", "")].filter(Boolean),
+    );
 
     const optionAFromTags = getFirstTagValueByAliases(tagValuesByType, [
       "option-a",
