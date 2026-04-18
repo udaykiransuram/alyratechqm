@@ -27,6 +27,11 @@ const sections = [
       "The Talent Test is a national-level assessment designed to help students from Class 1 to 12 discover their strengths in STEM subjects such as Maths, Physics, and Chemistry. Every participant receives a personalized analysis report that highlights conceptual understanding, skill gaps, and practical next steps for improvement.",
   },
   {
+    title: "Legal entity",
+    body:
+      "This program is owned and operated by AlyraTech LLP. References to Alyra Tech or AlyraTech on this site refer to AlyraTech LLP unless explicitly stated otherwise.",
+  },
+  {
     title: "How your data is used",
     body:
       "Registration details and test responses are stored securely and used only for generating diagnostic reports, rankings, and related communication. We do not share personal information with third parties except when required by law. Families may request deletion of data by contacting support.",

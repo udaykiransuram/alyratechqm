@@ -237,7 +237,7 @@ export default function Footer() {
 
         <div className="mt-8 flex flex-col gap-3 border-t border-white/10 pt-5 text-xs sm:flex-row sm:items-center sm:justify-between">
           <p className="public-footer-note">
-            © {new Date().getFullYear()} Alyra Tech Pvt. Ltd. All rights
+            © {new Date().getFullYear()} AlyraTech LLP. All rights
             reserved.
           </p>
           <div className="flex flex-wrap items-center gap-4">

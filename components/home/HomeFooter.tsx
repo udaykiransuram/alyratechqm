@@ -107,7 +107,7 @@ export default function HomeFooter() {
       </div>
 
       <div className="mx-auto mt-10 max-w-[96rem] border-t border-white/8 pt-6 text-xs text-white/42">
-        © {new Date().getFullYear()} Alyra Tech Pvt. Ltd. All rights reserved.
+        © {new Date().getFullYear()} AlyraTech LLP. All rights reserved.
       </div>
     </footer>
   );
