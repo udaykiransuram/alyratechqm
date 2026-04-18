@@ -96,6 +96,9 @@ export default function PublicTestsPageClient({
   const [diagnosticDetails, setDiagnosticDetails] = useState<
     Record<string, any> | null
   >(null);
+  const [diagnosticTimestamps, setDiagnosticTimestamps] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
     setConfig(initialData.config);
@@ -254,6 +257,10 @@ export default function PublicTestsPageClient({
       }
 
       setDiagnosticDetails(response);
+      setDiagnosticTimestamps((current) => ({
+        ...current,
+        [card.classBand]: new Date().toISOString(),
+      }));
       setSuccessMessage("Diagnostic details loaded.");
     } catch (error) {
       setErrorMessage(
@@ -432,18 +439,12 @@ export default function PublicTestsPageClient({
                       {card.mappedPaper
                         ? card.mappedPaper.title
                         : card.mappingStatus === "invalid"
-                          ? card.mappedPaperIssue ||
-                            "The saved paper is no longer valid for public diagnostic use."
+                          ? "The saved paper is no longer valid for public diagnostic use."
                           : "No paper mapped yet."}
                     </p>
                     {card.mappedPaper ? (
                       <p className="mt-1 text-xs text-muted-foreground">
                         {card.mappedPaper.totalMarks} marks • {card.mappedPaper.duration} min
-                      </p>
-                    ) : null}
-                    {card.mappingStatus === "invalid" && card.mappedPaperIssue ? (
-                      <p className="mt-2 text-xs text-rose-600">
-                        {card.mappedPaperIssue}
                       </p>
                     ) : null}
                   </div>
@@ -528,6 +529,11 @@ export default function PublicTestsPageClient({
                       <p className="text-sm font-semibold text-foreground">
                         Validation details
                       </p>
+                      {diagnosticTimestamps[card.classBand] ? (
+                        <p className="mt-1">
+                          Last validated: {new Date(diagnosticTimestamps[card.classBand]).toLocaleString()}
+                        </p>
+                      ) : null}
                       <p className="mt-2">
                         Status: {diagnosticDetails.diagnostic.ok ? "Ready" : "Needs attention"}
                       </p>

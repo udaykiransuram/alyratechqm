@@ -42,7 +42,6 @@ export type WorkspacePublicTestClassBandCard = {
   mappedPaper: WorkspacePublicTestPaperOption | null;
   candidatePapers: WorkspacePublicTestPaperOption[];
   mappingStatus: "ready" | "missing" | "invalid";
-  mappedPaperIssue?: string | null;
 };
 
 export type WorkspacePublicTestsConfig = {
@@ -691,38 +690,25 @@ export async function getWorkspacePublicTestsConfig(
       const diagnosticQuestionPaperId = String(
         mapping.diagnosticQuestionPaperId || "",
       ).trim();
-      let mappedPaper =
-        candidatePapers.find((paper) => paper._id === diagnosticQuestionPaperId) ||
-        null;
-      const mappingStatus =
-        !diagnosticQuestionPaperId
-          ? "missing"
-          : mappedPaper
-            ? "ready"
-            : "invalid";
-      let mappedPaperIssue: string | null = null;
-
-      if (!mappedPaper && diagnosticQuestionPaperId) {
-        const paperDetails = await loadDiagnosticPaperForDisplay({
-          paperId: diagnosticQuestionPaperId,
-          expectedClassName: mapping.className,
-        });
-        if (paperDetails?.summary) {
-          mappedPaper = paperDetails.summary;
-        }
-        mappedPaperIssue = paperDetails?.issue || null;
-      }
+    const mappedPaper =
+      candidatePapers.find((paper) => paper._id === diagnosticQuestionPaperId) ||
+      null;
+    const mappingStatus: "ready" | "missing" | "invalid" =
+      !diagnosticQuestionPaperId
+        ? "missing"
+        : mappedPaper
+          ? "ready"
+          : "invalid";
 
       return {
         classBand: mapping.classBand,
         className: mapping.className,
-        diagnosticQuestionPaperId,
-        mappedPaper,
-        candidatePapers,
-        mappingStatus,
-        mappedPaperIssue,
-      } satisfies WorkspacePublicTestClassBandCard;
-    }),
+      diagnosticQuestionPaperId,
+      mappedPaper,
+      candidatePapers,
+      mappingStatus,
+    } satisfies WorkspacePublicTestClassBandCard;
+  }),
   );
 
   return {
