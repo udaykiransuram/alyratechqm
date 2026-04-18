@@ -13982,6 +13982,64 @@ html[data-public-home-flagship="true"] ::selection {
     box-shadow: 0 32px 72px -44px hsl(var(--public-shadow) / 0.18);
   }
 
+  .public-summer-hero {
+    padding: 2.75rem 2.5rem;
+  }
+
+  .public-summer-hero-grid {
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+  }
+
+  .public-summer-hero-card {
+    @apply rounded-2xl border p-6;
+    border-color: hsl(var(--public-border) / 0.75);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--public-surface) / 0.96) 0%,
+        hsl(var(--public-surface-2) / 0.82) 100%
+      );
+    box-shadow: 0 24px 52px -40px hsl(var(--public-shadow) / 0.2);
+  }
+
+  .public-summer-hero-stat {
+    @apply grid gap-4 rounded-2xl border p-4;
+    border-color: hsl(var(--public-border) / 0.6);
+    background: hsl(var(--public-surface) / 0.72);
+  }
+
+  .public-summer-grid {
+    @apply grid gap-4 lg:grid-cols-[1.15fr_0.85fr];
+  }
+
+  .public-summer-steps {
+    @apply grid gap-4 lg:grid-cols-[1.05fr_0.95fr];
+  }
+
+  .public-summer-step {
+    @apply flex flex-col gap-3 rounded-xl border p-4;
+    border-color: hsl(var(--public-border) / 0.6);
+    background: hsl(var(--public-surface) / 0.9);
+  }
+
+  @media (min-width: 768px) {
+    .public-summer-hero-grid {
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+    }
+
+    .public-summer-hero-stat {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .public-summer-hero {
+      padding: 2.25rem 1.5rem;
+    }
+  }
+
   .public-flow-banner {
     @apply rounded-full border px-5 py-3 text-sm font-semibold shadow-sm;
     border-color: hsl(var(--public-accent) / 0.2);
