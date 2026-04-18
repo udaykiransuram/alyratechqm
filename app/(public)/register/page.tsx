@@ -758,8 +758,9 @@ export default function TalentTestRegisterPage() {
 										>
 											Terms & Conditions
 										</Link>{' '}
-										and confirm that all information provided is accurate. I understand that the registration fee is non-refundable once payment is completed.
-									</label>
+											and confirm that all information provided is accurate. I understand that the registration fee is non-refundable once payment is completed.
+											No refunds are available once the test has been started.
+										</label>
 								</div>
 							</div>
 

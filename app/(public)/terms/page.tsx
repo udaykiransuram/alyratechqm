@@ -97,6 +97,48 @@ export default function AboutTermsPage() {
               ))}
 
               <section>
+                <h2>Cancellation and refunds</h2>
+                <p>
+                  Alyra Tech LLP believes in helping its customers as far as
+                  possible and follows a liberal cancellation policy for our
+                  digital programs, assessments, and learning services:
+                </p>
+                <ul>
+                  <li>
+                    Cancellations will be considered only if the request is
+                    made immediately after placing the order and before the
+                    service is accessed or delivered (for example: test launch,
+                    course access, or content delivery).
+                  </li>
+                  <li>
+                    For digital services that have already started (test
+                    started, course access granted, or live class attended),
+                    cancellations are generally not accepted. However, a refund
+                    or credit may be considered if the customer establishes a
+                    genuine service-quality issue that prevents usage.
+                  </li>
+                  <li>
+                    In case of service issues (access problems, incorrect
+                    enrollment, or technical failure), please report the same
+                    to our Customer Service team within 2 days of purchase or
+                    access. The Customer Service Team will review the issue and
+                    take an appropriate decision.
+                  </li>
+                  <li>
+                    For third-party tools or services accessed via links (for
+                    example, external video platforms or payment partners),
+                    issues related to those services may need to be addressed
+                    with the respective provider.
+                  </li>
+                  <li>
+                    In case of any refunds approved by Alyra Tech LLP, it will
+                    take 1 to 2 days for the refund to be processed to the end
+                    customer.
+                  </li>
+                </ul>
+              </section>
+
+              <section>
                 <h2>Contact and support</h2>
                 <p>
                   For questions about registration, analysis, or report access,
