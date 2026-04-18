@@ -170,25 +170,25 @@ function JoinCard({ report }: { report: SummerCrashDiagnosticParentReport }) {
     return (
       <Card className="app-surface overflow-hidden">
         <CardHeader className="app-section-header">
-          <CardTitle>Summer lessons are ready</CardTitle>
+          <CardTitle>What to do after this report</CardTitle>
         </CardHeader>
         <CardContent className="app-section-body space-y-4">
           <p className="text-sm leading-6 text-muted-foreground">
-            Your child can start the Summer Crash Course now and work on the weak areas shown in this report.
+            Review the weak areas in this report first. Keep this page parent-focused, then continue from the Summer home later if needed.
           </p>
-          <div className="space-y-2 rounded-[1.25rem] border border-emerald-200/80 bg-emerald-50/80 px-4 py-4 text-sm text-emerald-900">
+          <div className="space-y-2 rounded-[1.25rem] border border-sky-200/80 bg-sky-50/80 px-4 py-4 text-sm text-sky-950">
             <div className="flex items-start gap-3">
               <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>Guided lessons already unlocked for this student.</p>
+              <p>Use the weak subskills and topics below as the immediate revision plan.</p>
             </div>
             <div className="flex items-start gap-3">
               <BookOpen className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>Open the course and begin with the weakest areas first.</p>
+              <p>The Summer course can be opened separately from the Summer home, not directly from this report.</p>
             </div>
           </div>
-          <Button asChild className="app-button-primary w-full">
+          <Button asChild variant="outline" className="w-full">
             <AppPrefetchLink href={SUMMER_CRASH_HOME_PATH}>
-              Open Summer Course
+              Back to Summer Home
             </AppPrefetchLink>
           </Button>
         </CardContent>
@@ -246,6 +246,8 @@ export default function SummerCrashDiagnosticParentReport({
   report: SummerCrashDiagnosticParentReport;
   defaultBackHref: string;
 }) {
+  const hasLockedJoinCta = !report.courseAccess.isUnlocked;
+
   return (
     <div className="app-student-page-shell">
       <PageHero
@@ -254,7 +256,7 @@ export default function SummerCrashDiagnosticParentReport({
         title={`${report.student}'s learning summary`}
         variant="overview"
         density="compact"
-        description="We found the main subskills and topics where your child needs more support. Review the summary below, then continue into the Summer Crash Course for guided help."
+        description="We found the main subskills and topics where your child needs more support. Review the summary below first, then decide the next step from the Summer home."
         actions={
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="outline" className="app-button-back">
@@ -263,12 +265,14 @@ export default function SummerCrashDiagnosticParentReport({
                 Back to Summer Home
               </AppPrefetchLink>
             </Button>
-            <Button asChild className="app-button-primary">
-              <a href="#summer-join-card">
-                Join Summer Course
-                <ArrowRight className="h-4 w-4" />
-              </a>
-            </Button>
+            {hasLockedJoinCta ? (
+              <Button asChild className="app-button-primary">
+                <AppPrefetchLink href={`${SUMMER_CRASH_HOME_PATH}#summer-unlock-lessons`}>
+                  Join Summer Course
+                  <ArrowRight className="h-4 w-4" />
+                </AppPrefetchLink>
+              </Button>
+            ) : null}
           </div>
         }
         meta={

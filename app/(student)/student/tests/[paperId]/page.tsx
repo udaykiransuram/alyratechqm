@@ -4,12 +4,18 @@ import { getServerSession } from "next-auth";
 import StudentTestPageClient from "@/components/student/test-detail/StudentTestPageClient";
 import { authOptions } from "@/lib/auth";
 import type { StudentTestDetailResponse } from "@/components/student/test-detail/student-test-types";
+import { startStudentExamAttempt } from "@/lib/exam-runtime";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import {
   assertSummerCrashStudentPageAccess,
+  recordSummerCrashDiagnosticStarted,
 } from "@/lib/server/summer-crash";
+import { scheduleStudentDashboardCacheInvalidation } from "@/lib/server/student-dashboard-cache";
 import { isSummerCrashConfiguredDiagnosticPaper } from "@/lib/summer-crash/portal-access";
-import { SUMMER_CRASH_HOME_PATH } from "@/lib/summer-crash/constants";
+import {
+  SUMMER_CRASH_DIAGNOSTIC_SUBMITTED_PATH,
+  SUMMER_CRASH_HOME_PATH,
+} from "@/lib/summer-crash/constants";
 import { getStudentTestDetailData } from "@/lib/server/student-tests";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
@@ -66,20 +72,55 @@ export default async function StudentTestPage({
     ? resolvedSearchParams.returnTo[0]
     : resolvedSearchParams?.returnTo;
   const safeReturnTo = getSafeReturnToPath(rawReturnTo);
-  const returnToPath =
-    accessCheck.policy.applies && !accessCheck.policy.isUnlocked
-      ? safeReturnTo || SUMMER_CRASH_HOME_PATH
-      : safeReturnTo || "/student/tests";
   const isSummerCrashDiagnostic =
     accessCheck.policy.applies && !accessCheck.policy.isUnlocked;
-  const autoStart = isSummerCrashDiagnostic || forceAutoStart;
+  const returnToPath = isSummerCrashDiagnostic
+    ? SUMMER_CRASH_DIAGNOSTIC_SUBMITTED_PATH
+    : safeReturnTo || "/student/tests";
+  let autoStart = isSummerCrashDiagnostic || forceAutoStart;
   const allowStartWithoutFullscreen = isSummerCrashDiagnostic || forceAutoStart;
+  const deliveryMode = isSummerCrashDiagnostic ? "full" : "bootstrap";
 
   let initialData: StudentTestDetailResponse | null = null;
   let initialLoadError: string | null = null;
 
   if (!isMockedE2ETestMode()) {
     try {
+      const shouldWarmStartSummerDiagnostic =
+        isSummerCrashDiagnostic && forceAutoStart;
+
+      if (shouldWarmStartSummerDiagnostic) {
+        try {
+          await startStudentExamAttempt(
+            schoolKey,
+            studentId,
+            paperId,
+            {
+              classId: session.user.studentClassId,
+              academicSectionId: session.user.studentAcademicSectionId,
+            },
+            {
+              skipOnlineDeliveryValidation,
+            },
+          );
+
+          autoStart = false;
+
+          await recordSummerCrashDiagnosticStarted({
+            schoolKey,
+            studentId,
+            paperId,
+          }).catch(() => undefined);
+
+          scheduleStudentDashboardCacheInvalidation({
+            schoolKey,
+            studentIds: [studentId],
+          });
+        } catch {
+          autoStart = true;
+        }
+      }
+
       initialData = await getStudentTestDetailData({
         schoolKey,
         studentId,
@@ -89,7 +130,7 @@ export default async function StudentTestPage({
           academicSectionId: session.user.studentAcademicSectionId,
         },
         now: new Date(),
-        deliveryMode: "bootstrap",
+        deliveryMode,
         skipOnlineDeliveryValidation,
       });
     } catch (error) {

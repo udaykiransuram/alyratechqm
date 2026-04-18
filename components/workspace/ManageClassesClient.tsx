@@ -244,6 +244,7 @@ export default function ManageClassesClient({
 	                            <AlertDialogDescription>
 	                              This action cannot be undone. This will archive the class
 	                              <strong className="mx-1">&ldquo;{classItem.name}&rdquo;</strong>.
+                                If this class still has linked questions, question papers, or courses, archiving will be blocked.
 	                            </AlertDialogDescription>
 	                          </AlertDialogHeader>
 	                          <AlertDialogFooter>
@@ -305,7 +306,7 @@ export default function ManageClassesClient({
 	                                  <strong className="mx-1">
 	                                    &ldquo;{classItem.name}&rdquo;
 	                                  </strong>
-	                                  .
+	                                  . If this class still has linked questions, question papers, or courses, archiving will be blocked.
 	                                </AlertDialogDescription>
 	                              </AlertDialogHeader>
 	                              <AlertDialogFooter>

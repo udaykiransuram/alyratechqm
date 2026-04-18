@@ -93,17 +93,17 @@ export default async function StudentReportQuestionPage({
           className="app-learning-hero"
           eyebrow="Analysis Report"
           title="Question Not Available"
-          description="We could not load this question from your report."
-          actions={
-            <Button asChild variant="outline" className="app-button-back">
-              <AppPrefetchLink href={backHref}>
-                <ArrowLeft className="h-4 w-4" />
-                Back to Report
-              </AppPrefetchLink>
-            </Button>
-          }
+        description="We could not load this question from your report."
+        actions={
+          <Button asChild variant="outline" className="app-button-back">
+            <AppPrefetchLink href={backHref}>
+              <ArrowLeft className="h-4 w-4" />
+              Back to Report
+            </AppPrefetchLink>
+          </Button>
+        }
         >
-          <StudentPortalNav />
+          {!isSummerDiagnosticReport ? <StudentPortalNav /> : null}
         </PageHero>
       </PageShell>
     );

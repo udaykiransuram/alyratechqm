@@ -908,6 +908,8 @@ type ExamQuestionPanelProps = {
   paperSubjectLabel: string;
   isHydratingQuestions: boolean;
   questionHydrationError: string | null;
+  isSubmitting: boolean;
+  setSubmitDialogOpen: (open: boolean) => void;
   onJumpToQuestion: (index: number) => Promise<void>;
   onRetryQuestionHydration: () => Promise<void>;
   onUpdateMultipleChoice: (questionId: string, optionIndex: number) => void;
@@ -934,6 +936,8 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
   paperSubjectLabel,
   isHydratingQuestions,
   questionHydrationError,
+  isSubmitting,
+  setSubmitDialogOpen,
   onJumpToQuestion,
   onRetryQuestionHydration,
   onUpdateMultipleChoice,
@@ -1407,14 +1411,18 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
                     variant="primary"
                     size="md"
                     className="app-student-action-compact app-exam-nav-button"
-                    onClick={() =>
+                    onClick={() => {
+                      if (currentIndex >= totalQuestions - 1) {
+                        setSubmitDialogOpen(true);
+                        return;
+                      }
                       void onJumpToQuestion(
                         Math.min(totalQuestions - 1, currentIndex + 1),
-                      )
-                    }
-                    disabled={currentIndex >= totalQuestions - 1}
+                      );
+                    }}
+                    disabled={isSubmitting}
                   >
-                    Next
+                    {currentIndex >= totalQuestions - 1 ? "Finish" : "Next"}
                   </Button>
                 ) : null}
               </div>
@@ -2230,6 +2238,8 @@ export default function StudentTestActiveAttemptView({
             paperSubjectLabel={paperSubjectLabel}
             isHydratingQuestions={isHydratingQuestions}
             questionHydrationError={questionHydrationError}
+            isSubmitting={isSubmitting}
+            setSubmitDialogOpen={setSubmitDialogOpen}
             onJumpToQuestion={handleJumpToQuestion}
             onRetryQuestionHydration={onRetryQuestionHydration}
             onUpdateMultipleChoice={onUpdateMultipleChoice}

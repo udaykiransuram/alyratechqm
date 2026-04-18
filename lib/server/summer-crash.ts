@@ -588,7 +588,6 @@ function buildSummerCrashPaymentMatchQuery(params: {
   campaignId: unknown;
   enrollment: SummerCrashPaymentLookupContext | null;
 }) {
-  const conditions: Array<Record<string, unknown>> = [];
   const enrollmentId = String(params.enrollment?._id || "").trim();
   const summerId = String(params.enrollment?.summerId || "")
     .trim()
@@ -602,13 +601,26 @@ function buildSummerCrashPaymentMatchQuery(params: {
   const studentName = normalizeSummerCrashText(params.enrollment?.studentName);
   const studentNameNormalized = normalizeSummerCrashNameKey(studentName);
 
+  const baseQuery = {
+    campaignId: params.campaignId,
+    summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
+  };
+
   if (enrollmentId) {
-    conditions.push({ enrollmentId });
+    return {
+      ...baseQuery,
+      enrollmentId,
+    };
   }
 
   if (summerId) {
-    conditions.push({ summerId });
+    return {
+      ...baseQuery,
+      summerId,
+    };
   }
+
+  const conditions: Array<Record<string, unknown>> = [];
 
   if (phoneDigits && classBandNormalized && studentNameNormalized) {
     conditions.push({
@@ -633,11 +645,6 @@ function buildSummerCrashPaymentMatchQuery(params: {
   if (uniqueConditions.length === 0) {
     return null;
   }
-
-  const baseQuery = {
-    campaignId: params.campaignId,
-    summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
-  };
 
   if (uniqueConditions.length === 1) {
     return {

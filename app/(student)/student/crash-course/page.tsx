@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth";
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import SummerCrashPaymentCard from "@/components/summer-crash/SummerCrashPaymentCard";
-import StudentPortalNav from "@/components/student/StudentPortalNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
@@ -118,9 +117,7 @@ export default async function StudentSummerCrashHomePage({
               </Button>
             ) : undefined
           }
-        >
-          <StudentPortalNav />
-        </PageHero>
+        />
 
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem]">
           <Card className="app-surface overflow-hidden">
@@ -147,7 +144,12 @@ export default async function StudentSummerCrashHomePage({
                     </span>
                   </div>
                   <Button asChild className="app-button-primary w-full">
-                    <AppPrefetchLink href={state.diagnostic.launchHref}>
+                    <AppPrefetchLink
+                      href={state.diagnostic.launchHref}
+                      prefetch={false}
+                      prefetchOnIntent={false}
+                      prefetchOnViewport={false}
+                    >
                       {state.diagnostic.status === "started"
                         ? "Resume Diagnostic"
                         : "Start Free Diagnostic"}
@@ -217,9 +219,7 @@ export default async function StudentSummerCrashHomePage({
             ? "Open the assigned summer courses and the free diagnostic from here."
             : "Your summer lessons will appear here as soon as they are assigned."
         }
-      >
-        <StudentPortalNav />
-      </PageHero>
+      />
 
       <div className="app-summer-crash-strip">
         <div className="app-summer-crash-strip-card">
@@ -336,6 +336,9 @@ export default async function StudentSummerCrashHomePage({
                             ? state.diagnostic.reportHref
                             : state.diagnostic.launchHref
                         }
+                        prefetch={false}
+                        prefetchOnIntent={false}
+                        prefetchOnViewport={false}
                       >
                         {state.diagnostic.status === "submitted"
                           ? "View Diagnostic Report"
