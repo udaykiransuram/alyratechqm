@@ -28,7 +28,7 @@ type RequireTenantSessionOptions = {
   allowRoles?: SchoolUserRole[];
   allowSchoolQueryFallback?: boolean;
   requireSchoolKey?: boolean;
-  studentSessionValidationMode?: "default" | "redis_strict";
+  studentSessionValidationMode?: "default" | "redis_strict" | "redis_hot_path";
 };
 
 type RequireTenantSessionFailure = {
@@ -166,9 +166,13 @@ async function validateStudentSession(
   }
 
   const now = new Date();
-  const redisStrict = options?.mode === "redis_strict";
+  const redisConfigured = isRedisConfigured();
+  const redisHotPath = options?.mode === "redis_hot_path";
+  const redisStrict =
+    options?.mode === "redis_strict" || (redisHotPath && redisConfigured);
+  const syncRedisValidationToDb = !redisHotPath;
 
-  if (isRedisConfigured()) {
+  if (redisConfigured) {
     try {
       if (
         hasRecentlyValidatedStudentSessionViaRedis(
@@ -179,7 +183,7 @@ async function validateStudentSession(
         )
       ) {
         if (
-          !redisStrict &&
+          syncRedisValidationToDb &&
           shouldSyncRedisValidatedStudentSessionToDb(
             schoolKey,
             session.user.id,
@@ -276,7 +280,7 @@ async function validateStudentSession(
       );
 
       if (
-        !redisStrict &&
+        syncRedisValidationToDb &&
         shouldSyncRedisValidatedStudentSessionToDb(
           schoolKey,
           session.user.id,

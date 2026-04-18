@@ -15,7 +15,7 @@ import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 type StudentTestPageProps = {
   params: Promise<{ paperId: string }>;
-  searchParams: Promise<{ returnTo?: string | string[] }>;
+  searchParams: Promise<{ returnTo?: string | string[]; autoStart?: string | string[] }>;
 };
 
 export default async function StudentTestPage({
@@ -53,6 +53,10 @@ export default async function StudentTestPage({
   }
 
   const resolvedSearchParams = await searchParams;
+  const rawAutoStart = Array.isArray(resolvedSearchParams?.autoStart)
+    ? resolvedSearchParams.autoStart[0]
+    : resolvedSearchParams?.autoStart;
+  const forceAutoStart = String(rawAutoStart || "").trim() === "1";
   const rawReturnTo = Array.isArray(resolvedSearchParams?.returnTo)
     ? resolvedSearchParams.returnTo[0]
     : resolvedSearchParams?.returnTo;
@@ -63,8 +67,8 @@ export default async function StudentTestPage({
       : safeReturnTo || "/student/tests";
   const isSummerCrashDiagnostic =
     accessCheck.policy.applies && !accessCheck.policy.isUnlocked;
-  const autoStart = isSummerCrashDiagnostic;
-  const allowStartWithoutFullscreen = isSummerCrashDiagnostic;
+  const autoStart = isSummerCrashDiagnostic || forceAutoStart;
+  const allowStartWithoutFullscreen = isSummerCrashDiagnostic || forceAutoStart;
 
   let initialData: StudentTestDetailResponse | null = null;
   let initialLoadError: string | null = null;

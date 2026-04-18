@@ -30,10 +30,6 @@ export default async function SummerCrashRegisterPage({
     getSummerCrashPublicConfig(),
     searchParams,
   ]);
-  const entrySource =
-    getSearchParam(resolvedSearchParams?.entry) === "diagnostic"
-      ? "diagnostic"
-      : "direct_registration";
 
   if (
     session &&
@@ -45,6 +41,11 @@ export default async function SummerCrashRegisterPage({
   ) {
     redirect(SUMMER_CRASH_WELCOME_PATH);
   }
+
+  const entrySource =
+    getSearchParam(resolvedSearchParams?.entry) === "diagnostic"
+      ? "diagnostic"
+      : "direct_registration";
 
   return (
     <div className="public-flow-page public-register-page">

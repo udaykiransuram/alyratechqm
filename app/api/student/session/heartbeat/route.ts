@@ -4,6 +4,7 @@ import { requireTenantSession } from "@/lib/api-auth";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   if (isMockedE2ETestMode()) {
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
-    studentSessionValidationMode: "redis_strict",
+    studentSessionValidationMode: "redis_hot_path",
   });
   if (!auth.ok) return auth.response;
 

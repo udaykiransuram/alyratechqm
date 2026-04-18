@@ -12,6 +12,7 @@ import { paperRequiresManualReview, paperSupportsOnlineDelivery } from "@/lib/st
 import {
   buildSummerCrashDiagnosticHref,
   buildSummerCrashStudentReportHref,
+  buildSummerCrashWelcomeHref,
   normalizeSummerCrashClassBandKey,
   normalizeSummerCrashNameKey,
   normalizeSummerCrashPhone,
@@ -985,10 +986,11 @@ export async function registerSummerCrashStudent(input: {
           "_id name fatherName mobileNumber passwordHash rollNumber class role",
         )
       : null;
-
-  const passwordHash = await bcrypt.hash(defaultPassword, 10);
+  const hasExistingStudentRecord = Boolean(studentRecord?._id);
+  let usesDefaultPassword = !hasExistingStudentRecord;
 
   if (!studentRecord) {
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
     summerId = summerId || (await generateUniqueSummerCrashId(UserModel));
     studentRecord = await UserModel.create({
       name: studentName,
@@ -1003,18 +1005,28 @@ export async function registerSummerCrashStudent(input: {
   } else {
     summerId =
       String(studentRecord.rollNumber || "").trim().toUpperCase() || summerId;
+    const existingMobileNumber = String(studentRecord.mobileNumber || "").trim();
+    usesDefaultPassword = await isUsingDefaultStudentPassword({
+      mobileNumber: existingMobileNumber,
+      passwordHash: studentRecord.passwordHash,
+    });
+    const nextStudentUpdate: Record<string, unknown> = {
+      name: studentName,
+      fatherName: guardianName,
+      mobileNumber: phoneDigits,
+      class: classDoc._id,
+    };
+
+    if (usesDefaultPassword && existingMobileNumber !== phoneDigits) {
+      nextStudentUpdate.passwordHash = await bcrypt.hash(defaultPassword, 10);
+    }
+
     await UserModel.updateOne(
       {
         _id: studentRecord._id,
       },
       {
-        $set: {
-          name: studentName,
-          fatherName: guardianName,
-          mobileNumber: phoneDigits,
-          class: classDoc._id,
-          passwordHash,
-        },
+        $set: nextStudentUpdate,
       },
     );
     studentRecord = await UserModel.findById(studentRecord._id).select(
@@ -1026,7 +1038,7 @@ export async function registerSummerCrashStudent(input: {
     throw new Error("We couldn't prepare the Summer Crash Course account.");
   }
 
-  const requiresPasswordSetup = false;
+  const requiresPasswordSetup = !hasExistingStudentRecord || usesDefaultPassword;
 
   const nextEnrollmentPatch: Record<string, unknown> = {
     summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
@@ -1040,7 +1052,7 @@ export async function registerSummerCrashStudent(input: {
     classBand,
     classBandNormalized,
     sourceSchoolName: sourceSchoolName || undefined,
-    status: "active",
+    status: requiresPasswordSetup ? "setup_pending" : "active",
   };
 
   if (!existingEnrollment?.entrySource) {
@@ -1088,6 +1100,9 @@ export async function registerSummerCrashStudent(input: {
     classBand,
     entrySource,
   });
+  const nextDestinationHref = requiresPasswordSetup
+    ? buildSummerCrashWelcomeHref(destinationHref)
+    : destinationHref;
 
   return {
     campaignTitle:
@@ -1101,10 +1116,10 @@ export async function registerSummerCrashStudent(input: {
     sourceSchoolName,
     summerId,
     studentId: String(studentRecord._id),
-    autoSignInAllowed: true,
-    bootstrapPassword: defaultPassword,
+    autoSignInAllowed: requiresPasswordSetup,
+    bootstrapPassword: requiresPasswordSetup ? defaultPassword : "",
     signInPath: SUMMER_CRASH_SIGNIN_PATH,
-    destinationHref,
+    destinationHref: nextDestinationHref,
     entrySource,
     enrollment: updatedEnrollment,
   };
@@ -1180,7 +1195,10 @@ export async function getSummerCrashStudentState(params: {
   }
 
   const classBand = normalizeSummerCrashText(enrollment?.classBand);
-  const requiresPasswordSetup = false;
+  const requiresPasswordSetup = await isUsingDefaultStudentPassword({
+    mobileNumber: studentRecord.mobileNumber,
+    passwordHash: studentRecord.passwordHash,
+  });
   const courseList = courseAccess.isUnlocked
     ? await listStudentCoursesPage({
         schoolKey: params.schoolKey,
@@ -1208,19 +1226,32 @@ export async function getSummerCrashStudentState(params: {
       })
     : null;
 
-  if (enrollment?._id && !enrollment.firstAccessAt) {
-    await SummerCrashEnrollment.updateOne(
-      {
-        _id: enrollment._id,
-        firstAccessAt: null,
-      },
-      {
-        $set: {
-          firstAccessAt: new Date(),
-          status: "active",
+  if (enrollment?._id) {
+    if (requiresPasswordSetup) {
+      await SummerCrashEnrollment.updateOne(
+        {
+          _id: enrollment._id,
+          status: { $ne: "setup_pending" },
         },
-      },
-    ).catch(() => undefined);
+        {
+          $set: {
+            status: "setup_pending",
+          },
+        },
+      ).catch(() => undefined);
+    } else if (!enrollment.firstAccessAt || enrollment.status !== "active") {
+      await SummerCrashEnrollment.updateOne(
+        {
+          _id: enrollment._id,
+        },
+        {
+          $set: {
+            firstAccessAt: enrollment.firstAccessAt || new Date(),
+            status: "active",
+          },
+        },
+      ).catch(() => undefined);
+    }
   }
 
   return {

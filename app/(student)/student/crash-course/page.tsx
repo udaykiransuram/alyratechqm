@@ -10,7 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
 import { getSummerCrashStudentState } from "@/lib/server/summer-crash";
 import {
-  SUMMER_CRASH_HOME_PATH,
   SUMMER_CRASH_SIGNIN_PATH,
   SUMMER_CRASH_WELCOME_PATH,
 } from "@/lib/summer-crash/constants";
@@ -76,14 +75,29 @@ export default async function StudentSummerCrashHomePage({
   );
   const isCourseLocked =
     state.courseAccess.requiresPayment && !state.courseAccess.isUnlocked;
-
-  if (
-    isCourseLocked &&
-    state.diagnostic?.available &&
-    state.diagnostic.launchHref
-  ) {
-    redirect(state.diagnostic.launchHref);
-  }
+  const lockedDiagnosticHref =
+    state.diagnostic?.available
+      ? state.diagnostic.status === "submitted" && state.diagnostic.reportHref
+        ? state.diagnostic.reportHref
+        : state.diagnostic.launchHref
+      : "";
+  const lockedDiagnosticLabel =
+    state.diagnostic?.status === "submitted"
+      ? "View Diagnostic Report"
+      : state.diagnostic?.status === "started"
+        ? "Resume Diagnostic"
+        : "Start Free Diagnostic";
+  const diagnosticStatusLabel = state.diagnostic?.available
+    ? state.diagnostic.status === "submitted"
+      ? "Completed"
+      : state.diagnostic.status === "started"
+        ? "In Progress"
+        : "Ready"
+    : "Not ready";
+  const courseAccessLabel = isCourseLocked ? "Locked" : "Unlocked";
+  const quickSummaryCopy = isCourseLocked
+    ? "Start with the free diagnostic. Lessons open after payment confirmation."
+    : "Your lessons and diagnostic are ready. Continue where you left off.";
 
   if (isCourseLocked) {
     return (
@@ -94,12 +108,16 @@ export default async function StudentSummerCrashHomePage({
           title="Free Diagnostic"
           variant="overview"
           density="compact"
-          description="Only the free diagnostic is available until payment is completed."
+          description={
+            state.diagnostic?.status === "submitted"
+              ? "Your diagnostic report is ready. Lessons unlock after payment is completed."
+              : "Only the free diagnostic is available until payment is completed."
+          }
           actions={
-            state.diagnostic?.available ? (
+            lockedDiagnosticHref ? (
               <Button asChild className="app-button-primary">
-                <AppPrefetchLink href={state.diagnostic.launchHref}>
-                  Start Free Diagnostic
+                <AppPrefetchLink href={lockedDiagnosticHref}>
+                  {lockedDiagnosticLabel}
                 </AppPrefetchLink>
               </Button>
             ) : undefined
@@ -193,24 +211,40 @@ export default async function StudentSummerCrashHomePage({
   return (
     <div className="app-student-page-shell app-course-page">
       <PageHero
-        className="app-learning-hero"
+        className="app-learning-hero app-summer-crash-hero"
         eyebrow="Summer Crash Course"
         title="Your Summer Home"
         variant="overview"
         density="compact"
         description={
-          isCourseLocked
-            ? "The free diagnostic is ready now. Lessons will open here after payment."
-            : state.courses.length > 0 || state.diagnostic
-              ? "Open the assigned summer courses and the free diagnostic from here."
-              : "Your summer lessons will appear here as soon as they are assigned."
+          state.courses.length > 0 || state.diagnostic
+            ? "Open the assigned summer courses and the free diagnostic from here."
+            : "Your summer lessons will appear here as soon as they are assigned."
         }
       >
         <StudentPortalNav />
       </PageHero>
 
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem]">
-        <Card className="app-surface overflow-hidden">
+      <div className="app-summer-crash-strip">
+        <div className="app-summer-crash-strip-card">
+          <p className="app-summer-crash-strip-label">Class Band</p>
+          <p className="app-summer-crash-strip-value">{state.classBand}</p>
+        </div>
+        <div className="app-summer-crash-strip-card">
+          <p className="app-summer-crash-strip-label">Diagnostic</p>
+          <p className="app-summer-crash-strip-value">{diagnosticStatusLabel}</p>
+        </div>
+        <div className="app-summer-crash-strip-card">
+          <p className="app-summer-crash-strip-label">Course Access</p>
+          <p className="app-summer-crash-strip-value">{courseAccessLabel}</p>
+        </div>
+        <div className="app-summer-crash-strip-note">
+          {quickSummaryCopy}
+        </div>
+      </div>
+
+      <div className="app-summer-crash-grid">
+        <Card className="app-surface app-summer-crash-panel overflow-hidden">
           <CardHeader className="app-section-header">
             <CardTitle>Your Summer Lessons</CardTitle>
           </CardHeader>
@@ -231,7 +265,7 @@ export default async function StudentSummerCrashHomePage({
             {state.courses.map((course) => (
               <div
                 key={course._id}
-                className="rounded-[1.35rem] border border-border/70 bg-background/80 p-4 shadow-sm"
+                className="app-summer-crash-course-card"
               >
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="space-y-1.5">
@@ -270,7 +304,7 @@ export default async function StudentSummerCrashHomePage({
 
         <div className="space-y-4">
           {state.diagnostic ? (
-            <Card className="app-surface overflow-hidden">
+            <Card className="app-surface app-summer-crash-panel overflow-hidden">
               <CardHeader className="app-section-header">
                 <CardTitle>Free Diagnostic Test</CardTitle>
               </CardHeader>
@@ -308,7 +342,7 @@ export default async function StudentSummerCrashHomePage({
                         }
                       >
                         {state.diagnostic.status === "submitted"
-                          ? "View Report"
+                          ? "View Diagnostic Report"
                           : state.diagnostic.status === "started"
                             ? "Resume Diagnostic"
                             : "Take Free Diagnostic"}
@@ -321,7 +355,7 @@ export default async function StudentSummerCrashHomePage({
           ) : null}
 
           {isCourseLocked ? (
-            <Card className="app-surface overflow-hidden">
+            <Card className="app-surface app-summer-crash-panel overflow-hidden">
               <CardHeader className="app-section-header">
                 <CardTitle>Unlock Lessons</CardTitle>
               </CardHeader>
@@ -354,7 +388,7 @@ export default async function StudentSummerCrashHomePage({
             </Card>
           ) : null}
 
-          <Card className="app-surface overflow-hidden">
+          <Card className="app-surface app-summer-crash-panel overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Backup ID</CardTitle>
             </CardHeader>
@@ -369,7 +403,7 @@ export default async function StudentSummerCrashHomePage({
             </CardContent>
           </Card>
 
-          <Card className="app-surface overflow-hidden">
+          <Card className="app-surface app-summer-crash-panel overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Need help?</CardTitle>
             </CardHeader>

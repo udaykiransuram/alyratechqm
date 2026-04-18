@@ -307,9 +307,6 @@ export async function POST(req: NextRequest) {
   testId
 };
 
-    // Generate Word document
-    await generateWordDoc(questions);
-
     const { searchParams } = new URL(req.url);
     const isExcel = searchParams.get("excel") === "1";
     const isWord = searchParams.get("word") === "1";
@@ -692,62 +689,6 @@ function romanToInt(r: string): number | null {
     prev = val;
   }
   return total;
-}
-
-// Generate Word document
-async function generateWordDoc(questions: Question[], fileName = "question_paper.docx") {
-  const doc = new Document({
-    sections: [{
-      properties: {},
-      children: [
-        new Paragraph({
-          text: "Diagnostic Test",
-          heading: HeadingLevel.HEADING_1,
-          alignment: AlignmentType.CENTER,
-        }),
-        new Paragraph({
-          text: `Subject: ${questions[0]?.subject ?? ""}    Class: ${questions[0]?.class ?? ""}`,
-          heading: HeadingLevel.HEADING_3,
-          alignment: AlignmentType.CENTER,
-        }),
-        new Paragraph({
-          text: "Instructions: Choose the best option. Section B may have multiple correct answers.",
-          alignment: AlignmentType.CENTER,
-        }),
-        new Paragraph({ text: "" }),
-        new Paragraph({
-          text: "Section A: Single Correct",
-          heading: HeadingLevel.HEADING_2,
-        }),
-        new Paragraph({ text: "" }), // <-- Add this line for space after section A heading
-        ...questions.filter(q => q.type === "single").flatMap((q, idx) => questionToParagraph(q, idx + 1)),
-        new Paragraph({
-          text: "Section B: Multiple Correct",
-          heading: HeadingLevel.HEADING_2,
-        }),
-        new Paragraph({ text: "" }), // <-- Add this line for space after section B heading
-        ...questions.filter(q => q.type === "multiple").flatMap((q, idx, arr) => questionToParagraph(q, idx + 1 + questions.filter(q => q.type === "single").length)),
-        new Paragraph({
-          border: { bottom: { color: "auto", space: 1, style: BorderStyle.SINGLE, size: 6 } },
-          spacing: { after: 120 },
-        }),
-        new Paragraph({
-          children: [new TextRun({ text: "End of Paper", italics: true, size: 18 })],
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 240 },
-        }),
-      ]
-    }]
-  });
-
-  const buffer = await Packer.toBuffer(doc);
-
-  // For Node.js: save to disk
-  const fs = require("fs");
-  fs.writeFileSync(fileName, buffer);
-
-  // For browser: trigger download
-  // saveAs(new Blob([buffer]), fileName);
 }
 
 function questionToParagraph(q: Question, idx: number) {

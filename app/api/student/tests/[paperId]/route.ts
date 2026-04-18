@@ -19,7 +19,7 @@ export async function GET(
 ) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
-    studentSessionValidationMode: "redis_strict",
+    studentSessionValidationMode: "redis_hot_path",
   });
   if (!auth.ok) return auth.response;
   const { paperId } = await params;

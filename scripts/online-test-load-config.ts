@@ -5,7 +5,10 @@ export type OnlineTestLoadProfileName =
   | "smoke"
   | "scale-1k"
   | "scale-5k"
-  | "scale-10k";
+  | "scale-10k"
+  | "scale-25k"
+  | "scale-50k"
+  | "scale-100k";
 
 export type OnlineTestLoadProfile = {
   name: OnlineTestLoadProfileName;
@@ -149,6 +152,69 @@ export const ONLINE_TEST_LOAD_PROFILES: Record<
     maxP95StartMs: 2500,
     maxP95SaveMs: 1500,
     maxP95SubmitMs: 3000,
+  },
+  "scale-25k": {
+    name: "scale-25k",
+    description: "Distributed 25k-concurrency gate across 125 runners.",
+    totalStudents: 25_000,
+    targetTotalConcurrency: 25_000,
+    recommendedRunnerCount: 125,
+    rounds: 3,
+    roundDelayMs: 250,
+    jitterMs: 90,
+    timeoutMs: 35_000,
+    sampleSize: 150,
+    submitEnabled: true,
+    heartbeatEnabled: true,
+    listFirstEnabled: true,
+    warmupEnabled: true,
+    maxFailureRatePct: 2.5,
+    maxP95ListMs: 3000,
+    maxP95StartMs: 3000,
+    maxP95SaveMs: 1800,
+    maxP95SubmitMs: 3500,
+  },
+  "scale-50k": {
+    name: "scale-50k",
+    description: "Distributed 50k-concurrency gate across 250 runners.",
+    totalStudents: 50_000,
+    targetTotalConcurrency: 50_000,
+    recommendedRunnerCount: 250,
+    rounds: 2,
+    roundDelayMs: 250,
+    jitterMs: 90,
+    timeoutMs: 40_000,
+    sampleSize: 200,
+    submitEnabled: true,
+    heartbeatEnabled: true,
+    listFirstEnabled: true,
+    warmupEnabled: true,
+    maxFailureRatePct: 3,
+    maxP95ListMs: 3500,
+    maxP95StartMs: 3500,
+    maxP95SaveMs: 2000,
+    maxP95SubmitMs: 4250,
+  },
+  "scale-100k": {
+    name: "scale-100k",
+    description: "Distributed 100k-concurrency gate across 500 runners.",
+    totalStudents: 100_000,
+    targetTotalConcurrency: 100_000,
+    recommendedRunnerCount: 500,
+    rounds: 2,
+    roundDelayMs: 225,
+    jitterMs: 80,
+    timeoutMs: 45_000,
+    sampleSize: 250,
+    submitEnabled: true,
+    heartbeatEnabled: true,
+    listFirstEnabled: true,
+    warmupEnabled: true,
+    maxFailureRatePct: 3.5,
+    maxP95ListMs: 4000,
+    maxP95StartMs: 4000,
+    maxP95SaveMs: 2400,
+    maxP95SubmitMs: 5000,
   },
 };
 

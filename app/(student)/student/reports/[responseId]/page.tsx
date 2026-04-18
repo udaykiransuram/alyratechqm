@@ -2,9 +2,11 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 
 import { StudentTagReportPageView } from "@/components/analytics/StudentTagReportPageView";
+import SummerCrashDiagnosticParentReport from "@/components/summer-crash/SummerCrashDiagnosticParentReport";
 import { authOptions } from "@/lib/auth";
 import { getStudentTagReportPageBootstrap } from "@/lib/analytics/student-tag-report-page";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
+import { getSummerCrashDiagnosticParentReport } from "@/lib/server/summer-crash-parent-report";
 import {
   assertSummerCrashStudentPageAccess,
 } from "@/lib/server/summer-crash";
@@ -57,6 +59,26 @@ export default async function StudentReportDetailPage({
     accessCheck.policy.applies && !accessCheck.policy.isUnlocked
       ? SUMMER_CRASH_HOME_PATH
       : getSafeReturnToPath(rawReturnTo) || "/student/account";
+  const isSummerDiagnosticReport =
+    accessCheck.policy.applies &&
+    accessCheck.policy.allowedDiagnosticResponseId === resolvedParams.responseId;
+
+  if (isSummerDiagnosticReport) {
+    const parentReport = await getSummerCrashDiagnosticParentReport({
+      schoolKey,
+      studentId,
+      responseId: resolvedParams.responseId,
+    });
+
+    if (parentReport) {
+      return (
+        <SummerCrashDiagnosticParentReport
+          report={parentReport}
+          defaultBackHref={SUMMER_CRASH_HOME_PATH}
+        />
+      );
+    }
+  }
 
   return (
     <StudentTagReportPageView

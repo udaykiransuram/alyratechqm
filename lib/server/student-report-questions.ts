@@ -5,6 +5,14 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { resolveExamRuntimeMongoResponseIdWithCooldown } from "@/lib/exam-runtime-sync-cache";
+import {
+  buildPaperQuestionLookup,
+  evaluateQuestionAnswer,
+} from "@/lib/question-paper/grading";
+import {
+  buildSummerCrashAnswerSummary,
+  selectSummerCrashQuestionLabels,
+} from "@/lib/summer-crash/diagnostic-report";
 
 function normalizeId(value: unknown) {
   return String(value || "").trim();
@@ -22,6 +30,11 @@ export type StudentReportQuestionDetail = {
   paperSubjectNames: string[];
   metaSubjectName: string;
   metaClassName: string;
+  answerStatus: "correct" | "incorrect" | "unattempted";
+  studentAnswerSummary: string;
+  correctAnswerSummary: string;
+  weakAreaLabel: string;
+  topicLabel: string;
 };
 
 export async function getStudentReportQuestionDetail(params: {
@@ -68,7 +81,7 @@ export async function getStudentReportQuestionDetail(params: {
           _id: resolvedResponseId,
           student: params.studentId,
         })
-          .select("paper")
+          .select("paper sectionAnswers")
           .populate({
             path: "paper",
             model: QuestionPaperModel,
@@ -113,6 +126,11 @@ export async function getStudentReportQuestionDetail(params: {
       paperSubjectNames: [],
       metaSubjectName: "",
       metaClassName: "",
+      answerStatus: "unattempted",
+      studentAnswerSummary: "Not answered",
+      correctAnswerSummary: "Answer key not available",
+      weakAreaLabel: "",
+      topicLabel: "",
     };
   }
 
@@ -154,6 +172,27 @@ export async function getStudentReportQuestionDetail(params: {
   const metaSubjectName = String(matchedQuestion?.subject?.name || "").trim();
   const metaClassName =
     String(matchedQuestion?.class?.name || paper?.class?.name || "").trim();
+  const questionLookup = buildPaperQuestionLookup(paper);
+  const questionId = normalizeId(params.questionId);
+  const matchedAnswer =
+    (Array.isArray(response?.sectionAnswers) ? response.sectionAnswers : [])
+      .flatMap((sectionAnswer: any) =>
+        Array.isArray(sectionAnswer?.answers) ? sectionAnswer.answers : [],
+      )
+      .find((answer: any) => normalizeId(answer?.question) === questionId) || null;
+  const spec = matchedQuestion
+    ? questionLookup.get(`${matchedSectionName}::${questionId}`)
+    : null;
+  const evaluation = evaluateQuestionAnswer(spec, matchedAnswer);
+  const answerSummary = buildSummerCrashAnswerSummary({
+    question: matchedQuestion,
+    answer: matchedAnswer,
+  });
+  const labels = selectSummerCrashQuestionLabels({
+    question: matchedQuestion,
+    fallbackSectionName: matchedSectionName || matchedSectionDescription,
+    fallbackSubjectName: metaSubjectName || paperSubjectNames[0],
+  });
 
   return {
     status: matchedQuestion ? "ready" : "question_not_found",
@@ -167,5 +206,14 @@ export async function getStudentReportQuestionDetail(params: {
     paperSubjectNames,
     metaSubjectName,
     metaClassName,
+    answerStatus: !evaluation.attempted
+      ? "unattempted"
+      : evaluation.isCorrect
+        ? "correct"
+        : "incorrect",
+    studentAnswerSummary: answerSummary.studentAnswerSummary,
+    correctAnswerSummary: answerSummary.correctAnswerSummary,
+    weakAreaLabel: labels.weakAreaLabel,
+    topicLabel: labels.topicLabel,
   };
 }

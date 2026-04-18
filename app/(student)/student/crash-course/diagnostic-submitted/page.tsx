@@ -59,15 +59,15 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
       <PageHero
         className="app-learning-hero"
         eyebrow="Free Diagnostic"
-        title="Student analysis is ready"
+        title="Your child's diagnostic report is ready"
         variant="overview"
         density="compact"
-        description="Review the diagnostic insights and open the detailed report."
+        description="See the weak subskills, weak topics, and the next best step before starting the Summer Crash Course."
         actions={
           reportHref ? (
             <Button asChild className="app-button-primary">
               <AppPrefetchLink href={reportHref}>
-                Open Analysis Report
+                View Diagnostic Report
               </AppPrefetchLink>
             </Button>
           ) : undefined
@@ -106,7 +106,7 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
                 {reportHref ? (
                   <Button asChild className="app-button-primary w-full">
                     <AppPrefetchLink href={reportHref}>
-                      Open Analysis Report
+                      View Diagnostic Report
                     </AppPrefetchLink>
                   </Button>
                 ) : (
@@ -126,8 +126,7 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
             </CardHeader>
             <CardContent className="app-section-body space-y-3">
               <p className="text-sm leading-6 text-muted-foreground">
-                You can return to the summer home at any time or open the
-                analysis report directly.
+                You can open the parent-friendly diagnostic report now or go back to the summer home and continue from there.
               </p>
               <Button asChild variant="outline" className="app-button-compact">
                 <AppPrefetchLink href={SUMMER_CRASH_HOME_PATH}>

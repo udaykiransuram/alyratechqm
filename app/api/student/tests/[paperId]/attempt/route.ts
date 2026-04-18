@@ -22,7 +22,7 @@ export async function POST(
 ) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
-    studentSessionValidationMode: "redis_strict",
+    studentSessionValidationMode: "redis_hot_path",
   });
   if (!auth.ok) return auth.response;
 
@@ -96,7 +96,7 @@ export async function PATCH(
 ) {
   const auth = await requireTenantSession(req, {
     allowRoles: ["student"],
-    studentSessionValidationMode: "redis_strict",
+    studentSessionValidationMode: "redis_hot_path",
   });
   if (!auth.ok) return auth.response;
 
@@ -126,11 +126,6 @@ export async function PATCH(
       sectionAnswers: body?.sectionAnswers ?? [],
       baseLastSavedAt:
         typeof body?.baseLastSavedAt === "string" ? body.baseLastSavedAt : null,
-    });
-
-    scheduleStudentDashboardCacheInvalidation({
-      schoolKey: auth.schoolKey,
-      studentIds: [auth.session.user.id],
     });
 
     return NextResponse.json(result);

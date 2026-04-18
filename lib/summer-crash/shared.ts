@@ -107,6 +107,7 @@ export function buildSummerCrashDiagnosticHref(paperId: unknown) {
 
   const searchParams = new URLSearchParams({
     returnTo: buildSummerCrashDiagnosticReturnToPath(),
+    autoStart: "1",
   });
 
   return `/student/tests/${encodeURIComponent(normalizedPaperId)}?${searchParams.toString()}`;

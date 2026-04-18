@@ -3153,6 +3153,125 @@
     padding-bottom: 0.9rem;
   }
 
+  .app-summer-crash-hero {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .app-summer-crash-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(
+        circle at top right,
+        hsl(var(--app-surface-2) / 0.55),
+        transparent 55%
+      ),
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.98),
+        hsl(var(--app-surface-2) / 0.82)
+      );
+    pointer-events: none;
+  }
+
+  .app-summer-crash-hero > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .app-summer-crash-strip {
+    margin-top: 1.2rem;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    border-radius: calc(var(--app-radius-lg) + 0.2rem);
+    border: 1px solid hsl(var(--border) / 0.66);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--app-surface-1) / 0.96),
+        hsl(var(--app-surface-2) / 0.82)
+      );
+    padding: 1rem 1.1rem;
+    box-shadow:
+      0 16px 30px -30px hsl(var(--app-shadow-deep) / 0.18),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.8);
+  }
+
+  .app-summer-crash-strip-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .app-summer-crash-strip-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .app-summer-crash-strip-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  .app-summer-crash-strip-note {
+    grid-column: 1 / -1;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .app-summer-crash-grid {
+    margin-top: 1.2rem;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @media (min-width: 960px) {
+    .app-summer-crash-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.4fr);
+      align-items: start;
+    }
+  }
+
+  .app-summer-crash-panel {
+    box-shadow:
+      0 16px 28px -34px hsl(var(--app-shadow-deep) / 0.2),
+      inset 0 1px 0 hsl(var(--app-surface-1) / 0.75);
+  }
+
+  .app-summer-crash-course-card {
+    border-radius: 1.35rem;
+    border: 1px solid hsl(var(--border) / 0.7);
+    background: hsl(var(--background) / 0.9);
+    padding: 1rem 1.1rem;
+    box-shadow: 0 12px 24px -30px hsl(var(--app-shadow-deep) / 0.18);
+  }
+
+  @media (max-width: 640px) {
+    .app-summer-crash-strip {
+      padding: 0.9rem;
+    }
+
+    .app-summer-crash-strip-value {
+      font-size: 0.95rem;
+    }
+
+    .app-summer-crash-strip-note {
+      font-size: 0.8rem;
+    }
+
+    .app-summer-crash-course-card {
+      padding: 0.9rem 0.95rem;
+    }
+  }
+
   .app-student-page-shell .app-page-hero .app-segmented-control {
     width: 100%;
     justify-content: flex-start;
@@ -8171,6 +8290,7 @@
 
     .app-exam-question-body {
       gap: 0.75rem;
+      padding-bottom: calc(6.25rem + env(safe-area-inset-bottom));
     }
 
     .app-exam-question-header {

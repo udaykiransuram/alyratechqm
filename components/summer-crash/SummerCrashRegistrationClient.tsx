@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
@@ -71,9 +71,6 @@ export default function SummerCrashRegistrationClient({
 }: SummerCrashRegistrationClientProps) {
   const [form, setForm] = useState(INITIAL_FORM_STATE);
   const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [summerId, setSummerId] = useState("");
-  const [nextHref, setNextHref] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const selectedClassBand = useMemo(
@@ -98,7 +95,7 @@ export default function SummerCrashRegistrationClient({
       ? "Register once and go to the summer home after sign-in. The free diagnostic stays open there, and lessons unlock after payment."
       : "Register once and enter the summer learning space without using the normal school portal.";
   const submitLabel = isDiagnosticEntry
-    ? "Register & Continue"
+    ? "Register & Start Test"
     : hasPaidCourseAccess
       ? "Register"
       : "Register Free";
@@ -130,8 +127,6 @@ export default function SummerCrashRegistrationClient({
     }
 
     setErrorMessage("");
-    setSuccessMessage("");
-
     startTransition(() => {
       void (async () => {
         try {
@@ -170,8 +165,6 @@ export default function SummerCrashRegistrationClient({
           }?phone=${encodeURIComponent(form.phone)}&summerId=${encodeURIComponent(
             resolvedSummerId,
           )}&next=${encodeURIComponent(destinationHref)}`;
-          setSummerId(resolvedSummerId);
-          setNextHref(signInHref);
 
           if (
             registration?.autoSignInAllowed &&
@@ -198,13 +191,7 @@ export default function SummerCrashRegistrationClient({
             }
           }
 
-          setSuccessMessage(
-            isDiagnosticEntry
-              ? "Registration complete. Continue to sign in and start the free diagnostic."
-              : hasPaidCourseAccess
-                ? "Registration complete. Continue to sign in, open the summer home, and unlock lessons after payment."
-                : "Registration complete. Continue to sign in and open the learning space.",
-          );
+          window.location.assign(signInHref);
         } catch (error) {
           setErrorMessage(
             getClientRequestErrorMessage(
@@ -250,59 +237,7 @@ export default function SummerCrashRegistrationClient({
         <FeedbackNotice variant="error">{errorMessage}</FeedbackNotice>
       ) : null}
 
-      {successMessage ? (
-        <FeedbackNotice variant="success">{successMessage}</FeedbackNotice>
-      ) : null}
-
-      {summerId ? (
-        <div className="public-flow-card space-y-4">
-          <div className="space-y-1">
-            <p className="text-lg font-semibold text-foreground">
-              Registration complete
-            </p>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Sign in with the parent phone number below. Keep the backup ID
-              only if support ever asks for it.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="app-meta-chip">{form.phone}</span>
-            <span className="app-meta-chip">{form.classBand}</span>
-            {hasPaidCourseAccess ? (
-              <span className="app-meta-chip">{priceLabel}</span>
-            ) : null}
-          </div>
-          <p className="text-sm leading-6 text-muted-foreground">
-            Backup ID:{" "}
-            <span className="font-semibold tracking-[0.06em] text-foreground">
-              {summerId}
-            </span>
-          </p>
-          <p className="text-sm leading-6 text-muted-foreground">
-            {isDiagnosticEntry
-              ? "After sign-in, the student can start the free diagnostic right away."
-              : hasPaidCourseAccess
-                ? "After sign-in, the student goes to the summer home. The free diagnostic stays open there, and lessons unlock after payment."
-                : "After sign-in, the student goes straight to the summer learning space."}
-          </p>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Link
-              href={nextHref || SUMMER_CRASH_SIGNIN_PATH}
-              className="public-flow-button-primary w-full justify-center sm:flex-1"
-            >
-              Continue to Sign In
-            </Link>
-            <Link
-              href={SUMMER_CRASH_HELP_PATH}
-              className="public-flow-button-secondary w-full justify-center sm:flex-1"
-            >
-              Need Help?
-            </Link>
-          </div>
-        </div>
-      ) : null}
-
-      {!summerId && isActive ? (
+      {isActive ? (
         <form
           className="space-y-5"
           onSubmit={(event) => {

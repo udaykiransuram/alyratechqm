@@ -25,6 +25,13 @@ import {
   getDefaultSummerCrashPortalAccessPolicy,
   isSummerCrashPortalRestricted,
 } from "../../../lib/summer-crash/portal-access";
+import {
+  buildSummerCrashAnswerSummary,
+  buildSummerCrashAreaInsights,
+  buildSummerCrashParentNextSteps,
+  selectSummerCrashQuestionLabels,
+  stripHtmlToText,
+} from "../../../lib/summer-crash/diagnostic-report";
 import SummerCrashCampaign from "../../../models/SummerCrashCampaign";
 import SummerCrashEnrollment from "../../../models/SummerCrashEnrollment";
 import SummerCrashPayment from "../../../models/SummerCrashPayment";
@@ -91,7 +98,7 @@ test.describe("Summer crash course helpers @desktop", () => {
 
   test("builds safe diagnostic, welcome, and report routes for the summer flow", async () => {
     expect(buildSummerCrashDiagnosticHref("paper_123")).toBe(
-      "/student/tests/paper_123?returnTo=%2Fstudent%2Fcrash-course%3Fsubmitted%3D1%26mode%3Ddiagnostic",
+      "/student/tests/paper_123?returnTo=%2Fstudent%2Fcrash-course%2Fdiagnostic-submitted&autoStart=1",
     );
     expect(buildSummerCrashWelcomeHref("/student/crash-course")).toBe(
       "/summer-crash-course/welcome?next=%2Fstudent%2Fcrash-course",
@@ -318,5 +325,120 @@ test.describe("Summer crash course helpers @desktop", () => {
         kind: "locked-student-content",
       }),
     ).toBe(false);
+  });
+
+  test("picks parent-friendly subskill and topic labels from question metadata", async () => {
+    const labels = selectSummerCrashQuestionLabels({
+      question: {
+        subject: { name: "Mathematics" },
+        tags: [
+          { name: "Fractions", type: { name: "chapter-name" } },
+          { name: "Multiply decimals", type: { name: "subtopic-title" } },
+          { name: "Understand", type: { name: "competency" } },
+        ],
+      },
+      fallbackSectionName: "Section A",
+    });
+
+    expect(labels).toEqual({
+      subskillLabel: "Multiply decimals",
+      topicLabel: "Fractions",
+      topicKind: "topic",
+      weakAreaLabel: "Multiply decimals",
+      subjectLabel: "Mathematics",
+    });
+    expect(stripHtmlToText("<p>Test <strong>value</strong></p>")).toBe(
+      "Test value",
+    );
+  });
+
+  test("builds weak-area insights and parent next steps from diagnostic question results", async () => {
+    const questionResults = [
+      {
+        question: {
+          subject: { name: "Mathematics" },
+          tags: [
+            { name: "Multiply decimals", type: { name: "subtopic-title" } },
+            { name: "Fractions", type: { name: "chapter-name" } },
+          ],
+        },
+        sectionName: "Section A",
+        fallbackSubjectName: "Mathematics",
+        status: "incorrect" as const,
+      },
+      {
+        question: {
+          subject: { name: "Mathematics" },
+          tags: [
+            { name: "Multiply decimals", type: { name: "subtopic" } },
+            { name: "Fractions", type: { name: "topic" } },
+          ],
+        },
+        sectionName: "Section A",
+        fallbackSubjectName: "Mathematics",
+        status: "unattempted" as const,
+      },
+      {
+        question: {
+          subject: { name: "Mathematics" },
+          tags: [
+            { name: "Place value", type: { name: "subtopic" } },
+            { name: "Decimals", type: { name: "topic" } },
+          ],
+        },
+        sectionName: "Section A",
+        fallbackSubjectName: "Mathematics",
+        status: "correct" as const,
+      },
+    ];
+
+    const insights = buildSummerCrashAreaInsights({ questionResults });
+    expect(insights.subskillInsights[0]).toMatchObject({
+      kind: "subskill",
+      label: "Multiply decimals",
+      incorrect: 1,
+      unattempted: 1,
+      accuracyPct: 0,
+    });
+    expect(insights.topicInsights[0]).toMatchObject({
+      label: "Fractions",
+      incorrect: 1,
+      unattempted: 1,
+      accuracyPct: 0,
+    });
+
+    const nextSteps = buildSummerCrashParentNextSteps({
+      weakSubskills: insights.subskillInsights.slice(0, 1),
+      weakTopics: insights.topicInsights.slice(0, 1),
+      overallAccuracyPct: 33,
+      isUnlocked: false,
+    });
+
+    expect(nextSteps).toHaveLength(3);
+    expect(nextSteps[0]).toContain("Multiply decimals");
+    expect(nextSteps[1]).toContain("Fractions");
+    expect(nextSteps[2]).toContain("short and consistent");
+  });
+
+  test("summarizes the student's answer and the correct answer for objective questions", async () => {
+    const summary = buildSummerCrashAnswerSummary({
+      question: {
+        type: "single",
+        options: [
+          { content: "<p>12</p>" },
+          { content: "<p>14</p>" },
+          { content: "<p>16</p>" },
+        ],
+        answerIndexes: [1],
+      },
+      answer: {
+        selectedOptions: [2],
+      },
+    });
+
+    expect(summary).toEqual({
+      studentAnswerSummary: "16",
+      correctAnswerSummary: "14",
+    });
   });
 });
