@@ -12,6 +12,8 @@ type QuestionResultsListProps = {
   isDeleting: boolean;
   questionToArchive: string | null;
   onArchive: (id: string) => void;
+  onCopyToGlobal: (id: string) => void;
+  copyingQuestionId: string | null;
 };
 
 const QuestionResultsList = memo(function QuestionResultsList({
@@ -19,6 +21,8 @@ const QuestionResultsList = memo(function QuestionResultsList({
   isDeleting,
   questionToArchive,
   onArchive,
+  onCopyToGlobal,
+  copyingQuestionId,
 }: QuestionResultsListProps) {
   if (questions.length === 0) {
     return (
@@ -50,6 +54,8 @@ const QuestionResultsList = memo(function QuestionResultsList({
           question={question}
           onArchive={() => onArchive(question._id)}
           isDeleting={isDeleting && questionToArchive === question._id}
+          onCopyToGlobal={() => onCopyToGlobal(question._id)}
+          isCopying={copyingQuestionId === question._id}
         />
       ))}
     </div>

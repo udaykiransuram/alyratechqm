@@ -9,6 +9,7 @@ export async function GET() {
   const headers = [
     "Subject",
     "Class",
+    "Question Number",
     "Question",
     "Option A",
     "Option B",
@@ -16,7 +17,12 @@ export async function GET() {
     "Option D",
     "Option E",
     "Correct (letter)",
-    "Correct (text)"
+    "Correct (text)",
+    "Chapter Name",
+    "Topic",
+    "Competency",
+    "Difficulty",
+    "Template ID",
   ];
   const ws = XLSX.utils.aoa_to_sheet([headers]);
   const wb = XLSX.utils.book_new();

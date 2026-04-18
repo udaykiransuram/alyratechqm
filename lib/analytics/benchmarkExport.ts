@@ -7,6 +7,7 @@ import {
   normalizeBenchmarkViewSettings,
   type BenchmarkViewSettings,
 } from "@/lib/analytics/benchmarkPresentation";
+import { sanitizeRichTextToPlainText } from "@/lib/security/html-sanitize";
 
 export type BenchmarkExportOptions = {
   benchmarkViewSettings?: Partial<BenchmarkViewSettings> | null;
@@ -28,11 +29,8 @@ function toText(value: any, fallback = "—"): string {
 }
 
 function toPlainText(value: any, fallback = "—"): string {
-  const text = String(value ?? "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text || fallback;
+  const text = sanitizeRichTextToPlainText(value);
+  return text?.trim() ? text.trim() : fallback;
 }
 
 function toPercentText(value: any): string {
@@ -57,6 +55,268 @@ function toSignedMinutesText(value: any): string {
   if (numeric === null) return "—";
   const prefix = numeric > 0 ? "+" : "";
   return `${prefix}${numeric.toFixed(2)} min`;
+}
+
+const QUESTION_IMPORT_BASE_HEADERS = [
+  "Subject",
+  "Class",
+  "Question Number",
+  "Question",
+  "Option A",
+  "Option B",
+  "Option C",
+  "Option D",
+  "Option E",
+  "Correct (letter)",
+  "Correct (text)",
+];
+
+const QUESTION_IMPORT_TAG_EXCLUDE = new Set([
+  "option-a",
+  "option-b",
+  "option-c",
+  "option-d",
+  "option-e",
+  "correct-letter",
+  "correct-text",
+  "question",
+  "question-text",
+  "question-number",
+  "testid",
+]);
+
+function normalizeTagTypeKey(value: string) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\/\s_]+/g, "-")
+    .replace(/[^a-z0-9\-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function formatImportTagHeader(type: string) {
+  const normalized = normalizeTagTypeKey(type);
+  if (normalized === "templateid" || normalized === "template-id") return "Template ID";
+  if (normalized === "chapter-name") return "Chapter Name";
+  if (normalized === "subtopic") return "Sub Topic";
+  return normalized
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatAnswerLetters(answerIndexes: number[]) {
+  return (Array.isArray(answerIndexes) ? answerIndexes : [])
+    .filter((value) => Number.isFinite(value))
+    .map((value) => String.fromCharCode(65 + Number(value)))
+    .join("");
+}
+
+function buildCorrectText(options: any[], answerIndexes: number[]) {
+  const safeOptions = Array.isArray(options) ? options : [];
+  const values = (Array.isArray(answerIndexes) ? answerIndexes : [])
+    .filter((value) => Number.isFinite(value))
+    .map((index) => toPlainText(safeOptions[index]?.content || "", ""))
+    .filter(Boolean);
+  return values.join(", ");
+}
+
+function getFirstTagValueByAliases(
+  tagValueMap: Map<string, string[]>,
+  aliases: string[],
+) {
+  for (const alias of aliases) {
+    const values = tagValueMap.get(alias) || [];
+    const first = values.find((value) => String(value || "").trim());
+    if (first) return String(first).trim();
+  }
+  return "";
+}
+
+function buildBenchmarkQuestionImportRows(benchmarkData: any) {
+  const questionBenchmarks = Array.isArray(benchmarkData?.questionBenchmarks)
+    ? benchmarkData.questionBenchmarks
+    : [];
+  const distractorBenchmarks = Array.isArray(benchmarkData?.distractorBenchmarks)
+    ? benchmarkData.distractorBenchmarks
+    : [];
+
+  const paperSubjectFallback = String(
+    benchmarkData?.subjectName || benchmarkData?.paper?.subjectName || "",
+  ).trim();
+  const paperClassFallback = String(
+    benchmarkData?.className || benchmarkData?.paper?.className || "",
+  ).trim();
+
+  const optionsByQuestionId = new Map<string, Array<{ content: string }>>();
+  const answerIndexesByQuestionId = new Map<string, number[]>();
+  distractorBenchmarks.forEach((row: any) => {
+    const questionId = String(row?.questionId || "").trim();
+    if (!questionId) return;
+
+    const currentOptions = optionsByQuestionId.get(questionId) || [];
+    const optionIndex = Number(row?.optionIndex);
+    const optionText = String(row?.optionText || "").trim();
+    if (Number.isFinite(optionIndex) && optionIndex >= 0) {
+      while (currentOptions.length <= optionIndex) {
+        currentOptions.push({ content: "" });
+      }
+      if (!currentOptions[optionIndex]?.content && optionText) {
+        currentOptions[optionIndex] = { content: optionText };
+      }
+      optionsByQuestionId.set(questionId, currentOptions);
+    }
+
+    if (row?.isCorrectOption === true && Number.isFinite(optionIndex) && optionIndex >= 0) {
+      const currentAnswerIndexes = answerIndexesByQuestionId.get(questionId) || [];
+      if (!currentAnswerIndexes.includes(optionIndex)) {
+        currentAnswerIndexes.push(optionIndex);
+      }
+      answerIndexesByQuestionId.set(questionId, currentAnswerIndexes);
+    }
+  });
+
+  const tagTypes = new Set<string>();
+  questionBenchmarks.forEach((row: any) => {
+    (Array.isArray(row?.tags) ? row.tags : []).forEach((tag: any) => {
+      const key = normalizeTagTypeKey(tag?.type || "");
+      if (!key || QUESTION_IMPORT_TAG_EXCLUDE.has(key)) return;
+      tagTypes.add(key);
+    });
+  });
+
+  const tagHeaders = Array.from(tagTypes)
+    .sort((left, right) => left.localeCompare(right))
+    .map((type) => formatImportTagHeader(type));
+
+  const header = [...QUESTION_IMPORT_BASE_HEADERS, ...tagHeaders];
+
+  const rows = questionBenchmarks.map((row: any) => {
+    const question = row?.question || {};
+    const questionId = String(row?.questionId || "").trim();
+    const questionOptions = Array.isArray(question?.options) ? question.options : [];
+    const rowOptions = Array.isArray(row?.options) ? row.options : [];
+    const distractorOptions = optionsByQuestionId.get(questionId) || [];
+    const options =
+      questionOptions.length > 0
+        ? questionOptions
+        : rowOptions.length > 0
+          ? rowOptions
+          : distractorOptions;
+    const questionAnswerIndexes = Array.isArray(question?.answerIndexes)
+      ? question.answerIndexes.map((value: any) => Number(value)).filter(Number.isFinite)
+      : [];
+    const rowAnswerIndexes = Array.isArray(row?.answerIndexes)
+      ? row.answerIndexes.map((value: any) => Number(value)).filter(Number.isFinite)
+      : [];
+    const distractorAnswerIndexes = answerIndexesByQuestionId.get(questionId) || [];
+    const answerIndexes =
+      questionAnswerIndexes.length > 0
+        ? questionAnswerIndexes
+        : rowAnswerIndexes.length > 0
+          ? rowAnswerIndexes
+          : distractorAnswerIndexes;
+    const tagValuesByType = new Map<string, string[]>();
+    (Array.isArray(row?.tags) ? row.tags : []).forEach((tag: any) => {
+      const key = normalizeTagTypeKey(tag?.type || "");
+      if (!key || QUESTION_IMPORT_TAG_EXCLUDE.has(key)) return;
+      const value = String(tag?.value || "").trim();
+      if (!value) return;
+      if (!tagValuesByType.has(key)) tagValuesByType.set(key, []);
+      tagValuesByType.get(key)?.push(value);
+    });
+
+    const optionAFromTags = getFirstTagValueByAliases(tagValuesByType, [
+      "option-a",
+      "option-a-text",
+      "option-a-value",
+    ]);
+    const optionBFromTags = getFirstTagValueByAliases(tagValuesByType, [
+      "option-b",
+      "option-b-text",
+      "option-b-value",
+    ]);
+    const optionCFromTags = getFirstTagValueByAliases(tagValuesByType, [
+      "option-c",
+      "option-c-text",
+      "option-c-value",
+    ]);
+    const optionDFromTags = getFirstTagValueByAliases(tagValuesByType, [
+      "option-d",
+      "option-d-text",
+      "option-d-value",
+    ]);
+    const optionEFromTags = getFirstTagValueByAliases(tagValuesByType, [
+      "option-e",
+      "option-e-text",
+      "option-e-value",
+    ]);
+
+    const correctLetterFromTags = getFirstTagValueByAliases(tagValuesByType, [
+      "correct-letter",
+      "correct-option",
+      "correct-option-letter",
+      "answer-letter",
+      "answer",
+    ]);
+    const correctTextFromTags = getFirstTagValueByAliases(tagValuesByType, [
+      "correct-text",
+      "correct-option-text",
+      "answer-text",
+      "answer-explanation",
+    ]);
+
+    const subjectFromTags = getFirstTagValueByAliases(tagValuesByType, [
+      "subject",
+      "subject-name",
+    ]);
+    const classFromTags = getFirstTagValueByAliases(tagValuesByType, [
+      "class",
+      "class-name",
+      "grade",
+    ]);
+
+    const tagColumns: Record<string, string> = {};
+    Array.from(tagTypes).forEach((typeKey) => {
+      const headerLabel = formatImportTagHeader(typeKey);
+      const values = tagValuesByType.get(typeKey) || [];
+      tagColumns[headerLabel] = values.join(" | ");
+    });
+
+    return {
+      Subject: toText(
+        question?.subject?.name ||
+          question?.subject ||
+          row?.subjectName ||
+          subjectFromTags ||
+          paperSubjectFallback,
+        "",
+      ),
+      Class: toText(
+        question?.class?.name ||
+          question?.class ||
+          row?.className ||
+          classFromTags ||
+          paperClassFallback,
+        "",
+      ),
+      "Question Number": row?.questionNumber ?? "",
+      Question: toPlainText(row?.questionText || question?.content || "", ""),
+      "Option A": toPlainText(options[0]?.content || optionAFromTags || "", ""),
+      "Option B": toPlainText(options[1]?.content || optionBFromTags || "", ""),
+      "Option C": toPlainText(options[2]?.content || optionCFromTags || "", ""),
+      "Option D": toPlainText(options[3]?.content || optionDFromTags || "", ""),
+      "Option E": toPlainText(options[4]?.content || optionEFromTags || "", ""),
+      "Correct (letter)":
+        formatAnswerLetters(answerIndexes) || toText(correctLetterFromTags, ""),
+      "Correct (text)":
+        buildCorrectText(options, answerIndexes) || toText(correctTextFromTags, ""),
+      ...tagColumns,
+    };
+  });
+
+  return { rows, header };
 }
 
 function applyHyperlinks(
@@ -606,6 +866,7 @@ export function appendBenchmarkSheetsToWorkbook(
   const distractorRows = buildBenchmarkDistractorRows(benchmarkData, options);
   const insightRows = buildBenchmarkInsightRows(benchmarkData);
   const questionLinkRows = buildBenchmarkQuestionLinkRows(benchmarkData, options);
+  const importRows = buildBenchmarkQuestionImportRows(benchmarkData);
 
   XLSX.utils.book_append_sheet(
     workbook,
@@ -742,6 +1003,17 @@ export function appendBenchmarkSheetsToWorkbook(
       ["Question URL"],
     ),
     "Benchmark Questions",
+  );
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    withAutoFilter(
+      importRows.rows.length > 0
+        ? importRows.rows
+        : [{ Subject: "No questions available for import" }],
+      importRows.header.length > 0 ? importRows.header : QUESTION_IMPORT_BASE_HEADERS,
+    ),
+    "Question Import",
   );
 
   if (insightRows.length > 0) {

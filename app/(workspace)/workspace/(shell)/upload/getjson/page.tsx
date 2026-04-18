@@ -54,7 +54,21 @@ export default function ImportQuestionsPage() {
     setUploadResult(null);
     setBulkTestId(null);
 
-    const res = await fetch('/api/convert', { method: 'POST', body: formData });
+    let res: Response;
+    try {
+      res = await fetch('/api/convert', { method: 'POST', body: formData });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Network error while uploading the file.';
+      toast({
+        title: 'Upload failed',
+        description: message,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     const contentType = res.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
@@ -76,9 +90,11 @@ export default function ImportQuestionsPage() {
       return;
     }
 
+    const rawText = await res.text().catch(() => '');
+    const snippet = rawText.replace(/\s+/g, ' ').slice(0, 140);
     toast({
       title: 'Unexpected response',
-      description: 'The server returned an invalid response for this conversion.',
+      description: `Status ${res.status}. ${snippet || 'The server returned a non-JSON response.'}`,
       variant: 'destructive',
     });
   }
@@ -251,10 +267,14 @@ export default function ImportQuestionsPage() {
               <CardTitle>1. Upload Excel</CardTitle>
             </CardHeader>
             <CardContent className="app-section-body space-y-5">
-              <div>
+              <div className="space-y-2">
                 <Button variant="outline" asChild>
                   <a href="/api/convert/template">Download Excel Template</a>
                 </Button>
+                <p className="text-sm text-muted-foreground">
+                  The template includes tag columns (Chapter Name, Topic, Competency, Difficulty, Template ID).
+                  Any extra columns you add will also be imported as tag types.
+                </p>
               </div>
 
               <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">

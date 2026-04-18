@@ -699,9 +699,13 @@ function buildQuestionBenchmarks({
       questionSection: meta.paperSectionName,
       questionLabel: `${meta.paperSectionName} Q${meta.questionNumber}`,
       questionText: String(meta.question?.content || ""),
+      subjectName: String(meta.subjectName || ""),
+      className: String(meta.className || ""),
       type: meta.question?.type,
       marks: Number(meta.marks || 0),
       tags: meta.tags,
+      answerIndexes: Array.isArray(meta.answerIndexes) ? meta.answerIndexes : [],
+      options: Array.isArray(meta.options) ? meta.options : [],
       baseline,
       cohorts: (Array.isArray(cohorts) ? cohorts : []).map((cohort: any) => {
         const cohortContexts = baselineContexts.filter(

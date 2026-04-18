@@ -5,7 +5,7 @@ import QuestionTagList from '@/components/questions/QuestionTagList';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Archive, Edit, Eye } from 'lucide-react';
+import { Archive, Edit, Eye, Globe } from 'lucide-react';
 import { Spinner } from './ui/spinner';
 import { ContentRenderer } from './ContentRenderer';
 import { useReturnHrefBuilder } from '@/hooks/useReturnNavigation';
@@ -51,10 +51,19 @@ interface QuestionItemProps {
   question: Question;
   onDelete?: (id: string) => void;
   onArchive?: (id: string) => void;
+  onCopyToGlobal?: (id: string) => void;
   isDeleting?: boolean;
+  isCopying?: boolean;
 }
 
-export function QuestionItem({ question, onDelete, onArchive, isDeleting = false }: QuestionItemProps) {
+export function QuestionItem({
+  question,
+  onDelete,
+  onArchive,
+  onCopyToGlobal,
+  isDeleting = false,
+  isCopying = false,
+}: QuestionItemProps) {
   const { buildReturnHref } = useReturnHrefBuilder('/workspace/questions');
   const tags = Array.isArray(question.tags) ? question.tags : [];
   const handleDelete = onArchive || onDelete;
@@ -105,21 +114,33 @@ export function QuestionItem({ question, onDelete, onArchive, isDeleting = false
               '/api/tags/with-subjects',
             ]}
           >
-            <Button
-              variant="outline"
-              size="sm"
-              className="app-row-action-button app-row-action-button-accent"
-              disabled={isDeleting}
-              aria-label="Edit question"
-              title="Edit question"
-            >
-              <Edit className="h-4 w-4" />
-              Edit
-            </Button>
-          </AppPrefetchLink>
           <Button
             variant="outline"
             size="sm"
+            className="app-row-action-button app-row-action-button-accent"
+            disabled={isDeleting}
+            aria-label="Edit question"
+            title="Edit question"
+          >
+            <Edit className="h-4 w-4" />
+            Edit
+          </Button>
+        </AppPrefetchLink>
+        <Button
+          variant="outline"
+          size="sm"
+          className="app-row-action-button"
+          onClick={() => onCopyToGlobal?.(question._id)}
+          disabled={isDeleting || isCopying || !onCopyToGlobal}
+          aria-label="Copy to global bank"
+          title="Copy to global bank"
+        >
+          {isCopying ? <Spinner /> : <Globe className="h-4 w-4" />}
+          Copy to global
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
             className="app-row-action-button app-row-action-button-danger"
             onClick={() => handleDelete?.(question._id)}
             disabled={isDeleting || !handleDelete}

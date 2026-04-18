@@ -102,18 +102,51 @@ export async function POST(req: NextRequest) {
       findCol(headers, ["correct", "text"]) ??
       findCol(headers, ["answer", "text"]);
 
-    if (!colQuestion) return json400({ error: "Could not locate a 'Question Text' column." });
+    if (!colQuestion) return json400({ error: "Could not locate a 'Question' (or 'Question Text') column." });
     if (!colOptA || !colOptB || !colOptC || !colOptD) {
       return json400({ error: "Missing one or more required option columns: Option A, Option B, Option C, Option D." });
     }
     if (!colCorrectLetter) return json400({ error: "Missing 'Correct Option (letter...)' column." });
 
-    // --- Build canonical tagTypes from headers (minus subject/class/code); strip () and kebab-case; dedup ---
-    const EXCLUDE_FROM_TAGS = new Set(["subject", "class", "code"]);
+    // --- Build canonical tagTypes from headers (minus subject/class/options/answers); strip () and kebab-case; dedup ---
+    const EXCLUDE_FROM_TAGS = new Set([
+      "subject",
+      "class",
+      "grade",
+      "code",
+      "question",
+      "question-number",
+      "question-no",
+      "q-no",
+      "q-number",
+      "qno",
+      "question-text",
+      "text",
+      "stem",
+      "option-a",
+      "option-b",
+      "option-c",
+      "option-d",
+      "option-e",
+      "correct-letter",
+      "correct-option",
+      "correct-option-letter",
+      "correct-text",
+      "correct-option-text",
+      "answer-letter",
+      "answer-text",
+      "answer",
+    ]);
+
+    const excludeByHeader = new Set<string>();
+    [colSubject, colClass]
+      .filter(Boolean)
+      .forEach((header) => excludeByHeader.add(normalizeHeader(String(header))));
+
     const canonicalTagTypesBase = uniqueify(
       headers
         .map((h) => normalizeHeader(h))
-        .filter((t) => t && !EXCLUDE_FROM_TAGS.has(t))
+        .filter((t) => t && !EXCLUDE_FROM_TAGS.has(t) && !excludeByHeader.has(t)),
     );
 
     // --- Process rows ---
@@ -153,7 +186,7 @@ export async function POST(req: NextRequest) {
 
       // Core content
       const qText = String(row[colQuestion] ?? "").trim();
-      if (!qText) return json400({ error: `Row ${rowNum}: Question Text is blank.` });
+      if (!qText) return json400({ error: `Row ${rowNum}: Question is blank.` });
 
       // Options (A–D required; E optional)
       const a = ensureOptionStrict(String(row[colOptA] ?? "").trim());
@@ -221,8 +254,28 @@ export async function POST(req: NextRequest) {
         rationales.push("option e: notation/spelling near-miss");
       }
 
-      const finalTagTypes = [...pruned.tagTypes, ...optionTagTypes, "testid"];
-      const finalTags = [...pruned.tags, ...rationales, testId];
+      const questionNumberRaw =
+        row[findCol(headers, ["question", "number"]) ?? ""] ??
+        row[findCol(headers, ["q", "no"]) ?? ""] ??
+        row[findCol(headers, ["q#", "no"]) ?? ""] ??
+        "";
+      const questionNumberTag = String(questionNumberRaw || rowNum - 1).trim();
+      const questionTextTag = qText;
+
+      const finalTagTypes = [
+        ...pruned.tagTypes,
+        ...optionTagTypes,
+        "question-number",
+        "question-text",
+        "testid",
+      ];
+      const finalTags = [
+        ...pruned.tags,
+        ...rationales,
+        questionNumberTag,
+        questionTextTag,
+        testId,
+      ];
 
       const contentHTML = escapeHtml(qText);
 
@@ -380,13 +433,15 @@ function findCol(headers: string[], tokens: string[]): string | null {
 // Normalize header -> tagType: strip (...) blocks, kebab-case, trim hyphens.
 function normalizeHeader(h: string): string {
   const noBrackets = String(h ?? "").replace(/\(.*?\)/g, "");
-  return noBrackets
+  const normalized = noBrackets
     .trim()
     .toLowerCase()
     .replace(/[\/\s]+/g, "-")
     .replace(/[^a-z0-9\-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+  if (normalized === "template-id") return "templateid";
+  return normalized;
 }
 
 // Deduplicate tagTypes with numeric suffixes

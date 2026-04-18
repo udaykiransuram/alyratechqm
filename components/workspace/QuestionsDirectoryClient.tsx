@@ -67,6 +67,12 @@ type QuestionBankFilters = {
   search: string;
 };
 
+type CopyResult = {
+  success?: boolean;
+  id?: string;
+  message?: string;
+};
+
 export type QuestionsDirectoryClientProps = {
   questions: Question[];
   classes: FilterOption[];
@@ -154,6 +160,7 @@ export default function QuestionsDirectoryClient({
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [questionToArchive, setQuestionToArchive] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [copyingQuestionId, setCopyingQuestionId] = useState<string | null>(null);
 
   const [draftFilters, setDraftFilters] = useState<QuestionBankFilters>({
     classId: initialClassFilterId || "",
@@ -170,6 +177,36 @@ export default function QuestionsDirectoryClient({
     questionTagMatchMode: initialTagMode,
     search: initialSearch || "",
   });
+
+  const handleCopyToGlobal = useCallback(
+    async (id: string) => {
+      if (copyingQuestionId) return;
+      setCopyingQuestionId(id);
+      try {
+        const result = await fetchApiJson<CopyResult>(
+          `/api/questions/${encodeURIComponent(id)}/copy-to-global`,
+          { method: "POST" },
+        );
+        if (!result?.success) {
+          throw new Error(result?.message || "Failed to copy question.");
+        }
+        toast({
+          title: "Copied to global bank",
+          description: "This question is now available in the global library.",
+        });
+      } catch (error) {
+        toast({
+          title: "Copy failed",
+          description:
+            error instanceof Error ? error.message : "Unable to copy the question.",
+          variant: "destructive",
+        });
+      } finally {
+        setCopyingQuestionId(null);
+      }
+    },
+    [copyingQuestionId, toast],
+  );
 
   useEffect(() => {
     if (!hasSyncedServerPropsRef.current) {
@@ -696,6 +733,8 @@ export default function QuestionsDirectoryClient({
         isDeleting={isDeleting}
         questionToArchive={questionToArchive}
         onArchive={handleArchiveRequest}
+        onCopyToGlobal={handleCopyToGlobal}
+        copyingQuestionId={copyingQuestionId}
       />
 
       {showArchiveDialog ? (
