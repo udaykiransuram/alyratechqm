@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
@@ -73,6 +74,7 @@ export default function SummerCrashRegistrationClient({
 }: SummerCrashRegistrationClientProps) {
   const [form, setForm] = useState(INITIAL_FORM_STATE);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const selectedClassBand = useMemo(
@@ -370,20 +372,34 @@ export default function SummerCrashRegistrationClient({
                 <label className="public-flow-label" htmlFor="password">
                   Create password
                 </label>
-                <Input
-                  id="password"
-                  value={form.password}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      password: event.target.value,
-                    }))
-                  }
-                  className="public-flow-input"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="Create password"
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    value={form.password}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                    className="public-flow-input pr-12"
+                    type={showPasswords ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Create password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    onClick={() => setShowPasswords((current) => !current)}
+                    aria-label={showPasswords ? "Hide password" : "Show password"}
+                  >
+                    {showPasswords ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
                 <p className="public-flow-helper mt-2">
                   Choose a password with at least 6 characters.
                 </p>
@@ -393,20 +409,36 @@ export default function SummerCrashRegistrationClient({
                 <label className="public-flow-label" htmlFor="confirmPassword">
                   Confirm password
                 </label>
-                <Input
-                  id="confirmPassword"
-                  value={form.confirmPassword}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      confirmPassword: event.target.value,
-                    }))
-                  }
-                  className="public-flow-input"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="Re-enter password"
-                />
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    value={form.confirmPassword}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        confirmPassword: event.target.value,
+                      }))
+                    }
+                    className="public-flow-input pr-12"
+                    type={showPasswords ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Re-enter password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    onClick={() => setShowPasswords((current) => !current)}
+                    aria-label={
+                      showPasswords ? "Hide confirm password" : "Show confirm password"
+                    }
+                  >
+                    {showPasswords ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 

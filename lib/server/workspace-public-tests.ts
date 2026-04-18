@@ -6,6 +6,7 @@ import {
   normalizeSummerCrashClassMappings,
 } from "@/lib/server/summer-crash";
 import { paperRequiresManualReview, paperSupportsOnlineDelivery } from "@/lib/student-tests";
+import { buildPaperQuestionLookup, isOnlineQuestionType } from "@/lib/question-paper/grading";
 import {
   normalizeSummerCrashClassBandKey,
   normalizeSummerCrashText,
@@ -212,6 +213,7 @@ function getDiagnosticPaperIssues(params: {
   const paperClassName = normalizeSummerCrashText(
     (params.paper.class as { name?: unknown } | null | undefined)?.name,
   );
+  const questionCount = getPaperQuestionCount(params.paper);
 
   if (
     normalizeSummerCrashClassBandKey(paperClassName) !==
@@ -232,14 +234,48 @@ function getDiagnosticPaperIssues(params: {
   }
 
   if (!paperSupportsOnlineDelivery(params.paper)) {
-    issues.push("unsupported question types");
+    const lookup = buildPaperQuestionLookup(params.paper);
+    const unsupportedTypes = new Set<string>();
+    let hasMissingType = false;
+    let hasInvalidMatrix = false;
+
+    for (const spec of lookup.values()) {
+      const normalizedType = String(spec.type || "").trim();
+      if (!normalizedType) {
+        hasMissingType = true;
+      }
+      if (!isOnlineQuestionType(normalizedType)) {
+        unsupportedTypes.add(normalizedType || "missing type");
+      } else if (
+        normalizedType === "matrix-match" &&
+        (spec.matrixRowCount <= 0 || spec.matrixColumnIndexes.size <= 0)
+      ) {
+        hasInvalidMatrix = true;
+      }
+    }
+
+    if (questionCount > 0 && lookup.size === 0) {
+      issues.push("section names are missing");
+    }
+    if (hasMissingType) {
+      issues.push("some questions have no type");
+    }
+    if (unsupportedTypes.size > 0) {
+      issues.push(`unsupported types: ${Array.from(unsupportedTypes).join(", ")}`);
+    }
+    if (hasInvalidMatrix) {
+      issues.push("matrix-match options are incomplete");
+    }
+    if (issues.length === 0) {
+      issues.push("unsupported question setup");
+    }
   }
 
   if (paperRequiresManualReview(params.paper)) {
     issues.push("manual review required");
   }
 
-  if (getPaperQuestionCount(params.paper) === 0) {
+  if (questionCount === 0) {
     issues.push("paper has no questions");
   }
 
