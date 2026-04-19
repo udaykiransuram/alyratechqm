@@ -10,7 +10,6 @@ export default function LandingLayout({
   return (
     <PublicRouteShell
       flushTop
-      hideNavbar
       publicTheme="clear"
       publicHomeVariant="cinematic"
     >

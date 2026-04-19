@@ -59,15 +59,6 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
         variant="overview"
         density="compact"
         description="See the weak subskills, weak topics, and the next best step before starting the Summer Crash Course."
-        actions={
-          reportHref ? (
-            <Button asChild className="app-button-primary">
-              <AppPrefetchLink href={reportHref}>
-                View Diagnostic Report
-              </AppPrefetchLink>
-            </Button>
-          ) : undefined
-        }
       />
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem]">
@@ -76,11 +67,18 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
             <CardTitle>Diagnostic Summary</CardTitle>
           </CardHeader>
           <CardContent className="app-section-body space-y-3">
-            <p className="text-sm leading-6 text-muted-foreground">
-              {state.diagnostic?.available
-                ? state.diagnostic.title
-                : "The diagnostic report is still being prepared."}
-            </p>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">
+                {state.diagnostic?.available
+                  ? state.diagnostic.title
+                  : "Diagnostic report is being prepared."}
+              </p>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {state.diagnostic?.available
+                  ? "Use the report to see weak subskills and the next best step."
+                  : "You can return to the summer home now. We will unlock the report as soon as it is ready."}
+              </p>
+            </div>
             {state.diagnostic?.available ? (
               <>
                 <div className="flex flex-wrap gap-2">
@@ -100,18 +98,31 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
                   </p>
                 ) : null}
                 {reportHref ? (
-                  <Button asChild className="app-button-primary w-full">
-                    <AppPrefetchLink href={reportHref}>
-                      View Diagnostic Report
-                    </AppPrefetchLink>
-                  </Button>
+                  <div className="flex flex-wrap gap-3">
+                    <Button asChild className="app-button-primary">
+                      <AppPrefetchLink href={reportHref}>
+                        View Diagnostic Report
+                      </AppPrefetchLink>
+                    </Button>
+                    <Button asChild variant="outline" className="app-button-compact">
+                      <AppPrefetchLink href={SUMMER_CRASH_HOME_PATH}>
+                        Back to Summer Home
+                      </AppPrefetchLink>
+                    </Button>
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     The report link will appear here once it is ready.
                   </p>
                 )}
               </>
-            ) : null}
+            ) : (
+              <Button asChild variant="outline" className="app-button-compact">
+                <AppPrefetchLink href={SUMMER_CRASH_HOME_PATH}>
+                  Back to Summer Home
+                </AppPrefetchLink>
+              </Button>
+            )}
           </CardContent>
         </Card>
 
@@ -122,13 +133,8 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
             </CardHeader>
             <CardContent className="app-section-body space-y-3">
               <p className="text-sm leading-6 text-muted-foreground">
-                You can open the parent-friendly diagnostic report now or go back to the summer home and continue from there.
+                Use the report to identify weak areas, then continue from the summer home when you are ready.
               </p>
-              <Button asChild variant="outline" className="app-button-compact">
-                <AppPrefetchLink href={SUMMER_CRASH_HOME_PATH}>
-                  Back to Summer Home
-                </AppPrefetchLink>
-              </Button>
             </CardContent>
           </Card>
         </div>

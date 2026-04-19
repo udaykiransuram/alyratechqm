@@ -88,11 +88,15 @@ export default function SummerCrashRegistrationClient({
   const campaignTitle =
     String(title || SUMMER_CRASH_DISPLAY_NAME).trim() ||
     SUMMER_CRASH_DISPLAY_NAME;
-  const pageTitle = "Create account";
+  const pageTitle = isDiagnosticEntry
+    ? "Register & start test"
+    : "Create account";
   const pageSummary = isDiagnosticEntry
-    ? "Create the family sign-in and open the free diagnostic next."
-    : "Use the parent phone number for future sign-ins.";
-  const submitLabel = "Create account";
+    ? "Create the family sign-in once. The free diagnostic opens right after this."
+    : "Use the parent phone number and password for future sign-ins.";
+  const submitLabel = isDiagnosticEntry
+    ? "Create account & start test"
+    : "Create account";
   const supportLabel = supportContact || "";
   const supportWhatsappHref = String(supportHref || "").trim();
   const supportText = supportWhatsappHref
@@ -278,9 +282,9 @@ export default function SummerCrashRegistrationClient({
           ) : null}
         </div>
       ) : (
-        <div className="public-flow-surface public-summer-register-panel space-y-5 sm:space-y-6">
+        <div className="public-flow-surface public-summer-register-panel space-y-4 sm:space-y-5">
           <div className="public-summer-register-header">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 {campaignTitle}
               </p>
@@ -291,7 +295,7 @@ export default function SummerCrashRegistrationClient({
                 {pageSummary}
               </p>
             </div>
-            <div className="text-sm text-muted-foreground">
+            <div className="pt-0.5 text-sm text-muted-foreground">
               Already registered?{" "}
               <Link href={SUMMER_CRASH_SIGNIN_PATH} className="public-flow-text-link">
                 Sign in
@@ -304,21 +308,21 @@ export default function SummerCrashRegistrationClient({
           ) : null}
 
           <form
-            className="space-y-4 sm:space-y-5"
+            className="space-y-3.5 sm:space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
               handleRegister();
             }}
           >
-            <section className="public-flow-card-soft space-y-4">
-              <div className="flex items-start gap-3">
+            <section className="public-flow-card-soft space-y-3 p-4 sm:space-y-3.5 sm:p-5">
+              <div className="flex items-start gap-2.5">
                 <span className="public-flow-step">1</span>
-                <p className="pt-0.5 text-lg font-semibold text-foreground">
+                <p className="pt-0.5 text-base font-semibold text-foreground sm:text-[1.05rem]">
                   Student
                 </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="public-flow-label" htmlFor="studentName">
                     Student name
@@ -384,15 +388,15 @@ export default function SummerCrashRegistrationClient({
               </div>
             </section>
 
-            <section className="public-flow-card-soft space-y-4">
-              <div className="flex items-start gap-3">
+            <section className="public-flow-card-soft space-y-3 p-4 sm:space-y-3.5 sm:p-5">
+              <div className="flex items-start gap-2.5">
                 <span className="public-flow-step">2</span>
-                <p className="pt-0.5 text-lg font-semibold text-foreground">
+                <p className="pt-0.5 text-base font-semibold text-foreground sm:text-[1.05rem]">
                   Parent
                 </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="public-flow-label" htmlFor="guardianName">
                     Parent name
@@ -434,15 +438,15 @@ export default function SummerCrashRegistrationClient({
               </div>
             </section>
 
-            <section className="public-flow-card-soft space-y-4">
-              <div className="flex items-start gap-3">
+            <section className="public-flow-card-soft space-y-3 p-4 sm:space-y-3.5 sm:p-5">
+              <div className="flex items-start gap-2.5">
                 <span className="public-flow-step">3</span>
-                <p className="pt-0.5 text-lg font-semibold text-foreground">
+                <p className="pt-0.5 text-base font-semibold text-foreground sm:text-[1.05rem]">
                   Password
                 </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="public-flow-label" htmlFor="password">
                     Password
@@ -520,7 +524,7 @@ export default function SummerCrashRegistrationClient({
               </div>
             </section>
 
-            <label className="flex items-start gap-3 rounded-2xl border border-[hsl(var(--public-border)/0.62)] bg-[hsl(var(--public-surface)/0.9)] px-4 py-4 sm:px-5">
+            <label className="flex items-start gap-3 rounded-[1rem] border border-[hsl(var(--public-border)/0.62)] bg-[hsl(var(--public-surface)/0.9)] px-3.5 py-3 sm:px-4">
               <input
                 type="checkbox"
                 checked={form.consent}
@@ -537,7 +541,7 @@ export default function SummerCrashRegistrationClient({
               </span>
             </label>
 
-            <div className="rounded-2xl border border-[hsl(var(--public-border)/0.62)] bg-[hsl(var(--public-surface)/0.94)] p-4 shadow-[0_22px_42px_-34px_hsl(var(--public-shadow)/0.14)] sm:p-5">
+            <div className="rounded-[1rem] border border-[hsl(var(--public-border)/0.62)] bg-[hsl(var(--public-surface)/0.94)] p-3.5 shadow-[0_22px_42px_-34px_hsl(var(--public-shadow)/0.14)] sm:p-4">
               <Button
                 type="submit"
                 disabled={isPending}
@@ -547,8 +551,14 @@ export default function SummerCrashRegistrationClient({
                 {!isPending ? <ArrowRight className="h-4 w-4" /> : null}
               </Button>
 
+              {isDiagnosticEntry ? (
+                <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">
+                  The free diagnostic opens right after account creation.
+                </p>
+              ) : null}
+
               {supportWhatsappHref ? (
-                <div className="mt-3 text-center text-sm">
+                <div className="mt-2.5 text-center text-sm">
                   <a
                     href={supportWhatsappHref}
                     target="_blank"

@@ -8585,7 +8585,18 @@
 
     .app-exam-focus-shell-fullscreen .app-exam-question-body {
       min-height: 0;
-      padding-bottom: calc(7.75rem + env(safe-area-inset-bottom));
+      overflow-y: auto;
+      padding-bottom: 1.25rem;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-nav-row {
+      position: static;
+      bottom: auto;
+      margin-top: 0.75rem;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-mobile-nav-bar {
+      display: none;
     }
 
     .app-exam-focus-shell-fullscreen .app-exam-nav-row {
@@ -14244,14 +14255,14 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-shell {
-    padding-top: clamp(1rem, 3vw, 2.25rem);
+    padding-top: clamp(0.75rem, 2.2vw, 1.5rem);
   }
 
   .public-flow-surface.public-summer-register-panel {
     position: relative;
     overflow: hidden;
     border-radius: 1.6rem;
-    padding: 1.25rem;
+    padding: 1rem;
     border-color: hsl(var(--public-border) / 0.74);
     background: hsl(var(--public-surface) / 0.98);
     box-shadow:
@@ -14264,8 +14275,8 @@ html[data-public-home-flagship="true"] ::selection {
     flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 0.9rem;
-    padding-bottom: 1rem;
+    gap: 0.7rem;
+    padding-bottom: 0.8rem;
     border-bottom: 1px solid hsl(var(--public-border) / 0.56);
   }
 
@@ -14277,10 +14288,19 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-panel .public-flow-input {
-    min-height: 3rem;
+    min-height: 2.8rem;
     border-color: hsl(var(--public-border) / 0.78);
     background: hsl(var(--public-surface) / 0.98);
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.78);
+  }
+
+  .public-summer-register-panel .public-flow-label {
+    margin-bottom: 0.35rem;
+  }
+
+  .public-summer-register-panel .public-flow-helper {
+    margin-top: 0.35rem;
+    line-height: 1.35;
   }
 
   .public-summer-register-panel .public-flow-input:focus,
@@ -14679,11 +14699,11 @@ html[data-public-home-flagship="true"] ::selection {
 
   @media (min-width: 640px) {
     .public-summer-register-shell {
-      padding-top: 1.5rem;
+      padding-top: 1.15rem;
     }
 
     .public-flow-surface.public-summer-register-panel {
-      padding: 1.5rem;
+      padding: 1.15rem;
     }
 
     .public-register-page .public-flow-shell-narrow {
@@ -14693,7 +14713,7 @@ html[data-public-home-flagship="true"] ::selection {
 
   @media (min-width: 1024px) {
     .public-flow-surface.public-summer-register-panel {
-      padding: 1.6rem;
+      padding: 1.25rem;
     }
   }
 
@@ -14709,16 +14729,16 @@ html[data-public-home-flagship="true"] ::selection {
   @media (max-width: 639px) {
     .public-flow-surface.public-summer-register-panel {
       border-radius: 1.35rem;
-      padding: 0.9rem;
+      padding: 0.82rem;
     }
 
     .public-summer-register-header {
-      padding-bottom: 0.9rem;
+      padding-bottom: 0.75rem;
     }
 
     .public-summer-register-panel .public-flow-card-soft {
       border-radius: 1rem;
-      padding: 1rem;
+      padding: 0.9rem;
     }
 
     .public-talent-hero {

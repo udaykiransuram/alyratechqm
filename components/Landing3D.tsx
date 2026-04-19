@@ -5,7 +5,6 @@ import Link from "next/link";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 import GlassPanel from "@/components/GlassPanel";
-import Navbar from "@/components/Navbar";
 import { useClientRuntimeSignals } from "@/lib/client/runtime-signals";
 
 type Hero3DProps = {
@@ -132,7 +131,6 @@ export function Hero3D({ whatsappHref }: Hero3DProps) {
 
   return (
     <>
-      <Navbar />
       <section
         ref={sectionRef}
         data-home-cinematic-stage

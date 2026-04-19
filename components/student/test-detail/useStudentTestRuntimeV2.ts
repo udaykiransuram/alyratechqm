@@ -1733,9 +1733,6 @@ export function useStudentTestRuntime({
       ) {
         void loadTestRef.current("background");
       }
-      if (!isOfflineRef.current && hasUnsavedChangesRef.current) {
-        void saveAttemptRef.current();
-      }
     },
     [questionList],
   );
