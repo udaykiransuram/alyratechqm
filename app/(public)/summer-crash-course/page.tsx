@@ -4,15 +4,12 @@ import { Suspense } from "react";
 import { MessageCircleMore } from "lucide-react";
 import {
   AcademicCapIcon,
-  ArrowTrendingUpIcon,
   BoltIcon,
   ChartBarIcon,
   ChatBubbleBottomCenterTextIcon,
   ChatBubbleLeftRightIcon,
-  CheckBadgeIcon,
   ClockIcon,
   DevicePhoneMobileIcon,
-  ExclamationTriangleIcon,
   QueueListIcon,
 } from "@heroicons/react/24/outline";
 
@@ -37,102 +34,69 @@ export const metadata: Metadata = {
 
 const summerSupportPillars = [
   {
-    title: "Foundation repair before speed",
+    title: "Find the real gap first",
     copy:
-      "We slow the lesson down to the missing concept first, so students understand the method instead of memorizing steps they cannot reuse.",
+      "The diagnostic shows the exact foundation that is weak, not just a low score.",
     icon: AcademicCapIcon,
   },
   {
-    title: "Misconception correction in live classes",
+    title: "Repair it in live classes",
     copy:
-      "Teachers revisit the exact weak step in live classes, solve it slowly, and check understanding before moving on.",
-    icon: ExclamationTriangleIcon,
-  },
-  {
-    title: "Short guided lessons",
-    copy:
-      "Each day includes worked examples, quick checks, and focused practice questions so revision stays manageable at home.",
-    icon: ClockIcon,
-  },
-  {
-    title: "Home revision that feels doable",
-    copy:
-      "Parents can brush up the same weak areas with a smaller set of targeted questions instead of guessing what to revise next.",
-    icon: ChatBubbleBottomCenterTextIcon,
-  },
-] as const;
-
-const summerMisconceptionPatterns = [
-  {
-    title: "Fractions stay procedural",
-    copy:
-      "Many students can repeat a rule, but the core idea of part, whole, and comparison is still shaky underneath.",
+      "Teachers slow down the missed step, rebuild the idea, and check understanding before moving on.",
     icon: BoltIcon,
   },
   {
-    title: "Decimals break when place value is weak",
+    title: "Practice in small daily steps",
     copy:
-      "Even simple decimal operations feel confusing when the student is not fully secure with place value.",
-    icon: ChartBarIcon,
+      "Short practice blocks make revision easier to continue at home without overwhelming the child.",
+    icon: ClockIcon,
   },
   {
-    title: "Word problems feel bigger than they are",
+    title: "Clear parent next steps",
     copy:
-      "The math is often manageable, but students struggle to translate the language into clear steps and operations.",
-    icon: CheckBadgeIcon,
-  },
-  {
-    title: "Confidence drops after repeated mistakes",
-    copy:
-      "Once errors start compounding, students hesitate more, rush more, and avoid the very questions that need repair.",
-    icon: ArrowTrendingUpIcon,
+      "Parents see the weak areas, stronger areas, and the next thing worth practicing.",
+    icon: ChatBubbleBottomCenterTextIcon,
   },
 ] as const;
 
 const familyJourneySteps = [
   {
     step: "01",
-    title: "Register in a minute",
+    title: "Register once",
     copy:
-      "Use a parent phone number, pick the class band, and get into the Summer flow without the regular school portal.",
+      "Use one parent phone number and create one password for all future summer sign-ins.",
   },
   {
     step: "02",
     title: "Take the free diagnostic",
     copy:
-      "The first test shows the real weak areas and repeated misconception patterns instead of leaving parents to guess from marks alone.",
+      "The test matches the selected class band and highlights the weak foundations first.",
   },
   {
     step: "03",
-    title: "Join the live repair path",
+    title: "Start the support path",
     copy:
-      "Move into guided live classes, short daily practice, and a repair-first path built around the weakest foundations first.",
+      "Move into the parent report, summer home, and guided lesson path without the regular school portal.",
   },
 ] as const;
 
 const summerProgramHighlights = [
   {
-    title: "Live class updates for parents",
+    title: "Live class updates",
     copy:
-      "Parents can see what happened in class, how the child responded, and where a little more help is needed next.",
+      "Parents can quickly see what was taught and where the child still needs help.",
     icon: DevicePhoneMobileIcon,
   },
   {
-    title: "Daily attendance reports",
+    title: "Weak-area summary",
     copy:
-      "A simple daily attendance snapshot makes it easy to know whether the child joined and stayed on track.",
-    icon: QueueListIcon,
-  },
-  {
-    title: "Weak-area snapshots",
-    copy:
-      "Weak subskills and topics stay visible, so support remains focused on the right foundations instead of broad revision.",
+      "The same weak topics stay visible, so support remains focused on the right basics.",
     icon: ChartBarIcon,
   },
   {
-    title: "Practice questions to brush up",
+    title: "Practice for home",
     copy:
-      "Parents get targeted practice questions for the same weak areas, so home revision stays specific and manageable.",
+      "Parents get smaller follow-up questions for the same weak areas instead of broad revision.",
     icon: ChatBubbleLeftRightIcon,
   },
 ] as const;
@@ -186,12 +150,6 @@ const summerExperienceAccentCardStyle = {
     "radial-gradient(circle at top right, hsl(183 86% 70% / 0.18) 0%, transparent 15rem), linear-gradient(135deg, hsl(181 81% 30%) 0%, hsl(196 60% 19%) 100%)",
 } as const;
 
-const summerExperienceQuickPoints = [
-  "Live class updates",
-  "Daily attendance",
-  "Home practice support",
-] as const;
-
 const summerIntroTitleClass =
   "max-w-[14ch] text-[clamp(2rem,4.1vw,2.9rem)] leading-[1.02] tracking-[-0.05em]";
 
@@ -238,24 +196,17 @@ export default async function SummerCrashCourseLandingPage() {
   const registerCourseLabel = hasPaidCourseAccess
     ? "Register for Summer Course"
     : "Register Free";
-  const classBandSummary = config.classBands.length
-    ? config.classBands.map((band) => band.classBand).join(" / ")
-    : "Class bands will be announced shortly";
-  const classBandPills = config.classBands.length
-    ? config.classBands.map((band) => band.classBand)
-    : ["Bands soon"];
-  const registrationStatus = config.isActive ? "Open now" : "Opening soon";
   const accessNote = hasPaidCourseAccess
-    ? `The free diagnostic stays open, and the full lesson track unlocks after course payment (${priceLabel}).`
-    : "The free diagnostic and the Summer lesson track are both currently open at no cost.";
+    ? `Free diagnostic first. Guided lessons unlock after payment (${priceLabel}).`
+    : "The free diagnostic and the Summer lesson track are both open at no cost right now.";
   const supportWhatsappHref = String(config.supportHref || "").trim();
   const summerHeroMetricCards = [
     {
       eyebrow: "Observed scale",
       value: "2,000+",
-      title: "Misconception patterns studied",
-      note: "The Summer pathway focuses on the weak places where maths foundations usually break first.",
-      pills: ["Pattern-backed", "Concept repair", "Confidence rebuild"],
+      title: "Learning patterns reviewed",
+      note: "The Summer plan is shaped around the weak places where maths foundations usually break first.",
+      pills: ["Pattern-backed", "Clearer starting point"],
       icon: ChartBarIcon,
       cardStyle: {
         borderColor: "hsl(188 68% 78% / 0.62)",
@@ -276,10 +227,10 @@ export default async function SummerCrashCourseLandingPage() {
     },
     {
       eyebrow: "Coverage",
-      value: String(config.classBands.length),
-      title: "Class bands supported",
-      note: "Each learner is routed into the right diagnostic and Summer lesson path for the selected class band.",
-      pills: classBandPills,
+      value: "Class 5-10",
+      title: "Class-matched support",
+      note: "Each child is routed into the right diagnostic and lesson path for the selected class band.",
+      pills: ["Class-based routing"],
       icon: AcademicCapIcon,
       cardStyle: {
         borderColor: "hsl(204 70% 82% / 0.62)",
@@ -301,12 +252,12 @@ export default async function SummerCrashCourseLandingPage() {
     {
       eyebrow: hasPaidCourseAccess ? "Course unlock" : "Open access",
       value: hasPaidCourseAccess ? priceLabel : "Free",
-      title: hasPaidCourseAccess ? "Guided lesson access" : "Summer access",
+      title: hasPaidCourseAccess ? "Free test + course access" : "Summer access",
       note: hasPaidCourseAccess
-        ? "Start with the diagnostic, then unlock the guided lesson path."
+        ? "Parents can start with the diagnostic and unlock guided lessons later."
         : "Families can start the diagnostic and the course without a payment step right now.",
       pills: hasPaidCourseAccess
-        ? ["Free diagnostic included", "Parent report first"]
+        ? ["Free diagnostic first", "Parent report included"]
         : ["Diagnostic open", "Lessons open"],
       icon: BoltIcon,
       cardStyle: {
@@ -325,33 +276,6 @@ export default async function SummerCrashCourseLandingPage() {
         color: "hsl(168 52% 24%)",
       },
       valueClassName: "text-[hsl(168_52%_24%)]",
-    },
-    {
-      eyebrow: "Registration live",
-      value: registrationStatus,
-      title: "Registration status",
-      note: "Parents can register, sign in, and get help without going through the normal school portal.",
-      pills: [
-        config.isActive ? "Parents can start now" : "Opening shortly",
-        "Separate summer flow",
-      ],
-      icon: ChatBubbleBottomCenterTextIcon,
-      cardStyle: {
-        borderColor: "hsl(186 30% 82% / 0.62)",
-        backgroundImage:
-          "radial-gradient(circle at top right, hsl(189 38% 78% / 0.18) 0%, transparent 16rem), linear-gradient(180deg, hsl(0 0% 100% / 0.98) 0%, hsl(190 30% 96% / 0.98) 100%)",
-      },
-      iconStyle: {
-        color: "hsl(194 42% 28%)",
-        backgroundImage:
-          "linear-gradient(180deg, hsl(0 0% 100% / 0.98) 0%, hsl(191 38% 92% / 0.98) 100%)",
-      },
-      eyebrowStyle: {
-        borderColor: "hsl(186 30% 82% / 0.58)",
-        background: "hsl(0 0% 100% / 0.78)",
-        color: "hsl(194 34% 25%)",
-      },
-      valueClassName: "text-[hsl(194_34%_24%)]",
     },
   ] as const;
 
@@ -399,7 +323,7 @@ export default async function SummerCrashCourseLandingPage() {
 
       <section className="public-section pt-8 md:pt-12">
         <div className="public-shell">
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4 xl:gap-6">
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 xl:gap-6">
             {summerHeroMetricCards.map((card) => {
               const Icon = card.icon;
 
@@ -466,8 +390,8 @@ export default async function SummerCrashCourseLandingPage() {
             <div className="grid gap-6 lg:grid-cols-[1.02fr,0.98fr] lg:items-start xl:gap-8">
               <PublicSectionIntro
                 eyebrow="What Families Get"
-                title="A Summer program built to fix the reason the child is stuck"
-                description="This is not extra worksheet volume. The Summer Crash Course combines guided live classes, short daily practice, and a repair-first path so the child works on the real gap instead of repeating the same mistakes."
+                title="A Summer plan parents can understand quickly"
+                description="Families start with a free diagnostic, see the real weak area, and move into guided support that feels calm, specific, and easier to follow."
                 align="left"
                 compact
                 className="max-w-none"
@@ -485,15 +409,15 @@ export default async function SummerCrashCourseLandingPage() {
               >
                 <div className="max-w-[33rem] space-y-4 text-left">
                   <div className="public-eyebrow border-white/16 bg-white/10 text-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.44)]">
-                    Guided Support
+                    Parent-friendly
                   </div>
                   <h3 className="text-[1.85rem] font-semibold leading-[1.05] tracking-[-0.04em] text-white md:text-[2.05rem]">
-                    Small-step lessons that parents can actually follow
+                    Clear support for the child and less guesswork for the family
                   </h3>
                   <p className="text-[0.98rem] leading-7 text-white">
-                    We combine live teaching, worked examples, quick checks, and
-                    focused practice so the child gets support that feels clear
-                    instead of overwhelming.
+                    We combine live teaching, short practice, and simple next
+                    steps so the child gets steady support without the usual
+                    summer confusion.
                   </p>
                 </div>
               </div>
@@ -558,51 +482,6 @@ export default async function SummerCrashCourseLandingPage() {
 
       <section className="public-section pt-0">
         <div className="public-shell">
-          <div className="public-band-dark p-8 md:p-12 lg:p-14">
-            <div className="grid gap-12 lg:grid-cols-[0.92fr,1.08fr] lg:items-start">
-              <div className="space-y-8">
-                <PublicSectionIntro
-                  eyebrow="Why Children Fall Behind"
-                  title="We target the misconception, not just the missed mark"
-                  description="Across 2,000+ student learning patterns, the same issues show up again and again. The Summer Crash Course is built around these repeated breakdowns so the support feels specific, not generic."
-                  align="left"
-                  compact
-                  titleClassName={`${summerIntroTitleClass} !text-white`}
-                  descriptionClassName={`${summerIntroDescriptionClass} !text-white/78`}
-                />
-                <div className="rounded-[1.6rem] border border-white/12 bg-white/10 p-7 text-[0.96rem] leading-7 text-white shadow-[0_28px_70px_-52px_rgba(8,15,38,0.82)] backdrop-blur-sm md:p-8">
-                  Parents do not need to configure anything. The child takes the
-                  diagnostic once, sees the real weak areas, and gets a simpler
-                  next-step path from there.
-                </div>
-              </div>
-
-              <div className="grid gap-5 sm:grid-cols-2">
-                {summerMisconceptionPatterns.map((item) => {
-                  const Icon = item.icon;
-
-                  return (
-                    <article key={item.title} className="public-card h-full p-7 md:p-8">
-                      <div className="public-icon-chip">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <h3 className={summerLightCardTitleClass}>
-                        {item.title}
-                      </h3>
-                      <p className={summerLightCardCopyClass}>
-                        {item.copy}
-                      </p>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="public-section pt-0">
-        <div className="public-shell">
           <div className="grid gap-12 lg:grid-cols-[0.9fr,1.1fr] lg:items-center">
             <div className="public-panel flex items-center justify-center p-7 md:p-10">
               <LottieAnimation
@@ -616,7 +495,7 @@ export default async function SummerCrashCourseLandingPage() {
               <PublicSectionIntro
                 eyebrow="How Families Start"
                 title="A simple path from registration to recovery"
-                description="The public Summer flow is designed to stay easy for parents and clear for children. No school chooser, no confusing branches, and no dashboard clutter before the student gets started."
+                description="No school picker, no confusing branches, and no extra setup before the child gets started."
                 align="left"
                 compact
                 titleClassName={summerIntroTitleClass}
@@ -675,24 +554,14 @@ export default async function SummerCrashCourseLandingPage() {
                 <PublicSectionIntro
                   eyebrow="Summer Experience"
                   title="Simple updates parents can actually use"
-                  description="Instead of a confusing dashboard, parents get simple live-class updates, daily attendance reports, weak-area snapshots, and practice questions they can use at home."
+                  description="Parents see the weak areas, class progress, and the next best practice step without a confusing dashboard."
                   align="left"
                   compact
                   className="max-w-none"
                   titleClassName={summerIntroTitleClass}
                   descriptionClassName={summerIntroDescriptionClass}
                 />
-                <div className="flex flex-wrap gap-2.5">
-                  {summerExperienceQuickPoints.map((point) => (
-                    <span
-                      key={point}
-                      className="inline-flex items-center rounded-full border border-teal-200/80 bg-white/78 px-3.5 py-2 text-[0.82rem] font-semibold text-[hsl(var(--public-ink))] shadow-[0_16px_30px_-26px_rgba(15,23,42,0.18)]"
-                    >
-                      {point}
-                    </span>
-                  ))}
-                </div>
-                <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid gap-5 lg:grid-cols-3">
                   {summerProgramHighlights.map((item) => {
                     const Icon = item.icon;
 
@@ -732,8 +601,8 @@ export default async function SummerCrashCourseLandingPage() {
                       className="mx-auto h-[210px] w-full max-w-sm md:h-[250px]"
                     />
                     <p className="mx-auto max-w-sm text-[0.95rem] leading-7 text-white">
-                      A shorter, clearer recovery path helps confidence return
-                      faster and keeps children engaged through the summer.
+                      A clearer recovery path helps confidence return faster and
+                      keeps children more willing to try again.
                     </p>
                   </div>
                 </div>
@@ -750,12 +619,11 @@ export default async function SummerCrashCourseLandingPage() {
                       Program Snapshot
                     </div>
                     <h3 className="mt-5 text-[1.75rem] font-semibold leading-[1.04] tracking-[-0.04em] text-white md:text-[1.95rem]">
-                      Built for fast maths recovery
+                      Built for clear maths recovery
                     </h3>
                     <p className="mt-4 text-[0.95rem] leading-7 text-white">
                       Students move from diagnosis into live classes and guided
-                      practice that focus on the weakest foundations first instead
-                      of treating every topic with the same weight.
+                      practice that focus on the weakest foundations first.
                     </p>
                   </article>
 
@@ -811,7 +679,7 @@ export default async function SummerCrashCourseLandingPage() {
           <PublicFinalCta
             eyebrow="Start This Summer"
             title="Give your child a clearer plan before the next school term begins"
-            description="Start with the free diagnostic, understand the real weak areas, and then move into live classes and guided practice with far more confidence."
+            description="Start with the free diagnostic, understand the weak areas clearly, and then move into guided support with more confidence."
             primaryAction={{
               href: `${SUMMER_CRASH_REGISTER_PATH}?entry=diagnostic`,
               label: "Take Free Diagnostic Test",

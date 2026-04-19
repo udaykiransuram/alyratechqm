@@ -14163,6 +14163,7 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-register-page .public-flow-shell-narrow {
+    max-width: 72rem;
     padding-bottom: calc(env(safe-area-inset-bottom) + 5.75rem);
   }
 
@@ -14258,7 +14259,7 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-grid {
-    @apply grid gap-5 xl:grid-cols-[0.9fr_1.1fr];
+    @apply grid gap-6 xl:grid-cols-[0.88fr_1.12fr];
     align-items: start;
   }
 
@@ -14267,15 +14268,25 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-list {
-    @apply grid gap-3;
+    @apply grid gap-3.5;
   }
 
   .public-summer-register-list-item {
-    @apply flex items-start gap-3;
+    @apply flex items-start gap-3 rounded-[1.35rem] border p-4;
+    border-color: hsl(var(--public-border) / 0.66);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--public-surface) / 0.95) 0%,
+        hsl(var(--public-surface-2) / 0.72) 100%
+      );
+    box-shadow:
+      0 20px 36px -34px hsl(var(--public-shadow) / 0.16),
+      inset 0 1px 0 hsl(0 0% 100% / 0.72);
   }
 
   .public-summer-register-icon {
-    @apply inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full;
+    @apply inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[1rem];
     color: hsl(var(--public-accent));
     background:
       linear-gradient(
@@ -14283,23 +14294,33 @@ html[data-public-home-flagship="true"] ::selection {
         hsl(var(--public-accent) / 0.12) 0%,
         hsl(var(--public-accent-strong) / 0.1) 100%
       );
-    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.5);
+    box-shadow:
+      0 18px 32px -26px hsl(var(--public-shadow) / 0.18),
+      inset 0 1px 0 hsl(0 0% 100% / 0.58);
   }
 
   .public-summer-register-callout {
-    @apply rounded-2xl border p-4;
-    border-color: hsl(var(--public-border) / 0.6);
+    @apply rounded-[1.65rem] border p-5 sm:p-6;
+    border-color: hsl(var(--public-border) / 0.68);
     background:
+      radial-gradient(circle at top right, hsl(var(--public-accent-strong) / 0.12) 0%, transparent 16rem),
       linear-gradient(
-        180deg,
-        hsl(var(--public-surface) / 0.88) 0%,
-        hsl(var(--public-surface-2) / 0.68) 100%
+        135deg,
+        hsl(var(--public-surface) / 0.96) 0%,
+        hsl(var(--public-surface-2) / 0.82) 100%
       );
+    box-shadow:
+      0 26px 54px -40px hsl(var(--public-shadow) / 0.18),
+      inset 0 1px 0 hsl(0 0% 100% / 0.72);
   }
 
   .public-summer-register-form {
     position: relative;
     overflow: hidden;
+    border-radius: 2rem;
+    box-shadow:
+      0 36px 80px -52px hsl(var(--public-shadow) / 0.2),
+      inset 0 1px 0 hsl(0 0% 100% / 0.76);
   }
 
   .public-summer-register-form::before {
@@ -14308,8 +14329,9 @@ html[data-public-home-flagship="true"] ::selection {
     inset: 0;
     pointer-events: none;
     background:
-      radial-gradient(circle at top right, hsl(var(--public-accent-strong) / 0.08) 0%, transparent 20rem),
-      radial-gradient(circle at bottom left, hsl(var(--public-warm) / 0.08) 0%, transparent 22rem);
+      radial-gradient(circle at top right, hsl(var(--public-accent-strong) / 0.1) 0%, transparent 20rem),
+      radial-gradient(circle at bottom left, hsl(var(--public-warm) / 0.08) 0%, transparent 22rem),
+      linear-gradient(180deg, hsl(0 0% 100% / 0.08) 0%, transparent 100%);
   }
 
   .public-summer-register-form > * {
@@ -14318,15 +14340,17 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-form-section {
-    @apply space-y-4 rounded-[1.4rem] border p-5 sm:p-6;
+    @apply space-y-4 rounded-[1.45rem] border p-5 sm:p-6;
     border-color: hsl(var(--public-border) / 0.68);
     background:
       linear-gradient(
         180deg,
-        hsl(var(--public-surface) / 0.96) 0%,
-        hsl(var(--public-surface-2) / 0.72) 100%
+        hsl(var(--public-surface) / 0.98) 0%,
+        hsl(var(--public-surface-2) / 0.78) 100%
       );
-    box-shadow: 0 22px 38px -34px hsl(var(--public-shadow) / 0.12);
+    box-shadow:
+      0 22px 38px -34px hsl(var(--public-shadow) / 0.12),
+      inset 0 1px 0 hsl(0 0% 100% / 0.72);
   }
 
   .public-summer-register-section-head {
@@ -14338,25 +14362,32 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-consent {
-    @apply flex items-start gap-3 rounded-[1.35rem] border p-4 sm:p-5;
+    @apply flex items-start gap-3 rounded-[1.45rem] border p-4 sm:p-5;
     border-color: hsl(var(--public-border) / 0.64);
     background:
       linear-gradient(
         180deg,
-        hsl(var(--public-surface-2) / 0.7) 0%,
-        hsl(var(--public-surface) / 0.94) 100%
+        hsl(var(--public-surface-2) / 0.76) 0%,
+        hsl(var(--public-surface) / 0.96) 100%
       );
+    box-shadow:
+      0 20px 36px -34px hsl(var(--public-shadow) / 0.1),
+      inset 0 1px 0 hsl(0 0% 100% / 0.68);
   }
 
   .public-summer-register-submit {
-    @apply space-y-3 rounded-[1.4rem] border p-4 sm:p-5;
+    @apply space-y-3 rounded-[1.45rem] border p-4 sm:p-5;
     border-color: hsl(var(--public-border) / 0.68);
     background:
+      radial-gradient(circle at top right, hsl(var(--public-accent-strong) / 0.1) 0%, transparent 14rem),
       linear-gradient(
         180deg,
-        hsl(var(--public-surface) / 0.94) 0%,
-        hsl(var(--public-bg) / 0.96) 100%
+        hsl(var(--public-surface) / 0.96) 0%,
+        hsl(var(--public-bg) / 0.98) 100%
       );
+    box-shadow:
+      0 22px 42px -34px hsl(var(--public-shadow) / 0.14),
+      inset 0 1px 0 hsl(0 0% 100% / 0.72);
   }
 
   @media (min-width: 768px) {
@@ -14638,6 +14669,13 @@ html[data-public-home-flagship="true"] ::selection {
   @media (min-width: 640px) {
     .public-register-page .public-flow-shell-narrow {
       padding-bottom: 0;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .public-summer-register-side {
+      position: sticky;
+      top: 1.25rem;
     }
   }
 

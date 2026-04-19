@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, MessageCircleMore } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
+import {
+  ChartBarIcon,
+  DevicePhoneMobileIcon,
+  ShieldCheckIcon,
+} from "@heroicons/react/24/outline";
 
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
@@ -86,22 +91,12 @@ export default function SummerCrashRegistrationClient({
       ? "diagnostic"
       : "direct_registration");
 
-  const selectedClassBand = useMemo(
-    () =>
-      classBands.find((option) => option.classBand === form.classBand) || null,
-    [classBands, form.classBand],
-  );
-
   const isDiagnosticEntry = resolvedEntrySource === "diagnostic";
   const hasPaidCourseAccess = Number(price) > 0;
   const priceLabel = formatSummerCrashPrice(price, currency);
   const pageDescription = isDiagnosticEntry
-    ? hasPaidCourseAccess
-      ? "Register once to open the class-matched free diagnostic after sign-in. Lessons unlock later after payment."
-      : "Register once to open the class-matched free diagnostic after sign-in."
-    : hasPaidCourseAccess
-      ? "Register once and go to the summer home after sign-in. The free diagnostic stays open there, and lessons unlock after payment."
-      : "Register once and enter the summer learning space without using the normal school portal.";
+    ? "Register once to open the class-matched free diagnostic and keep future sign-ins simple."
+    : "Register once to enter the Summer flow with the same phone number and password each time.";
   const submitLabel = isDiagnosticEntry
     ? "Register & Start Test"
     : hasPaidCourseAccess
@@ -111,6 +106,38 @@ export default function SummerCrashRegistrationClient({
   const supportWhatsappHref = useMemo(
     () => String(supportHref || "").trim(),
     [supportHref],
+  );
+  const introBadgeLabel = isDiagnosticEntry
+    ? "Free diagnostic first"
+    : hasPaidCourseAccess
+      ? "Summer course registration"
+      : "Free summer registration";
+  const accessSummary = hasPaidCourseAccess
+    ? `Free diagnostic first. Guided lessons unlock after payment (${priceLabel}).`
+    : "The free diagnostic and the Summer lessons are both open right now.";
+  const registrationHighlights = useMemo(
+    () => [
+      {
+        title: "One family login",
+        copy:
+          "Use the parent phone number and the password created here for every Summer sign-in.",
+        icon: DevicePhoneMobileIcon,
+      },
+      {
+        title: isDiagnosticEntry ? "Class-matched diagnostic" : "Direct Summer access",
+        copy: isDiagnosticEntry
+          ? "After sign-in, the child goes straight to the free diagnostic for the selected class."
+          : "After sign-in, the child goes straight to the Summer home. The diagnostic stays available there too.",
+        icon: ShieldCheckIcon,
+      },
+      {
+        title: "Simple parent report",
+        copy:
+          "Parents see weak areas and the next best step in a simpler, easier-to-read format.",
+        icon: ChartBarIcon,
+      },
+    ],
+    [isDiagnosticEntry],
   );
 
   const handleRegister = () => {
@@ -229,30 +256,50 @@ export default function SummerCrashRegistrationClient({
   };
 
   return (
-    <div className="public-flow-shell-narrow space-y-6">
-      <section className="public-flow-hero text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-          Summer Crash Course
-        </p>
-        <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-          {title}
-        </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-          {pageDescription}
-        </p>
-        <div className="mt-4 flex flex-wrap justify-center gap-3">
-          <Link
-            href={SUMMER_CRASH_SIGNIN_PATH}
-            className="public-flow-button-secondary inline-flex min-w-[12rem] items-center justify-center"
-          >
-            Already registered? Sign In
-          </Link>
-          <Link
-            href={SUMMER_CRASH_HELP_PATH}
-            className="public-flow-text-link inline-flex items-center gap-2"
-          >
-            Need help finding the account?
-          </Link>
+    <div className="public-flow-shell-narrow space-y-5 sm:space-y-6">
+      <section className="public-flow-hero text-left">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl space-y-4">
+            <span className="public-flow-badge">{introBadgeLabel}</span>
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+                Summer Crash Course
+              </p>
+              <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+                {title}
+              </h1>
+              <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
+                {pageDescription}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2.5">
+              {["Phone-first sign-in", "Class-matched", "Parent-friendly"].map(
+                (pill) => (
+                  <span
+                    key={pill}
+                    className="inline-flex items-center rounded-full border border-[hsl(var(--public-border)/0.72)] bg-white/72 px-3.5 py-1.5 text-xs font-semibold text-[hsl(var(--public-ink))] shadow-[0_16px_30px_-26px_rgba(15,23,42,0.16)]"
+                  >
+                    {pill}
+                  </span>
+                ),
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col lg:items-stretch">
+            <Link
+              href={SUMMER_CRASH_SIGNIN_PATH}
+              className="public-flow-button-secondary inline-flex min-w-[12rem] items-center justify-center"
+            >
+              Already registered? Sign In
+            </Link>
+            <Link
+              href={SUMMER_CRASH_HELP_PATH}
+              className="public-flow-text-link inline-flex items-center gap-2"
+            >
+              Need help finding the account?
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -301,20 +348,91 @@ export default function SummerCrashRegistrationClient({
           ) : null}
         </div>
       ) : (
-        <div className="public-flow-surface space-y-6">
-          <div className="space-y-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Registration form
-            </p>
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground">
-              Register once and keep summer access simple
-            </h2>
-            <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
-              Use the parent phone number and the password created here for
-              future sign-ins. Keep the backup Summer ID only if support ever
-              asks for it.
-            </p>
-          </div>
+        <div className="public-summer-register-grid">
+          <aside className="public-summer-register-side">
+            <div className="public-flow-card-soft space-y-5">
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  What parents can expect
+                </p>
+                <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[2rem]">
+                  One simple Summer setup for the family
+                </h2>
+                <p className="text-sm leading-7 text-muted-foreground sm:text-base">
+                  Register once. Then use the same phone number and password for
+                  the diagnostic, report, and all future Summer sign-ins.
+                </p>
+              </div>
+
+              <div className="public-summer-register-list">
+                {registrationHighlights.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <div key={item.title} className="public-summer-register-list-item">
+                      <span className="public-summer-register-icon">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">
+                          {item.title}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {item.copy}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="public-summer-register-callout space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Access note
+              </p>
+              <h3 className="text-xl font-semibold tracking-tight text-foreground">
+                {hasPaidCourseAccess
+                  ? `${priceLabel} guided course access`
+                  : "Free Summer access right now"}
+              </h3>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {accessSummary}
+              </p>
+              {supportLabel ? (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-foreground">
+                  <span className="font-medium">Need help?</span>
+                  {supportWhatsappHref ? (
+                    <a
+                      href={supportWhatsappHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 font-semibold text-foreground underline-offset-4 transition hover:text-foreground/80 hover:underline"
+                    >
+                      <MessageCircleMore className="h-4 w-4" />
+                      {supportLabel}
+                    </a>
+                  ) : (
+                    <span>{supportLabel}</span>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </aside>
+
+          <div className="public-flow-surface public-summer-register-form space-y-6">
+            <div className="space-y-3">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Registration form
+              </p>
+              <h2 className="text-3xl font-semibold tracking-tight text-foreground">
+                Start in about a minute
+              </h2>
+              <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
+                Enter the child&apos;s details, the parent phone number, and a
+                password the family will remember.
+              </p>
+            </div>
 
             {errorMessage ? (
               <FeedbackNotice variant="error">{errorMessage}</FeedbackNotice>
@@ -331,10 +449,10 @@ export default function SummerCrashRegistrationClient({
                 <div className="public-summer-register-section-head">
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">
-                      Student details
+                      Child details
                     </h3>
                     <p className="public-flow-helper">
-                      Add the child’s details and choose the correct class band.
+                      Add the child&apos;s name and choose the right class band.
                     </p>
                   </div>
                 </div>
@@ -406,10 +524,10 @@ export default function SummerCrashRegistrationClient({
                 <div className="public-summer-register-section-head">
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">
-                      Parent contact
+                      Parent details
                     </h3>
                     <p className="public-flow-helper">
-                      This phone number becomes the main family sign-in path.
+                      This phone number becomes the main Summer sign-in.
                     </p>
                   </div>
                 </div>
@@ -458,10 +576,10 @@ export default function SummerCrashRegistrationClient({
                 <div className="public-summer-register-section-head">
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">
-                      Create sign-in password
+                      Create password
                     </h3>
                     <p className="public-flow-helper">
-                      This password is used the next time the family signs in.
+                      Choose one password the family can remember easily.
                     </p>
                   </div>
                 </div>
@@ -500,7 +618,7 @@ export default function SummerCrashRegistrationClient({
                       </button>
                     </div>
                     <p className="public-flow-helper mt-2">
-                      Choose a password with at least 6 characters.
+                      Use at least 6 characters.
                     </p>
                   </div>
 
@@ -558,7 +676,7 @@ export default function SummerCrashRegistrationClient({
                 />
                 <span className="text-sm leading-6 text-muted-foreground">
                   I confirm that these student and parent details are correct
-                  and may be used for the Summer Crash Course access flow.
+                  for the Summer Crash Course registration.
                 </span>
               </label>
 
@@ -571,29 +689,11 @@ export default function SummerCrashRegistrationClient({
                   {isPending ? "Registering..." : submitLabel}
                 </Button>
                 <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
-                  One registration sets up the family sign-in for all future
-                  summer access.
+                  One registration sets up future Summer sign-ins for the family.
                 </p>
               </div>
             </form>
-          {supportLabel ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>Need help?</span>
-              {supportWhatsappHref ? (
-                <a
-                  href={supportWhatsappHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 font-medium text-foreground/90 underline-offset-4 transition hover:text-foreground hover:underline"
-                >
-                  <MessageCircleMore className="h-3.5 w-3.5" />
-                  {supportLabel}
-                </a>
-              ) : (
-                <span>{supportLabel}</span>
-              )}
-            </div>
-          ) : null}
+          </div>
         </div>
       )}
     </div>
