@@ -7039,6 +7039,7 @@
 
   .app-exam-topbar-action {
     @apply min-h-9 w-full justify-center rounded-[0.85rem] whitespace-nowrap px-3 text-[12px];
+    touch-action: manipulation;
   }
 
   .app-exam-topbar-action-submit {
@@ -7132,15 +7133,16 @@
     }
 
     .app-exam-focus-topbar-side {
-      display: flex;
-      flex-wrap: nowrap;
-      align-items: center;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
       gap: 0.5rem;
     }
 
     .app-exam-focus-topbar-actions {
-      display: flex;
-      flex-wrap: nowrap;
+      display: grid;
+      width: 100%;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.4rem;
       padding: 0.35rem;
     }
@@ -7152,8 +7154,8 @@
     }
 
     .app-exam-topbar-action-submit {
-      grid-column: auto;
-      width: auto;
+      grid-column: 1 / -1;
+      width: 100%;
     }
 
     .app-exam-focus-topbar-status {
@@ -7917,6 +7919,7 @@
 
   .app-exam-nav-button {
     @apply min-h-9;
+    touch-action: manipulation;
   }
 
   .app-exam-mobile-nav-bar {
@@ -7942,6 +7945,8 @@
       0 24px 44px -28px hsl(var(--app-shadow-deep) / 0.24),
       inset 0 1px 0 hsl(var(--app-surface-1) / 0.82);
     backdrop-filter: blur(18px);
+    pointer-events: auto;
+    touch-action: manipulation;
   }
 
   .app-exam-mobile-nav-bar-copy {
@@ -7976,6 +7981,7 @@
 
   .app-exam-mobile-nav-open {
     @apply min-h-11 rounded-[0.95rem] px-3.5 text-[13px];
+    touch-action: manipulation;
   }
 
   .app-exam-mobile-sheet {
@@ -8314,7 +8320,7 @@
     }
 
     .app-exam-timer-card-badge {
-      min-width: 5.4rem;
+      min-width: fit-content;
       font-size: 0.62rem;
       padding-inline: 0.45rem;
     }
@@ -8325,7 +8331,7 @@
 
     .app-exam-question-body {
       gap: 0.75rem;
-      padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+      padding-bottom: calc(6.25rem + env(safe-area-inset-bottom));
     }
 
     .app-exam-question-header {
@@ -8398,6 +8404,24 @@
       width: 1.3rem;
       font-size: 0.62rem;
     }
+
+    .app-exam-focus-topbar-fullscreen .app-exam-timer-card-main {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+    }
+
+    .app-exam-focus-topbar-fullscreen .app-exam-timer-card-badge {
+      display: none;
+    }
+
+    .app-exam-focus-topbar-fullscreen .app-exam-timer-card-value {
+      font-size: 0.98rem;
+      text-align: right;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-question-body {
+      padding-bottom: calc(6.85rem + env(safe-area-inset-bottom));
+    }
   }
 
   @media (min-width: 640px) {
@@ -8417,6 +8441,45 @@
       left: 1rem;
       right: 1rem;
       bottom: calc(1rem + env(safe-area-inset-bottom));
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .app-exam-focus-shell-fullscreen {
+      gap: 0.75rem;
+    }
+
+    .app-exam-focus-topbar-fullscreen .app-exam-focus-topbar-main {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: 0.5rem;
+    }
+
+    .app-exam-focus-topbar-fullscreen .app-exam-focus-topbar-side {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: 0.5rem;
+    }
+
+    .app-exam-focus-topbar-fullscreen .app-exam-focus-topbar-actions {
+      width: 100%;
+    }
+
+    .app-exam-focus-topbar-fullscreen .app-exam-topbar-action-submit {
+      grid-column: auto;
+      width: 100%;
+    }
+
+    .app-exam-focus-topbar-fullscreen .app-exam-focus-topbar-status {
+      justify-content: flex-start;
+    }
+
+    .app-exam-focus-topbar-fullscreen .app-exam-timer-card {
+      width: 100%;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-mobile-nav-bar {
+      z-index: 50;
     }
   }
 
