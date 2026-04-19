@@ -369,7 +369,7 @@ export default async function SummerCrashCourseLandingPage() {
             </span>
           </>
         }
-        subtitle={`A guided Summer recovery program for families who want a clear diagnosis, simpler next steps, and a calmer way to rebuild confidence in maths. Built around misconception patterns observed across 2,000+ student journeys. ${accessNote}`}
+        subtitle="A simple Summer maths recovery program that helps families find weak foundations, understand the next steps, and rebuild confidence before the next term."
         pillText="Summer Crash Course"
         variant="flagship"
         lottieLeft="/animations/teacher-classroom.lottie"
