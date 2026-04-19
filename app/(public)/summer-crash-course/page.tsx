@@ -199,6 +199,7 @@ export default async function SummerCrashCourseLandingPage() {
 
   const hasPaidCourseAccess = Number(config.price) > 0;
   const priceLabel = formatSummerCrashPrice(config.price, config.currency);
+  const diagnosticCtaLabel = "Register & Write Test";
   const registerCourseLabel = hasPaidCourseAccess
     ? "Register for Summer Course"
     : "Register Free";
@@ -309,7 +310,7 @@ export default async function SummerCrashCourseLandingPage() {
           href={`${SUMMER_CRASH_REGISTER_PATH}?entry=diagnostic`}
           className="public-button-primary"
         >
-          Take Free Diagnostic Test
+          {diagnosticCtaLabel}
         </Link>
         <Link
           href={`${SUMMER_CRASH_REGISTER_PATH}?entry=direct_registration`}
@@ -529,7 +530,7 @@ export default async function SummerCrashCourseLandingPage() {
                   href={`${SUMMER_CRASH_REGISTER_PATH}?entry=diagnostic`}
                   className="public-button-primary"
                 >
-                  Start Free Diagnostic
+                  {diagnosticCtaLabel}
                 </Link>
                 <Link
                   href={`${SUMMER_CRASH_REGISTER_PATH}?entry=direct_registration`}
@@ -627,7 +628,7 @@ export default async function SummerCrashCourseLandingPage() {
             description="Start with the free diagnostic, understand the weak areas clearly, and then move into guided support with more confidence."
             primaryAction={{
               href: `${SUMMER_CRASH_REGISTER_PATH}?entry=diagnostic`,
-              label: "Take Free Diagnostic Test",
+              label: diagnosticCtaLabel,
             }}
             secondaryAction={{
               href: `${SUMMER_CRASH_REGISTER_PATH}?entry=direct_registration`,
