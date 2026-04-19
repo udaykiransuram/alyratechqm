@@ -1,10 +1,8 @@
 import type { ReactNode } from "react";
 
-import Footer from "@/components/Footer";
-import Navbar from "@/components/Navbar";
 import ChromeDocumentRuntime from "@/components/layout/ChromeDocumentRuntime";
 import ClientApiRequestProbe from "@/components/layout/ClientApiRequestProbe";
-import ViewportHover from "@/components/ViewportHover";
+import PublicRouteChrome from "@/components/layout/PublicRouteChrome";
 import { cn } from "@/lib/utils";
 
 const enableClientApiProbe = process.env.NODE_ENV !== "production";
@@ -44,8 +42,7 @@ export default function PublicRouteShell({
         />
         <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.06)_1px,transparent_1px)] [background-size:132px_132px] [mask-image:linear-gradient(180deg,rgba(0,0,0,0.24),transparent_82%)]" />
       </div>
-      {hideNavbar ? null : <Navbar />}
-      <ViewportHover />
+      <PublicRouteChrome hideNavbar={hideNavbar} />
       <main
         className={cn(
           "app-route-main app-route-main-public flex-1",
@@ -54,7 +51,6 @@ export default function PublicRouteShell({
       >
         {children}
       </main>
-      <Footer />
     </div>
   );
 }

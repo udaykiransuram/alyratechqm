@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -14,6 +15,7 @@ import {
 import { performCredentialSignIn } from "@/lib/client/next-auth-client";
 import { setSchoolSelectionCookies } from "@/lib/client/school";
 import { setStudentPortalSignInPath } from "@/lib/client/student-portal-signin-path";
+import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import {
   SUMMER_CRASH_DISPLAY_NAME,
   SUMMER_CRASH_HELP_PATH,
@@ -109,21 +111,30 @@ export default function SummerCrashSignInClient({
   nextHref = "",
   pageError = "",
 }: SummerCrashSignInClientProps) {
-  const [phone, setPhone] = useState(String(initialPhone || "").trim());
+  const searchParams = useSearchParams();
+  const initialPhoneValue = String(
+    initialPhone || searchParams.get("phone") || "",
+  ).trim();
+  const initialSummerIdValue = String(
+    summerId || searchParams.get("summerId") || "",
+  )
+    .trim()
+    .toUpperCase();
+  const resolvedNextHref =
+    getSafeReturnToPath(nextHref || searchParams.get("next")) || "";
+  const initialPageErrorMessage = getSummerCrashAuthErrorMessage(
+    pageError || searchParams.get("error"),
+  );
+  const [phone, setPhone] = useState(initialPhoneValue);
   const [matches, setMatches] = useState<NormalizedSummerCrashLookupMatch[]>(
     [],
   );
   const [selectedSummerId, setSelectedSummerId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [submitError, setSubmitError] = useState(
-    getSummerCrashAuthErrorMessage(pageError),
-  );
+  const [submitError, setSubmitError] = useState(initialPageErrorMessage);
   const [isLookupPending, startLookupTransition] = useTransition();
   const [isSignInPending, startSignInTransition] = useTransition();
-  const initialPhoneValue = String(initialPhone || "").trim();
-  const initialSummerIdValue = String(summerId || "").trim().toUpperCase();
-  const initialPageErrorMessage = getSummerCrashAuthErrorMessage(pageError);
   const selectedMatch =
     matches.find((match) => match.summerId === selectedSummerId) || null;
 
@@ -234,7 +245,7 @@ export default function SummerCrashSignInClient({
       void (async () => {
         const result = await performCredentialSignIn({
           provider: "school-user",
-          callbackUrl: nextHref || "/student/crash-course",
+          callbackUrl: resolvedNextHref || "/student/crash-course",
           credentials: {
             identifier: selectedSummerId,
             password,
@@ -252,7 +263,9 @@ export default function SummerCrashSignInClient({
           SUMMER_CRASH_DISPLAY_NAME,
         );
         setStudentPortalSignInPath(SUMMER_CRASH_SIGNIN_PATH);
-        window.location.assign(result.url || nextHref || "/student/crash-course");
+        window.location.assign(
+          result.url || resolvedNextHref || "/student/crash-course",
+        );
       })().catch(() => {
         setSubmitError("We couldn't complete Summer Crash Course sign-in.");
       });

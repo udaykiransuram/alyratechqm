@@ -4,6 +4,8 @@ import dynamic from "next/dynamic";
 import type { DotLottie } from "@lottiefiles/dotlottie-react";
 import { useEffect, useRef, useState } from "react";
 
+import { useClientRuntimeSignals } from "@/lib/client/runtime-signals";
+
 const LOCAL_DOTLOTTIE_WASM_URL = "/wasm/dotlottie-player.wasm";
 
 // Lazy-load the heavy Lottie player on the client to reduce initial JS
@@ -31,6 +33,7 @@ interface LottieAnimationProps {
   loop?: boolean;
   autoplay?: boolean;
   speed?: number;
+  preferStatic?: boolean;
 }
 
 export function LottieAnimation({
@@ -39,24 +42,20 @@ export function LottieAnimation({
   loop = true,
   autoplay = true,
   speed = 1,
+  preferStatic = false,
 }: LottieAnimationProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const runtimeSignals = useClientRuntimeSignals();
   const [isVisible, setIsVisible] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const [dotLottie, setDotLottie] = useState<DotLottie | null>(null);
   const isGif = /\.(gif|webp)$/i.test(src);
   const isVideo = /\.(mp4|webm|ogg)$/i.test(src);
   const isLottie = /\.(lottie|json)$/i.test(src);
-
-  useEffect(() => {
-    // Respect user motion preferences
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const onChange = () => setReducedMotion(mq.matches);
-    onChange();
-    mq.addEventListener?.("change", onChange);
-    return () => mq.removeEventListener?.("change", onChange);
-  }, []);
+  const shouldPreferStatic =
+    preferStatic || runtimeSignals.liteMode || runtimeSignals.saveData;
+  const shouldAutoplay =
+    autoplay && !runtimeSignals.prefersReducedMotion && !shouldPreferStatic;
 
   useEffect(() => {
     setPlaybackFailed(false);
@@ -112,27 +111,34 @@ export function LottieAnimation({
         isGif ? (
           // Static animated image fallback (GIF/WebP)
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="animation" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+          <img
+            src={src}
+            alt="animation"
+            loading="lazy"
+            decoding="async"
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
         ) : isVideo ? (
           <video
             src={src}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            autoPlay={!reducedMotion}
+            autoPlay={shouldAutoplay}
             muted
             loop={loop}
             playsInline
+            preload="none"
           />
         ) : isLottie ? (
           // Lottie with graceful fallback if the runtime chunk fails to load
           <div style={{ width: "100%", height: "100%" }}>
-            {playbackFailed ? (
+            {playbackFailed || shouldPreferStatic ? (
               fallbackDecoration
             ) : (
               <DotLottieReact
                 src={src}
                 loop={loop}
-                autoplay={reducedMotion ? false : autoplay}
-                speed={reducedMotion ? 0 : speed}
+                autoplay={shouldAutoplay}
+                speed={shouldAutoplay ? speed : 0}
                 dotLottieRefCallback={setDotLottie}
                 style={{ width: "100%", height: "100%" }}
               />
@@ -141,7 +147,13 @@ export function LottieAnimation({
         ) : (
           // Generic image fallback for JPG/PNG/SVG or other URLs
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="illustration" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+          <img
+            src={src}
+            alt="illustration"
+            loading="lazy"
+            decoding="async"
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
         )
       )}
     </div>

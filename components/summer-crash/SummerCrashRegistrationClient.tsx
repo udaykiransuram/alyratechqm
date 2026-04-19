@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowRight, Eye, EyeOff } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, Eye, EyeOff, MessageCircleMore } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
@@ -24,6 +25,7 @@ import { formatSummerCrashPrice } from "@/lib/summer-crash/shared";
 type SummerCrashRegistrationClientProps = {
   title: string;
   supportContact: string;
+  supportHref?: string;
   classBands: Array<{
     classBand: string;
     className: string;
@@ -66,16 +68,23 @@ const INITIAL_FORM_STATE = {
 export default function SummerCrashRegistrationClient({
   title,
   supportContact,
+  supportHref = "",
   classBands,
   isActive,
   price,
   currency,
-  entrySource = "direct_registration",
+  entrySource,
 }: SummerCrashRegistrationClientProps) {
+  const searchParams = useSearchParams();
   const [form, setForm] = useState(INITIAL_FORM_STATE);
   const [errorMessage, setErrorMessage] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const resolvedEntrySource =
+    entrySource ||
+    (String(searchParams.get("entry") || "").trim() === "diagnostic"
+      ? "diagnostic"
+      : "direct_registration");
 
   const selectedClassBand = useMemo(
     () =>
@@ -83,7 +92,7 @@ export default function SummerCrashRegistrationClient({
     [classBands, form.classBand],
   );
 
-  const isDiagnosticEntry = entrySource === "diagnostic";
+  const isDiagnosticEntry = resolvedEntrySource === "diagnostic";
   const hasPaidCourseAccess = Number(price) > 0;
   const priceLabel = formatSummerCrashPrice(price, currency);
   const pageDescription = isDiagnosticEntry
@@ -99,6 +108,10 @@ export default function SummerCrashRegistrationClient({
       ? "Register"
       : "Register Free";
   const supportLabel = supportContact || "";
+  const supportWhatsappHref = useMemo(
+    () => String(supportHref || "").trim(),
+    [supportHref],
+  );
 
   const handleRegister = () => {
     if (!form.studentName.trim()) {
@@ -154,7 +167,7 @@ export default function SummerCrashRegistrationClient({
                 classBand: form.classBand,
                 sourceSchoolName: form.sourceSchoolName,
                 password: form.password,
-                entrySource,
+                entrySource: resolvedEntrySource,
               }),
               schoolKey: SUMMER_CRASH_SCHOOL_KEY,
               includeSchoolQuery: false,
@@ -269,9 +282,22 @@ export default function SummerCrashRegistrationClient({
             </Link>
           </div>
           {supportContact ? (
-            <p className="text-sm font-medium text-foreground">
-              Support: {supportContact}
-            </p>
+            <div className="flex flex-wrap justify-center gap-2 text-sm font-medium text-foreground">
+              <span>Support:</span>
+              {supportWhatsappHref ? (
+                <a
+                  href={supportWhatsappHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-foreground underline-offset-4 transition hover:text-foreground/80 hover:underline"
+                >
+                  <MessageCircleMore className="h-4 w-4" />
+                  {supportContact}
+                </a>
+              ) : (
+                <span>{supportContact}</span>
+              )}
+            </div>
           ) : null}
         </div>
       ) : (
@@ -551,9 +577,22 @@ export default function SummerCrashRegistrationClient({
               </div>
             </form>
           {supportLabel ? (
-            <p className="text-xs text-muted-foreground">
-              Need help? {supportLabel}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>Need help?</span>
+              {supportWhatsappHref ? (
+                <a
+                  href={supportWhatsappHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 font-medium text-foreground/90 underline-offset-4 transition hover:text-foreground hover:underline"
+                >
+                  <MessageCircleMore className="h-3.5 w-3.5" />
+                  {supportLabel}
+                </a>
+              ) : (
+                <span>{supportLabel}</span>
+              )}
+            </div>
           ) : null}
         </div>
       )}

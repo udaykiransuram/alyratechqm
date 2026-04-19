@@ -41,7 +41,7 @@ export function PublicStatsGrid({
         <div
           key={`public-stat-${index}`}
           className={cn(
-            "public-stat-card p-6 text-center md:p-7",
+            "public-stat-card flex h-full flex-col items-center justify-start p-6 text-center sm:p-7 md:p-8",
             tone === "dark" && "public-stat-card-dark",
           )}
         >
@@ -55,7 +55,7 @@ export function PublicStatsGrid({
             {item.label}
           </div>
           {item.note ? (
-            <div className="mt-3 text-sm leading-6 text-current/70">
+            <div className="mt-3 max-w-[16rem] text-sm leading-6 text-current/70">
               {item.note}
             </div>
           ) : null}
@@ -64,4 +64,3 @@ export function PublicStatsGrid({
     </div>
   );
 }
-

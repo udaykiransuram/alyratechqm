@@ -3,6 +3,7 @@
 import React from "react";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 
+import { useClientRuntimeSignals } from "@/lib/client/runtime-signals";
 import { cn } from "@/lib/utils";
 import { LottieAnimation } from "./LottieAnimation";
 
@@ -18,22 +19,25 @@ interface InnerHeroProps {
   lottieRight?: string;
   /** Lottie animation floating on the left */
   lottieLeft?: string;
+  /** Optional size overrides for hero lottie treatments */
+  lottieRightClassName?: string;
+  lottieLeftClassName?: string;
 }
 
 const heroVariantClasses = {
   flagship: {
-    shell: "pt-8 pb-8 sm:pt-10 sm:pb-10 lg:pt-12 lg:pb-12",
+    shell: "pt-9 pb-9 sm:pt-11 sm:pb-11 lg:pt-14 lg:pb-14",
     content: "max-w-[56rem]",
     title: "text-[clamp(2.15rem,4.8vw,4.05rem)]",
     subtitle: "mx-auto max-w-[48rem]",
-    actions: "mt-5 flex flex-wrap items-center justify-center gap-3 sm:gap-3.5",
+    actions: "mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-3.5",
   },
   story: {
-    shell: "pt-8 pb-10 sm:pt-10 sm:pb-12 lg:pt-12 lg:pb-12",
+    shell: "pt-9 pb-10 sm:pt-11 sm:pb-12 lg:pt-14 lg:pb-14",
     content: "max-w-[52rem]",
     title: "text-[clamp(2rem,4.4vw,3.7rem)]",
     subtitle: "mx-auto max-w-[42rem]",
-    actions: "mt-5 flex flex-wrap items-center justify-center gap-3 sm:gap-3.5",
+    actions: "mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-3.5",
   },
   conversion: {
     shell: "pt-8 pb-8 sm:pt-9 sm:pb-9 lg:pt-10 lg:pb-10",
@@ -53,9 +57,13 @@ export const InnerHero = ({
   whatsappHref,
   lottieRight,
   lottieLeft,
+  lottieRightClassName,
+  lottieLeftClassName,
 }: InnerHeroProps) => {
   const { scrollY } = useScroll();
   const prefersReduced = useReducedMotion();
+  const runtimeSignals = useClientRuntimeSignals();
+  const ambientMotionDisabled = prefersReduced || runtimeSignals.liteMode;
   const y1 = useTransform(scrollY, [0, 500], [0, 200]);
   const y2 = useTransform(scrollY, [0, 500], [0, -150]);
   const variantClasses = heroVariantClasses[variant];
@@ -83,40 +91,43 @@ export const InnerHero = ({
       {/* Abstract Shapes Background */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <motion.div
-          style={{ y: prefersReduced ? 0 : y1 }}
+          style={{ y: ambientMotionDisabled ? 0 : y1 }}
           className="absolute -right-[8%] -top-[38%] h-[640px] w-[640px] rounded-full bg-emerald-500/38 blur-[86px] mix-blend-multiply"
         />
         <motion.div
-          style={{ y: prefersReduced ? 0 : y2 }}
+          style={{ y: ambientMotionDisabled ? 0 : y2 }}
           className="absolute -left-[12%] top-[8%] h-[560px] w-[560px] rounded-full bg-teal-400/44 blur-[82px] mix-blend-multiply"
         />
 
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.045]" />
+        <div className="absolute inset-0 opacity-[0.08] [background-image:radial-gradient(rgba(255,255,255,0.24)_1px,transparent_1px)] [background-size:18px_18px] [mask-image:linear-gradient(180deg,rgba(0,0,0,0.42),transparent_84%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.045)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_64%_56%_at_50%_0%,#000_72%,transparent_100%)]" />
       </div>
 
       {/* Floating Lottie - Right */}
-      {lottieRight && (
+      {lottieRight && !runtimeSignals.liteMode && (
         <motion.div
           initial={{ opacity: 0, x: 60 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
-          className="pointer-events-none absolute bottom-[-7%] right-[-3%] z-[2] hidden items-end justify-center lg:flex xl:bottom-[-10%] xl:right-0 2xl:right-[2%]"
+          className="pointer-events-none absolute bottom-[-6%] right-[-4%] z-[2] hidden items-end justify-center lg:flex xl:bottom-[-9%] xl:right-0 2xl:right-[2%]"
         >
           <motion.div
-            animate={prefersReduced ? undefined : { y: [-8, 10, -8] }}
-            transition={prefersReduced ? undefined : { duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            animate={ambientMotionDisabled ? undefined : { y: [-8, 10, -8] }}
+            transition={ambientMotionDisabled ? undefined : { duration: 6, repeat: Infinity, ease: "easeInOut" }}
           >
             <LottieAnimation
               src={lottieRight}
-              className="h-[18rem] w-[18rem] opacity-80 drop-shadow-[0_28px_42px_rgba(15,23,42,0.10)] xl:h-[24rem] xl:w-[24rem] 2xl:h-[30rem] 2xl:w-[30rem]"
+              className={cn(
+                "h-[18rem] w-[18rem] opacity-80 drop-shadow-[0_28px_42px_rgba(15,23,42,0.10)] xl:h-[24rem] xl:w-[24rem] 2xl:h-[30rem] 2xl:w-[30rem]",
+                lottieRightClassName,
+              )}
             />
           </motion.div>
         </motion.div>
       )}
 
       {/* Floating Lottie - Left */}
-      {lottieLeft && (
+      {lottieLeft && !runtimeSignals.liteMode && (
         <motion.div
           initial={{ opacity: 0, x: -60 }}
           animate={{ opacity: 1, x: 0 }}
@@ -124,12 +135,15 @@ export const InnerHero = ({
           className="pointer-events-none absolute bottom-[-6%] left-[-4%] z-[2] hidden items-end justify-center lg:flex xl:bottom-[-9%] xl:left-0 2xl:left-[2%]"
         >
           <motion.div
-            animate={prefersReduced ? undefined : { y: [7, -9, 7] }}
-            transition={prefersReduced ? undefined : { duration: 7, repeat: Infinity, ease: "easeInOut" }}
+            animate={ambientMotionDisabled ? undefined : { y: [7, -9, 7] }}
+            transition={ambientMotionDisabled ? undefined : { duration: 7, repeat: Infinity, ease: "easeInOut" }}
           >
             <LottieAnimation
               src={lottieLeft}
-              className="h-[16rem] w-[16rem] opacity-74 drop-shadow-[0_24px_38px_rgba(15,23,42,0.09)] xl:h-[22rem] xl:w-[22rem] 2xl:h-[27rem] 2xl:w-[27rem]"
+              className={cn(
+                "h-[16rem] w-[16rem] opacity-74 drop-shadow-[0_24px_38px_rgba(15,23,42,0.09)] xl:h-[22rem] xl:w-[22rem] 2xl:h-[27rem] 2xl:w-[27rem]",
+                lottieLeftClassName,
+              )}
             />
           </motion.div>
         </motion.div>
@@ -139,9 +153,9 @@ export const InnerHero = ({
         <div className={cn("mx-auto text-center", variantClasses.content)}>
           {pillText && (
             <motion.div
-              initial={prefersReduced ? undefined : { opacity: 0, scale: 0.9 }}
-              animate={prefersReduced ? undefined : { opacity: 1, scale: 1 }}
-              transition={prefersReduced ? undefined : { duration: 0.5 }}
+              initial={ambientMotionDisabled ? undefined : { opacity: 0, scale: 0.9 }}
+              animate={ambientMotionDisabled ? undefined : { opacity: 1, scale: 1 }}
+              transition={ambientMotionDisabled ? undefined : { duration: 0.5 }}
               className="mb-4 inline-flex items-center rounded-full border border-white/65 bg-white/72 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[hsl(var(--public-ink-soft))] shadow-sm backdrop-blur-sm"
             >
               <span className="mr-2 flex h-2 w-2">
@@ -152,9 +166,9 @@ export const InnerHero = ({
           )}
 
           <motion.h1
-            initial={prefersReduced ? undefined : { opacity: 0, y: 20 }}
-            animate={prefersReduced ? undefined : { opacity: 1, y: 0 }}
-            transition={prefersReduced ? undefined : { duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            initial={ambientMotionDisabled ? undefined : { opacity: 0, y: 20 }}
+            animate={ambientMotionDisabled ? undefined : { opacity: 1, y: 0 }}
+            transition={ambientMotionDisabled ? undefined : { duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
               "text-balance font-semibold leading-[0.98] tracking-tight text-slate-900",
               variantClasses.title,
@@ -164,11 +178,11 @@ export const InnerHero = ({
           </motion.h1>
 
           <motion.p
-            initial={prefersReduced ? undefined : { opacity: 0, y: 20 }}
-            animate={prefersReduced ? undefined : { opacity: 1, y: 0 }}
-            transition={prefersReduced ? undefined : { duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+            initial={ambientMotionDisabled ? undefined : { opacity: 0, y: 20 }}
+            animate={ambientMotionDisabled ? undefined : { opacity: 1, y: 0 }}
+            transition={ambientMotionDisabled ? undefined : { duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
-              "mt-3 text-balance text-[0.95rem] leading-[1.65] text-slate-700 sm:text-[1rem] sm:leading-7",
+              "mt-4 text-balance text-[0.98rem] leading-7 text-slate-700 sm:text-[1.04rem] sm:leading-8",
               variantClasses.subtitle,
             )}
           >
@@ -177,9 +191,9 @@ export const InnerHero = ({
 
           {children && (
             <motion.div
-              initial={prefersReduced ? undefined : { opacity: 0, y: 20 }}
-              animate={prefersReduced ? undefined : { opacity: 1, y: 0 }}
-              transition={prefersReduced ? undefined : { duration: 0.8, delay: 0.2 }}
+              initial={ambientMotionDisabled ? undefined : { opacity: 0, y: 20 }}
+              animate={ambientMotionDisabled ? undefined : { opacity: 1, y: 0 }}
+              transition={ambientMotionDisabled ? undefined : { duration: 0.8, delay: 0.2 }}
               className={variantClasses.actions}
             >
               {children}

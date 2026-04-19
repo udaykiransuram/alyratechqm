@@ -94,8 +94,8 @@ export default function SummerAuthorSignInClient({
         <AuthHeroPanel
           icon={Rocket}
           eyebrow="Summer Author Access"
-          title="Create public summer diagnostics from the real workspace"
-          copy="This sign-in opens the hidden Summer Crash workspace so internal authors can use the existing question bank, paper builder, classes, and analytics without a duplicate admin surface."
+          title="Manage summer live classes and diagnostics from the real workspace"
+          copy="This sign-in opens the hidden Summer Crash workspace so internal authors can use the existing live-class, question, paper, class, and analytics tools without a duplicate admin surface."
           points={[
             {
               icon: ShieldCheck,
@@ -109,7 +109,7 @@ export default function SummerAuthorSignInClient({
             },
           ]}
           noteTitle="Internal use only"
-          noteCopy="Use this only for summer content, public diagnostics, and summer lead/result tracking."
+          noteCopy="Use this only for summer live classes, public diagnostics, and summer lead/result tracking."
         />
       }
     >

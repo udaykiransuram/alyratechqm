@@ -1,57 +1,24 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
+import { Suspense } from "react";
 
 import SummerCrashSignInClient from "@/components/summer-crash/SummerCrashSignInClient";
-import { authOptions } from "@/lib/auth";
-import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
-import { SUMMER_CRASH_HOME_PATH } from "@/lib/summer-crash/constants";
-import { isSummerCrashSession } from "@/lib/summer-crash/shared";
+import SummerCrashSessionRedirect from "@/components/summer-crash/SummerCrashSessionRedirect";
 
 export const metadata: Metadata = {
   title: "Sign In | Summer Crash Course",
   description: "Parent phone sign-in for Summer Crash Course students.",
 };
 
-type SummerCrashSignInPageProps = {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-};
-
-function getSearchParam(
-  value: string | string[] | undefined,
-) {
-  return Array.isArray(value) ? String(value[0] || "") : String(value || "");
-}
-
-export default async function SummerCrashSignInPage({
-  searchParams,
-}: SummerCrashSignInPageProps) {
-  const [session, resolvedSearchParams] = await Promise.all([
-    getServerSession(authOptions),
-    searchParams,
-  ]);
-  const nextHref = getSafeReturnToPath(getSearchParam(resolvedSearchParams?.next));
-
-  if (
-    session &&
-    isSummerCrashSession({
-      accountType: session.user.accountType,
-      role: session.user.role,
-      schoolKey: session.user.schoolKey,
-    })
-  ) {
-    redirect(nextHref || SUMMER_CRASH_HOME_PATH);
-  }
-
+export default function SummerCrashSignInPage() {
   return (
     <div className="public-flow-page">
+      <Suspense fallback={null}>
+        <SummerCrashSessionRedirect nextParamName="next" />
+      </Suspense>
       <div className="public-flow-shell-narrow">
-        <SummerCrashSignInClient
-          phone={getSearchParam(resolvedSearchParams?.phone)}
-          summerId={getSearchParam(resolvedSearchParams?.summerId)}
-          nextHref={nextHref || ""}
-          pageError={getSearchParam(resolvedSearchParams?.error)}
-        />
+        <Suspense fallback={null}>
+          <SummerCrashSignInClient />
+        </Suspense>
       </div>
     </div>
   );

@@ -16,6 +16,10 @@ import {
   truncateText,
   type SummerCrashDiagnosticAreaSummary,
 } from "@/lib/summer-crash/diagnostic-report";
+import {
+  formatSummerCrashPrice,
+  resolveSummerCrashSupportHref,
+} from "@/lib/summer-crash/shared";
 import { getSummerCrashCourseAccessForStudent } from "@/lib/server/summer-crash";
 
 function normalizeId(value: unknown) {
@@ -78,7 +82,147 @@ export type SummerCrashDiagnosticParentReport = {
     ReturnType<typeof getSummerCrashCourseAccessForStudent>
   >["courseAccess"];
   supportContact: string;
+  supportHref: string;
+  whatsappSummaryText: string;
 };
+
+function getWhatsappWeakAreaBadge(weaknessPct: number) {
+  return weaknessPct >= 70 ? "❌" : "⚠️";
+}
+
+function buildWhatsappTopAreas(params: {
+  weakSubskills: SummerCrashDiagnosticAreaSummary[];
+  weakTopics: SummerCrashDiagnosticAreaSummary[];
+}) {
+  const seen = new Set<string>();
+  const items: Array<{ label: string; weaknessPct: number }> = [];
+
+  [...params.weakSubskills, ...params.weakTopics].forEach((area) => {
+    const label = normalizeText(area.label);
+    if (!label || seen.has(label.toLowerCase())) {
+      return;
+    }
+
+    seen.add(label.toLowerCase());
+    items.push({
+      label,
+      weaknessPct: Number(area.weaknessPct || 0),
+    });
+  });
+
+  return items.slice(0, 3);
+}
+
+function buildWhatsappMeaningLine(params: {
+  percent: number;
+  topAreaLabel: string;
+}) {
+  const topAreaLabel = normalizeText(params.topAreaLabel);
+  const weakAreaSuffix = topAreaLabel
+    ? `, especially in ${topAreaLabel},`
+    : "";
+
+  if (params.percent < 25) {
+    return `There are clear foundation gaps${weakAreaSuffix}. Starting guided practice now can make later maths topics much easier.`;
+  }
+
+  if (params.percent < 50) {
+    return `Some important foundations still need support${weakAreaSuffix}. A short structured plan can improve confidence and accuracy.`;
+  }
+
+  return `Your child has a base to build on, but the areas above still need focused support for stronger consistency.`;
+}
+
+function buildSummerCrashWhatsappSummaryText(params: {
+  student: string;
+  guardianName: string;
+  classBand: string;
+  paperTitle: string;
+  score: number;
+  totalMarks: number;
+  percent: number;
+  overview: SummerCrashDiagnosticOverview;
+  weakSubskills: SummerCrashDiagnosticAreaSummary[];
+  weakTopics: SummerCrashDiagnosticAreaSummary[];
+  nextSteps: string[];
+  courseAccess: Awaited<
+    ReturnType<typeof getSummerCrashCourseAccessForStudent>
+  >["courseAccess"];
+  supportContact: string;
+}) {
+  const guardianName = normalizeText(params.guardianName) || "Parent";
+  const studentName = normalizeText(params.student) || "your child";
+  const classBand = normalizeText(params.classBand);
+  const paperTitle = normalizeText(params.paperTitle);
+  const topAreas = buildWhatsappTopAreas({
+    weakSubskills: params.weakSubskills,
+    weakTopics: params.weakTopics,
+  });
+  const topAreaLabel = topAreas[0]?.label || "";
+  const totalMarksLabel =
+    params.totalMarks > 0 ? `${params.score}/${params.totalMarks}` : String(params.score);
+  const nextStepLines = params.nextSteps
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((step) => `• ${step}`);
+  const lines = [
+    "📊 Your Child's Math Diagnostic Report",
+    "",
+    `Hi ${guardianName},`,
+    `We've completed ${studentName}'s assessment${paperTitle ? ` (${paperTitle})` : ""}. Here's a quick summary 👇`,
+    "",
+    "🔴 Overall Performance:",
+    `👉 Score: ${totalMarksLabel} (${params.percent}%)`,
+    `👉 Correct: ${params.overview.correct} | Incorrect: ${params.overview.incorrect} | Skipped: ${params.overview.unattempted}`,
+    classBand ? `👉 Level checked for: ${classBand}` : "",
+    "",
+    "📌 Top Areas to Improve:",
+    ...(topAreas.length > 0
+      ? topAreas.map(
+          (area) => `${getWhatsappWeakAreaBadge(area.weaknessPct)} ${area.label}`,
+        )
+      : ["⚠️ Review the incorrect and skipped questions in the report."]),
+    "",
+    "⚠️ What this means:",
+    buildWhatsappMeaningLine({
+      percent: params.percent,
+      topAreaLabel,
+    }),
+    "",
+    "✅ Good news:",
+    "These gaps are fixable with consistent practice and the right guidance.",
+    "",
+    "🧠 Recommended next steps:",
+    ...(nextStepLines.length > 0
+      ? nextStepLines
+      : ["• Start with the weakest topic and keep practice short and consistent."]),
+    "",
+    "🎯 Next step:",
+    params.courseAccess.isUnlocked
+      ? "Open the Summer Course and begin with the weakest area first."
+      : params.courseAccess.requiresPayment
+        ? `Join the structured Summer Crash Course at ${formatSummerCrashPrice(
+            params.courseAccess.price,
+            params.courseAccess.currency,
+          )} to get guided support on these weak areas.`
+        : "The Summer Crash Course is currently free, so you can open it and start right away.",
+    params.supportContact
+      ? `Support: ${normalizeText(params.supportContact)}`
+      : "",
+  ];
+
+  return lines
+    .filter((line, index, source) => {
+      if (line !== "") {
+        return true;
+      }
+
+      const previousLine = source[index - 1];
+      const nextLine = source[index + 1];
+      return previousLine !== "" && nextLine !== undefined;
+    })
+    .join("\n");
+}
 
 export async function getSummerCrashDiagnosticParentReport(params: {
   schoolKey: string;
@@ -329,6 +473,11 @@ export async function getSummerCrashDiagnosticParentReport(params: {
         : 0,
     isUnlocked: courseAccess.isUnlocked,
   });
+  const supportContact = normalizeText(campaign?.supportContact);
+  const supportHref = resolveSummerCrashSupportHref({
+    supportContact,
+    whatsappGroupUrl: normalizeText(campaign?.whatsappGroupUrl),
+  });
 
   return {
     student: normalizeText(enrollment?.studentName) || "Student",
@@ -352,6 +501,25 @@ export async function getSummerCrashDiagnosticParentReport(params: {
     nextSteps,
     reviewQuestions,
     courseAccess,
-    supportContact: normalizeText(campaign?.supportContact),
+    supportContact,
+    supportHref,
+    whatsappSummaryText: buildSummerCrashWhatsappSummaryText({
+      student: normalizeText(enrollment?.studentName) || "Student",
+      guardianName: normalizeText(enrollment?.guardianName),
+      classBand:
+        normalizeText(enrollment?.classBand) ||
+        normalizeText(paper?.class?.name) ||
+        "Summer Crash",
+      paperTitle: normalizeText(paper?.title) || "Diagnostic Test",
+      score,
+      totalMarks: paperTotalMarks,
+      percent,
+      overview,
+      weakSubskills,
+      weakTopics,
+      nextSteps,
+      courseAccess,
+      supportContact,
+    }),
   };
 }

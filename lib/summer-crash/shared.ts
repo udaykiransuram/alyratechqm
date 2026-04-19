@@ -74,6 +74,35 @@ export function formatSummerCrashPrice(price: unknown, currency: unknown): strin
   }
 }
 
+export function resolveSummerCrashSupportHref(params: {
+  supportContact?: unknown;
+  whatsappGroupUrl?: unknown;
+  defaultMessage?: string;
+}) {
+  const normalizedWhatsappGroupUrl = normalizeSummerCrashText(
+    params.whatsappGroupUrl,
+  );
+  if (normalizedWhatsappGroupUrl) {
+    if (/^https?:\/\//i.test(normalizedWhatsappGroupUrl)) {
+      return normalizedWhatsappGroupUrl;
+    }
+    if (/^wa\.me\//i.test(normalizedWhatsappGroupUrl)) {
+      return `https://${normalizedWhatsappGroupUrl}`;
+    }
+  }
+
+  const phoneDigits = normalizeSummerCrashPhone(params.supportContact);
+  if (phoneDigits.length < 10) {
+    return "";
+  }
+
+  return `https://wa.me/${phoneDigits}?text=${encodeURIComponent(
+    String(
+      params.defaultMessage || "Hello! I need help with the Summer Crash Course.",
+    ),
+  )}`;
+}
+
 export function maskSummerCrashId(value: unknown): string {
   const summerId = String(value || "").trim().toUpperCase();
   if (summerId.length <= 4) {

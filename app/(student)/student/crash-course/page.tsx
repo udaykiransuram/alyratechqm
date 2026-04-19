@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { MessageCircleMore } from "lucide-react";
 
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
@@ -93,6 +94,7 @@ export default async function StudentSummerCrashHomePage({
   const quickSummaryCopy = isCourseLocked
     ? "Start with the free diagnostic. Lessons open after payment confirmation."
     : "Your lessons and diagnostic are ready. Continue where you left off.";
+  const supportWhatsappHref = state.supportHref;
 
   if (isCourseLocked) {
     return (
@@ -161,7 +163,7 @@ export default async function StudentSummerCrashHomePage({
           </Card>
 
           <div className="space-y-4">
-            <Card className="app-surface overflow-hidden">
+            <Card id="summer-unlock-lessons" className="app-surface overflow-hidden">
               <CardHeader className="app-section-header">
                 <CardTitle>Unlock Lessons</CardTitle>
               </CardHeader>
@@ -193,11 +195,21 @@ export default async function StudentSummerCrashHomePage({
                 <CardTitle>Need help?</CardTitle>
               </CardHeader>
               <CardContent className="app-section-body">
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {state.supportContact
-                    ? `Support: ${state.supportContact}`
-                    : "Contact the support team if you need help with access."}
-                </p>
+                {state.supportContact ? (
+                  <a
+                    href={supportWhatsappHref || undefined}
+                    target={supportWhatsappHref ? "_blank" : undefined}
+                    rel={supportWhatsappHref ? "noreferrer" : undefined}
+                    className="inline-flex items-center gap-2 text-sm font-medium text-foreground/90 underline-offset-4 transition hover:text-foreground hover:underline"
+                  >
+                    <MessageCircleMore className="h-4 w-4" />
+                    {state.supportContact}
+                  </a>
+                ) : (
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Contact the support team if you need help with access.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -354,7 +366,7 @@ export default async function StudentSummerCrashHomePage({
           ) : null}
 
           {isCourseLocked ? (
-            <Card className="app-surface app-summer-crash-panel overflow-hidden">
+            <Card id="summer-unlock-lessons" className="app-surface app-summer-crash-panel overflow-hidden">
               <CardHeader className="app-section-header">
                 <CardTitle>Unlock Lessons</CardTitle>
               </CardHeader>
@@ -407,11 +419,21 @@ export default async function StudentSummerCrashHomePage({
               <CardTitle>Need help?</CardTitle>
             </CardHeader>
             <CardContent className="app-section-body">
-              <p className="text-sm leading-6 text-muted-foreground">
-                {state.supportContact
-                  ? `Support: ${state.supportContact}`
-                  : "Contact the support team if you need help with access."}
-              </p>
+              {state.supportContact ? (
+                <a
+                  href={supportWhatsappHref || undefined}
+                  target={supportWhatsappHref ? "_blank" : undefined}
+                  rel={supportWhatsappHref ? "noreferrer" : undefined}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-foreground/90 underline-offset-4 transition hover:text-foreground hover:underline"
+                >
+                  <MessageCircleMore className="h-4 w-4" />
+                  {state.supportContact}
+                </a>
+              ) : (
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Contact the support team if you need help with access.
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

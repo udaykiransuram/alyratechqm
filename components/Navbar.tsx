@@ -439,12 +439,12 @@ export default function Navbar() {
             Request Demo
           </Link>
           <Link
-            href="/talent-test"
+            href="/summer-crash-course/register"
             className="public-nav-cta focus:outline-none focus:ring-2 focus:ring-[hsl(var(--public-accent))/0.34] focus:ring-offset-2"
-            aria-label="Start Baseline Test"
+            aria-label="Register for Summer Crash Course"
           >
             <span className="mr-2 whitespace-nowrap drop-shadow-sm">
-              Start Test
+              Summer Crash Course
             </span>
             <ArrowRight className="h-3.5 w-3.5 drop-shadow-sm transition-transform group-hover:translate-x-1 md:h-4 md:w-4" />
           </Link>

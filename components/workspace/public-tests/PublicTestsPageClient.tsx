@@ -13,6 +13,7 @@ import {
   fetchApiJson,
   getClientRequestErrorMessage,
 } from "@/lib/client/api";
+import { formatSummerCrashPrice } from "@/lib/summer-crash/shared";
 import type {
   WorkspacePublicTestsConfig,
   WorkspacePublicTestsPageData,
@@ -80,6 +81,7 @@ export default function PublicTestsPageClient({
   const [supportContact, setSupportContact] = useState(
     initialData.config.supportContact,
   );
+  const [price, setPrice] = useState(String(initialData.config.price || 0));
   const [isActive, setIsActive] = useState(initialData.config.isActive);
   const [mappingValues, setMappingValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -104,6 +106,7 @@ export default function PublicTestsPageClient({
     setConfig(initialData.config);
     setTitle(initialData.config.title);
     setSupportContact(initialData.config.supportContact);
+    setPrice(String(initialData.config.price || 0));
     setIsActive(initialData.config.isActive);
     setMappingValues(
       Object.fromEntries(
@@ -163,13 +166,16 @@ export default function PublicTestsPageClient({
         String(card.diagnosticQuestionPaperId || ""),
     );
 
+    const normalizedPrice = Number(price);
+
     return (
       mappingsChanged ||
       title !== config.title ||
       supportContact !== config.supportContact ||
+      (Number.isFinite(normalizedPrice) ? normalizedPrice : 0) !== config.price ||
       isActive !== config.isActive
     );
-  }, [config, isActive, mappingValues, supportContact, title]);
+  }, [config, isActive, mappingValues, price, supportContact, title]);
 
   const handleSave = () => {
     setErrorMessage("");
@@ -188,6 +194,7 @@ export default function PublicTestsPageClient({
               body: JSON.stringify({
                 title,
                 supportContact,
+                price,
                 isActive,
                 classMappings: config.classBandCards.map((card) => ({
                   classBand: card.classBand,
@@ -210,6 +217,7 @@ export default function PublicTestsPageClient({
           setConfig(response.config);
           setTitle(response.config.title);
           setSupportContact(response.config.supportContact);
+          setPrice(String(response.config.price || 0));
           setIsActive(response.config.isActive);
           setMappingValues(
             Object.fromEntries(
@@ -231,6 +239,17 @@ export default function PublicTestsPageClient({
       })();
     });
   };
+
+  const parsedPrice = Number(price);
+  const normalizedPrice = Number.isFinite(parsedPrice)
+    ? Math.max(0, parsedPrice)
+    : 0;
+  const pricePreviewLabel =
+    normalizedPrice > 0
+      ? formatSummerCrashPrice(normalizedPrice, config.currency)
+      : "Free";
+  const accessModeLabel =
+    normalizedPrice > 0 ? "Payment required" : "Free access";
 
   const handleDiagnose = async (card: WorkspacePublicTestsConfig["classBandCards"][number]) => {
     const selectedPaperId = String(
@@ -337,6 +356,28 @@ export default function PublicTestsPageClient({
                   placeholder="WhatsApp, phone, or support email"
                 />
               </div>
+
+              <div className="app-field-group">
+                <label
+                  className="app-field-label"
+                  htmlFor="public-test-course-price"
+                >
+                  Summer course price
+                </label>
+                <Input
+                  id="public-test-course-price"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={price}
+                  onChange={(event) => setPrice(event.target.value)}
+                  placeholder="0"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Set `0` to keep the Summer course free. Any amount above `0`
+                  locks lessons until payment is confirmed.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-4 rounded-[1.25rem] border border-border/70 bg-background/70 p-4">
@@ -364,6 +405,8 @@ export default function PublicTestsPageClient({
                 <span className="app-meta-chip">
                   {isActive ? "Registration open" : "Registration closed"}
                 </span>
+                <span className="app-meta-chip">{accessModeLabel}</span>
+                <span className="app-meta-chip">{pricePreviewLabel}</span>
                 <AppPrefetchLink
                   href="/workspace/questions/create?returnTo=/workspace/public-tests"
                   className="app-meta-chip"

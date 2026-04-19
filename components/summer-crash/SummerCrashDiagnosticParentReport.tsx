@@ -1,19 +1,25 @@
-import { ArrowLeft, ArrowRight, BookOpen, CircleCheck, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  CircleCheck,
+  MessageCircleMore,
+  Sparkles,
+} from "lucide-react";
 
 import StaticContentRenderer from "@/components/StaticContentRenderer";
 import PageHero from "@/components/layout/PageHero";
 import AppPrefetchLink from "@/components/navigation/AppPrefetchLink";
 import SummerCrashPaymentCard from "@/components/summer-crash/SummerCrashPaymentCard";
+import SummerCrashWhatsappSummaryCard from "@/components/summer-crash/SummerCrashWhatsappSummaryCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   SummerCrashDiagnosticParentReport,
 } from "@/lib/server/summer-crash-parent-report";
-import {
-  formatSummerCrashPrice,
-} from "@/lib/summer-crash/shared";
 import { SUMMER_CRASH_HOME_PATH } from "@/lib/summer-crash/constants";
+import { formatSummerCrashPrice } from "@/lib/summer-crash/shared";
 
 function formatDateTime(value?: string | null) {
   if (!value) {
@@ -328,6 +334,7 @@ export default function SummerCrashDiagnosticParentReport({
   const courseActionLabel = isCourseUnlocked
     ? "Open Summer Course"
     : "Join Summer Course";
+  const supportWhatsappHref = report.supportHref;
 
   return (
     <div className="app-student-page-shell">
@@ -370,6 +377,9 @@ export default function SummerCrashDiagnosticParentReport({
 
       <div className="space-y-5">
         <SummarySnapshot report={report} />
+        <SummerCrashWhatsappSummaryCard
+          summaryText={report.whatsappSummaryText}
+        />
 
         {!isCourseUnlocked ? (
           <div id="summer-join-card" className="scroll-mt-24 lg:hidden">
@@ -666,11 +676,21 @@ export default function SummerCrashDiagnosticParentReport({
                 <CardTitle>Need help?</CardTitle>
               </CardHeader>
               <CardContent className="app-section-body space-y-3">
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {report.supportContact
-                    ? `Support: ${report.supportContact}`
-                    : "If you need help with payment or access, contact the support team."}
-                </p>
+                {report.supportContact ? (
+                  <a
+                    href={supportWhatsappHref || undefined}
+                    target={supportWhatsappHref ? "_blank" : undefined}
+                    rel={supportWhatsappHref ? "noreferrer" : undefined}
+                    className="inline-flex items-center gap-2 text-sm font-medium text-foreground/90 underline-offset-4 transition hover:text-foreground hover:underline"
+                  >
+                    <MessageCircleMore className="h-4 w-4" />
+                    {report.supportContact}
+                  </a>
+                ) : (
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    If you need help with payment or access, contact the support team.
+                  </p>
+                )}
                 <Button asChild variant="outline" className="w-full">
                   <AppPrefetchLink href={defaultBackHref}>
                     Back to Summer Home

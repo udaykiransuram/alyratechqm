@@ -32,18 +32,18 @@ export function PublicSectionIntro({
       className={cn(
         "public-section-intro",
         centered ? "mx-auto text-center" : "text-left",
-        compact ? "max-w-xl" : "max-w-[46rem]",
+        compact ? "max-w-[40rem]" : "max-w-[47rem]",
         className,
       )}
     >
       {eyebrow ? (
-        <div className={cn("public-eyebrow mb-4", centered && "mx-auto")}>
+        <div className={cn("public-eyebrow mb-5", centered && "mx-auto")}>
           {eyebrow}
         </div>
       ) : null}
       <h2
         className={cn(
-          "public-heading text-[2rem] font-semibold tracking-tight md:text-[2.45rem] lg:text-[2.85rem]",
+          "public-heading text-balance text-[clamp(1.95rem,4.4vw,2.95rem)] font-semibold leading-[1.02] tracking-[-0.045em]",
           titleClassName,
         )}
       >
@@ -52,7 +52,8 @@ export function PublicSectionIntro({
       {description ? (
         <p
           className={cn(
-            "public-copy mt-4 text-[1rem] leading-7 md:text-[1.08rem] md:leading-8",
+            "public-copy mt-5 text-[0.98rem] leading-7 md:text-[1.04rem] md:leading-8",
+            centered && "mx-auto",
             descriptionClassName,
           )}
         >
@@ -62,7 +63,7 @@ export function PublicSectionIntro({
       {actions ? (
         <div
           className={cn(
-            "public-section-intro-actions mt-6 flex flex-wrap gap-2.5 sm:gap-3",
+            "public-section-intro-actions mt-7 flex flex-wrap gap-2.5 sm:gap-3",
             centered ? "justify-center" : "justify-start",
           )}
         >

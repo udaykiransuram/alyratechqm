@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireTenantSession } from "@/lib/api-auth";
@@ -5,6 +6,7 @@ import {
   getWorkspacePublicTestsConfig,
   updateWorkspacePublicTestsConfig,
 } from "@/lib/server/workspace-public-tests";
+import { SUMMER_CRASH_PUBLIC_CONFIG_CACHE_TAG } from "@/lib/server/summer-crash";
 import { isSummerCrashSchoolKey } from "@/lib/summer-crash/constants";
 
 export const runtime = "nodejs";
@@ -73,6 +75,12 @@ export async function PUT(req: NextRequest) {
       supportContact: String(body?.supportContact || ""),
       isActive:
         typeof body?.isActive === "boolean" ? body.isActive : undefined,
+      price:
+        typeof body?.price === "number"
+          ? body.price
+          : typeof body?.price === "string" && body.price.trim() !== ""
+            ? Number(body.price)
+            : undefined,
       classMappings: Array.isArray(body?.classMappings)
         ? body.classMappings.map((mapping: Record<string, unknown>) => ({
             classBand: String(mapping?.classBand || ""),
@@ -81,6 +89,7 @@ export async function PUT(req: NextRequest) {
           }))
         : undefined,
     });
+    revalidateTag(SUMMER_CRASH_PUBLIC_CONFIG_CACHE_TAG);
 
     return NextResponse.json({
       success: true,

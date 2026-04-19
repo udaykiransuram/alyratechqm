@@ -41,6 +41,7 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
       classId: session.user.studentClassId,
       academicSectionId: session.user.studentAcademicSectionId,
     },
+    includeCourses: false,
   });
 
   const reportHref = state.diagnostic?.reportHref || "";

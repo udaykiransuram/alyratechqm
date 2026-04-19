@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
@@ -30,38 +30,39 @@ export default function SummerCrashPaymentCard({
 }: SummerCrashPaymentCardProps) {
   const [cashfreeSDK, setCashfreeSDK] = useState<CashfreeSDK | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const [isSdkLoading, setIsSdkLoading] = useState(true);
+  const [isSdkLoading, setIsSdkLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const sdkPromiseRef = useRef<Promise<CashfreeSDK | null> | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const ensureCashfreeSdk = async (): Promise<CashfreeSDK> => {
+    if (cashfreeSDK) {
+      return cashfreeSDK;
+    }
 
-    load({ mode: process.env.NEXT_PUBLIC_CASHFREE_ENV || "sandbox" })
-      .then((sdk) => {
-        if (cancelled) {
-          return;
-        }
-        setCashfreeSDK(sdk);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-        setErrorMessage(
+    if (!sdkPromiseRef.current) {
+      setIsSdkLoading(true);
+      sdkPromiseRef.current = load({
+        mode: process.env.NEXT_PUBLIC_CASHFREE_ENV || "sandbox",
+      });
+    }
+
+    try {
+      const sdk = await sdkPromiseRef.current;
+      if (!sdk) {
+        sdkPromiseRef.current = null;
+        throw new Error(
           "We couldn't load the payment module right now. Please refresh and try again.",
         );
-      })
-      .finally(() => {
-        if (cancelled) {
-          return;
-        }
-        setIsSdkLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      }
+      setCashfreeSDK(sdk);
+      return sdk;
+    } catch (error) {
+      sdkPromiseRef.current = null;
+      throw error;
+    } finally {
+      setIsSdkLoading(false);
+    }
+  };
 
   const handlePayNow = () => {
     setErrorMessage("");
@@ -69,6 +70,7 @@ export default function SummerCrashPaymentCard({
     startTransition(() => {
       void (async () => {
         try {
+          const sdk = await ensureCashfreeSdk();
           const response = await fetchApiJson<SummerCrashPaymentResponse>(
             "/api/cashfree/summer-crash-pay",
             {
@@ -88,7 +90,7 @@ export default function SummerCrashPaymentCard({
             throw new Error("Payment session not received.");
           }
 
-          await cashfreeSDK?.checkout({
+          await sdk.checkout({
             paymentSessionId: response.payment_session_id,
           });
         } catch (error) {
@@ -118,13 +120,13 @@ export default function SummerCrashPaymentCard({
       <div className="flex flex-col gap-3">
         <Button
           type="button"
-          disabled={isPending || isSdkLoading || !cashfreeSDK}
+          disabled={isPending || isSdkLoading}
           className="app-button-primary w-full"
           onClick={handlePayNow}
         >
           {isPending
             ? "Opening payment..."
-            : isSdkLoading || !cashfreeSDK
+            : isSdkLoading
               ? "Loading payment..."
               : primaryLabel}
         </Button>

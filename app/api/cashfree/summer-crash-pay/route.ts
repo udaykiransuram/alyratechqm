@@ -29,6 +29,7 @@ export const runtime = "nodejs";
 
 const MAX_PENDING_PAYMENTS_PER_SCOPE = 3;
 const PENDING_PAYMENT_WINDOW_MS = 30 * 60 * 1000;
+const CASHFREE_ORDER_FETCH_TIMEOUT_MS = 12_000;
 
 type SummerCrashPaymentRequestContext = {
   scopeId: string;
@@ -48,15 +49,24 @@ type SummerCrashPaymentRequestContext = {
 };
 
 async function resolveSummerCrashPaymentRequestContext(params: {
-  req: NextRequest;
+  auth:
+    | Awaited<ReturnType<typeof requireTenantSession>>
+    | { ok: false; response: NextResponse };
   body: Record<string, unknown>;
 }) {
-  const auth = await requireTenantSession(params.req, {
-    allowRoles: ["student"],
-  });
+  const auth = params.auth;
 
   if (auth.ok) {
-    if (!isSummerCrashSchoolKey(auth.schoolKey)) {
+    const schoolKey = String(auth.schoolKey || "").trim();
+
+    if (!schoolKey) {
+      return NextResponse.json(
+        { error: "Authenticated session is missing school context." },
+        { status: 403 },
+      );
+    }
+
+    if (!isSummerCrashSchoolKey(schoolKey)) {
       return NextResponse.json(
         { error: "This payment route is only available for Summer Crash Course students." },
         { status: 403 },
@@ -65,7 +75,7 @@ async function resolveSummerCrashPaymentRequestContext(params: {
 
     const { campaign, enrollment, courseAccess } =
       await getSummerCrashCourseAccessForStudent({
-        schoolKey: auth.schoolKey,
+        schoolKey,
         studentId: auth.session.user.id,
       });
 
@@ -114,7 +124,7 @@ async function resolveSummerCrashPaymentRequestContext(params: {
     return {
       scopeId: `summer-crash-pay-user:${hashSensitiveScopeValue(auth.session.user.id)}`,
       campaignId: String(campaign._id),
-      summerSchoolKey: String(campaign.summerSchoolKey || auth.schoolKey).trim(),
+      summerSchoolKey: String(campaign.summerSchoolKey || schoolKey).trim(),
       studentName,
       studentNameNormalized: normalizeSummerCrashNameKey(studentName),
       guardianName,
@@ -214,15 +224,16 @@ async function resolveSummerCrashPaymentRequestContext(params: {
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const phoneDigits = normalizeSummerCrashPhone(body?.phone);
 
     const auth = await requireTenantSession(req, {
       allowRoles: ["student"],
     });
     const scopeId = auth.ok
       ? `summer-crash-pay-user:${hashSensitiveScopeValue(auth.session.user.id)}`
-      : normalizeSummerCrashPhone(body?.phone)
+      : phoneDigits
         ? `summer-crash-pay:${hashSensitiveScopeValue(
-            normalizeSummerCrashPhone(body?.phone),
+            phoneDigits,
           )}`
         : "summer-crash-pay:anonymous";
 
@@ -236,7 +247,7 @@ export async function POST(req: NextRequest) {
         await connectDB();
 
         const context = await resolveSummerCrashPaymentRequestContext({
-          req,
+          auth,
           body,
         });
 
@@ -269,6 +280,86 @@ export async function POST(req: NextRequest) {
         const registrationLookupTokenHash =
           hashRegistrationLookupToken(registrationLookupToken);
 
+        const cashfreeEnv = (
+          process.env.CASHFREE_ENV ||
+          process.env.NEXT_PUBLIC_CASHFREE_ENV ||
+          "sandbox"
+        ).toLowerCase();
+        const cashfreeBaseUrl =
+          process.env.CASHFREE_BASE_URL ||
+          (cashfreeEnv === "production"
+            ? "https://api.cashfree.com"
+            : "https://sandbox.cashfree.com");
+
+        const siteUrl = getSiteUrlOrFallback(getTrustedInternalOrigin());
+        const returnUrl = `${siteUrl}/summer-crash-course/payment/${orderId}?token=${encodeURIComponent(
+          registrationLookupToken,
+        )}`;
+
+        const timeoutController = new AbortController();
+        const timeoutId = setTimeout(() => {
+          timeoutController.abort();
+        }, CASHFREE_ORDER_FETCH_TIMEOUT_MS);
+
+        let res: Response;
+        try {
+          res = await fetch(`${cashfreeBaseUrl}/pg/orders`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-version": "2022-09-01",
+              "x-client-id": process.env.CASHFREE_APP_ID!,
+              "x-client-secret": process.env.CASHFREE_SECRET_KEY!,
+            },
+            body: JSON.stringify({
+              order_id: orderId,
+              order_amount: context.price,
+              order_currency: context.currency,
+              customer_details: {
+                customer_id: context.phoneDigits,
+                customer_phone: context.phoneDigits,
+              },
+              order_meta: {
+                return_url: returnUrl,
+                notify_url: `${siteUrl}/api/cashfree/webhook`,
+              },
+            }),
+            signal: timeoutController.signal,
+          });
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            (error.name === "AbortError" ||
+              timeoutController.signal.aborted)
+          ) {
+            return NextResponse.json(
+              {
+                error:
+                  "Payment provider timeout. Please retry in a moment.",
+              },
+              { status: 504 },
+            );
+          }
+          throw error;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error("Cashfree API error:", errorText);
+          return NextResponse.json({ error: errorText }, { status: res.status });
+        }
+
+        const data = await res.json();
+
+        if (!data.payment_session_id) {
+          return NextResponse.json(
+            { error: "Payment session not received." },
+            { status: 500 },
+          );
+        }
+
         await SummerCrashPayment.create({
           campaignId: context.campaignId,
           summerSchoolKey: context.summerSchoolKey,
@@ -288,60 +379,6 @@ export async function POST(req: NextRequest) {
           enrollmentId: context.enrollmentId || null,
           summerId: context.summerId,
         });
-
-        const cashfreeEnv = (
-          process.env.CASHFREE_ENV ||
-          process.env.NEXT_PUBLIC_CASHFREE_ENV ||
-          "sandbox"
-        ).toLowerCase();
-        const cashfreeBaseUrl =
-          process.env.CASHFREE_BASE_URL ||
-          (cashfreeEnv === "production"
-            ? "https://api.cashfree.com"
-            : "https://sandbox.cashfree.com");
-
-        const siteUrl = getSiteUrlOrFallback(getTrustedInternalOrigin());
-        const returnUrl = `${siteUrl}/summer-crash-course/payment/${orderId}?token=${encodeURIComponent(
-          registrationLookupToken,
-        )}`;
-
-        const res = await fetch(`${cashfreeBaseUrl}/pg/orders`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-version": "2022-09-01",
-            "x-client-id": process.env.CASHFREE_APP_ID!,
-            "x-client-secret": process.env.CASHFREE_SECRET_KEY!,
-          },
-          body: JSON.stringify({
-            order_id: orderId,
-            order_amount: context.price,
-            order_currency: context.currency,
-            customer_details: {
-              customer_id: context.phoneDigits,
-              customer_phone: context.phoneDigits,
-            },
-            order_meta: {
-              return_url: returnUrl,
-              notify_url: `${siteUrl}/api/cashfree/webhook`,
-            },
-          }),
-        });
-
-        if (!res.ok) {
-          const errorText = await res.text();
-          console.error("Cashfree API error:", errorText);
-          return NextResponse.json({ error: errorText }, { status: res.status });
-        }
-
-        const data = await res.json();
-
-        if (!data.payment_session_id) {
-          return NextResponse.json(
-            { error: "Payment session not received." },
-            { status: 500 },
-          );
-        }
 
         return NextResponse.json({
           payment_session_id: data.payment_session_id,

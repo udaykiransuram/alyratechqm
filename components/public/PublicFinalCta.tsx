@@ -67,7 +67,7 @@ export function PublicFinalCta({
     <section
       className={cn(
         tone === "brand" ? "public-cta" : "public-band-dark",
-        "relative overflow-hidden p-8 sm:p-10 lg:p-14",
+        "relative overflow-hidden p-8 sm:p-10 lg:p-12",
         className,
       )}
     >
@@ -86,18 +86,18 @@ export function PublicFinalCta({
           {eyebrow ? (
             <div
               className={cn(
-                "public-eyebrow mb-5 border-white/12 bg-white/10 text-white/76",
+                "public-eyebrow mb-6 border-white/12 bg-white/10 text-white/76",
                 !visual && "mx-auto",
               )}
             >
               {eyebrow}
             </div>
           ) : null}
-          <h2 className="text-balance text-3xl font-semibold tracking-[-0.05em] text-white md:text-4xl">
+          <h2 className="text-balance text-[clamp(2rem,4vw,3.05rem)] font-semibold leading-[1.02] tracking-[-0.05em] text-white">
             {title}
           </h2>
           {description ? (
-            <p className="mt-4 max-w-2xl text-base leading-8 text-white/78 md:text-lg">
+            <p className="mt-5 max-w-[34rem] text-[0.98rem] leading-7 text-white/78 md:text-[1.05rem] md:leading-8">
               {description}
             </p>
           ) : null}
@@ -122,4 +122,3 @@ export function PublicFinalCta({
     </section>
   );
 }
-

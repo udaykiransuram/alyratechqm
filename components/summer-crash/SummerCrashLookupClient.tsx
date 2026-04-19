@@ -24,6 +24,7 @@ import {
 type SummerCrashLookupClientProps = {
   title: string;
   supportContact: string;
+  supportHref?: string;
 };
 
 type SummerCrashLookupResponse = {
@@ -35,6 +36,7 @@ type SummerCrashLookupResponse = {
 export default function SummerCrashLookupClient({
   title,
   supportContact,
+  supportHref = "",
 }: SummerCrashLookupClientProps) {
   const [phone, setPhone] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -196,9 +198,23 @@ export default function SummerCrashLookupClient({
             appear here.
           </p>
           {supportContact ? (
-            <p className="text-sm font-medium text-foreground">
-              Support: {supportContact}
-            </p>
+            supportHref ? (
+              <p className="text-sm font-medium text-foreground">
+                Support:{" "}
+                <a
+                  href={supportHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline-offset-4 transition hover:underline"
+                >
+                  {supportContact}
+                </a>
+              </p>
+            ) : (
+              <p className="text-sm font-medium text-foreground">
+                Support: {supportContact}
+              </p>
+            )
           ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link href={SUMMER_CRASH_SIGNIN_PATH} className="public-flow-text-link">

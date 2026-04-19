@@ -48,6 +48,8 @@ export type WorkspacePublicTestsConfig = {
   title: string;
   supportContact: string;
   isActive: boolean;
+  price: number;
+  currency: string;
   classBandCards: WorkspacePublicTestClassBandCard[];
 };
 
@@ -136,6 +138,7 @@ type WorkspacePublicTestsUpdateInput = {
   title?: string;
   supportContact?: string;
   isActive?: boolean;
+  price?: number | null;
   classMappings?: Array<{
     classBand: string;
     diagnosticQuestionPaperId?: string | null;
@@ -718,6 +721,8 @@ export async function getWorkspacePublicTestsConfig(
     title: normalizeSummerCrashText(campaign.title),
     supportContact: normalizeSummerCrashText(campaign.supportContact),
     isActive: Boolean(campaign.isActive),
+    price: Number.isFinite(Number(campaign.price)) ? Number(campaign.price) : 0,
+    currency: normalizeSummerCrashText(campaign.currency) || "INR",
     classBandCards,
   };
 }
@@ -773,6 +778,9 @@ export async function updateWorkspacePublicTestsConfig(
     undefined;
   if (typeof input.isActive === "boolean") {
     campaign.isActive = input.isActive;
+  }
+  if (typeof input.price === "number" && Number.isFinite(input.price)) {
+    campaign.price = Math.max(0, input.price);
   }
   campaign.classMappings = nextMappings as typeof campaign.classMappings;
   await campaign.save();
