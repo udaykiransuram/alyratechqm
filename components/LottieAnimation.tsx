@@ -34,6 +34,7 @@ interface LottieAnimationProps {
   autoplay?: boolean;
   speed?: number;
   preferStatic?: boolean;
+  respectLiteMode?: boolean;
 }
 
 export function LottieAnimation({
@@ -43,6 +44,7 @@ export function LottieAnimation({
   autoplay = true,
   speed = 1,
   preferStatic = false,
+  respectLiteMode = true,
 }: LottieAnimationProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const runtimeSignals = useClientRuntimeSignals();
@@ -53,7 +55,9 @@ export function LottieAnimation({
   const isVideo = /\.(mp4|webm|ogg)$/i.test(src);
   const isLottie = /\.(lottie|json)$/i.test(src);
   const shouldPreferStatic =
-    preferStatic || runtimeSignals.liteMode || runtimeSignals.saveData;
+    preferStatic ||
+    runtimeSignals.saveData ||
+    (respectLiteMode && runtimeSignals.liteMode);
   const shouldAutoplay =
     autoplay && !runtimeSignals.prefersReducedMotion && !shouldPreferStatic;
 

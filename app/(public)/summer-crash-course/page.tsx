@@ -546,7 +546,7 @@ export default async function SummerCrashCourseLandingPage() {
                 <div className="flex h-full items-center justify-center pt-2 lg:min-h-[31rem] lg:pt-4">
                   <LottieAnimation
                     src="/animations/exams-preparation.lottie"
-                    preferStatic
+                    respectLiteMode={false}
                     className="mx-auto h-[280px] w-full max-w-md drop-shadow-[0_28px_46px_rgba(15,23,42,0.12)] md:h-[360px]"
                   />
                 </div>
@@ -607,7 +607,7 @@ export default async function SummerCrashCourseLandingPage() {
             <div className="public-panel flex items-center justify-center p-7 md:p-10">
               <LottieAnimation
                 src="/animations/learning-books.lottie"
-                preferStatic
+                respectLiteMode={false}
                 className="h-[240px] w-full max-w-lg md:h-[310px]"
               />
             </div>
@@ -728,7 +728,7 @@ export default async function SummerCrashCourseLandingPage() {
                     </div>
                     <LottieAnimation
                       src="/animations/rocket-success.lottie"
-                      preferStatic
+                      respectLiteMode={false}
                       className="mx-auto h-[210px] w-full max-w-sm md:h-[250px]"
                     />
                     <p className="mx-auto max-w-sm text-[0.95rem] leading-7 text-white">
@@ -823,7 +823,7 @@ export default async function SummerCrashCourseLandingPage() {
             visual={
               <LottieAnimation
                 src="/animations/success-graduation.lottie"
-                preferStatic
+                respectLiteMode={false}
                 className="h-[220px] w-full max-w-sm md:h-[260px]"
               />
             }

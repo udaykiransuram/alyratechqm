@@ -42,15 +42,16 @@ export default function PublicRouteShell({
         />
         <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.06)_1px,transparent_1px)] [background-size:132px_132px] [mask-image:linear-gradient(180deg,rgba(0,0,0,0.24),transparent_82%)]" />
       </div>
-      <PublicRouteChrome hideNavbar={hideNavbar} />
-      <main
-        className={cn(
-          "app-route-main app-route-main-public flex-1",
-          flushTop && "app-route-main-public-home",
-        )}
-      >
-        {children}
-      </main>
+      <PublicRouteChrome hideNavbar={hideNavbar}>
+        <main
+          className={cn(
+            "app-route-main app-route-main-public flex-1",
+            flushTop && "app-route-main-public-home",
+          )}
+        >
+          {children}
+        </main>
+      </PublicRouteChrome>
     </div>
   );
 }

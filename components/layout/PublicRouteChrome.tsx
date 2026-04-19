@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useLayoutEffect } from "react";
 import { usePathname } from "next/navigation";
 
@@ -19,8 +20,10 @@ function isLitePublicRoute(pathname: string) {
 
 export default function PublicRouteChrome({
   hideNavbar = false,
+  children,
 }: {
   hideNavbar?: boolean;
+  children: ReactNode;
 }) {
   const pathname = usePathname() || "/";
   const liteMode = isLitePublicRoute(pathname);
@@ -36,6 +39,7 @@ export default function PublicRouteChrome({
     <>
       {!hideNavbar && !liteMode ? <Navbar /> : null}
       {!liteMode ? <ViewportHover /> : null}
+      {children}
       {!liteMode ? <Footer /> : null}
     </>
   );
