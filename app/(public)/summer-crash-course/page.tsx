@@ -10,7 +10,6 @@ import {
   ChatBubbleLeftRightIcon,
   ClockIcon,
   DevicePhoneMobileIcon,
-  QueueListIcon,
 } from "@heroicons/react/24/outline";
 
 import { InnerHero } from "@/components/InnerHero";
@@ -98,6 +97,13 @@ const summerProgramHighlights = [
     copy:
       "Parents get smaller follow-up questions for the same weak areas instead of broad revision.",
     icon: ChatBubbleLeftRightIcon,
+  },
+  {
+    title: "Confidence Builder",
+    copy:
+      "A clearer recovery path helps confidence return faster and keeps children more willing to try again.",
+    icon: BoltIcon,
+    emphasis: "accent",
   },
 ] as const;
 
@@ -549,125 +555,64 @@ export default async function SummerCrashCourseLandingPage() {
               <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.14)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.12)_1px,transparent_1px)] bg-[size:72px_72px] opacity-30 [mask-image:radial-gradient(ellipse_82%_70%_at_50%_48%,#000_62%,transparent_100%)]" />
             </div>
 
-            <div className="relative grid gap-10 lg:grid-cols-[1.02fr,0.98fr] lg:items-start xl:gap-12">
-              <div className="space-y-8">
-                <PublicSectionIntro
-                  eyebrow="Summer Experience"
-                  title="Simple updates parents can actually use"
-                  description="Parents see the weak areas, class progress, and the next best practice step without a confusing dashboard."
-                  align="left"
-                  compact
-                  className="max-w-none"
-                  titleClassName={summerIntroTitleClass}
-                  descriptionClassName={summerIntroDescriptionClass}
-                />
-                <div className="grid gap-5 lg:grid-cols-3">
-                  {summerProgramHighlights.map((item) => {
-                    const Icon = item.icon;
-
-                    return (
-                      <article
-                        key={item.title}
-                        className={summerDarkCardClass}
-                        style={summerExperienceCardStyle}
-                      >
-                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/16 bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-                          <Icon className="h-5 w-5" />
-                        </div>
-                        <h3 className={summerDarkCardTitleClass}>
-                          {item.title}
-                        </h3>
-                        <p className={summerDarkCardCopyClass}>
-                          {item.copy}
-                        </p>
-                      </article>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="grid gap-5">
-                <div
-                  className="flex items-center justify-center rounded-[1.7rem] border p-7 shadow-[0_28px_60px_-42px_rgba(15,23,42,0.32)] md:p-8"
-                  style={summerExperienceVisualCardStyle}
-                >
-                  <div className="w-full space-y-4 text-center">
-                    <div className="inline-flex items-center rounded-full border border-white/16 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.44)]">
-                      Confidence Builder
+            <div className="relative space-y-8 xl:space-y-10">
+              <article
+                className="overflow-hidden rounded-[1.9rem] border p-6 shadow-[0_34px_74px_-48px_rgba(15,23,42,0.32)] md:p-8 xl:p-10"
+                style={summerExperienceVisualCardStyle}
+              >
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1.04fr)_minmax(18rem,0.96fr)] lg:items-center xl:gap-8">
+                  <div className="max-w-none text-left">
+                    <div className="mb-5 inline-flex items-center rounded-full border border-white/16 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.44)]">
+                      Summer Experience
                     </div>
+                    <h2 className={`${summerIntroTitleClass} text-white`}>
+                      Simple updates parents can actually use
+                    </h2>
+                    <p
+                      className="mt-5 max-w-[39rem] text-[0.98rem] leading-7 md:text-[1.04rem] md:leading-8"
+                      style={{ color: "hsl(0 0% 100% / 0.82)" }}
+                    >
+                      Parents see the weak areas, class progress, and the next
+                      best practice step without a confusing dashboard.
+                    </p>
+                  </div>
+
+                  <div className="flex min-h-[12.5rem] items-center justify-center p-2 md:p-4">
                     <LottieAnimation
                       src="/animations/rocket-success.lottie"
                       respectLiteMode={false}
-                      className="mx-auto h-[210px] w-full max-w-sm md:h-[250px]"
+                      className="mx-auto h-[170px] w-full max-w-sm drop-shadow-[0_28px_46px_rgba(15,23,42,0.22)] md:h-[210px]"
                     />
-                    <p className="mx-auto max-w-sm text-[0.95rem] leading-7 text-white">
-                      A clearer recovery path helps confidence return faster and
-                      keeps children more willing to try again.
-                    </p>
                   </div>
                 </div>
+              </article>
 
-                <div className="grid gap-5 md:grid-cols-2">
-                  <article
-                    className={summerDarkCardClass}
-                    style={summerExperienceCardStyle}
-                  >
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/16 bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-                      <AcademicCapIcon className="h-5 w-5" />
-                    </div>
-                    <div className="mt-5 inline-flex items-center rounded-full border border-white/16 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.44)]">
-                      Program Snapshot
-                    </div>
-                    <h3 className="mt-5 text-[1.75rem] font-semibold leading-[1.04] tracking-[-0.04em] text-white md:text-[1.95rem]">
-                      Built for clear maths recovery
-                    </h3>
-                    <p className="mt-4 text-[0.95rem] leading-7 text-white">
-                      Students move from diagnosis into live classes and guided
-                      practice that focus on the weakest foundations first.
-                    </p>
-                  </article>
+              <div className="grid auto-rows-fr gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                {summerProgramHighlights.map((item) => {
+                  const Icon = item.icon;
+                  const cardStyle =
+                    "emphasis" in item && item.emphasis === "accent"
+                      ? summerExperienceAccentCardStyle
+                      : summerExperienceCardStyle;
 
-                  <article
-                    className={summerDarkCardClass}
-                    style={summerExperienceCardStyle}
-                  >
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/16 bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-                      <QueueListIcon className="h-5 w-5" />
-                    </div>
-                    <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-white">
-                      Available class bands
-                    </p>
-                    <div className="mt-5 flex flex-wrap gap-2.5">
-                      {config.classBands.map((band) => (
-                        <span
-                          key={band.classBand}
-                          className="inline-flex items-center rounded-full border border-white/18 bg-white/10 px-3.5 py-2 text-[0.84rem] font-semibold text-white shadow-[0_18px_32px_-28px_rgba(15,23,42,0.26)]"
-                        >
-                          {band.classBand}
-                        </span>
-                      ))}
-                    </div>
-                  </article>
-                </div>
-
-                <article
-                  className="rounded-[1.55rem] border p-7 shadow-[0_28px_58px_-42px_rgba(15,23,42,0.28)] md:p-8"
-                  style={summerExperienceAccentCardStyle}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 flex-none items-center justify-center rounded-2xl border border-white/16 bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-                      <BoltIcon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white">
-                        Access note
+                  return (
+                    <article
+                      key={item.title}
+                      className={summerDarkCardClass}
+                      style={cardStyle}
+                    >
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/16 bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <h3 className={summerDarkCardTitleClass}>
+                        {item.title}
+                      </h3>
+                      <p className={summerDarkCardCopyClass}>
+                        {item.copy}
                       </p>
-                      <p className="mt-4 text-[0.95rem] leading-7 text-white">
-                        {accessNote}
-                      </p>
-                    </div>
-                  </div>
-                </article>
+                    </article>
+                  );
+                })}
               </div>
             </div>
           </div>

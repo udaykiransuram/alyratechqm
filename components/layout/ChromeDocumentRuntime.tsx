@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 
 import {
   PUBLIC_THEME_CHANGE_EVENT,
@@ -24,7 +24,7 @@ export default function ChromeDocumentRuntime({
   publicTheme,
   publicHomeVariant,
 }: ChromeDocumentRuntimeProps) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
 
     root.setAttribute("data-app-visual-mode", visualMode);

@@ -142,7 +142,6 @@ export function useStudentTestRuntime({
   const router = useRouter();
   const initialPaper = initialData?.paper || null;
   const initialAttempt = initialData?.attempt || null;
-  const initialPaperHydrated = initialPaper?.questionsHydrated !== false;
   const initialFullscreen = false;
   const fullscreenRequired = !allowStartWithoutFullscreen;
   const initialExamLocked = fullscreenRequired
@@ -197,7 +196,9 @@ export function useStudentTestRuntime({
   const paperRef = useRef<StudentPaper | null>(initialPaper);
   const lastSavedSignatureRef = useRef<string>(initialHydration.signature);
   const skipInitialFetchRef = useRef(Boolean(initialPaper || initialLoadError));
-  const skipMountRefreshRef = useRef(Boolean(initialPaper && initialPaperHydrated));
+  // When the server already gave us bootstrap paper data, keep that lightweight
+  // payload on screen until the student actually moves to an unloaded question.
+  const skipMountRefreshRef = useRef(Boolean(initialPaper));
   const hasUnsavedChangesRef = useRef(false);
   const saveInFlightRef = useRef(false);
   const saveQueuedRef = useRef(false);

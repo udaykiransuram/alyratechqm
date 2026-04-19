@@ -335,6 +335,9 @@ export default function SummerCrashDiagnosticParentReport({
     ? "Open Summer Course"
     : "Join Summer Course";
   const supportWhatsappHref = report.supportHref;
+  const supportLabel = supportWhatsappHref
+    ? "WhatsApp support"
+    : report.supportContact;
 
   return (
     <div className="app-student-page-shell">
@@ -684,7 +687,7 @@ export default function SummerCrashDiagnosticParentReport({
                     className="inline-flex items-center gap-2 text-sm font-medium text-foreground/90 underline-offset-4 transition hover:text-foreground hover:underline"
                   >
                     <MessageCircleMore className="h-4 w-4" />
-                    {report.supportContact}
+                    {supportLabel}
                   </a>
                 ) : (
                   <p className="text-sm leading-6 text-muted-foreground">

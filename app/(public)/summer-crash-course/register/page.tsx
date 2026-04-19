@@ -13,16 +13,15 @@ export const metadata: Metadata = {
 
 export default async function SummerCrashRegisterPage() {
   const config = await getSummerCrashPublicConfig();
+
   return (
-    <div className="public-flow-page public-register-page public-summer-register-page">
+    <main className="public-flow-page public-summer-register-page">
       <Suspense fallback={null}>
         <SummerCrashSessionRedirect />
       </Suspense>
-      <div className="public-flow-shell">
-        <Suspense fallback={null}>
-          <SummerCrashRegistrationClient {...config} />
-        </Suspense>
-      </div>
-    </div>
+      <Suspense fallback={null}>
+        <SummerCrashRegistrationClient {...config} />
+      </Suspense>
+    </main>
   );
 }

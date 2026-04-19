@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MessageCircleMore } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -200,14 +201,14 @@ export default function SummerCrashLookupClient({
           {supportContact ? (
             supportHref ? (
               <p className="text-sm font-medium text-foreground">
-                Support:{" "}
                 <a
                   href={supportHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="underline-offset-4 transition hover:underline"
+                  className="inline-flex items-center gap-2 underline-offset-4 transition hover:underline"
                 >
-                  {supportContact}
+                  <MessageCircleMore className="h-4 w-4" />
+                  WhatsApp support
                 </a>
               </p>
             ) : (

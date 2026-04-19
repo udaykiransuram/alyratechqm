@@ -79,7 +79,9 @@ export default async function StudentTestPage({
     : safeReturnTo || "/student/tests";
   let autoStart = isSummerCrashDiagnostic || forceAutoStart;
   const allowStartWithoutFullscreen = isSummerCrashDiagnostic || forceAutoStart;
-  const deliveryMode = isSummerCrashDiagnostic ? "full" : "bootstrap";
+  // Keep Summer diagnostics on the lighter bootstrap payload too so the
+  // runner can render the first question faster and hydrate the rest later.
+  const deliveryMode = "bootstrap";
 
   let initialData: StudentTestDetailResponse | null = null;
   let initialLoadError: string | null = null;

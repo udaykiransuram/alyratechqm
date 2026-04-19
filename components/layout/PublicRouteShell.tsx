@@ -11,10 +11,14 @@ export default function PublicRouteShell({
   children,
   flushTop = false,
   hideNavbar = false,
+  publicTheme = "sync",
+  publicHomeVariant,
 }: {
   children: ReactNode;
   flushTop?: boolean;
   hideNavbar?: boolean;
+  publicTheme?: "clear" | "sync";
+  publicHomeVariant?: "cinematic" | "flagship";
 }) {
   return (
     <div className="public-site-shell relative flex min-h-screen flex-col overflow-x-hidden">
@@ -22,7 +26,8 @@ export default function PublicRouteShell({
         visualMode="public"
         sidebarWidth="0px"
         mobileSchoolSwitcherHeight="0px"
-        publicTheme="sync"
+        publicTheme={publicTheme}
+        publicHomeVariant={publicHomeVariant}
       />
       {enableClientApiProbe ? <ClientApiRequestProbe /> : null}
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
