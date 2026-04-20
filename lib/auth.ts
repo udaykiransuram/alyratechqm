@@ -1,5 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProviderImport from "next-auth/providers/credentials";
+import mongoose from "mongoose";
 
 import { buildArchiveFilter } from "@/lib/archive";
 import { connectDB } from "@/lib/db";
@@ -55,6 +56,14 @@ const CredentialsProvider =
 
 if (typeof CredentialsProvider !== "function") {
   throw new Error("Failed to initialize NextAuth credentials provider.");
+}
+
+function isValidMongoObjectId(value: unknown) {
+  return (
+    typeof value === "string" &&
+    Boolean(value.trim()) &&
+    mongoose.Types.ObjectId.isValid(value.trim())
+  );
 }
 
 export const authOptions: NextAuthOptions = {
@@ -385,6 +394,8 @@ export const authOptions: NextAuthOptions = {
   events: {
     async signOut(message) {
       const token = "token" in message ? message.token : undefined;
+      const studentId =
+        typeof token?.id === "string" ? token.id.trim() : "";
       const studentSessionId =
         typeof token?.studentSessionId === "string"
           ? token.studentSessionId.trim()
@@ -393,7 +404,7 @@ export const authOptions: NextAuthOptions = {
       if (
         token?.accountType !== "school_user" ||
         token?.role !== "student" ||
-        !token?.id ||
+        !studentId ||
         !token?.schoolKey ||
         !studentSessionId
       ) {
@@ -403,36 +414,38 @@ export const authOptions: NextAuthOptions = {
       try {
         await clearStudentSessionIfMatch(
           String(token.schoolKey),
-          String(token.id),
+          studentId,
           studentSessionId,
         ).catch((error) => {
           console.error("Failed to clear Redis student session on sign out:", error);
           return null;
         });
 
-        const { User } = await getTenantModels(String(token.schoolKey), ["User"]);
-        await User.updateOne(
-          {
-            _id: token.id,
-            role: "student",
-            activeStudentSessionId: studentSessionId,
-          },
-          {
-            $unset: {
-              activeStudentSessionId: 1,
-              activeStudentSessionLastSeenAt: 1,
+        if (isValidMongoObjectId(studentId)) {
+          const { User } = await getTenantModels(String(token.schoolKey), ["User"]);
+          await User.updateOne(
+            {
+              _id: studentId,
+              role: "student",
+              activeStudentSessionId: studentSessionId,
             },
-          },
-        );
+            {
+              $unset: {
+                activeStudentSessionId: 1,
+                activeStudentSessionLastSeenAt: 1,
+              },
+            },
+          );
+        }
 
         invalidateStudentSessionValidationCache({
           schoolKey: String(token.schoolKey),
-          studentId: String(token.id),
+          studentId,
           studentSessionId,
         });
         invalidateStudentTestResourceCache({
           schoolKey: String(token.schoolKey),
-          studentId: String(token.id),
+          studentId,
         });
       } catch (error) {
         console.error("Error clearing active student session on sign out:", error);
