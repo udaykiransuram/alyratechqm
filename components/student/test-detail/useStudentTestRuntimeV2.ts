@@ -197,8 +197,9 @@ export function useStudentTestRuntime({
   const lastSavedSignatureRef = useRef<string>(initialHydration.signature);
   const skipInitialFetchRef = useRef(Boolean(initialPaper || initialLoadError));
   // When the server already gave us bootstrap paper data, keep that lightweight
-  // payload on screen until the student actually moves to an unloaded question.
+  // payload on screen for first paint and avoid a blocking refetch on mount.
   const skipMountRefreshRef = useRef(Boolean(initialPaper));
+  const backgroundPrefetchTriggeredRef = useRef(false);
   const hasUnsavedChangesRef = useRef(false);
   const saveInFlightRef = useRef(false);
   const saveQueuedRef = useRef(false);
@@ -917,6 +918,25 @@ export function useStudentTestRuntime({
       clearDraftPersistTimeout(draftPersistTimerRef);
     };
   }, [computeExamLockState, paperId, setIsExamLockedIfChanged]);
+
+  useEffect(() => {
+    if (!attemptStarted || attemptLocked || paper?.questionsHydrated !== false) {
+      return;
+    }
+
+    if (backgroundPrefetchTriggeredRef.current) {
+      return;
+    }
+
+    backgroundPrefetchTriggeredRef.current = true;
+    const timeoutId = window.setTimeout(() => {
+      void loadTestRef.current("background");
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [attemptLocked, attemptStarted, paper?.questionsHydrated]);
 
   async function runSaveAttempt(force = false) {
     if (!paper || !attemptStarted || attemptLocked || isSubmitting) {

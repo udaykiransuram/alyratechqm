@@ -12,6 +12,8 @@ import {
 } from "@/lib/question-paper/sections";
 import { sanitizeRichTextToPlainText } from "@/lib/security/html-sanitize";
 
+export const STUDENT_TEST_BOOTSTRAP_QUESTION_COUNT = 2;
+
 function normalizeId(value: unknown) {
   return String(value || "").trim();
 }

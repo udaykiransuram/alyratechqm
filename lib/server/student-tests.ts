@@ -29,6 +29,7 @@ import {
   sanitizeAttemptForStudentDelivery,
   sanitizePaperForStudent,
   serializeStudentAttempt,
+  STUDENT_TEST_BOOTSTRAP_QUESTION_COUNT,
 } from "@/lib/student-tests";
 import { buildArchiveFilter } from "@/lib/archive";
 
@@ -285,12 +286,15 @@ export async function getStudentTestDetailData(
       return runtimeDetail;
     }
 
-    return {
-      ...runtimeDetail,
-      paper: sanitizePaperForStudent(runtimeDetail.paper, {
-        hydratedQuestionIds: collectStudentPaperQuestionIds(runtimeDetail.paper, 1),
-      }),
-    };
+      return {
+        ...runtimeDetail,
+        paper: sanitizePaperForStudent(runtimeDetail.paper, {
+          hydratedQuestionIds: collectStudentPaperQuestionIds(
+            runtimeDetail.paper,
+            STUDENT_TEST_BOOTSTRAP_QUESTION_COUNT,
+          ),
+        }),
+      };
   }
 
   const models = await getStudentTestModels(params.schoolKey);
@@ -381,7 +385,10 @@ export async function getStudentTestDetailData(
       paper:
         deliveryMode === "bootstrap"
           ? sanitizePaperForStudent(paper, {
-              hydratedQuestionIds: collectStudentPaperQuestionIds(paper, 1),
+              hydratedQuestionIds: collectStudentPaperQuestionIds(
+                paper,
+                STUDENT_TEST_BOOTSTRAP_QUESTION_COUNT,
+              ),
             })
           : sanitizePaperForStudent(paper),
       attempt: null,
@@ -398,7 +405,10 @@ export async function getStudentTestDetailData(
     paper:
       deliveryMode === "bootstrap"
         ? sanitizePaperForStudent(paper, {
-            hydratedQuestionIds: collectStudentPaperQuestionIds(paper, 1),
+            hydratedQuestionIds: collectStudentPaperQuestionIds(
+              paper,
+              STUDENT_TEST_BOOTSTRAP_QUESTION_COUNT,
+            ),
           })
         : sanitizePaperForStudent(paper),
     attempt: sanitizeAttemptForStudentDelivery(attempt, paper, now),

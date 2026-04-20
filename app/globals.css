@@ -6880,6 +6880,7 @@
     max-width: none;
     width: 100%;
     --app-exam-sticky-top: env(safe-area-inset-top);
+    --app-exam-mobile-nav-height: 3.25rem;
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
@@ -7956,7 +7957,7 @@
     gap: 0.625rem;
     border: 1px solid hsl(var(--border) / 0.82);
     border-radius: calc(var(--app-radius-lg) + 0.125rem);
-    padding: 0.625rem 0.75rem;
+    padding: 0.4rem 0.6rem;
     background:
       radial-gradient(circle at top right, hsl(var(--primary) / 0.12) 0%, transparent 12rem),
       linear-gradient(
@@ -7972,12 +7973,20 @@
     touch-action: manipulation;
   }
 
+  .app-exam-mobile-nav-bar[data-open="false"] .app-exam-mobile-nav-bar-meta {
+    display: none;
+  }
+
+  .app-exam-mobile-nav-bar[data-open="false"] .app-exam-mobile-nav-bar-chip {
+    display: none;
+  }
+
   .app-exam-mobile-nav-bar-copy {
     @apply min-w-0 flex-1;
   }
 
   .app-exam-mobile-nav-bar-label {
-    @apply text-[12.5px] font-semibold leading-5 text-foreground;
+    @apply text-[12px] font-semibold leading-4 text-foreground;
   }
 
   .app-exam-mobile-nav-bar-meta {
@@ -8003,7 +8012,7 @@
   }
 
   .app-exam-mobile-nav-open {
-    @apply min-h-11 rounded-[0.95rem] px-3.5 text-[13px];
+    @apply min-h-9 rounded-[0.85rem] px-3 text-[12px];
     touch-action: manipulation;
   }
 
@@ -8586,17 +8595,13 @@
     .app-exam-focus-shell-fullscreen .app-exam-question-body {
       min-height: 0;
       overflow-y: auto;
-      padding-bottom: 1.25rem;
+      padding-bottom: calc(var(--app-exam-mobile-nav-height) + env(safe-area-inset-bottom) + 0.85rem);
     }
 
     .app-exam-focus-shell-fullscreen .app-exam-nav-row {
       position: static;
       bottom: auto;
       margin-top: 0.75rem;
-    }
-
-    .app-exam-focus-shell-fullscreen .app-exam-mobile-nav-bar {
-      display: none;
     }
 
     .app-exam-focus-shell-fullscreen .app-exam-nav-row {
@@ -8606,7 +8611,7 @@
 
     .app-exam-focus-shell-fullscreen .app-exam-nav-row-actions {
       flex-direction: row;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       align-items: center;
       justify-content: space-between;
       gap: 0.5rem;
@@ -8616,14 +8621,14 @@
       display: flex;
       width: auto;
       min-width: 0;
-      flex: 1 1 auto;
-      flex-wrap: wrap;
+      flex: 0 0 auto;
+      flex-wrap: nowrap;
       justify-content: flex-end;
       gap: 0.5rem;
     }
 
     .app-exam-focus-shell-fullscreen .app-exam-nav-button {
-      min-width: min(8rem, 100%);
+      min-width: min(7.5rem, 100%);
     }
 
     .app-exam-focus-shell-fullscreen .app-exam-mobile-nav-bar {

@@ -1542,6 +1542,7 @@ const ExamMobileNavigation = memo(function ExamMobileNavigation({
       <div
         className="app-exam-mobile-nav-bar xl:hidden"
         aria-label={showQuestionJump ? "Question navigation" : "Test details"}
+        data-open={sheetOpen ? "true" : "false"}
       >
         <div className="app-exam-mobile-nav-bar-copy">
           <p className="app-exam-mobile-nav-bar-label">{currentQuestionLabel}</p>

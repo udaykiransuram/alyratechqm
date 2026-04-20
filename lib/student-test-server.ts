@@ -7,6 +7,7 @@ import {
   readSharedCacheEntry,
   writeSharedCacheEntry,
 } from "@/lib/redis";
+import { STUDENT_TEST_BOOTSTRAP_QUESTION_COUNT } from "@/lib/student-tests";
 
 const STUDENT_SNAPSHOT_TTL_MS = 30_000;
 const PAPER_RUNTIME_TTL_MS = 120_000;
@@ -493,38 +494,52 @@ async function loadOnlinePaperBootstrapByIdUncached(
     return null;
   }
 
-  const firstQuestionId = (() => {
+  const bootstrapQuestionIds = (() => {
+    const questionIds: string[] = [];
+
     for (const section of Array.isArray(paper.sections) ? paper.sections : []) {
       for (const entry of Array.isArray(section?.questions) ? section.questions : []) {
         const questionId = String(entry?.question?._id || entry?.question || "").trim();
         if (questionId) {
-          return questionId;
+          questionIds.push(questionId);
+          if (questionIds.length >= STUDENT_TEST_BOOTSTRAP_QUESTION_COUNT) {
+            return questionIds;
+          }
         }
       }
     }
 
-    return "";
+    return questionIds;
   })();
 
-  if (!firstQuestionId) {
+  if (bootstrapQuestionIds.length === 0) {
     return paper;
   }
 
-  const firstQuestion = await QuestionModel.findById(firstQuestionId)
+  const bootstrapQuestions = await QuestionModel.find({
+    _id: { $in: bootstrapQuestionIds },
+  })
     .select("content options type matrixOptions subject")
     .populate({ path: "subject", model: SubjectModel, select: "name" })
     .lean();
 
-  if (!firstQuestion) {
+  if (!Array.isArray(bootstrapQuestions) || bootstrapQuestions.length === 0) {
     return paper;
   }
 
-  outer: for (const section of Array.isArray(paper.sections) ? paper.sections : []) {
+  const bootstrapQuestionsById = new Map(
+    bootstrapQuestions.map((question: any) => [
+      String(question?._id || "").trim(),
+      question,
+    ]),
+  );
+
+  for (const section of Array.isArray(paper.sections) ? paper.sections : []) {
     for (const entry of Array.isArray(section?.questions) ? section.questions : []) {
       const questionId = String(entry?.question?._id || entry?.question || "").trim();
-      if (questionId === firstQuestionId) {
-        entry.question = firstQuestion;
-        break outer;
+      const hydratedQuestion = bootstrapQuestionsById.get(questionId);
+      if (hydratedQuestion) {
+        entry.question = hydratedQuestion;
       }
     }
   }
