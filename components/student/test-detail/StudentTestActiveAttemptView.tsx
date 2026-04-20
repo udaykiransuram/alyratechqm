@@ -914,6 +914,7 @@ type ExamQuestionPanelProps = {
   onRetryQuestionHydration: () => Promise<void>;
   onUpdateMultipleChoice: (questionId: string, optionIndex: number) => void;
   onUpdateSingleChoice: (questionId: string, optionIndex: number) => void;
+  onObjectiveOptionPress: (optionIndex: number) => void;
   onUpdateDescriptiveAnswer: (question: StudentQuestion, value: string) => void;
   onUpdateMatrixSelection: (
     question: StudentQuestion,
@@ -942,6 +943,7 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
   onRetryQuestionHydration,
   onUpdateMultipleChoice,
   onUpdateSingleChoice,
+  onObjectiveOptionPress,
   onUpdateDescriptiveAnswer,
   onUpdateMatrixSelection,
   onClearCurrentAnswer,
@@ -1164,6 +1166,10 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
                     "app-exam-option",
                     selected && "app-exam-option-selected",
                   )}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onObjectiveOptionPress(optionIndex);
+                  }}
                 >
                   <input
                     type={
@@ -1175,20 +1181,6 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
                     checked={selected}
                     aria-label={`Option ${getOptionLabel(optionIndex)}`}
                     readOnly
-                    onClick={(event) => {
-                      event.preventDefault();
-                      if (currentQuestion.question.type === "multiple") {
-                        onUpdateMultipleChoice(
-                          currentQuestion.question._id,
-                          optionIndex,
-                        );
-                        return;
-                      }
-                      onUpdateSingleChoice(
-                        currentQuestion.question._id,
-                        optionIndex,
-                      );
-                    }}
                     className="sr-only"
                   />
                   <span
@@ -1386,7 +1378,7 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
                   }
                   disabled={currentIndex === 0}
                 >
-                  Previous
+                  Prev
                 </Button>
               ) : null}
               <div
@@ -1400,7 +1392,10 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
                   <Button
                     variant="ghost"
                     size="md"
-                    className="app-student-action-compact app-exam-nav-button"
+                    className={cn(
+                      "app-student-action-compact app-exam-nav-button",
+                      !isSingleQuestionActionRow && "hidden sm:inline-flex",
+                    )}
                     onClick={onClearCurrentAnswer}
                   >
                     Clear
@@ -2041,6 +2036,21 @@ export default function StudentTestActiveAttemptView({
     flushDescriptiveAnswer();
     onClearCurrentAnswer();
   }, [flushDescriptiveAnswer, onClearCurrentAnswer]);
+  const handleObjectiveOptionPress = useCallback(
+    (optionIndex: number) => {
+      if (!currentQuestion) {
+        return;
+      }
+
+      if (currentQuestion.question.type === "multiple") {
+        onUpdateMultipleChoice(currentQuestion.question._id, optionIndex);
+        return;
+      }
+
+      onUpdateSingleChoice(currentQuestion.question._id, optionIndex);
+    },
+    [currentQuestion, onUpdateMultipleChoice, onUpdateSingleChoice],
+  );
   const handleKeyboardSave = useCallback(() => {
     if (isSaving || isSubmitting) {
       return;
@@ -2118,12 +2128,7 @@ export default function StudentTestActiveAttemptView({
       }
 
       event.preventDefault();
-      if (currentQuestion.question.type === "multiple") {
-        onUpdateMultipleChoice(currentQuestion.question._id, optionIndex);
-        return;
-      }
-
-      onUpdateSingleChoice(currentQuestion.question._id, optionIndex);
+      handleObjectiveOptionPress(optionIndex);
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -2135,8 +2140,7 @@ export default function StudentTestActiveAttemptView({
     currentQuestion,
     handleJumpToQuestion,
     handleKeyboardSave,
-    onUpdateMultipleChoice,
-    onUpdateSingleChoice,
+    handleObjectiveOptionPress,
     questionList.length,
   ]);
 
@@ -2245,6 +2249,7 @@ export default function StudentTestActiveAttemptView({
             onRetryQuestionHydration={onRetryQuestionHydration}
             onUpdateMultipleChoice={onUpdateMultipleChoice}
             onUpdateSingleChoice={onUpdateSingleChoice}
+            onObjectiveOptionPress={handleObjectiveOptionPress}
             onUpdateDescriptiveAnswer={onUpdateDescriptiveAnswer}
             onUpdateMatrixSelection={onUpdateMatrixSelection}
             onClearCurrentAnswer={handleClearCurrentAnswer}

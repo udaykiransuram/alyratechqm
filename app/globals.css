@@ -8296,6 +8296,10 @@
       display: none;
     }
 
+    .app-exam-nav-button {
+      min-width: 0;
+    }
+
     .app-exam-focus-topbar {
       padding: 0.6rem 0.7rem;
       border-radius: 0.9rem;
@@ -8619,16 +8623,18 @@
 
     .app-exam-focus-shell-fullscreen .app-exam-nav-actions {
       display: flex;
-      width: auto;
+      width: 100%;
       min-width: 0;
-      flex: 0 0 auto;
+      flex: 1 1 0;
       flex-wrap: nowrap;
       justify-content: flex-end;
       gap: 0.5rem;
     }
 
     .app-exam-focus-shell-fullscreen .app-exam-nav-button {
-      min-width: min(7.5rem, 100%);
+      flex: 1 1 0;
+      width: 100%;
+      min-width: 0;
     }
 
     .app-exam-focus-shell-fullscreen .app-exam-mobile-nav-bar {
@@ -14230,12 +14236,15 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-page {
+    --public-register-accent-start: 28 32% 34%;
+    --public-register-accent-end: 39 78% 61%;
     background:
-      radial-gradient(circle at top right, hsl(var(--public-accent-strong) / 0.06) 0%, transparent 20rem),
+      radial-gradient(circle at top right, hsl(38 70% 76% / 0.08) 0%, transparent 18rem),
+      radial-gradient(circle at top left, hsl(32 44% 78% / 0.08) 0%, transparent 20rem),
       linear-gradient(
         180deg,
-        hsl(var(--public-surface)) 0%,
-        hsl(var(--public-bg)) 100%
+        hsl(36 36% 98%) 0%,
+        hsl(40 28% 95%) 100%
       );
     padding-bottom: calc(env(safe-area-inset-bottom) + 2.5rem);
   }
@@ -14251,7 +14260,7 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-page .public-flow-shell-narrow {
-    max-width: 44rem;
+    max-width: 42rem;
   }
 
   .public-register-page .public-flow-shell-narrow {
@@ -14260,18 +14269,23 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-shell {
-    padding-top: clamp(0.75rem, 2.2vw, 1.5rem);
+    padding-top: clamp(1rem, 2.8vw, 1.85rem);
   }
 
   .public-flow-surface.public-summer-register-panel {
     position: relative;
     overflow: hidden;
-    border-radius: 1.6rem;
-    padding: 1rem;
-    border-color: hsl(var(--public-border) / 0.74);
-    background: hsl(var(--public-surface) / 0.98);
+    border-radius: 1.5rem;
+    padding: 1.1rem;
+    border-color: hsl(34 22% 78% / 0.7);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(42 45% 99% / 0.98) 0%,
+        hsl(36 42% 97% / 0.98) 100%
+      );
     box-shadow:
-      0 20px 44px -34px hsl(var(--public-shadow) / 0.12),
+      0 22px 42px -34px hsl(28 24% 30% / 0.12),
       0 1px 2px hsl(var(--public-shadow) / 0.04);
   }
 
@@ -14280,9 +14294,57 @@ html[data-public-home-flagship="true"] ::selection {
     flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 0.7rem;
-    padding-bottom: 0.8rem;
-    border-bottom: 1px solid hsl(var(--public-border) / 0.56);
+    gap: 0.9rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid hsl(34 20% 78% / 0.52);
+  }
+
+  .public-summer-register-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(32 20% 46%);
+  }
+
+  .public-summer-register-title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 5vw, 2.7rem);
+    font-weight: 600;
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    color: hsl(26 17% 18%);
+  }
+
+  .public-summer-register-summary {
+    max-width: 33rem;
+    font-size: 0.98rem;
+    line-height: 1.62;
+    color: hsl(30 10% 38%);
+  }
+
+  .public-summer-register-signin {
+    padding-top: 0.35rem;
+    font-size: 0.94rem;
+    color: hsl(30 10% 43%);
+  }
+
+  .public-summer-register-form {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .public-summer-register-row {
+    display: grid;
+    gap: 0.9rem;
+  }
+
+  .public-summer-register-row-paired {
+    grid-template-columns: 1fr;
+  }
+
+  .public-summer-register-field {
+    min-width: 0;
   }
 
   .public-summer-register-panel .public-flow-card-soft {
@@ -14293,26 +14355,34 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-panel .public-flow-input {
-    min-height: 2.8rem;
-    border-color: hsl(var(--public-border) / 0.78);
-    background: hsl(var(--public-surface) / 0.98);
-    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.78);
+    min-height: 3rem;
+    border-radius: 0.95rem;
+    border-color: hsl(34 18% 76% / 0.78);
+    background: hsl(40 36% 99% / 0.98);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.8),
+      0 12px 20px -24px hsl(28 24% 28% / 0.12);
   }
 
   .public-summer-register-panel .public-flow-label {
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.45rem;
+    font-size: 0.88rem;
+    color: hsl(26 16% 24%);
   }
 
   .public-summer-register-panel .public-flow-helper {
     margin-top: 0.35rem;
     line-height: 1.35;
+    color: hsl(30 9% 46%);
   }
 
   .public-summer-register-panel .public-flow-input:focus,
   .public-summer-register-panel .public-flow-input:focus-visible {
+    border-color: hsl(var(--public-register-accent-end) / 0.44);
     box-shadow:
-      0 0 0 4px hsl(var(--public-accent) / 0.08),
+      0 0 0 4px hsl(var(--public-register-accent-end) / 0.1),
       inset 0 1px 0 hsl(0 0% 100% / 0.82);
+    transform: none;
   }
 
   .public-summer-register-panel .public-flow-step {
@@ -14327,7 +14397,13 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-panel .public-flow-button-primary {
-    box-shadow: 0 16px 30px -24px hsl(var(--public-shadow) / 0.24);
+    background:
+      linear-gradient(
+        135deg,
+        hsl(var(--public-register-accent-start)) 0%,
+        hsl(var(--public-register-accent-end)) 100%
+      );
+    box-shadow: 0 18px 30px -24px hsl(28 36% 30% / 0.3);
   }
 
   .public-summer-register-panel .public-flow-button-secondary {
@@ -14336,6 +14412,44 @@ html[data-public-home-flagship="true"] ::selection {
 
   .public-summer-register-panel .public-flow-text-link {
     font-weight: 600;
+    color: hsl(var(--public-register-accent-start));
+  }
+
+  .public-summer-register-consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    border-radius: 1rem;
+    border: 1px solid hsl(34 20% 80% / 0.72);
+    background: hsl(42 30% 98% / 0.9);
+    padding: 0.95rem 1rem;
+  }
+
+  .public-summer-register-submit {
+    border-radius: 1.1rem;
+    border: 1px solid hsl(34 20% 80% / 0.72);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(40 38% 99% / 0.98) 0%,
+        hsl(38 36% 96% / 0.98) 100%
+      );
+    padding: 0.9rem;
+    box-shadow: 0 18px 36px -34px hsl(28 24% 30% / 0.12);
+  }
+
+  .public-summer-register-submit-note {
+    margin-top: 0.65rem;
+    text-align: center;
+    font-size: 0.76rem;
+    line-height: 1.45;
+    color: hsl(30 10% 43%);
+  }
+
+  .public-summer-register-support {
+    margin-top: 0.85rem;
+    text-align: center;
+    font-size: 0.9rem;
   }
 
   .public-flow-hero {
@@ -14708,7 +14822,7 @@ html[data-public-home-flagship="true"] ::selection {
     }
 
     .public-flow-surface.public-summer-register-panel {
-      padding: 1.15rem;
+      padding: 1.2rem;
     }
 
     .public-register-page .public-flow-shell-narrow {
@@ -14716,9 +14830,15 @@ html[data-public-home-flagship="true"] ::selection {
     }
   }
 
+  @media (min-width: 768px) {
+    .public-summer-register-row-paired {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
   @media (min-width: 1024px) {
     .public-flow-surface.public-summer-register-panel {
-      padding: 1.25rem;
+      padding: 1.3rem;
     }
   }
 
@@ -14733,17 +14853,21 @@ html[data-public-home-flagship="true"] ::selection {
 
   @media (max-width: 639px) {
     .public-flow-surface.public-summer-register-panel {
-      border-radius: 1.35rem;
-      padding: 0.82rem;
+      border-radius: 1.25rem;
+      padding: 0.95rem;
     }
 
     .public-summer-register-header {
-      padding-bottom: 0.75rem;
+      padding-bottom: 0.85rem;
     }
 
     .public-summer-register-panel .public-flow-card-soft {
       border-radius: 1rem;
       padding: 0.9rem;
+    }
+
+    .public-summer-register-title {
+      font-size: clamp(1.8rem, 10vw, 2.2rem);
     }
 
     .public-talent-hero {

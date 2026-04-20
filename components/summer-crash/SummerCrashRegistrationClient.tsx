@@ -90,10 +90,10 @@ export default function SummerCrashRegistrationClient({
     SUMMER_CRASH_DISPLAY_NAME;
   const pageTitle = isDiagnosticEntry
     ? "Register & start test"
-    : "Create account";
+    : "Create parent account";
   const pageSummary = isDiagnosticEntry
-    ? "Create the family sign-in once. The free diagnostic opens right after this."
-    : "Use the parent phone number and password for future sign-ins.";
+    ? "Free diagnostic opens right after signup."
+    : "Use one parent sign-in for the full Summer Crash flow.";
   const submitLabel = isDiagnosticEntry
     ? "Create account & start test"
     : "Create account";
@@ -284,18 +284,18 @@ export default function SummerCrashRegistrationClient({
       ) : (
         <div className="public-flow-surface public-summer-register-panel space-y-4 sm:space-y-5">
           <div className="public-summer-register-header">
-            <div className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <div className="space-y-2">
+              <p className="public-summer-register-eyebrow">
                 {campaignTitle}
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[2rem]">
+              <h1 className="public-summer-register-title">
                 {pageTitle}
               </h1>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-[0.95rem]">
+              <p className="public-summer-register-summary">
                 {pageSummary}
               </p>
             </div>
-            <div className="pt-0.5 text-sm text-muted-foreground">
+            <div className="public-summer-register-signin">
               Already registered?{" "}
               <Link href={SUMMER_CRASH_SIGNIN_PATH} className="public-flow-text-link">
                 Sign in
@@ -308,22 +308,15 @@ export default function SummerCrashRegistrationClient({
           ) : null}
 
           <form
-            className="space-y-3.5 sm:space-y-4"
+            className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
               handleRegister();
             }}
           >
-            <section className="public-flow-card-soft space-y-3 p-4 sm:space-y-3.5 sm:p-5">
-              <div className="flex items-start gap-2.5">
-                <span className="public-flow-step">1</span>
-                <p className="pt-0.5 text-base font-semibold text-foreground sm:text-[1.05rem]">
-                  Student
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
+            <div className="public-summer-register-form">
+              <div className="public-summer-register-row public-summer-register-row-paired">
+                <div className="public-summer-register-field">
                   <label className="public-flow-label" htmlFor="studentName">
                     Student name
                   </label>
@@ -342,7 +335,7 @@ export default function SummerCrashRegistrationClient({
                   />
                 </div>
 
-                <div>
+                <div className="public-summer-register-field">
                   <label className="public-flow-label" htmlFor="classBand">
                     Class
                   </label>
@@ -367,37 +360,30 @@ export default function SummerCrashRegistrationClient({
                 </div>
               </div>
 
-              <div>
-                <label className="public-flow-label" htmlFor="sourceSchoolName">
-                  School name
-                  <span className="text-muted-foreground"> (optional)</span>
-                </label>
-                <Input
-                  id="sourceSchoolName"
-                  value={form.sourceSchoolName}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      sourceSchoolName: event.target.value,
-                    }))
-                  }
-                  className="public-flow-input"
-                  placeholder="Current school"
-                  autoComplete="organization"
-                />
-              </div>
-            </section>
-
-            <section className="public-flow-card-soft space-y-3 p-4 sm:space-y-3.5 sm:p-5">
-              <div className="flex items-start gap-2.5">
-                <span className="public-flow-step">2</span>
-                <p className="pt-0.5 text-base font-semibold text-foreground sm:text-[1.05rem]">
-                  Parent
-                </p>
+              <div className="public-summer-register-row">
+                <div className="public-summer-register-field">
+                  <label className="public-flow-label" htmlFor="sourceSchoolName">
+                    School name
+                    <span className="text-muted-foreground"> (optional)</span>
+                  </label>
+                  <Input
+                    id="sourceSchoolName"
+                    value={form.sourceSchoolName}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        sourceSchoolName: event.target.value,
+                      }))
+                    }
+                    className="public-flow-input"
+                    placeholder="Current school"
+                    autoComplete="organization"
+                  />
+                </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
+              <div className="public-summer-register-row public-summer-register-row-paired">
+                <div className="public-summer-register-field">
                   <label className="public-flow-label" htmlFor="guardianName">
                     Parent name
                   </label>
@@ -416,7 +402,7 @@ export default function SummerCrashRegistrationClient({
                   />
                 </div>
 
-                <div>
+                <div className="public-summer-register-field">
                   <label className="public-flow-label" htmlFor="phone">
                     Phone number
                   </label>
@@ -436,18 +422,9 @@ export default function SummerCrashRegistrationClient({
                   />
                 </div>
               </div>
-            </section>
 
-            <section className="public-flow-card-soft space-y-3 p-4 sm:space-y-3.5 sm:p-5">
-              <div className="flex items-start gap-2.5">
-                <span className="public-flow-step">3</span>
-                <p className="pt-0.5 text-base font-semibold text-foreground sm:text-[1.05rem]">
-                  Password
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
+              <div className="public-summer-register-row public-summer-register-row-paired">
+                <div className="public-summer-register-field">
                   <label className="public-flow-label" htmlFor="password">
                     Password
                   </label>
@@ -484,7 +461,7 @@ export default function SummerCrashRegistrationClient({
                   </p>
                 </div>
 
-                <div>
+                <div className="public-summer-register-field">
                   <label className="public-flow-label" htmlFor="confirmPassword">
                     Confirm password
                   </label>
@@ -522,9 +499,9 @@ export default function SummerCrashRegistrationClient({
                   </div>
                 </div>
               </div>
-            </section>
+            </div>
 
-            <label className="flex items-start gap-3 rounded-[1rem] border border-[hsl(var(--public-border)/0.62)] bg-[hsl(var(--public-surface)/0.9)] px-3.5 py-3 sm:px-4">
+            <label className="public-summer-register-consent">
               <input
                 type="checkbox"
                 checked={form.consent}
@@ -541,7 +518,7 @@ export default function SummerCrashRegistrationClient({
               </span>
             </label>
 
-            <div className="rounded-[1rem] border border-[hsl(var(--public-border)/0.62)] bg-[hsl(var(--public-surface)/0.94)] p-3.5 shadow-[0_22px_42px_-34px_hsl(var(--public-shadow)/0.14)] sm:p-4">
+            <div className="public-summer-register-submit">
               <Button
                 type="submit"
                 disabled={isPending}
@@ -552,13 +529,13 @@ export default function SummerCrashRegistrationClient({
               </Button>
 
               {isDiagnosticEntry ? (
-                <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">
+                <p className="public-summer-register-submit-note">
                   The free diagnostic opens right after account creation.
                 </p>
               ) : null}
 
               {supportWhatsappHref ? (
-                <div className="mt-2.5 text-center text-sm">
+                <div className="public-summer-register-support">
                   <a
                     href={supportWhatsappHref}
                     target="_blank"
@@ -570,11 +547,11 @@ export default function SummerCrashRegistrationClient({
                   </a>
                 </div>
               ) : supportLabel ? (
-                <div className="mt-3 text-center text-sm text-muted-foreground">
+                <div className="public-summer-register-support text-muted-foreground">
                   Need help? {supportText}
                 </div>
               ) : (
-                <div className="mt-3 text-center text-sm">
+                <div className="public-summer-register-support">
                   <Link
                     href={SUMMER_CRASH_HELP_PATH}
                     className="public-flow-text-link inline-flex items-center gap-1"
