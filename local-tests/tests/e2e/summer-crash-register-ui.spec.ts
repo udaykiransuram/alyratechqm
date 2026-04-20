@@ -15,7 +15,10 @@ test.describe("Summer Crash register page", () => {
     await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 
     await expect(page.getByLabel("Student name")).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Class" })).toBeVisible();
+    const classSelector = page.getByRole("combobox", { name: "Class" });
+    await expect(classSelector).toBeVisible();
+    await classSelector.click();
+    await expect(page.getByRole("option").first()).toBeVisible();
     await expect(page.getByLabel(/School name/i)).toBeVisible();
     await expect(page.getByLabel("Parent name")).toBeVisible();
     await expect(page.getByLabel("Phone number")).toBeVisible();

@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   fetchApiJson,
   getClientRequestErrorMessage,
 } from "@/lib/client/api";
@@ -339,24 +346,31 @@ export default function SummerCrashRegistrationClient({
                   <label className="public-flow-label" htmlFor="classBand">
                     Class
                   </label>
-                  <select
-                    id="classBand"
+                  <Select
                     value={form.classBand}
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        classBand: event.target.value,
+                        classBand: value,
                       }))
                     }
-                    className="public-flow-input"
+                    disabled={isPending}
                   >
-                    <option value="">Select class</option>
-                    {classBands.map((option) => (
-                      <option key={option.classBand} value={option.classBand}>
-                        {option.classBand}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      id="classBand"
+                      aria-label="Class"
+                      className="public-summer-register-select-trigger"
+                    >
+                      <SelectValue placeholder="Select class" />
+                    </SelectTrigger>
+                    <SelectContent className="public-summer-register-select-content">
+                      {classBands.map((option) => (
+                        <SelectItem key={option.classBand} value={option.classBand}>
+                          {option.classBand}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

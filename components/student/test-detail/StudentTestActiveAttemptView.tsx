@@ -1354,13 +1354,6 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
               isSingleQuestionActionRow && "app-exam-nav-row-single",
             )}
           >
-            {!isSingleQuestionActionRow ? (
-              <div className="app-exam-nav-row-copy">
-                <span className="app-meta-chip">
-                  {currentQuestionPositionLabel}
-                </span>
-              </div>
-            ) : null}
             <div
               className={cn(
                 "app-exam-nav-row-actions",

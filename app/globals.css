@@ -8300,6 +8300,31 @@
       min-width: 0;
     }
 
+    .app-exam-nav-row-actions {
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .app-exam-nav-actions {
+      display: flex;
+      width: auto;
+      min-width: 0;
+      flex: 1 1 0;
+      flex-wrap: nowrap;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
+
+    .app-exam-nav-row-actions > .app-exam-nav-button,
+    .app-exam-nav-actions > .app-exam-nav-button {
+      width: auto;
+      min-width: 0;
+      flex: 1 1 0;
+    }
+
     .app-exam-focus-topbar {
       padding: 0.6rem 0.7rem;
       border-radius: 0.9rem;
@@ -14345,6 +14370,64 @@ html[data-public-home-flagship="true"] ::selection {
 
   .public-summer-register-field {
     min-width: 0;
+  }
+
+  .public-summer-register-select-trigger {
+    min-height: 3rem;
+    border-radius: 0.95rem;
+    border-color: hsl(34 18% 76% / 0.78);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(40 40% 99% / 0.99) 0%,
+        hsl(38 30% 97% / 0.98) 100%
+      );
+    padding-inline: 0.95rem 0.85rem;
+    color: hsl(26 16% 24%);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.8),
+      0 12px 20px -24px hsl(28 24% 28% / 0.12);
+  }
+
+  .public-summer-register-select-trigger[data-placeholder] {
+    color: hsl(30 9% 46%);
+  }
+
+  .public-summer-register-select-trigger:hover {
+    border-color: hsl(var(--public-register-accent-end) / 0.3);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(40 46% 99% / 1) 0%,
+        hsl(38 34% 97% / 0.99) 100%
+      );
+  }
+
+  .public-summer-register-select-trigger:focus,
+  .public-summer-register-select-trigger:focus-visible,
+  .public-summer-register-select-trigger[data-state="open"] {
+    border-color: hsl(var(--public-register-accent-end) / 0.44);
+    box-shadow:
+      0 0 0 4px hsl(var(--public-register-accent-end) / 0.1),
+      inset 0 1px 0 hsl(0 0% 100% / 0.82),
+      0 16px 24px -24px hsl(28 24% 28% / 0.12);
+  }
+
+  .public-summer-register-select-trigger > svg {
+    height: 1.05rem;
+    width: 1.05rem;
+    color: hsl(var(--public-register-accent-start) / 0.88);
+  }
+
+  .public-summer-register-select-content {
+    border-color: hsl(34 22% 78% / 0.84);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(40 42% 99% / 0.98) 0%,
+        hsl(38 38% 97% / 0.98) 100%
+      );
+    box-shadow: 0 24px 48px -28px hsl(28 24% 30% / 0.18);
   }
 
   .public-summer-register-panel .public-flow-card-soft {
