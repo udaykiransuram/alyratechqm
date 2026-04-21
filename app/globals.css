@@ -14261,15 +14261,22 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-page {
-    --public-register-accent-start: 28 32% 34%;
-    --public-register-accent-end: 39 78% 61%;
+    --public-register-accent-start: 188 66% 24%;
+    --public-register-accent-end: 175 73% 39%;
+    --public-register-ink: 193 48% 15%;
+    --public-register-muted: 191 16% 40%;
+    --public-register-border: 186 30% 79%;
+    --public-register-border-strong: 185 34% 68%;
+    --public-register-surface: 187 46% 98%;
+    --public-register-surface-2: 185 56% 95%;
     background:
-      radial-gradient(circle at top right, hsl(38 70% 76% / 0.08) 0%, transparent 18rem),
-      radial-gradient(circle at top left, hsl(32 44% 78% / 0.08) 0%, transparent 20rem),
+      radial-gradient(circle at top right, hsl(180 62% 72% / 0.12) 0%, transparent 18rem),
+      radial-gradient(circle at top left, hsl(192 72% 76% / 0.12) 0%, transparent 20rem),
+      radial-gradient(circle at bottom center, hsl(175 44% 72% / 0.08) 0%, transparent 24rem),
       linear-gradient(
         180deg,
-        hsl(36 36% 98%) 0%,
-        hsl(40 28% 95%) 100%
+        hsl(188 54% 98%) 0%,
+        hsl(186 42% 94%) 100%
       );
     padding-bottom: calc(env(safe-area-inset-bottom) + 2.5rem);
   }
@@ -14302,15 +14309,16 @@ html[data-public-home-flagship="true"] ::selection {
     overflow: hidden;
     border-radius: 1.5rem;
     padding: 1.1rem;
-    border-color: hsl(34 22% 78% / 0.7);
+    border-color: hsl(var(--public-register-border) / 0.72);
     background:
       linear-gradient(
         180deg,
-        hsl(42 45% 99% / 0.98) 0%,
-        hsl(36 42% 97% / 0.98) 100%
+        hsl(0 0% 100% / 0.97) 0%,
+        hsl(var(--public-register-surface) / 0.98) 52%,
+        hsl(var(--public-register-surface-2) / 0.96) 100%
       );
     box-shadow:
-      0 22px 42px -34px hsl(28 24% 30% / 0.12),
+      0 24px 48px -36px hsl(191 38% 24% / 0.16),
       0 1px 2px hsl(var(--public-shadow) / 0.04);
   }
 
@@ -14321,7 +14329,7 @@ html[data-public-home-flagship="true"] ::selection {
     justify-content: space-between;
     gap: 0.9rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid hsl(34 20% 78% / 0.52);
+    border-bottom: 1px solid hsl(var(--public-register-border) / 0.56);
   }
 
   .public-summer-register-eyebrow {
@@ -14329,7 +14337,7 @@ html[data-public-home-flagship="true"] ::selection {
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: hsl(32 20% 46%);
+    color: hsl(var(--public-register-muted));
   }
 
   .public-summer-register-title {
@@ -14338,20 +14346,20 @@ html[data-public-home-flagship="true"] ::selection {
     font-weight: 600;
     line-height: 0.98;
     letter-spacing: -0.035em;
-    color: hsl(26 17% 18%);
+    color: hsl(var(--public-register-ink));
   }
 
   .public-summer-register-summary {
     max-width: 33rem;
     font-size: 0.98rem;
     line-height: 1.62;
-    color: hsl(30 10% 38%);
+    color: hsl(var(--public-register-muted));
   }
 
   .public-summer-register-signin {
     padding-top: 0.35rem;
     font-size: 0.94rem;
-    color: hsl(30 10% 43%);
+    color: hsl(var(--public-register-muted));
   }
 
   .public-summer-register-form {
@@ -14375,22 +14383,22 @@ html[data-public-home-flagship="true"] ::selection {
   .public-summer-register-select-trigger {
     min-height: 3rem;
     border-radius: 0.95rem;
-    border-color: hsl(34 18% 76% / 0.78);
+    border-color: hsl(var(--public-register-border) / 0.84);
     background:
       linear-gradient(
         180deg,
-        hsl(40 40% 99% / 0.99) 0%,
-        hsl(38 30% 97% / 0.98) 100%
+        hsl(0 0% 100% / 0.99) 0%,
+        hsl(var(--public-register-surface) / 0.96) 100%
       );
     padding-inline: 0.95rem 0.85rem;
-    color: hsl(26 16% 24%);
+    color: hsl(var(--public-register-ink));
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.8),
-      0 12px 20px -24px hsl(28 24% 28% / 0.12);
+      0 12px 20px -24px hsl(191 30% 24% / 0.12);
   }
 
   .public-summer-register-select-trigger[data-placeholder] {
-    color: hsl(30 9% 46%);
+    color: hsl(var(--public-register-muted));
   }
 
   .public-summer-register-select-trigger:hover {
@@ -14398,8 +14406,8 @@ html[data-public-home-flagship="true"] ::selection {
     background:
       linear-gradient(
         180deg,
-        hsl(40 46% 99% / 1) 0%,
-        hsl(38 34% 97% / 0.99) 100%
+        hsl(0 0% 100% / 1) 0%,
+        hsl(var(--public-register-surface-2) / 0.9) 100%
       );
   }
 
@@ -14410,7 +14418,7 @@ html[data-public-home-flagship="true"] ::selection {
     box-shadow:
       0 0 0 4px hsl(var(--public-register-accent-end) / 0.1),
       inset 0 1px 0 hsl(0 0% 100% / 0.82),
-      0 16px 24px -24px hsl(28 24% 28% / 0.12);
+      0 16px 24px -24px hsl(191 30% 24% / 0.16);
   }
 
   .public-summer-register-select-trigger > svg {
@@ -14420,43 +14428,48 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-select-content {
-    border-color: hsl(34 22% 78% / 0.84);
+    border-color: hsl(var(--public-register-border) / 0.84);
     background:
       linear-gradient(
         180deg,
-        hsl(40 42% 99% / 0.98) 0%,
-        hsl(38 38% 97% / 0.98) 100%
+        hsl(0 0% 100% / 0.98) 0%,
+        hsl(var(--public-register-surface) / 0.98) 100%
       );
-    box-shadow: 0 24px 48px -28px hsl(28 24% 30% / 0.18);
+    box-shadow: 0 24px 48px -28px hsl(191 30% 24% / 0.18);
   }
 
   .public-summer-register-panel .public-flow-card-soft {
     border-radius: 1.15rem;
-    border-color: hsl(var(--public-border) / 0.62);
-    background: hsl(var(--public-surface) / 0.96);
-    box-shadow: none;
+    border-color: hsl(var(--public-register-border) / 0.66);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(0 0% 100% / 0.9) 0%,
+        hsl(var(--public-register-surface) / 0.94) 100%
+      );
+    box-shadow: 0 16px 30px -28px hsl(191 26% 22% / 0.12);
   }
 
   .public-summer-register-panel .public-flow-input {
     min-height: 3rem;
     border-radius: 0.95rem;
-    border-color: hsl(34 18% 76% / 0.78);
-    background: hsl(40 36% 99% / 0.98);
+    border-color: hsl(var(--public-register-border) / 0.84);
+    background: hsl(0 0% 100% / 0.98);
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.8),
-      0 12px 20px -24px hsl(28 24% 28% / 0.12);
+      0 12px 20px -24px hsl(191 30% 24% / 0.12);
   }
 
   .public-summer-register-panel .public-flow-label {
     margin-bottom: 0.45rem;
     font-size: 0.88rem;
-    color: hsl(26 16% 24%);
+    color: hsl(var(--public-register-ink));
   }
 
   .public-summer-register-panel .public-flow-helper {
     margin-top: 0.35rem;
     line-height: 1.35;
-    color: hsl(30 9% 46%);
+    color: hsl(var(--public-register-muted));
   }
 
   .public-summer-register-panel .public-flow-input:focus,
@@ -14474,9 +14487,9 @@ html[data-public-home-flagship="true"] ::selection {
   }
 
   .public-summer-register-panel .public-flow-badge {
-    border-color: hsl(var(--public-border) / 0.72);
-    background: hsl(var(--public-surface-2) / 0.72);
-    color: hsl(var(--public-ink-soft));
+    border-color: hsl(var(--public-register-border) / 0.74);
+    background: hsl(var(--public-register-surface-2) / 0.8);
+    color: hsl(var(--public-register-accent-start) / 0.9);
   }
 
   .public-summer-register-panel .public-flow-button-primary {
@@ -14486,11 +14499,20 @@ html[data-public-home-flagship="true"] ::selection {
         hsl(var(--public-register-accent-start)) 0%,
         hsl(var(--public-register-accent-end)) 100%
       );
-    box-shadow: 0 18px 30px -24px hsl(28 36% 30% / 0.3);
+    box-shadow: 0 18px 30px -24px hsl(187 56% 24% / 0.34);
   }
 
   .public-summer-register-panel .public-flow-button-secondary {
-    box-shadow: none;
+    border-color: hsl(var(--public-register-border-strong) / 0.72);
+    background: hsl(0 0% 100% / 0.78);
+    color: hsl(var(--public-register-ink));
+    box-shadow: 0 14px 24px -24px hsl(191 28% 24% / 0.14);
+  }
+
+  .public-summer-register-panel
+    .public-flow-button-secondary:not(:disabled):not([aria-disabled='true']):hover {
+    border-color: hsl(var(--public-register-accent-end) / 0.34);
+    background: hsl(var(--public-register-surface-2) / 0.92);
   }
 
   .public-summer-register-panel .public-flow-text-link {
@@ -14503,22 +14525,27 @@ html[data-public-home-flagship="true"] ::selection {
     align-items: flex-start;
     gap: 0.75rem;
     border-radius: 1rem;
-    border: 1px solid hsl(34 20% 80% / 0.72);
-    background: hsl(42 30% 98% / 0.9);
+    border: 1px solid hsl(var(--public-register-border) / 0.76);
+    background:
+      linear-gradient(
+        180deg,
+        hsl(0 0% 100% / 0.86) 0%,
+        hsl(var(--public-register-surface) / 0.9) 100%
+      );
     padding: 0.95rem 1rem;
   }
 
   .public-summer-register-submit {
     border-radius: 1.1rem;
-    border: 1px solid hsl(34 20% 80% / 0.72);
+    border: 1px solid hsl(var(--public-register-border) / 0.76);
     background:
       linear-gradient(
         180deg,
-        hsl(40 38% 99% / 0.98) 0%,
-        hsl(38 36% 96% / 0.98) 100%
+        hsl(0 0% 100% / 0.97) 0%,
+        hsl(var(--public-register-surface-2) / 0.9) 100%
       );
     padding: 0.9rem;
-    box-shadow: 0 18px 36px -34px hsl(28 24% 30% / 0.12);
+    box-shadow: 0 18px 36px -34px hsl(191 28% 24% / 0.14);
   }
 
   .public-summer-register-submit-note {
@@ -14526,13 +14553,14 @@ html[data-public-home-flagship="true"] ::selection {
     text-align: center;
     font-size: 0.76rem;
     line-height: 1.45;
-    color: hsl(30 10% 43%);
+    color: hsl(var(--public-register-muted));
   }
 
   .public-summer-register-support {
     margin-top: 0.85rem;
     text-align: center;
     font-size: 0.9rem;
+    color: hsl(var(--public-register-muted));
   }
 
   .public-flow-hero {
