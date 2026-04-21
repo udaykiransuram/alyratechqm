@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { connectDB } from "@/lib/db";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 import ContactInfo from "@/models/ContactInfo";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,17 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
+    if (isMockedE2ETestMode()) {
+      return NextResponse.json(
+        { success: true, data: null },
+        {
+          headers: {
+            "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+          },
+        },
+      );
+    }
+
     await connectDB();
     const doc = await ContactInfo.findOne();
     return NextResponse.json(

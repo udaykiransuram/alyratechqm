@@ -23,7 +23,9 @@ const useDevServer =
   (!isCI && process.env.PLAYWRIGHT_USE_DEV_SERVER !== "0");
 const reuseExistingServer =
   !isCI && process.env.PLAYWRIGHT_REUSE_SERVER === "1";
-const configuredWorkers = Number(process.env.PLAYWRIGHT_WORKERS || "2");
+const configuredWorkers = Number(process.env.PLAYWRIGHT_WORKERS || "");
+const defaultLocalWorkerCount =
+  !useExternalServer && useDevServer ? 1 : 2;
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const managedServerScriptPath = fileURLToPath(
   new URL("../scripts/playwright-web-server.mjs", import.meta.url),
@@ -55,7 +57,7 @@ export default defineConfig({
       ? 2
       : Number.isFinite(configuredWorkers) && configuredWorkers > 0
         ? configuredWorkers
-        : 2,
+        : defaultLocalWorkerCount,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL,
