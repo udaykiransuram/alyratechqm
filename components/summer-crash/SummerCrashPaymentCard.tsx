@@ -112,16 +112,16 @@ export default function SummerCrashPaymentCard({
       : `Pay ${amountLabel}`;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {errorMessage ? (
         <FeedbackNotice variant="error">{errorMessage}</FeedbackNotice>
       ) : null}
 
-      <div className="flex flex-col gap-3">
+      <div className="public-summer-flow-stack">
         <Button
           type="button"
           disabled={isPending || isSdkLoading}
-          className="app-button-primary w-full"
+          className="app-button-primary min-h-11 w-full"
           onClick={handlePayNow}
         >
           {isPending
@@ -135,7 +135,7 @@ export default function SummerCrashPaymentCard({
           <Button
             type="button"
             variant="outline"
-            className="w-full"
+            className="w-full border-border/70 bg-background/70"
             onClick={() => window.location.reload()}
           >
             Check payment status

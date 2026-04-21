@@ -195,12 +195,12 @@ function ReportHero({
   const leadStrength = getLeadStrength(report);
 
   return (
-    <section className="relative overflow-hidden rounded-[2rem] border border-sky-200/70 bg-[linear-gradient(135deg,rgba(236,254,255,0.98)_0%,rgba(255,255,255,0.98)_44%,rgba(248,250,252,0.98)_100%)] px-5 py-6 shadow-[0_34px_70px_-48px_rgba(8,47,73,0.4)] sm:px-7 sm:py-8">
+    <div className="relative overflow-hidden rounded-[2rem] border border-sky-200/70 bg-[linear-gradient(135deg,rgba(236,254,255,0.98)_0%,rgba(255,255,255,0.98)_44%,rgba(248,250,252,0.98)_100%)] px-5 py-5 shadow-[0_34px_70px_-48px_rgba(8,47,73,0.4)] sm:px-6 sm:py-7">
       <div className="absolute -left-16 top-0 h-48 w-48 rounded-full bg-sky-200/35 blur-3xl" />
       <div className="absolute -right-10 bottom-0 h-56 w-56 rounded-full bg-teal-200/45 blur-3xl" />
       <div className="absolute inset-x-0 top-0 h-px bg-white/85" />
 
-      <div className="relative z-10 grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.9fr)]">
+      <div className="relative z-10 grid gap-3 md:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <MetaPill>Free Diagnostic Report</MetaPill>
@@ -208,15 +208,15 @@ function ReportHero({
             <MetaPill>{report.paperTitle}</MetaPill>
           </div>
 
-          <h1 className="mt-5 max-w-3xl text-pretty font-[family:var(--font-display)] text-[2rem] leading-tight text-slate-950 sm:text-[2.35rem]">
+          <h1 className="mt-4 max-w-2xl text-pretty font-[family:var(--font-display)] text-[2rem] leading-tight text-slate-950 sm:text-[2.25rem]">
             {report.student}&apos;s maths snapshot
           </h1>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-700 sm:text-[15px]">
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-700 sm:text-[15px]">
             A calmer parent view of what feels steady, what needs support, and what
             the next best step should be before the new term starts.
           </p>
 
-          <div className="mt-5 flex flex-wrap gap-2.5">
+          <div className="mt-4 flex flex-wrap gap-2">
             <MetaPill>Submitted {formatDateTime(report.submittedAt)}</MetaPill>
             {report.guardianName ? (
               <MetaPill>Parent: {report.guardianName}</MetaPill>
@@ -224,7 +224,7 @@ function ReportHero({
             <MetaPill>{getCourseStatusLabel(report)}</MetaPill>
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-5 flex flex-wrap gap-3">
             <Button asChild variant="outline" className="app-button-back">
               <AppPrefetchLink href={defaultBackHref}>
                 <ArrowLeft className="h-4 w-4" />
@@ -278,7 +278,7 @@ function ReportHero({
           />
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -1136,15 +1136,16 @@ export default function SummerCrashDiagnosticParentReport({
 
   return (
     <div className="app-student-page-shell">
-      <div className="space-y-6">
-        <ReportHero
-          report={report}
-          defaultBackHref={defaultBackHref}
-          courseActionHref={courseActionHref}
-          courseActionLabel={courseActionLabel}
-        />
-
-        <SummarySnapshot report={report} />
+      <div className="space-y-5 md:space-y-6">
+        <section className="space-y-4 md:space-y-5">
+          <ReportHero
+            report={report}
+            defaultBackHref={defaultBackHref}
+            courseActionHref={courseActionHref}
+            courseActionLabel={courseActionLabel}
+          />
+          <SummarySnapshot report={report} />
+        </section>
 
         {!isCourseUnlocked ? (
           <div id="summer-join-card" className="scroll-mt-24 lg:hidden">
