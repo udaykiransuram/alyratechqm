@@ -232,15 +232,17 @@ export default function SummerCrashSignInClient({
   };
 
   return (
-    <div className="public-flow-surface space-y-6">
-      <div className="space-y-2 text-center">
-        <div className="public-flow-badge mx-auto w-fit">Parent Sign In</div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+    <div className="public-flow-surface public-summer-flow-surface public-summer-flow-stack">
+      <div className="space-y-3 text-center">
+        <div className="public-flow-badge mx-auto w-fit">
+          {SUMMER_CRASH_DISPLAY_NAME}
+        </div>
+        <h1 className="text-[clamp(2rem,4vw,2.7rem)] font-extrabold tracking-tight text-foreground">
           Welcome back
         </h1>
-        <p className="text-sm text-muted-foreground sm:text-base">
-          Enter the parent phone number used during registration. If more than
-          one child is linked, choose the student and enter the password.
+        <p className="mx-auto max-w-2xl text-sm leading-6 text-muted-foreground">
+          Use the parent phone number to find the student account, then continue
+          with the password.
         </p>
       </div>
 
@@ -248,7 +250,7 @@ export default function SummerCrashSignInClient({
         <FeedbackNotice variant="error">{submitError}</FeedbackNotice>
       ) : null}
 
-      <div className="public-flow-card-soft space-y-5">
+      <div className="public-flow-card public-summer-flow-stack">
         <div className="flex items-start gap-3">
           <span className="public-flow-step">1</span>
           <div>
@@ -261,7 +263,7 @@ export default function SummerCrashSignInClient({
           </div>
         </div>
 
-        <form className="space-y-5" onSubmit={handleLookupSubmit}>
+        <form className="public-summer-flow-stack" onSubmit={handleLookupSubmit}>
           <div>
             <label className="public-flow-label" htmlFor="summerPhone">
               Parent phone number
@@ -294,7 +296,7 @@ export default function SummerCrashSignInClient({
       </div>
 
       {matches.length > 0 ? (
-        <div className="space-y-4">
+        <div className="public-summer-flow-stack">
           <div className="flex items-start gap-3">
             <span className="public-flow-step">2</span>
             <div>
@@ -309,7 +311,7 @@ export default function SummerCrashSignInClient({
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="public-summer-flow-stack">
             {matches.map((match) => {
               const isSelected = match.summerId === selectedSummerId;
 
@@ -318,10 +320,10 @@ export default function SummerCrashSignInClient({
                   key={`${match.summerId}-${match.studentName}`}
                   type="button"
                   className={[
-                    "w-full rounded-[1.35rem] border p-4 text-left transition",
+                    "public-flow-card public-summer-flow-stack w-full p-4 text-left transition sm:p-5",
                     isSelected
-                      ? "border-primary/70 bg-primary/[0.06] shadow-sm ring-2 ring-primary/15"
-                      : "border-border/70 bg-background/80 hover:border-primary/40 hover:bg-background",
+                      ? "border-primary/70 bg-primary/[0.06] ring-2 ring-primary/15"
+                      : "hover:border-primary/40 hover:bg-background",
                   ].join(" ")}
                   onClick={() => {
                     setSelectedSummerId(match.summerId);
@@ -361,8 +363,8 @@ export default function SummerCrashSignInClient({
       ) : null}
 
       {selectedMatch ? (
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div className="public-flow-card space-y-5">
+        <form className="public-summer-flow-stack" onSubmit={handleSubmit}>
+          <div className="public-flow-card public-summer-flow-stack">
             <div className="flex items-start gap-3">
               <span className="public-flow-step">3</span>
               <div>
@@ -438,7 +440,7 @@ export default function SummerCrashSignInClient({
         </FeedbackNotice>
       ) : null}
 
-      <div className="public-flow-card-soft space-y-4 text-center">
+      <div className="public-flow-card-soft public-summer-flow-stack text-center">
         <p className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
           More options
         </p>

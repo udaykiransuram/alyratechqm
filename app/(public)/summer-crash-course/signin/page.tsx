@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import SummerCrashSignInClient from "@/components/summer-crash/SummerCrashSignInClient";
 import {
@@ -63,17 +64,21 @@ export default async function SummerCrashSignInPage({
 
   return (
     <div className="public-flow-page">
-      <div className="public-flow-shell-narrow">
-        <SummerCrashSignInClient
-          phone={phone}
-          summerId={summerId}
-          nextHref={nextHref}
-          pageError={pageError}
-          initialMatches={initialLookupResult.matches}
-          initialLookupError={pageError ? "" : initialLookupResult.errorMessage}
-          supportContact={config.supportContact}
-          supportHref={config.supportHref}
-        />
+      <div className="public-flow-shell-narrow public-summer-shell">
+        <Suspense fallback={null}>
+          <SummerCrashSignInClient
+            phone={phone}
+            summerId={summerId}
+            nextHref={nextHref}
+            pageError={pageError}
+            initialMatches={initialLookupResult.matches}
+            initialLookupError={
+              pageError ? "" : initialLookupResult.errorMessage
+            }
+            supportContact={config.supportContact}
+            supportHref={config.supportHref}
+          />
+        </Suspense>
       </div>
     </div>
   );

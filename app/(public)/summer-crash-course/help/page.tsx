@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import SummerCrashLookupClient from "@/components/summer-crash/SummerCrashLookupClient";
 import { getSummerCrashPublicConfig } from "@/lib/server/summer-crash";
@@ -17,12 +18,14 @@ export default async function SummerCrashHelpPage() {
 
   return (
     <div className="public-flow-page">
-      <div className="public-flow-shell-narrow">
-        <SummerCrashLookupClient
-          campaignTitle={config.title}
-          supportContact={config.supportContact}
-          supportHref={config.supportHref}
-        />
+      <div className="public-flow-shell-narrow public-summer-shell">
+        <Suspense fallback={null}>
+          <SummerCrashLookupClient
+            campaignTitle={config.title}
+            supportContact={config.supportContact}
+            supportHref={config.supportHref}
+          />
+        </Suspense>
       </div>
     </div>
   );

@@ -105,13 +105,13 @@ export default function SummerCrashLookupClient({
   };
 
   return (
-    <div className="public-flow-surface space-y-6">
-      <div className="space-y-2 text-center">
+    <div className="public-flow-surface public-summer-flow-surface public-summer-flow-stack">
+      <div className="space-y-3 text-center">
         <div className="public-flow-badge mx-auto w-fit">Account Recovery</div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+        <h1 className="text-[clamp(2rem,4vw,2.7rem)] font-extrabold tracking-tight text-foreground">
           Find your child account
         </h1>
-        <p className="text-sm text-muted-foreground sm:text-base">
+        <p className="mx-auto max-w-2xl text-sm leading-6 text-muted-foreground">
           Enter the parent phone number used during registration for{" "}
           {campaignTitle}. We will show the linked student accounts before you
           continue to sign in.
@@ -122,7 +122,7 @@ export default function SummerCrashLookupClient({
         <FeedbackNotice variant="error">{errorMessage}</FeedbackNotice>
       ) : null}
 
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form className="public-summer-flow-stack" onSubmit={handleSubmit}>
         <div>
           <label className="public-flow-label" htmlFor="lookupPhone">
             Parent phone / WhatsApp number
@@ -151,9 +151,12 @@ export default function SummerCrashLookupClient({
       </form>
 
       {results.length > 0 ? (
-        <div className="space-y-4">
+        <div className="public-summer-flow-stack">
           {results.map((match) => (
-            <div key={`${match.summerId}-${match.studentName}`} className="public-flow-card">
+            <div
+              key={`${match.summerId}-${match.studentName}`}
+              className="public-flow-card public-summer-flow-stack"
+            >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-lg font-semibold text-foreground">
@@ -178,7 +181,7 @@ export default function SummerCrashLookupClient({
                   </p>
                 </div>
               </div>
-              <div className="mt-4">
+              <div>
                 <Link
                   href={`${SUMMER_CRASH_SIGNIN_PATH}?phone=${encodeURIComponent(
                     phone,
@@ -194,7 +197,7 @@ export default function SummerCrashLookupClient({
       ) : null}
 
       {results.length === 0 && !errorMessage ? (
-        <div className="public-flow-card-soft space-y-2 text-center">
+        <div className="public-flow-card-soft public-summer-flow-stack text-center">
           <p className="text-sm leading-6 text-muted-foreground">
             If you already registered, the linked summer student accounts will
             appear here.

@@ -221,20 +221,18 @@ export default function SummerCrashRegistrationClient({
   };
 
   return (
-    <div className="public-flow-shell-narrow public-summer-register-shell">
+    <div className="public-flow-surface public-summer-flow-surface public-summer-register-panel public-summer-flow-stack">
       {!isActive ? (
-        <div className="public-flow-surface public-summer-register-panel space-y-5 text-center">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">
-              {campaignTitle}
-            </p>
+        <>
+          <div className="public-summer-flow-stack text-center">
+            <div className="public-flow-badge mx-auto w-fit">{campaignTitle}</div>
             <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
               Registration is closed
             </h1>
+            <p className="mx-auto max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">
+              Existing families can still sign in. For help, contact support.
+            </p>
           </div>
-          <p className="mx-auto max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">
-            Existing families can still sign in. For help, contact support.
-          </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link
               href={SUMMER_CRASH_SIGNIN_PATH}
@@ -282,27 +280,23 @@ export default function SummerCrashRegistrationClient({
               )}
             </div>
           ) : null}
-        </div>
+        </>
       ) : (
-        <div className="public-flow-surface public-summer-register-panel space-y-4 sm:space-y-5">
-          <div className="public-summer-register-header">
-            <div className="space-y-2">
-              <p className="public-summer-register-eyebrow">
-                {campaignTitle}
-              </p>
-              <h1 className="public-summer-register-title">
-                {pageTitle}
-              </h1>
-              <p className="public-summer-register-summary">
-                {pageSummary}
-              </p>
+        <>
+          <div className="space-y-3 border-b border-[hsl(var(--public-register-border)/0.56)] pb-4 text-center sm:text-left">
+            <div className="public-flow-badge mx-auto w-fit sm:mx-0">
+              {campaignTitle}
             </div>
-            <div className="public-summer-register-signin">
-              Existing family?{" "}
+            <h1 className="public-summer-register-title">{pageTitle}</h1>
+            <p className="public-summer-register-summary mx-auto sm:mx-0">
+              {pageSummary}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Already registered?{" "}
               <Link href={SUMMER_CRASH_SIGNIN_PATH} className="public-flow-text-link">
-                Parent sign in
+                Sign in
               </Link>
-            </div>
+            </p>
           </div>
 
           {errorMessage ? (
@@ -310,202 +304,198 @@ export default function SummerCrashRegistrationClient({
           ) : null}
 
           <form
-            className="space-y-4"
+            className="public-summer-flow-stack"
             onSubmit={(event) => {
               event.preventDefault();
               handleRegister();
             }}
           >
-            <div className="public-summer-register-form">
-              <div className="public-summer-register-row public-summer-register-row-paired">
-                <div className="public-summer-register-field">
-                  <label className="public-flow-label" htmlFor="studentName">
-                    Student name
-                  </label>
-                  <Input
-                    id="studentName"
-                    value={form.studentName}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        studentName: event.target.value,
-                      }))
-                    }
-                    className="public-flow-input"
-                    placeholder="Student full name"
-                    autoComplete="name"
-                  />
-                </div>
+            <div className="public-summer-flow-grid public-summer-flow-grid-2">
+              <div className="public-summer-register-field">
+                <label className="public-flow-label" htmlFor="studentName">
+                  Student name
+                </label>
+                <Input
+                  id="studentName"
+                  value={form.studentName}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      studentName: event.target.value,
+                    }))
+                  }
+                  className="public-flow-input"
+                  placeholder="Student full name"
+                  autoComplete="name"
+                />
+              </div>
 
-                <div className="public-summer-register-field">
-                  <label className="public-flow-label" htmlFor="classBand">
-                    Class
-                  </label>
-                  <Select
-                    value={form.classBand}
-                    onValueChange={(value) =>
-                      setForm((current) => ({
-                        ...current,
-                        classBand: value,
-                      }))
-                    }
-                    disabled={isPending}
+              <div className="public-summer-register-field">
+                <label className="public-flow-label" htmlFor="classBand">
+                  Class
+                </label>
+                <Select
+                  value={form.classBand}
+                  onValueChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      classBand: value,
+                    }))
+                  }
+                  disabled={isPending}
+                >
+                  <SelectTrigger
+                    id="classBand"
+                    aria-label="Class"
+                    className="public-summer-register-select-trigger"
                   >
-                    <SelectTrigger
-                      id="classBand"
-                      aria-label="Class"
-                      className="public-summer-register-select-trigger"
-                    >
-                      <SelectValue placeholder="Select class" />
-                    </SelectTrigger>
-                    <SelectContent className="public-summer-register-select-content">
-                      {classBands.map((option) => (
-                        <SelectItem key={option.classBand} value={option.classBand}>
-                          {option.classBand}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <SelectValue placeholder="Select class" />
+                  </SelectTrigger>
+                  <SelectContent className="public-summer-register-select-content">
+                    {classBands.map((option) => (
+                      <SelectItem key={option.classBand} value={option.classBand}>
+                        {option.classBand}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="public-summer-flow-stack">
+              <div className="public-summer-register-field">
+                <label className="public-flow-label" htmlFor="sourceSchoolName">
+                  School name
+                  <span className="text-muted-foreground"> (optional)</span>
+                </label>
+                <Input
+                  id="sourceSchoolName"
+                  value={form.sourceSchoolName}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      sourceSchoolName: event.target.value,
+                    }))
+                  }
+                  className="public-flow-input"
+                  placeholder="Current school"
+                  autoComplete="organization"
+                />
+              </div>
+            </div>
+
+            <div className="public-summer-flow-grid public-summer-flow-grid-2">
+              <div className="public-summer-register-field">
+                <label className="public-flow-label" htmlFor="guardianName">
+                  Parent name
+                </label>
+                <Input
+                  id="guardianName"
+                  value={form.guardianName}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      guardianName: event.target.value,
+                    }))
+                  }
+                  className="public-flow-input"
+                  placeholder="Parent or guardian name"
+                  autoComplete="name"
+                />
               </div>
 
-              <div className="public-summer-register-row">
-                <div className="public-summer-register-field">
-                  <label className="public-flow-label" htmlFor="sourceSchoolName">
-                    School name
-                    <span className="text-muted-foreground"> (optional)</span>
-                  </label>
+              <div className="public-summer-register-field">
+                <label className="public-flow-label" htmlFor="phone">
+                  Phone number
+                </label>
+                <Input
+                  id="phone"
+                  value={form.phone}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      phone: event.target.value,
+                    }))
+                  }
+                  className="public-flow-input"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="Active phone number"
+                />
+              </div>
+            </div>
+
+            <div className="public-summer-flow-grid public-summer-flow-grid-2">
+              <div className="public-summer-register-field">
+                <label className="public-flow-label" htmlFor="password">
+                  Password
+                </label>
+                <div className="relative">
                   <Input
-                    id="sourceSchoolName"
-                    value={form.sourceSchoolName}
+                    id="password"
+                    value={form.password}
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        sourceSchoolName: event.target.value,
+                        password: event.target.value,
                       }))
                     }
-                    className="public-flow-input"
-                    placeholder="Current school"
-                    autoComplete="organization"
+                    className="public-flow-input pr-12"
+                    type={showPasswords ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Create password"
                   />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    onClick={() => setShowPasswords((current) => !current)}
+                    aria-label={showPasswords ? "Hide password" : "Show password"}
+                  >
+                    {showPasswords ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
+                <p className="public-flow-helper">Minimum 6 characters.</p>
               </div>
 
-              <div className="public-summer-register-row public-summer-register-row-paired">
-                <div className="public-summer-register-field">
-                  <label className="public-flow-label" htmlFor="guardianName">
-                    Parent name
-                  </label>
+              <div className="public-summer-register-field">
+                <label className="public-flow-label" htmlFor="confirmPassword">
+                  Confirm password
+                </label>
+                <div className="relative">
                   <Input
-                    id="guardianName"
-                    value={form.guardianName}
+                    id="confirmPassword"
+                    value={form.confirmPassword}
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        guardianName: event.target.value,
+                        confirmPassword: event.target.value,
                       }))
                     }
-                    className="public-flow-input"
-                    placeholder="Parent or guardian name"
-                    autoComplete="name"
+                    className="public-flow-input pr-12"
+                    type={showPasswords ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Re-enter password"
                   />
-                </div>
-
-                <div className="public-summer-register-field">
-                  <label className="public-flow-label" htmlFor="phone">
-                    Phone number
-                  </label>
-                  <Input
-                    id="phone"
-                    value={form.phone}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        phone: event.target.value,
-                      }))
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    onClick={() => setShowPasswords((current) => !current)}
+                    aria-label={
+                      showPasswords
+                        ? "Hide confirm password"
+                        : "Show confirm password"
                     }
-                    className="public-flow-input"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    placeholder="Active phone number"
-                  />
-                </div>
-              </div>
-
-              <div className="public-summer-register-row public-summer-register-row-paired">
-                <div className="public-summer-register-field">
-                  <label className="public-flow-label" htmlFor="password">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      value={form.password}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          password: event.target.value,
-                        }))
-                      }
-                      className="public-flow-input pr-12"
-                      type={showPasswords ? "text" : "password"}
-                      autoComplete="new-password"
-                      placeholder="Create password"
-                    />
-                    <button
-                      type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      onClick={() => setShowPasswords((current) => !current)}
-                      aria-label={showPasswords ? "Hide password" : "Show password"}
-                    >
-                      {showPasswords ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                  <p className="public-flow-helper">
-                    Minimum 6 characters.
-                  </p>
-                </div>
-
-                <div className="public-summer-register-field">
-                  <label className="public-flow-label" htmlFor="confirmPassword">
-                    Confirm password
-                  </label>
-                  <div className="relative">
-                    <Input
-                      id="confirmPassword"
-                      value={form.confirmPassword}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          confirmPassword: event.target.value,
-                        }))
-                      }
-                      className="public-flow-input pr-12"
-                      type={showPasswords ? "text" : "password"}
-                      autoComplete="new-password"
-                      placeholder="Re-enter password"
-                    />
-                    <button
-                      type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      onClick={() => setShowPasswords((current) => !current)}
-                      aria-label={
-                        showPasswords
-                          ? "Hide confirm password"
-                          : "Show confirm password"
-                      }
-                    >
-                      {showPasswords ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
+                  >
+                    {showPasswords ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -527,7 +517,7 @@ export default function SummerCrashRegistrationClient({
               </span>
             </label>
 
-            <div className="public-summer-register-submit">
+            <div className="public-summer-register-submit public-summer-flow-stack">
               <Button
                 type="submit"
                 disabled={isPending}
@@ -571,7 +561,7 @@ export default function SummerCrashRegistrationClient({
               )}
             </div>
           </form>
-        </div>
+        </>
       )}
     </div>
   );

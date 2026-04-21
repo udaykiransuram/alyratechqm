@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import SummerCrashRegistrationClient from "@/components/summer-crash/SummerCrashRegistrationClient";
 import { getSummerCrashPublicConfig } from "@/lib/server/summer-crash";
@@ -35,8 +36,15 @@ export default async function SummerCrashRegisterPage({
       : "direct_registration";
 
   return (
-    <main className="public-flow-page public-summer-register-page">
-      <SummerCrashRegistrationClient {...config} entrySource={entrySource} />
-    </main>
+    <div className="public-flow-page public-summer-register-page">
+      <div className="public-flow-shell-narrow public-summer-shell public-summer-register-shell">
+        <Suspense fallback={null}>
+          <SummerCrashRegistrationClient
+            {...config}
+            entrySource={entrySource}
+          />
+        </Suspense>
+      </div>
+    </div>
   );
 }
