@@ -119,6 +119,7 @@ export const InnerHero = ({
               src={lottieRight}
               autoplay={!ambientMotionDisabled}
               respectLiteMode={false}
+              eager
               className={cn(
                 "h-[18rem] w-[18rem] opacity-80 drop-shadow-[0_28px_42px_rgba(15,23,42,0.10)] xl:h-[24rem] xl:w-[24rem] 2xl:h-[30rem] 2xl:w-[30rem]",
                 lottieRightClassName,
@@ -144,6 +145,7 @@ export const InnerHero = ({
               src={lottieLeft}
               autoplay={!ambientMotionDisabled}
               respectLiteMode={false}
+              eager
               className={cn(
                 "h-[16rem] w-[16rem] opacity-74 drop-shadow-[0_24px_38px_rgba(15,23,42,0.09)] xl:h-[22rem] xl:w-[22rem] 2xl:h-[27rem] 2xl:w-[27rem]",
                 lottieLeftClassName,

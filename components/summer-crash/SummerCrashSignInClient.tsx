@@ -35,6 +35,8 @@ type SummerCrashSignInClientProps = {
   summerId?: string;
   nextHref?: string;
   pageError?: string;
+  supportContact?: string;
+  supportHref?: string;
 };
 
 type SummerCrashLookupResponse = {
@@ -110,6 +112,8 @@ export default function SummerCrashSignInClient({
   summerId = "",
   nextHref = "",
   pageError = "",
+  supportContact = "",
+  supportHref = "",
 }: SummerCrashSignInClientProps) {
   const searchParams = useSearchParams();
   const initialPhoneValue = String(
@@ -125,6 +129,7 @@ export default function SummerCrashSignInClient({
   const initialPageErrorMessage = getSummerCrashAuthErrorMessage(
     pageError || searchParams.get("error"),
   );
+  const supportWhatsappHref = String(supportHref || "").trim();
   const [phone, setPhone] = useState(initialPhoneValue);
   const [matches, setMatches] = useState<NormalizedSummerCrashLookupMatch[]>(
     [],
@@ -479,18 +484,40 @@ export default function SummerCrashSignInClient({
         </FeedbackNotice>
       ) : null}
 
-      <div className="public-flow-card-soft space-y-3 text-center">
-        <p className="text-sm leading-6 text-muted-foreground">
-          Need help signing in?
+      <div className="public-flow-card-soft space-y-4 text-center">
+        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          More options
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <Link href={SUMMER_CRASH_REGISTER_PATH} className="public-flow-text-link">
-            Register
+          <Link
+            href={SUMMER_CRASH_REGISTER_PATH}
+            className="public-flow-button-secondary w-full justify-center sm:w-auto"
+          >
+            Create parent account
           </Link>
-          <Link href={SUMMER_CRASH_HELP_PATH} className="public-flow-text-link">
-            Get Sign-In Help
-          </Link>
+          {supportWhatsappHref ? (
+            <a
+              href={supportWhatsappHref}
+              target="_blank"
+              rel="noreferrer"
+              className="public-flow-button-secondary w-full justify-center sm:w-auto"
+            >
+              WhatsApp support
+            </a>
+          ) : (
+            <Link
+              href={SUMMER_CRASH_HELP_PATH}
+              className="public-flow-button-secondary w-full justify-center sm:w-auto"
+            >
+              Find registered account
+            </Link>
+          )}
         </div>
+        {!supportWhatsappHref && supportContact ? (
+          <p className="text-sm leading-6 text-muted-foreground">
+            Support: {supportContact}
+          </p>
+        ) : null}
       </div>
     </div>
   );

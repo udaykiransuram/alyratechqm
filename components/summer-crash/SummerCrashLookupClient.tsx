@@ -23,7 +23,7 @@ import {
 } from "@/lib/summer-crash/shared";
 
 type SummerCrashLookupClientProps = {
-  title: string;
+  campaignTitle: string;
   supportContact: string;
   supportHref?: string;
 };
@@ -35,7 +35,7 @@ type SummerCrashLookupResponse = {
 };
 
 export default function SummerCrashLookupClient({
-  title,
+  campaignTitle,
   supportContact,
   supportHref = "",
 }: SummerCrashLookupClientProps) {
@@ -107,13 +107,14 @@ export default function SummerCrashLookupClient({
   return (
     <div className="public-flow-surface space-y-6">
       <div className="space-y-2 text-center">
-        <div className="public-flow-badge mx-auto w-fit">Sign-in Help</div>
+        <div className="public-flow-badge mx-auto w-fit">Account Recovery</div>
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-          {title}
+          Find your child account
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          Enter the parent phone number used during registration. We will show
-          the linked summer student accounts.
+          Enter the parent phone number used during registration for{" "}
+          {campaignTitle}. We will show the linked student accounts before you
+          continue to sign in.
         </p>
       </div>
 
@@ -145,7 +146,7 @@ export default function SummerCrashLookupClient({
           disabled={isPending}
           className="public-flow-button-primary w-full justify-center"
         >
-          {isPending ? "Finding..." : "Find Student"}
+          {isPending ? "Finding..." : "Find account"}
         </Button>
       </form>
 
@@ -184,7 +185,7 @@ export default function SummerCrashLookupClient({
                   )}&summerId=${encodeURIComponent(String(match.summerId || ""))}`}
                   className="public-flow-button-secondary w-full justify-center sm:inline-flex sm:w-auto"
                 >
-                  Continue to Sign In
+                  Continue to parent sign in
                 </Link>
               </div>
             </div>
@@ -219,10 +220,10 @@ export default function SummerCrashLookupClient({
           ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link href={SUMMER_CRASH_SIGNIN_PATH} className="public-flow-text-link">
-              Go to Sign In
+              Parent sign in
             </Link>
             <Link href={SUMMER_CRASH_REGISTER_PATH} className="public-flow-text-link">
-              Register Free
+              Create parent account
             </Link>
           </div>
         </div>

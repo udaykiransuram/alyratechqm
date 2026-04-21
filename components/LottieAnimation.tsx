@@ -7,17 +7,29 @@ import { useEffect, useRef, useState } from "react";
 import { useClientRuntimeSignals } from "@/lib/client/runtime-signals";
 
 const LOCAL_DOTLOTTIE_WASM_URL = "/wasm/dotlottie-player.wasm";
+let dotLottiePlayerPromise:
+  | Promise<typeof import("@lottiefiles/dotlottie-react")>
+  | null = null;
+
+function loadDotLottiePlayer() {
+  if (!dotLottiePlayerPromise) {
+    dotLottiePlayerPromise = import("@lottiefiles/dotlottie-react").then(
+      (module) => {
+        // Force the player to load the WASM bundle from our own deployment.
+        // The upstream default falls back to external CDNs, which is fragile
+        // behind production CSPs and is what breaks on Vercel.
+        module.setWasmUrl(LOCAL_DOTLOTTIE_WASM_URL);
+        return module;
+      },
+    );
+  }
+
+  return dotLottiePlayerPromise;
+}
 
 // Lazy-load the heavy Lottie player on the client to reduce initial JS
 const DotLottieReact = dynamic(
-  () =>
-    import("@lottiefiles/dotlottie-react").then((module) => {
-      // Force the player to load the WASM bundle from our own deployment.
-      // The upstream default falls back to external CDNs, which is fragile
-      // behind production CSPs and is what breaks on Vercel.
-      module.setWasmUrl(LOCAL_DOTLOTTIE_WASM_URL);
-      return module.DotLottieReact;
-    }),
+  () => loadDotLottiePlayer().then((module) => module.DotLottieReact),
   {
     ssr: false,
     // Show a lightweight placeholder while the chunk loads; avoids layout shifts
@@ -35,6 +47,7 @@ interface LottieAnimationProps {
   speed?: number;
   preferStatic?: boolean;
   respectLiteMode?: boolean;
+  eager?: boolean;
 }
 
 export function LottieAnimation({
@@ -45,10 +58,11 @@ export function LottieAnimation({
   speed = 1,
   preferStatic = false,
   respectLiteMode = true,
+  eager = false,
 }: LottieAnimationProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const runtimeSignals = useClientRuntimeSignals();
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(eager);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const [dotLottie, setDotLottie] = useState<DotLottie | null>(null);
   const isGif = /\.(gif|webp)$/i.test(src);
@@ -66,7 +80,18 @@ export function LottieAnimation({
   }, [src]);
 
   useEffect(() => {
-    if (!containerRef.current || isVisible) return;
+    if (eager) {
+      setIsVisible(true);
+    }
+  }, [eager]);
+
+  useEffect(() => {
+    if (!eager || !isLottie || shouldPreferStatic) return;
+    void loadDotLottiePlayer();
+  }, [eager, isLottie, shouldPreferStatic]);
+
+  useEffect(() => {
+    if (eager || !containerRef.current || isVisible) return;
     const el = containerRef.current;
     const io = new IntersectionObserver(
       (entries) => {
@@ -81,7 +106,7 @@ export function LottieAnimation({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [isVisible]);
+  }, [eager, isVisible]);
 
   useEffect(() => {
     if (!dotLottie) return;
@@ -118,8 +143,9 @@ export function LottieAnimation({
           <img
             src={src}
             alt="animation"
-            loading="lazy"
+            loading={eager ? "eager" : "lazy"}
             decoding="async"
+            fetchPriority={eager ? "high" : "auto"}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
           />
         ) : isVideo ? (
@@ -130,7 +156,7 @@ export function LottieAnimation({
             muted
             loop={loop}
             playsInline
-            preload="none"
+            preload={eager ? "auto" : "none"}
           />
         ) : isLottie ? (
           // Lottie with graceful fallback if the runtime chunk fails to load
@@ -154,8 +180,9 @@ export function LottieAnimation({
           <img
             src={src}
             alt="illustration"
-            loading="lazy"
+            loading={eager ? "eager" : "lazy"}
             decoding="async"
+            fetchPriority={eager ? "high" : "auto"}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
           />
         )

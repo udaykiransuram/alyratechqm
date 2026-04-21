@@ -48,16 +48,17 @@ export default async function StudentSummerCrashHomePage({
     );
   }
 
-  const state = await getSummerCrashStudentState({
-    schoolKey: String(session.user.schoolKey || ""),
-    studentId: String(session.user.id || ""),
-    studentPlacement: {
-      classId: session.user.studentClassId,
-      academicSectionId: session.user.studentAcademicSectionId,
-    },
-  });
-
-  const resolvedSearchParams = await searchParams;
+  const [state, resolvedSearchParams] = await Promise.all([
+    getSummerCrashStudentState({
+      schoolKey: String(session.user.schoolKey || ""),
+      studentId: String(session.user.id || ""),
+      studentPlacement: {
+        classId: session.user.studentClassId,
+        academicSectionId: session.user.studentAcademicSectionId,
+      },
+    }),
+    searchParams,
+  ]);
   const submitted = getSearchParam(resolvedSearchParams?.submitted) === "1";
   const mode = getSearchParam(resolvedSearchParams?.mode);
 

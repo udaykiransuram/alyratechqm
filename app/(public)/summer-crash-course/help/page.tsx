@@ -6,8 +6,9 @@ import SummerCrashSessionRedirect from "@/components/summer-crash/SummerCrashSes
 import { getSummerCrashPublicConfig } from "@/lib/server/summer-crash";
 
 export const metadata: Metadata = {
-  title: "Sign-in Help | Summer Crash Course",
-  description: "Find the linked Summer Crash Course student accounts with the parent phone number.",
+  title: "Find Account | Summer Crash Course",
+  description:
+    "Find the linked Summer Crash Course student accounts with the parent phone number.",
 };
 
 export default async function SummerCrashHelpPage() {
@@ -20,7 +21,7 @@ export default async function SummerCrashHelpPage() {
       </Suspense>
       <div className="public-flow-shell-narrow">
         <SummerCrashLookupClient
-          title={config.title}
+          campaignTitle={config.title}
           supportContact={config.supportContact}
           supportHref={config.supportHref}
         />

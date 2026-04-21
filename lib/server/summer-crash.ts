@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { unstable_cache } from "next/cache";
+import { after } from "next/server";
 import { cache } from "react";
 
 import { buildArchiveFilter, buildRestoreUpdate } from "@/lib/archive";
@@ -761,15 +762,15 @@ async function buildSummerCrashDiagnosticState(params: {
     return null;
   }
 
-  const paperSummary = await loadSummerCrashQuestionPaperSummary(
-    diagnosticQuestionPaperId,
-  );
-  const snapshot = await resolveSummerCrashDiagnosticSnapshot({
-    schoolKey: params.schoolKey,
-    studentId: params.studentId,
-    diagnosticPaperId: diagnosticQuestionPaperId,
-    enrollment: params.enrollment,
-  });
+  const [paperSummary, snapshot] = await Promise.all([
+    loadSummerCrashQuestionPaperSummary(diagnosticQuestionPaperId),
+    resolveSummerCrashDiagnosticSnapshot({
+      schoolKey: params.schoolKey,
+      studentId: params.studentId,
+      diagnosticPaperId: diagnosticQuestionPaperId,
+      enrollment: params.enrollment,
+    }),
+  ]);
   const score = Number(params.enrollment?.diagnosticScore ?? snapshot.score);
   const percent = Number(params.enrollment?.diagnosticPercent);
   const status = String(
@@ -1724,94 +1725,108 @@ export async function getSummerCrashStudentState(params: {
     throw new Error("Summer Crash Course access is only available for summer accounts.");
   }
 
-  const { campaign, enrollment, courseAccess } =
-    await getSummerCrashCourseAccessForStudent({
-      schoolKey: params.schoolKey,
-      studentId: params.studentId,
-    });
-  const { User: UserModel } = await getTenantModels(params.schoolKey, ["User"]);
-  const studentRecord = await UserModel.findById(params.studentId).select(
-    "name fatherName mobileNumber passwordHash rollNumber role",
+  const studentRecordPromise = getTenantModels(params.schoolKey, ["User"]).then(
+    ({ User: UserModel }) =>
+      UserModel.findById(params.studentId).select(
+        "name fatherName mobileNumber passwordHash rollNumber role",
+      ),
   );
+  const [{ campaign, enrollment, courseAccess }, studentRecord] =
+    await Promise.all([
+      getSummerCrashCourseAccessForStudent({
+        schoolKey: params.schoolKey,
+        studentId: params.studentId,
+      }),
+      studentRecordPromise,
+    ]);
 
   if (!studentRecord || String(studentRecord.role || "") !== "student") {
     throw new Error("Summer Crash Course student account not found.");
   }
 
   const classBand = normalizeSummerCrashText(enrollment?.classBand);
-  const requiresPasswordSetup = await isUsingDefaultStudentPassword({
-    mobileNumber: studentRecord.mobileNumber,
-    passwordHash: studentRecord.passwordHash,
-  });
   const includeCourses = params.includeCourses !== false;
   const classMapping = classBand
     ? resolveSummerCrashClassMapping(campaign, classBand)
     : null;
   const mappedCourseIds = Array.isArray(classMapping?.courseIds)
-    ? classMapping!.courseIds
+    ? classMapping.courseIds
     : [];
-  let courses: StudentCourseSummary[] = [];
-  if (includeCourses && courseAccess.isUnlocked) {
-    if (mappedCourseIds.length > 0) {
-      courses = await loadSummerCrashMappedCourseSummaries({
-        schoolKey: params.schoolKey,
-        studentId: params.studentId,
-        mappedCourseIds,
-      });
-    } else {
-      const courseList = await listStudentCoursesPage({
-        schoolKey: params.schoolKey,
-        studentId: params.studentId,
-        studentPlacement: params.studentPlacement,
-        page: 1,
-        limit: 60,
-        includeOptions: false,
-      });
-      courses = classBand
-        ? filterCoursesBySummerCrashMapping({
-            campaign,
-            classBand,
-            courses: courseList.items,
+  const requiresPasswordSetupPromise = isUsingDefaultStudentPassword({
+    mobileNumber: studentRecord.mobileNumber,
+    passwordHash: studentRecord.passwordHash,
+  });
+  const coursesPromise: Promise<StudentCourseSummary[]> =
+    includeCourses && courseAccess.isUnlocked
+      ? mappedCourseIds.length > 0
+        ? loadSummerCrashMappedCourseSummaries({
+            schoolKey: params.schoolKey,
+            studentId: params.studentId,
+            mappedCourseIds,
           })
-        : courseList.items;
-    }
-  }
-  const diagnostic = classBand
-    ? await buildSummerCrashDiagnosticState({
+        : listStudentCoursesPage({
+            schoolKey: params.schoolKey,
+            studentId: params.studentId,
+            studentPlacement: params.studentPlacement,
+            page: 1,
+            limit: 60,
+            includeOptions: false,
+          }).then((courseList) =>
+            classBand
+              ? filterCoursesBySummerCrashMapping({
+                  campaign,
+                  classBand,
+                  courses: courseList.items,
+                })
+              : courseList.items,
+          )
+      : Promise.resolve([]);
+  const diagnosticPromise = classBand
+    ? buildSummerCrashDiagnosticState({
         schoolKey: params.schoolKey,
         studentId: params.studentId,
         campaign,
         classBand,
         enrollment,
       })
-    : null;
+    : Promise.resolve(null);
+  const [requiresPasswordSetup, courses, diagnostic] = await Promise.all([
+    requiresPasswordSetupPromise,
+    coursesPromise,
+    diagnosticPromise,
+  ]);
 
   if (enrollment?._id) {
-    if (requiresPasswordSetup) {
-      await SummerCrashEnrollment.updateOne(
-        {
-          _id: enrollment._id,
-          status: { $ne: "setup_pending" },
-        },
-        {
-          $set: {
-            status: "setup_pending",
+    after(async () => {
+      if (requiresPasswordSetup) {
+        await SummerCrashEnrollment.updateOne(
+          {
+            _id: enrollment._id,
+            status: { $ne: "setup_pending" },
           },
-        },
-      ).catch(() => undefined);
-    } else if (!enrollment.firstAccessAt || enrollment.status !== "active") {
-      await SummerCrashEnrollment.updateOne(
-        {
-          _id: enrollment._id,
-        },
-        {
-          $set: {
-            firstAccessAt: enrollment.firstAccessAt || new Date(),
-            status: "active",
+          {
+            $set: {
+              status: "setup_pending",
+            },
           },
-        },
-      ).catch(() => undefined);
-    }
+        ).catch(() => undefined);
+        return;
+      }
+
+      if (!enrollment.firstAccessAt || enrollment.status !== "active") {
+        await SummerCrashEnrollment.updateOne(
+          {
+            _id: enrollment._id,
+          },
+          {
+            $set: {
+              firstAccessAt: enrollment.firstAccessAt || new Date(),
+              status: "active",
+            },
+          },
+        ).catch(() => undefined);
+      }
+    });
   }
 
   return {

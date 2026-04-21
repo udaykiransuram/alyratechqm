@@ -303,9 +303,9 @@ export default function SummerCrashRegistrationClient({
               </p>
             </div>
             <div className="public-summer-register-signin">
-              Already registered?{" "}
+              Existing family?{" "}
               <Link href={SUMMER_CRASH_SIGNIN_PATH} className="public-flow-text-link">
-                Sign in
+                Parent sign in
               </Link>
             </div>
           </div>
@@ -570,7 +570,7 @@ export default function SummerCrashRegistrationClient({
                     href={SUMMER_CRASH_HELP_PATH}
                     className="public-flow-text-link inline-flex items-center gap-1"
                   >
-                    Need help?
+                    Find registered account
                   </Link>
                 </div>
               )}

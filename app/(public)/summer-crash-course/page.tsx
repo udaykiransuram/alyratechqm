@@ -207,6 +207,11 @@ export default async function SummerCrashCourseLandingPage() {
     ? `Free diagnostic first. Guided lessons unlock after payment (${priceLabel}).`
     : "The free diagnostic and the Summer lesson track are both open at no cost right now.";
   const supportWhatsappHref = String(config.supportHref || "").trim();
+  const existingFamilySupportHref =
+    supportWhatsappHref || SUMMER_CRASH_HELP_PATH;
+  const existingFamilySupportLabel = supportWhatsappHref
+    ? "WhatsApp support"
+    : "Find registered account";
   const summerHeroMetricCards = [
     {
       eyebrow: "Observed scale",
@@ -318,13 +323,37 @@ export default async function SummerCrashCourseLandingPage() {
         >
           {registerCourseLabel}
         </Link>
-        <div className="basis-full flex flex-wrap items-center justify-center gap-x-5 gap-y-2 pt-2 text-sm">
-          <Link href={SUMMER_CRASH_SIGNIN_PATH} className="public-text-link">
-            Already registered? Sign in
-          </Link>
-          <Link href={SUMMER_CRASH_HELP_PATH} className="public-text-link">
-            Need sign-in help?
-          </Link>
+        <div className="basis-full pt-2">
+          <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 rounded-[1.5rem] border border-white/55 bg-white/74 px-4 py-4 text-center shadow-[0_26px_54px_-42px_rgba(15,23,42,0.22)] backdrop-blur sm:px-5">
+            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--public-ink-soft))]">
+              Existing families
+            </p>
+            <div className="flex w-full flex-wrap items-center justify-center gap-3">
+              <Link
+                href={SUMMER_CRASH_SIGNIN_PATH}
+                className="public-button-secondary min-w-[12rem]"
+              >
+                Parent sign in
+              </Link>
+              {supportWhatsappHref ? (
+                <a
+                  href={existingFamilySupportHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="public-button-secondary min-w-[12rem]"
+                >
+                  WhatsApp support
+                </a>
+              ) : (
+                <Link
+                  href={existingFamilySupportHref}
+                  className="public-button-secondary min-w-[12rem]"
+                >
+                  {existingFamilySupportLabel}
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
       </InnerHero>
 
@@ -538,9 +567,29 @@ export default async function SummerCrashCourseLandingPage() {
                 >
                   {registerCourseLabel}
                 </Link>
-                <Link href={SUMMER_CRASH_HELP_PATH} className="public-text-link">
-                  Need sign-in help?
+                <Link
+                  href={SUMMER_CRASH_SIGNIN_PATH}
+                  className="public-button-secondary"
+                >
+                  Parent sign in
                 </Link>
+                {supportWhatsappHref ? (
+                  <a
+                    href={existingFamilySupportHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="public-text-link"
+                  >
+                    {existingFamilySupportLabel}
+                  </a>
+                ) : (
+                  <Link
+                    href={existingFamilySupportHref}
+                    className="public-text-link"
+                  >
+                    {existingFamilySupportLabel}
+                  </Link>
+                )}
               </div>
             </div>
           </div>
@@ -642,27 +691,34 @@ export default async function SummerCrashCourseLandingPage() {
               />
             }
             supplemental={
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-                {supportWhatsappHref ? (
-                  <span className="inline-flex items-center gap-3">
-                    <span>Need help before you start?</span>
-                    <a
-                      href={supportWhatsappHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Message on WhatsApp"
-                      title="Message on WhatsApp"
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/18 bg-white/10 text-white transition-colors hover:bg-white/16"
-                    >
-                      <MessageCircleMore className="h-4 w-4" />
-                    </a>
-                  </span>
-                ) : (
-                  <span>Need help before you start?</span>
-                )}
-                <Link href={SUMMER_CRASH_SIGNIN_PATH} className="font-semibold text-white">
-                  Already registered? Sign in
+              <div className="flex flex-wrap items-center justify-center gap-3 text-center sm:justify-start sm:text-left">
+                <span className="text-sm font-medium text-white/82">
+                  Existing family?
+                </span>
+                <Link
+                  href={SUMMER_CRASH_SIGNIN_PATH}
+                  className="inline-flex min-h-[2.7rem] items-center justify-center rounded-full border border-white/22 bg-white/12 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/16"
+                >
+                  Parent sign in
                 </Link>
+                {supportWhatsappHref ? (
+                  <a
+                    href={existingFamilySupportHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-[2.7rem] items-center justify-center gap-2 rounded-full border border-white/18 bg-transparent px-5 py-2.5 text-sm font-semibold text-white/92 transition-colors hover:bg-white/10"
+                  >
+                    <MessageCircleMore className="h-4 w-4" />
+                    WhatsApp support
+                  </a>
+                ) : (
+                  <Link
+                    href={existingFamilySupportHref}
+                    className="inline-flex min-h-[2.7rem] items-center justify-center rounded-full border border-white/18 bg-transparent px-5 py-2.5 text-sm font-semibold text-white/92 transition-colors hover:bg-white/10"
+                  >
+                    {existingFamilySupportLabel}
+                  </Link>
+                )}
               </div>
             }
           />
