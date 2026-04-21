@@ -26,11 +26,11 @@ interface InnerHeroProps {
 
 const heroVariantClasses = {
   flagship: {
-    shell: "pt-9 pb-9 sm:pt-11 sm:pb-11 lg:pt-14 lg:pb-14",
-    content: "max-w-[56rem]",
-    title: "text-[clamp(2.15rem,4.8vw,4.05rem)]",
-    subtitle: "mx-auto max-w-[48rem]",
-    actions: "mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-3.5",
+    shell: "pt-7 pb-8 sm:pt-9 sm:pb-10 lg:pt-12 lg:pb-12",
+    content: "max-w-[52rem]",
+    title: "text-[clamp(2rem,4.6vw,3.75rem)]",
+    subtitle: "mx-auto max-w-[42rem]",
+    actions: "mt-5 flex flex-wrap items-center justify-center gap-3",
   },
   story: {
     shell: "pt-9 pb-10 sm:pt-11 sm:pb-12 lg:pt-14 lg:pb-14",
@@ -40,11 +40,11 @@ const heroVariantClasses = {
     actions: "mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-3.5",
   },
   conversion: {
-    shell: "pt-8 pb-8 sm:pt-9 sm:pb-9 lg:pt-10 lg:pb-10",
-    content: "max-w-[42rem]",
-    title: "text-[clamp(1.85rem,4vw,3.1rem)]",
-    subtitle: "mx-auto max-w-xl",
-    actions: "mt-4 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3",
+    shell: "pt-7 pb-7 sm:pt-8 sm:pb-8 lg:pt-9 lg:pb-9",
+    content: "max-w-[40rem]",
+    title: "text-[clamp(1.8rem,3.9vw,2.9rem)]",
+    subtitle: "mx-auto max-w-[34rem]",
+    actions: "mt-4 flex flex-wrap items-center justify-center gap-2.5",
   },
 } as const;
 
