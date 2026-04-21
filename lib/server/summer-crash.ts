@@ -10,6 +10,8 @@ import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { listStudentCoursesPage } from "@/lib/server/student-courses";
+import { getMockSummerCrashStudentState } from "@/lib/test-fixtures/summer-crash";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 import {
   buildSummerCrashDiagnosticHref,
   buildSummerCrashStudentReportHref,
@@ -1167,6 +1169,17 @@ export async function getSummerCrashPortalAccessPolicy(params: {
     return getDefaultSummerCrashPortalAccessPolicy();
   }
 
+  if (isMockedE2ETestMode()) {
+    return {
+      applies: true,
+      isUnlocked: true,
+      requiresPayment: true,
+      allowedDiagnosticPaperId: "777777777777777777777777",
+      allowedDiagnosticResponseId: "888888888888888888888888",
+      redirectHref: SUMMER_CRASH_HOME_PATH,
+    } satisfies SummerCrashPortalAccessPolicy;
+  }
+
   const cachedPolicy = getCachedSummerCrashPortalAccessPolicy({
     schoolKey,
     studentId,
@@ -1727,6 +1740,12 @@ export async function getSummerCrashStudentState(params: {
 }) {
   if (!isSummerCrashSchoolKey(params.schoolKey)) {
     throw new Error("Summer Crash Course access is only available for summer accounts.");
+  }
+
+  if (isMockedE2ETestMode()) {
+    return getMockSummerCrashStudentState({
+      includeCourses: params.includeCourses !== false,
+    });
   }
 
   const studentRecordPromise = getTenantModels(params.schoolKey, ["User"]).then(

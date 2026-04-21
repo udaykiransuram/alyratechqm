@@ -3,14 +3,6 @@ import { expect, test } from "./helpers/strict-browser-test";
 import { navigateToAppRoute } from "./helpers/navigation";
 import { setStudentSession } from "./helpers/session";
 
-function json(body: unknown, status = 200) {
-  return {
-    status,
-    contentType: "application/json",
-    body: JSON.stringify(body),
-  };
-}
-
 test.describe("Summer Crash visual refinement contract", () => {
   test("keeps the public utility flow shells and premium CTAs visible on mobile @mobile", async ({
     page,
@@ -40,11 +32,11 @@ test.describe("Summer Crash visual refinement contract", () => {
     ).toBeVisible();
   });
 
-  test("keeps the signed-in summer home summary and lesson actions visible @desktop", async ({
+  test("keeps the signed-in summer home summary and lesson actions visible", async ({
     page,
   }) => {
     await setStudentSession(page, {
-      schoolKey: "summer-crash",
+      schoolKey: "summer-crash-course",
       schoolDisplayName: "Summer Crash Course",
       id: "111111111111111111111111",
       studentSessionId: "summer-student-session-1",
