@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
 import { MessageCircleMore } from "lucide-react";
 import {
   AcademicCapIcon,
@@ -16,8 +15,8 @@ import { InnerHero } from "@/components/InnerHero";
 import { LottieAnimation } from "@/components/LottieAnimation";
 import { PublicFinalCta } from "@/components/public/PublicFinalCta";
 import { PublicSectionIntro } from "@/components/public/PublicSectionIntro";
-import SummerCrashSessionRedirect from "@/components/summer-crash/SummerCrashSessionRedirect";
 import { getSummerCrashPublicConfig } from "@/lib/server/summer-crash";
+import { redirectSummerCrashPublicSession } from "@/lib/server/summer-crash-session";
 import {
   SUMMER_CRASH_HELP_PATH,
   SUMMER_CRASH_REGISTER_PATH,
@@ -195,6 +194,8 @@ const summerDarkCardTitleClass =
 const summerDarkCardCopyClass = "mt-3 text-[0.95rem] leading-7 text-white";
 
 export default async function SummerCrashCourseLandingPage() {
+  await redirectSummerCrashPublicSession();
+
   const config = await getSummerCrashPublicConfig();
 
   const hasPaidCourseAccess = Number(config.price) > 0;
@@ -293,9 +294,6 @@ export default async function SummerCrashCourseLandingPage() {
 
   return (
     <main className="public-page">
-      <Suspense fallback={null}>
-        <SummerCrashSessionRedirect />
-      </Suspense>
       <InnerHero
         title={
           <>

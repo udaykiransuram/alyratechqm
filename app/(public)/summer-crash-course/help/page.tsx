@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 
 import SummerCrashLookupClient from "@/components/summer-crash/SummerCrashLookupClient";
-import SummerCrashSessionRedirect from "@/components/summer-crash/SummerCrashSessionRedirect";
 import { getSummerCrashPublicConfig } from "@/lib/server/summer-crash";
+import { redirectSummerCrashPublicSession } from "@/lib/server/summer-crash-session";
 
 export const metadata: Metadata = {
   title: "Find Account | Summer Crash Course",
@@ -12,13 +11,12 @@ export const metadata: Metadata = {
 };
 
 export default async function SummerCrashHelpPage() {
+  await redirectSummerCrashPublicSession();
+
   const config = await getSummerCrashPublicConfig();
 
   return (
     <div className="public-flow-page">
-      <Suspense fallback={null}>
-        <SummerCrashSessionRedirect />
-      </Suspense>
       <div className="public-flow-shell-narrow">
         <SummerCrashLookupClient
           campaignTitle={config.title}

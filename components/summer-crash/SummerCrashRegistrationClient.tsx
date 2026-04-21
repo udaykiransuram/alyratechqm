@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, MessageCircleMore } from "lucide-react";
 import { useState, useTransition } from "react";
 
@@ -79,17 +78,13 @@ export default function SummerCrashRegistrationClient({
   isActive,
   entrySource,
 }: SummerCrashRegistrationClientProps) {
-  const searchParams = useSearchParams();
   const [form, setForm] = useState(INITIAL_FORM_STATE);
   const [errorMessage, setErrorMessage] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const resolvedEntrySource =
-    entrySource ||
-    (String(searchParams.get("entry") || "").trim() === "diagnostic"
-      ? "diagnostic"
-      : "direct_registration");
+    entrySource === "diagnostic" ? "diagnostic" : "direct_registration";
 
   const isDiagnosticEntry = resolvedEntrySource === "diagnostic";
   const campaignTitle =

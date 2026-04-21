@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -32,6 +31,8 @@ import {
 
 type SummerCrashSignInClientProps = {
   phone?: string;
+  initialLookupError?: string;
+  initialMatches?: SummerCrashLookupMatch[];
   summerId?: string;
   nextHref?: string;
   pageError?: string;
@@ -109,35 +110,39 @@ function getSummerCrashAuthErrorMessage(error: string | null | undefined) {
 
 export default function SummerCrashSignInClient({
   phone: initialPhone = "",
+  initialLookupError = "",
+  initialMatches = [],
   summerId = "",
   nextHref = "",
   pageError = "",
   supportContact = "",
   supportHref = "",
 }: SummerCrashSignInClientProps) {
-  const searchParams = useSearchParams();
-  const initialPhoneValue = String(
-    initialPhone || searchParams.get("phone") || "",
-  ).trim();
-  const initialSummerIdValue = String(
-    summerId || searchParams.get("summerId") || "",
-  )
+  const initialPhoneValue = String(initialPhone || "").trim();
+  const initialSummerIdValue = String(summerId || "")
     .trim()
     .toUpperCase();
-  const resolvedNextHref =
-    getSafeReturnToPath(nextHref || searchParams.get("next")) || "";
+  const resolvedNextHref = getSafeReturnToPath(nextHref) || "";
   const initialPageErrorMessage = getSummerCrashAuthErrorMessage(
-    pageError || searchParams.get("error"),
+    pageError,
   );
+  const normalizedInitialMatches = normalizeSummerCrashLookupMatches(initialMatches);
   const supportWhatsappHref = String(supportHref || "").trim();
   const [phone, setPhone] = useState(initialPhoneValue);
   const [matches, setMatches] = useState<NormalizedSummerCrashLookupMatch[]>(
-    [],
+    normalizedInitialMatches,
   );
-  const [selectedSummerId, setSelectedSummerId] = useState("");
+  const [selectedSummerId, setSelectedSummerId] = useState(() =>
+    resolveSummerCrashSelectedSummerId(
+      normalizedInitialMatches,
+      initialSummerIdValue,
+    ),
+  );
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [submitError, setSubmitError] = useState(initialPageErrorMessage);
+  const [submitError, setSubmitError] = useState(
+    initialPageErrorMessage || initialLookupError,
+  );
   const [isLookupPending, startLookupTransition] = useTransition();
   const [isSignInPending, startSignInTransition] = useTransition();
   const selectedMatch =
@@ -146,57 +151,6 @@ export default function SummerCrashSignInClient({
   useEffect(() => {
     setStudentPortalSignInPath(SUMMER_CRASH_SIGNIN_PATH);
   }, []);
-
-  useEffect(() => {
-    if (!initialPhoneValue) {
-      return;
-    }
-
-    let cancelled = false;
-
-    startLookupTransition(() => {
-      void (async () => {
-        try {
-          const nextMatches = await fetchSummerCrashLookupMatches(
-            initialPhoneValue,
-          );
-          if (cancelled) {
-            return;
-          }
-
-          setMatches(nextMatches);
-          setSelectedSummerId(
-            resolveSummerCrashSelectedSummerId(
-              nextMatches,
-              initialSummerIdValue,
-            ),
-          );
-          if (!initialPageErrorMessage) {
-            setSubmitError("");
-          }
-        } catch (error) {
-          if (cancelled) {
-            return;
-          }
-
-          setMatches([]);
-          setSelectedSummerId("");
-          if (!initialPageErrorMessage) {
-            setSubmitError(
-              getClientRequestErrorMessage(
-                error,
-                "We couldn't find any Summer Crash Course students for that phone number.",
-              ),
-            );
-          }
-        }
-      })();
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [initialPageErrorMessage, initialPhoneValue, initialSummerIdValue]);
 
   const handleLookupSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

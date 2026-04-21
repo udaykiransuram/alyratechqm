@@ -1135,8 +1135,12 @@ export async function getSummerCrashCourseAccessForStudent(params: {
     throw new Error("Summer Crash Course access is only available for summer accounts.");
   }
 
-  const campaign = await getOrCreateSummerCrashCampaign();
-  const enrollment = await findSummerCrashEnrollmentByStudentId(params.studentId);
+  await connectDB();
+
+  const [campaign, enrollment] = await Promise.all([
+    getOrCreateSummerCrashCampaign(),
+    findSummerCrashEnrollmentByStudentId(params.studentId),
+  ]);
   const courseAccess = await resolveSummerCrashCourseAccessState({
     campaign,
     enrollment,
