@@ -9,13 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
 import { getSummerCrashStudentState } from "@/lib/server/summer-crash";
-import {
-  SUMMER_CRASH_SIGNIN_PATH,
-} from "@/lib/summer-crash/constants";
-import {
-  formatSummerCrashPrice,
-  isSummerCrashSession,
-} from "@/lib/summer-crash/shared";
+import { SUMMER_CRASH_SIGNIN_PATH } from "@/lib/summer-crash/constants";
+import { formatSummerCrashPrice, isSummerCrashSession } from "@/lib/summer-crash/shared";
 
 export const runtime = "nodejs";
 
@@ -79,7 +74,7 @@ export default async function StudentSummerCrashHomePage({
         : state.diagnostic.launchHref
       : "";
   const lockedDiagnosticLabel =
-    state.diagnostic?.status === "submitted"
+    state.diagnostic?.status === "submitted" && state.diagnostic?.reportHref
       ? "View Diagnostic Report"
       : state.diagnostic?.status === "started"
         ? "Resume Diagnostic"
@@ -92,24 +87,25 @@ export default async function StudentSummerCrashHomePage({
         : "Ready"
     : "Not ready";
   const courseAccessLabel = isCourseLocked ? "Locked" : "Unlocked";
-  const quickSummaryCopy = isCourseLocked
-    ? "Start with the free diagnostic. Lessons open after payment confirmation."
-    : "Your lessons and diagnostic are ready. Continue where you left off.";
+  const quickSummaryCopy =
+    state.courses.length > 0 || state.diagnostic
+      ? "Continue from the diagnostic report, summer lessons, and the next best step from one place."
+      : "Your summer lessons will appear here as soon as they are assigned.";
   const supportWhatsappHref = state.supportHref;
 
   if (isCourseLocked) {
     return (
       <div className="app-student-page-shell app-course-page">
         <PageHero
-          className="app-learning-hero"
+          className="app-learning-hero app-summer-crash-hero"
           eyebrow="Summer Crash Course"
           title="Free Diagnostic"
           variant="overview"
           density="compact"
           description={
             state.diagnostic?.status === "submitted"
-              ? "Your diagnostic report is ready. Lessons unlock after payment is completed."
-              : "Only the free diagnostic is available until payment is completed."
+              ? "Your diagnostic report is ready. Lessons unlock as soon as payment is completed."
+              : "Start with the free diagnostic now, then unlock the guided lesson path for this student."
           }
           actions={
             lockedDiagnosticHref ? (
@@ -122,8 +118,8 @@ export default async function StudentSummerCrashHomePage({
           }
         />
 
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem]">
-          <Card className="app-surface overflow-hidden">
+        <div className="app-summer-crash-grid">
+          <Card className="app-surface app-summer-crash-panel overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Free Diagnostic Test</CardTitle>
             </CardHeader>
@@ -148,14 +144,12 @@ export default async function StudentSummerCrashHomePage({
                   </div>
                   <Button asChild className="app-button-primary w-full">
                     <AppPrefetchLink
-                      href={state.diagnostic.launchHref}
+                      href={lockedDiagnosticHref || state.diagnostic.launchHref}
                       prefetch={false}
                       prefetchOnIntent={false}
                       prefetchOnViewport={false}
                     >
-                      {state.diagnostic.status === "started"
-                        ? "Resume Diagnostic"
-                        : "Start Free Diagnostic"}
+                      {lockedDiagnosticLabel}
                     </AppPrefetchLink>
                   </Button>
                 </>
@@ -164,14 +158,17 @@ export default async function StudentSummerCrashHomePage({
           </Card>
 
           <div className="space-y-4">
-            <Card id="summer-unlock-lessons" className="app-surface overflow-hidden">
+            <Card
+              id="summer-unlock-lessons"
+              className="app-surface app-summer-crash-panel overflow-hidden"
+            >
               <CardHeader className="app-section-header">
                 <CardTitle>Unlock Lessons</CardTitle>
               </CardHeader>
               <CardContent className="app-section-body space-y-3">
                 <p className="text-sm leading-6 text-muted-foreground">
-                  The free diagnostic stays open. To start lessons, complete the
-                  course payment for this student.
+                  The free diagnostic stays open. Complete the course payment to
+                  unlock the guided lesson path for this student.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <span className="app-meta-chip">{priceLabel}</span>
@@ -191,7 +188,7 @@ export default async function StudentSummerCrashHomePage({
               </CardContent>
             </Card>
 
-            <Card className="app-surface overflow-hidden">
+            <Card className="app-surface app-summer-crash-panel overflow-hidden">
               <CardHeader className="app-section-header">
                 <CardTitle>Need help?</CardTitle>
               </CardHeader>
@@ -229,7 +226,7 @@ export default async function StudentSummerCrashHomePage({
         density="compact"
         description={
           state.courses.length > 0 || state.diagnostic
-            ? "Open the assigned summer courses and the free diagnostic from here."
+            ? "Continue from the diagnostic report, summer lessons, and the next best step from one place."
             : "Your summer lessons will appear here as soon as they are assigned."
         }
       />
@@ -258,56 +255,56 @@ export default async function StudentSummerCrashHomePage({
             <CardTitle>Your Summer Lessons</CardTitle>
           </CardHeader>
           <CardContent className="app-section-body space-y-3">
-            {isCourseLocked ? (
-              <div className="rounded-[1.25rem] border border-dashed border-border/70 p-5 text-sm leading-6 text-muted-foreground">
-                Lessons will appear here automatically after the payment is
-                confirmed for this student.
-              </div>
-            ) : null}
-
-            {!isCourseLocked && state.courses.length === 0 ? (
+            {state.courses.length === 0 ? (
               <div className="rounded-[1.25rem] border border-dashed border-border/70 p-5 text-sm leading-6 text-muted-foreground">
                 No summer lessons are assigned to this student yet.
               </div>
             ) : null}
 
-            {state.courses.map((course) => (
-              <div
-                key={course._id}
-                className="app-summer-crash-course-card"
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div className="space-y-1.5">
-                    <p className="text-lg font-semibold text-foreground">
-                      {course.title}
-                    </p>
-                    {course.summary ? (
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        {course.summary}
-                      </p>
-                    ) : null}
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <span className="app-meta-chip">
-                        {course.class?.name || state.classBand}
-                      </span>
-                      <span className="app-meta-chip">
-                        {course.blockCount} lesson blocks
-                      </span>
-                      <span className="app-meta-chip">
-                        {Math.round(Number(course.completionPercent || 0))}%
-                        complete
-                      </span>
-                    </div>
-                  </div>
+            {state.courses.map((course) => {
+              const courseHref = `/student/courses/${course._id}`;
 
-                  <Button asChild className="app-button-primary">
-                    <AppPrefetchLink href={`/student/courses/${course._id}`}>
-                      Open Course
-                    </AppPrefetchLink>
-                  </Button>
-                </div>
-              </div>
-            ))}
+              return (
+                <article key={course._id} className="app-summer-crash-course-card">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0 space-y-3">
+                      <div className="space-y-1.5">
+                        <AppPrefetchLink
+                          href={courseHref}
+                          className="inline-flex text-lg font-semibold text-foreground transition-colors hover:text-primary"
+                        >
+                          {course.title}
+                        </AppPrefetchLink>
+                        {course.summary ? (
+                          <p className="text-sm leading-6 text-muted-foreground">
+                            {course.summary}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <span className="app-meta-chip">
+                          {course.class?.name || state.classBand}
+                        </span>
+                        <span className="app-meta-chip">
+                          {course.blockCount} lesson blocks
+                        </span>
+                        <span className="app-meta-chip">
+                          {Math.round(Number(course.completionPercent || 0))}%
+                          complete
+                        </span>
+                      </div>
+                    </div>
+
+                    <Button asChild className="app-button-primary w-full md:w-auto">
+                      <AppPrefetchLink href={courseHref}>
+                        Continue Course
+                      </AppPrefetchLink>
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
           </CardContent>
         </Card>
 
@@ -362,40 +359,6 @@ export default async function StudentSummerCrashHomePage({
                     </Button>
                   </>
                 ) : null}
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {isCourseLocked ? (
-            <Card id="summer-unlock-lessons" className="app-surface app-summer-crash-panel overflow-hidden">
-              <CardHeader className="app-section-header">
-                <CardTitle>Unlock Lessons</CardTitle>
-              </CardHeader>
-              <CardContent className="app-section-body space-y-3">
-                <p className="text-sm leading-6 text-muted-foreground">
-                  The free diagnostic stays open. To start lessons, complete the
-                  course payment for this student.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="app-meta-chip">{priceLabel}</span>
-                  <span className="app-meta-chip">
-                    {state.courseAccess.latestPaymentStatus === "pending"
-                      ? "Checking payment"
-                      : state.courseAccess.latestPaymentStatus === "failed"
-                        ? "Payment needs retry"
-                        : "Lessons locked"}
-                  </span>
-                </div>
-                {state.courseAccess.latestPaymentStatus === "pending" ? (
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Already paid? Refresh the status after a few seconds.
-                  </p>
-                ) : null}
-                <SummerCrashPaymentCard
-                  price={state.courseAccess.price}
-                  currency={state.courseAccess.currency}
-                  latestPaymentStatus={state.courseAccess.latestPaymentStatus}
-                />
               </CardContent>
             </Card>
           ) : null}

@@ -53,7 +53,7 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
   return (
     <div className="app-student-page-shell app-course-page">
       <PageHero
-        className="app-learning-hero"
+        className="app-learning-hero app-summer-crash-hero"
         eyebrow="Free Diagnostic"
         title="Your child's diagnostic report is ready"
         variant="overview"
@@ -61,12 +61,12 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
         description="See the weak subskills, weak topics, and the next best step before starting the Summer Crash Course."
       />
 
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem]">
-        <Card className="app-surface overflow-hidden">
+      <div className="app-summer-crash-grid">
+        <Card className="app-surface app-summer-crash-panel overflow-hidden">
           <CardHeader className="app-section-header">
             <CardTitle>Diagnostic Summary</CardTitle>
           </CardHeader>
-          <CardContent className="app-section-body space-y-3">
+          <CardContent className="app-section-body space-y-4">
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">
                 {state.diagnostic?.available
@@ -99,12 +99,12 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
                 ) : null}
                 {reportHref ? (
                   <div className="flex flex-wrap gap-3">
-                    <Button asChild className="app-button-primary">
+                    <Button asChild className="app-button-primary w-full sm:w-auto">
                       <AppPrefetchLink href={reportHref}>
                         View Diagnostic Report
                       </AppPrefetchLink>
                     </Button>
-                    <Button asChild variant="outline" className="app-button-compact">
+                    <Button asChild variant="outline" className="app-button-compact w-full sm:w-auto">
                       <AppPrefetchLink href={SUMMER_CRASH_HOME_PATH}>
                         Back to Summer Home
                       </AppPrefetchLink>
@@ -127,13 +127,14 @@ export default async function SummerCrashDiagnosticSubmittedPage() {
         </Card>
 
         <div className="space-y-4">
-          <Card className="app-surface overflow-hidden">
+          <Card className="app-surface app-summer-crash-panel overflow-hidden">
             <CardHeader className="app-section-header">
               <CardTitle>Next steps</CardTitle>
             </CardHeader>
             <CardContent className="app-section-body space-y-3">
               <p className="text-sm leading-6 text-muted-foreground">
-                Use the report to identify weak areas, then continue from the summer home when you are ready.
+                Use the report to identify weak areas, then continue from the
+                summer home when you are ready.
               </p>
             </CardContent>
           </Card>
