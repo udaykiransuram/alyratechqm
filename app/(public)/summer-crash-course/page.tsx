@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
 import { MessageCircleMore } from "lucide-react";
 import {
   AcademicCapIcon,
@@ -194,12 +193,9 @@ const summerDarkCardTitleClass =
 
 const summerDarkCardCopyClass = "mt-3 text-[0.95rem] leading-7 text-white";
 
-async function SummerCrashSessionRedirect() {
-  await redirectSummerCrashPublicSession();
-  return null;
-}
-
 export default async function SummerCrashCourseLandingPage() {
+  await redirectSummerCrashPublicSession();
+
   const config = await getSummerCrashPublicConfig();
 
   const hasPaidCourseAccess = Number(config.price) > 0;
@@ -298,9 +294,6 @@ export default async function SummerCrashCourseLandingPage() {
 
   return (
     <main className="public-page public-summer-shell">
-      <Suspense fallback={null}>
-        <SummerCrashSessionRedirect />
-      </Suspense>
       <InnerHero
         title={
           <>
