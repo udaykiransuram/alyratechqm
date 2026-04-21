@@ -1,0 +1,443 @@
+<style>
+  .intro {
+    margin-bottom: 24px;
+    padding: 24px;
+    border-radius: 30px;
+    background:
+      radial-gradient(circle at top right, rgba(45, 212, 191, 0.18) 0%, transparent 28%),
+      linear-gradient(145deg, #f4fbf9 0%, #fcfefe 100%);
+    border: 1px solid rgba(15, 118, 110, 0.12);
+    box-shadow: 0 32px 90px -58px rgba(15, 23, 42, 0.24);
+  }
+
+  .intro h2 {
+    margin: 0 0 10px;
+    font-size: 34px;
+    line-height: 1;
+    letter-spacing: -0.05em;
+    color: #0f172a;
+  }
+
+  .intro p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.6;
+    color: rgba(30, 41, 59, 0.82);
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: rgba(13, 148, 136, 0.1);
+    color: #0f766e;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+  }
+
+  .column {
+    border-radius: 30px;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 26px 70px -56px rgba(15, 23, 42, 0.26);
+  }
+
+  .column-header {
+    padding: 22px 22px 18px;
+    color: #f2fffc;
+  }
+
+  .column-header h3 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+  }
+
+  .column-header p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: rgba(242, 255, 252, 0.84);
+  }
+
+  .public-header {
+    background: linear-gradient(155deg, #0f5e5f 0%, #117a72 100%);
+  }
+
+  .student-header {
+    background: linear-gradient(155deg, #124d59 0%, #145b7a 100%);
+  }
+
+  .column-body {
+    padding: 18px 18px 22px;
+    display: grid;
+    gap: 16px;
+  }
+
+  .frame {
+    border-radius: 22px;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: linear-gradient(180deg, #f6fbfa 0%, #ffffff 100%);
+  }
+
+  .frame-top {
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.82);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .frame-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(71, 85, 105, 0.86);
+  }
+
+  .frame-chip {
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: rgba(15, 118, 110, 0.08);
+    color: #0f766e;
+  }
+
+  .mobile {
+    padding: 16px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .hero {
+    border-radius: 22px;
+    padding: 16px;
+    min-height: 126px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .public-hero {
+    background: linear-gradient(160deg, #0f5e5f 0%, #117a72 100%);
+    color: #f2fffc;
+  }
+
+  .student-hero {
+    background: linear-gradient(160deg, rgba(18,77,89,0.98) 0%, rgba(20,91,122,0.92) 100%);
+    color: #f4fbff;
+  }
+
+  .hero small {
+    display: inline-flex;
+    width: fit-content;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.14);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .hero h4 {
+    margin: 0;
+    font-size: 21px;
+    line-height: 1.03;
+    letter-spacing: -0.04em;
+  }
+
+  .hero p {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: rgba(240, 253, 250, 0.82);
+  }
+
+  .block,
+  .field,
+  .metric,
+  .course-card {
+    border-radius: 18px;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+  }
+
+  .field {
+    min-height: 48px;
+  }
+
+  .block {
+    padding: 14px;
+  }
+
+  .metric-row,
+  .cta-row,
+  .summary-row {
+    display: grid;
+    gap: 10px;
+  }
+
+  .metric-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cta-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .summary-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .metric,
+  .course-card {
+    padding: 14px;
+  }
+
+  .metric label,
+  .course-card label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(71, 85, 105, 0.82);
+  }
+
+  .metric strong,
+  .course-card strong {
+    font-size: 14px;
+    color: #0f172a;
+  }
+
+  .cta-primary,
+  .cta-secondary {
+    border-radius: 18px;
+    padding: 14px;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .cta-primary {
+    background: #0f7a72;
+    color: #f2fffc;
+  }
+
+  .cta-secondary {
+    background: rgba(15,118,110,0.08);
+    color: #0f5e5f;
+    border: 1px solid rgba(15,118,110,0.16);
+  }
+
+  .bullet-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .bullet {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    gap: 10px;
+    align-items: start;
+    font-size: 13px;
+    line-height: 1.5;
+    color: rgba(30, 41, 59, 0.86);
+  }
+
+  .dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: rgba(15,118,110,0.14);
+    color: #0f766e;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 900;
+    margin-top: 1px;
+  }
+
+  .scope {
+    margin-top: 24px;
+    padding: 22px;
+    border-radius: 28px;
+    background: rgba(255,255,255,0.9);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+  }
+
+  .scope h3 {
+    margin: 0 0 12px;
+    font-size: 22px;
+    color: #0f172a;
+  }
+
+  .scope-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .scope-card {
+    border-radius: 18px;
+    padding: 14px;
+    background: linear-gradient(180deg, rgba(248,250,252,0.96) 0%, rgba(255,255,255,0.96) 100%);
+    border: 1px solid rgba(148,163,184,0.16);
+    font-size: 13px;
+    line-height: 1.55;
+    color: rgba(30,41,59,0.86);
+  }
+
+  .scope-card strong {
+    display: block;
+    margin-bottom: 6px;
+    color: #0f172a;
+  }
+
+  @media (max-width: 1100px) {
+    .compare,
+    .scope-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="intro">
+  <div class="eyebrow">Section 2 · Page Application</div>
+  <h2>How The System Spreads Across The Summer Flow</h2>
+  <p>
+    The public pages and signed-in pages should feel like parts of the same product family,
+    but they should not behave the same. Public pages stay more expressive and trust-building.
+    Signed-in pages become cleaner, tighter, and more action-oriented inside the existing student shell.
+  </p>
+</div>
+
+<div class="compare">
+  <div class="column">
+    <div class="column-header public-header">
+      <h3>Public Summer Pages</h3>
+      <p>
+        Landing, register, sign-in, help, welcome redirects, payment entry moments, and parent-facing report surfaces.
+      </p>
+    </div>
+    <div class="column-body">
+      <div class="frame">
+        <div class="frame-top">
+          <span class="frame-label">Mobile Direction</span>
+          <span class="frame-chip">Parent-first clarity</span>
+        </div>
+        <div class="mobile">
+          <div class="hero public-hero">
+            <small>Summer Crash Course</small>
+            <div>
+              <h4>Register & start test</h4>
+              <p>The hero becomes more compact and the CTA comes earlier on mobile.</p>
+            </div>
+          </div>
+          <div class="field"></div>
+          <div class="field"></div>
+          <div class="cta-row">
+            <div class="cta-primary">Register & Start Test</div>
+            <div class="cta-secondary">Already Registered</div>
+          </div>
+          <div class="block"></div>
+        </div>
+      </div>
+
+      <div class="bullet-list">
+        <div class="bullet"><span class="dot">1</span><span><strong>Landing page:</strong> reduce decorative vertical length on mobile, pull proof and action higher, and make the family journey easier to scan.</span></div>
+        <div class="bullet"><span class="dot">2</span><span><strong>Register / Sign-in / Help:</strong> convert these into a tighter premium flow shell with stronger field grouping, clearer helper copy, and more decisive CTA hierarchy.</span></div>
+        <div class="bullet"><span class="dot">3</span><span><strong>Parent report:</strong> keep it rich, but make the story clearer on phones with stronger summary cards, better weak-area emphasis, and cleaner action placement.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="column">
+    <div class="column-header student-header">
+      <h3>Signed-In Student Side</h3>
+      <p>
+        Student home and diagnostic-submitted moments keep the portal shell, but summer surfaces inside become more distinctive and premium.
+      </p>
+    </div>
+    <div class="column-body">
+      <div class="frame">
+        <div class="frame-top">
+          <span class="frame-label">Inside Student Shell</span>
+          <span class="frame-chip">Summer-branded surfaces</span>
+        </div>
+        <div class="mobile">
+          <div class="hero student-hero">
+            <small>Your Summer Home</small>
+            <div>
+              <h4>Continue your recovery plan</h4>
+              <p>The shell stays familiar, but the hero, summary strip, and action cards feel more special.</p>
+            </div>
+          </div>
+          <div class="summary-row">
+            <div class="metric"><label>Class</label><strong>Class 7</strong></div>
+            <div class="metric"><label>Diagnostic</label><strong>Ready</strong></div>
+            <div class="metric"><label>Access</label><strong>Unlocked</strong></div>
+          </div>
+          <div class="course-card">
+            <label>Summer Lesson</label>
+            <strong>Numbers & Foundations</strong>
+          </div>
+          <div class="cta-row">
+            <div class="cta-primary">Open Lesson</div>
+            <div class="cta-secondary">View Report</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bullet-list">
+        <div class="bullet"><span class="dot">1</span><span><strong>Student home:</strong> preserve the student header/nav, but redesign the summer hero, strip, cards, and locked-payment panels to feel more premium and less generic.</span></div>
+        <div class="bullet"><span class="dot">2</span><span><strong>Diagnostic submitted state:</strong> make it feel like a high-value milestone screen, not just a confirmation panel.</span></div>
+        <div class="bullet"><span class="dot">3</span><span><strong>Mobile hierarchy:</strong> move the most important action to the top of each state, reduce noisy supporting copy, and make the next step obvious in one screenful.</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scope">
+  <h3>Planned Scope Under This Direction</h3>
+  <div class="scope-grid">
+    <div class="scope-card">
+      <strong>Public Flow Components</strong>
+      `app/(public)/summer-crash-course/*`, `InnerHero`, public CTA/card sections, and the summer registration/sign-in/help clients.
+    </div>
+    <div class="scope-card">
+      <strong>Signed-In Summer Components</strong>
+      `app/(student)/student/crash-course/*`, payment card treatment, diagnostic-submitted presentation, and summer-specific surface styling.
+    </div>
+    <div class="scope-card">
+      <strong>Shared Tokens / CSS</strong>
+      Update the public summer palette and the summer-specific student styles in `app/globals.css` so the design is systemic, not page-local.
+    </div>
+    <div class="scope-card">
+      <strong>Not Changing</strong>
+      No behavior changes, no auth flow logic changes, no student portal shell replacement, and no deep content rewrite.
+    </div>
+  </div>
+</div>

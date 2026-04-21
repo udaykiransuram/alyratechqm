@@ -11,6 +11,10 @@ import {
   isSupportedQuestionImportMimeType,
   parseTeacherMasterDocx,
 } from "@/lib/question-import/docx";
+import {
+  isSupportedQuestionImportWorkbookMimeType,
+  parseDiagnosticQuestionWorkbook,
+} from "@/lib/question-import/xlsx";
 import { deriveQuestionImportDraftStatus } from "@/lib/question-import/review";
 import { storePublicImage } from "@/lib/server/public-image-storage";
 import {
@@ -19,18 +23,24 @@ import {
 } from "@/lib/server/question-imports";
 import { withRequestBudget } from "@/lib/server/request-governor";
 
-const MAX_DOCX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
-const MAX_DOCX_UPLOAD_SIZE_LABEL = "20 MB";
+const MAX_IMPORT_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
+const MAX_IMPORT_UPLOAD_SIZE_LABEL = "20 MB";
 
 function hasDocxFileName(value: string) {
   return String(value || "").trim().toLowerCase().endsWith(".docx");
 }
 
+function hasXlsxFileName(value: string) {
+  return String(value || "").trim().toLowerCase().endsWith(".xlsx");
+}
+
 function isSupportedQuestionImportFile(file: File) {
   return (
     isSupportedQuestionImportMimeType(file.type) ||
+    isSupportedQuestionImportWorkbookMimeType(file.type) ||
     String(file.type || "").trim().toLowerCase() === "application/octet-stream" ||
-    hasDocxFileName(file.name)
+    hasDocxFileName(file.name) ||
+    hasXlsxFileName(file.name)
   );
 }
 
@@ -58,7 +68,7 @@ export async function POST(req: NextRequest) {
           {
             success: false,
             message:
-              "Upload a DOCX teacher-master file to start an import draft.",
+              "Upload a teacher-master DOCX or diagnostic XLSX file to start an import draft.",
           },
           { status: 400 },
         );
@@ -69,7 +79,7 @@ export async function POST(req: NextRequest) {
           {
             success: false,
             message:
-              "Only DOCX teacher-master files are supported in this import flow.",
+              "Only teacher-master DOCX or diagnostic XLSX files are supported in this import flow.",
           },
           { status: 400 },
         );
@@ -79,17 +89,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            message: "The uploaded DOCX file is empty.",
+            message: "The uploaded import file is empty.",
           },
           { status: 400 },
         );
       }
 
-      if (file.size > MAX_DOCX_UPLOAD_SIZE_BYTES) {
+      if (file.size > MAX_IMPORT_UPLOAD_SIZE_BYTES) {
         return NextResponse.json(
           {
             success: false,
-            message: `The uploaded DOCX file is too large. Keep imports under ${MAX_DOCX_UPLOAD_SIZE_LABEL}.`,
+            message: `The uploaded import file is too large. Keep imports under ${MAX_IMPORT_UPLOAD_SIZE_LABEL}.`,
           },
           { status: 413 },
         );
@@ -102,23 +112,34 @@ export async function POST(req: NextRequest) {
         } = await getTenantModels(auth.schoolKey, ["QuestionImportDraft"]);
 
         const buffer = Buffer.from(await file.arrayBuffer());
-        const parsedPayload = await parseTeacherMasterDocx({
-          buffer,
-          storeImage: async ({ buffer: imageBuffer, fileName, sourcePath }) =>
-            storePublicImage({
-              buffer: imageBuffer,
-              schoolKey: auth.schoolKey,
-              fileName,
-              mimeType: undefined,
-              relativeFolder: "question-imports",
-            }).then((storedImage) => ({
-              url: storedImage.url,
-              fileName:
-                storedImage.fileName ||
-                sourcePath.split("/").pop() ||
-                fileName,
-            })),
-        });
+        const parsedPayload =
+          hasXlsxFileName(file.name) ||
+          isSupportedQuestionImportWorkbookMimeType(file.type)
+            ? await parseDiagnosticQuestionWorkbook({
+                buffer,
+                fileName: file.name,
+              })
+            : await parseTeacherMasterDocx({
+                buffer,
+                storeImage: async ({
+                  buffer: imageBuffer,
+                  fileName,
+                  sourcePath,
+                }) =>
+                  storePublicImage({
+                    buffer: imageBuffer,
+                    schoolKey: auth.schoolKey,
+                    fileName,
+                    mimeType: undefined,
+                    relativeFolder: "question-imports",
+                  }).then((storedImage) => ({
+                    url: storedImage.url,
+                    fileName:
+                      storedImage.fileName ||
+                      sourcePath.split("/").pop() ||
+                      fileName,
+                  })),
+              });
 
     const payload = await applyWorkspaceQuestionImportMappings(
       auth.schoolKey,
@@ -130,7 +151,11 @@ export async function POST(req: NextRequest) {
       status,
       sourceFile: {
         name: file.name,
-        mimeType: file.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        mimeType:
+          file.type ||
+          (hasXlsxFileName(file.name)
+            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
         size: file.size,
       },
       payload,
@@ -145,7 +170,7 @@ export async function POST(req: NextRequest) {
       entityId: String(draft?._id || ""),
       entityLabel: file.name,
       action: "create",
-      summary: "Created a DOCX question import draft.",
+      summary: "Created a question import draft.",
       details: {
         status,
         questionCount: Array.isArray(payload.questions) ? payload.questions.length : 0,

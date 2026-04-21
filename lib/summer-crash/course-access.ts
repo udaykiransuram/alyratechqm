@@ -1,4 +1,5 @@
 import { SUMMER_CRASH_CURRENCY } from "@/lib/summer-crash/constants";
+import type { SummerCrashEarlyBirdOffer } from "@/lib/summer-crash/offer";
 
 export type SummerCrashPaymentStatus = "none" | "pending" | "paid" | "failed";
 
@@ -8,6 +9,7 @@ export type SummerCrashCourseAccessState = {
   latestPaymentStatus: SummerCrashPaymentStatus;
   price: number;
   currency: string;
+  earlyBirdOffer: SummerCrashEarlyBirdOffer | null;
 };
 
 function normalizeSummerCrashPaymentLookupStatus(
@@ -28,6 +30,7 @@ export function deriveSummerCrashCourseAccessState(params: {
   price: unknown;
   currency: unknown;
   paymentStatuses?: readonly unknown[] | null;
+  earlyBirdOffer?: SummerCrashEarlyBirdOffer | null;
 }): SummerCrashCourseAccessState {
   const parsedPrice = Number(params.price);
   const price = Number.isFinite(parsedPrice) ? Math.max(0, parsedPrice) : 0;
@@ -53,5 +56,6 @@ export function deriveSummerCrashCourseAccessState(params: {
         : "none",
     price,
     currency: currency || "INR",
+    earlyBirdOffer: params.earlyBirdOffer || null,
   };
 }

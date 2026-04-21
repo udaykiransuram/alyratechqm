@@ -183,6 +183,16 @@ export function getIncludedQuestionImportQuestions(
   );
 }
 
+function getIncludedQuestionImportSubjectTokens(
+  payload: QuestionImportDraftPayload,
+) {
+  return new Set(
+    getIncludedQuestionImportQuestions(payload)
+      .map((question) => normalizeToken(question.subjectToken))
+      .filter(Boolean),
+  );
+}
+
 function isQuestionScopedItemRelevant(
   questionIds: Set<string>,
   pathOrQuestionId: string | undefined,
@@ -277,11 +287,14 @@ export function getQuestionImportUnmappedMathFragments(
 export function getQuestionImportMissingMappings(
   payload: QuestionImportDraftPayload,
 ) {
+  const includedQuestionSubjectTokens =
+    getIncludedQuestionImportSubjectTokens(payload);
   const missingSubjectMappings = (Array.isArray(payload.mappings?.subjects)
     ? payload.mappings.subjects
     : []
   ).filter(
     (mapping) =>
+      includedQuestionSubjectTokens.has(normalizeToken(mapping?.token)) &&
       !normalizeToken(mapping?.subjectId) && mapping?.createIfMissing !== true,
   );
   const missingAcademicSectionMappings = (
@@ -433,4 +446,26 @@ export function getQuestionImportApprovalCounts(
       excluded: 0,
     } satisfies Record<QuestionImportQuestionDraft["approvalStatus"], number>,
   );
+}
+
+export function approveAllIncludedQuestionImportQuestions(
+  payload: QuestionImportDraftPayload,
+) {
+  let updatedCount = 0;
+
+  (Array.isArray(payload.questions) ? payload.questions : []).forEach(
+    (question) => {
+      if (
+        question.approvalStatus === "excluded" ||
+        question.approvalStatus === "approved"
+      ) {
+        return;
+      }
+
+      question.approvalStatus = "approved";
+      updatedCount += 1;
+    },
+  );
+
+  return updatedCount;
 }

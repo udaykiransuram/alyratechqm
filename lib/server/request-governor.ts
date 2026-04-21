@@ -12,6 +12,7 @@ import {
   runRedisCommand,
   runRedisEval,
 } from "@/lib/redis";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 
 export type RequestGovernorScope = "ip" | "user" | "tenant" | "worker";
 export type RequestGovernorFailMode = "closed" | "soft";
@@ -885,38 +886,56 @@ function buildGovernorResponse(
   );
 }
 
+function shouldSoftAllowUnavailableRequestBudget(policy: RequestGovernorPolicy) {
+  if (policy.failMode === "soft") {
+    return true;
+  }
+
+  return process.env.NODE_ENV !== "production" || isMockedE2ETestMode();
+}
+
+function buildSoftAllowedGovernorLease(
+  policy: RequestGovernorPolicy,
+  scopeKey: string,
+  context: RequestGovernorRouteContext,
+): RequestGovernorSuccess {
+  return {
+    ok: true,
+    policy,
+    scopeKey,
+    lease: {
+      policy,
+      scopeKey,
+      release: async (outcome = "completed", metadata) => {
+        await recordExpensiveRouteUsage(policy, outcome, {
+          ...context,
+          scopeId: scopeKey,
+          metadata,
+        });
+      },
+    },
+  };
+}
+
 export async function enforceRequestBudget(
   context: RequestGovernorRouteContext,
 ): Promise<RequestGovernorResult> {
   const policy = resolvePolicy(context.policy);
   const scopeKey = buildScopeKey(policy, context);
+  const shouldSoftAllowUnavailable =
+    shouldSoftAllowUnavailableRequestBudget(policy);
 
   if (!isRedisConfigured() || isRedisInBackoffWindow()) {
     await recordExpensiveRouteUsage(policy, "unavailable", {
       ...context,
       scopeId: scopeKey,
     });
-    if (policy.failMode === "soft") {
+    if (shouldSoftAllowUnavailable) {
       await recordExpensiveRouteUsage(policy, "soft_allowed", {
         ...context,
         scopeId: scopeKey,
       });
-      return {
-        ok: true,
-        policy,
-        scopeKey,
-        lease: {
-          policy,
-          scopeKey,
-          release: async (outcome = "completed", metadata) => {
-            await recordExpensiveRouteUsage(policy, outcome, {
-              ...context,
-              scopeId: scopeKey,
-              metadata,
-            });
-          },
-        },
-      };
+      return buildSoftAllowedGovernorLease(policy, scopeKey, context);
     }
 
     return {
@@ -934,6 +953,13 @@ export async function enforceRequestBudget(
       ...context,
       scopeId: scopeKey,
     });
+    if (shouldSoftAllowUnavailable) {
+      await recordExpensiveRouteUsage(policy, "soft_allowed", {
+        ...context,
+        scopeId: scopeKey,
+      });
+      return buildSoftAllowedGovernorLease(policy, scopeKey, context);
+    }
     return {
       ok: false,
       policy,

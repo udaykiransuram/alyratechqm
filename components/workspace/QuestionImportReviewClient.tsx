@@ -23,6 +23,13 @@ import { SearchableCommandSelect } from "@/components/ui/searchable-command-sele
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
 import {
+  getQuestionImportMetadataTagValue,
+  normalizeQuestionImportDiagnosticTagType,
+  QUESTION_IMPORT_REVIEW_DIAGNOSTIC_TAGS,
+  setQuestionImportMetadataTagValue,
+} from "@/lib/question-import/diagnostic-tags";
+import {
+  approveAllIncludedQuestionImportQuestions,
   cloneQuestionImportPayload,
   deriveQuestionImportDraftStatus,
   getQuestionImportApprovalCounts,
@@ -249,6 +256,11 @@ export default function QuestionImportReviewClient({
   const questions = payload.questions;
   const sectionsInDraft = payload.paperSections;
   const approvalCounts = getQuestionImportApprovalCounts(questions);
+  const bulkApproveEligibleCount = questions.filter(
+    (question) =>
+      question.approvalStatus !== "approved" &&
+      question.approvalStatus !== "excluded",
+  ).length;
   const issueMessages = buildIssueMessages(draft, reviewState);
   const availableAcademicSections = sections.filter((section) =>
     sectionBelongsToClass(section, payload.paper.classId),
@@ -282,6 +294,16 @@ export default function QuestionImportReviewClient({
     : [];
   const selectedQuestionMathFragments = selectedQuestion
     ? getQuestionMathFragmentsForQuestion(payload, selectedQuestion.id)
+    : [];
+  const selectedQuestionOtherTags = selectedQuestion
+    ? (Array.isArray(selectedQuestion.metadata.customTags)
+        ? selectedQuestion.metadata.customTags
+        : []
+      )
+        .map((tag, index) => ({ tag, index }))
+        .filter(
+          ({ tag }) => !normalizeQuestionImportDiagnosticTagType(tag?.type),
+        )
     : [];
 
   useEffect(() => {
@@ -391,6 +413,24 @@ export default function QuestionImportReviewClient({
           }
         }
       });
+    });
+  }
+
+  function handleApproveAllQuestions() {
+    if (bulkApproveEligibleCount === 0) {
+      return;
+    }
+
+    updateDraftPayload((nextPayload) => {
+      approveAllIncludedQuestionImportQuestions(nextPayload);
+    });
+
+    toast({
+      title: "Questions approved",
+      description:
+        bulkApproveEligibleCount === 1
+          ? "1 question was marked approved. Excluded questions were left unchanged."
+          : `${bulkApproveEligibleCount} questions were marked approved. Excluded questions were left unchanged.`,
     });
   }
 
@@ -522,6 +562,20 @@ export default function QuestionImportReviewClient({
               </div>
             </div>
             <div className="app-import-toolbar-actions">
+              {activeTab === "questions" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="app-import-action-button"
+                  onClick={handleApproveAllQuestions}
+                  disabled={
+                    isSaving || isPublishing || bulkApproveEligibleCount === 0
+                  }
+                >
+                  Approve all
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -1569,13 +1623,53 @@ export default function QuestionImportReviewClient({
                     </div>
 
                     <div className="space-y-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">
+                          Diagnostic tags
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Keep the canonical diagnostic labels here so the parent report,
+                          analytics filters, and workbook export all stay aligned.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {QUESTION_IMPORT_REVIEW_DIAGNOSTIC_TAGS.map((field) => (
+                          <div
+                            key={`${selectedQuestion.id}-${field.type}`}
+                            className="app-field-group"
+                          >
+                            <Label className="app-field-label">{field.label}</Label>
+                            <Input
+                              value={getQuestionImportMetadataTagValue(
+                                selectedQuestion.metadata,
+                                field.type,
+                              )}
+                              onChange={(event) =>
+                                updateQuestion(selectedQuestion.id, (question) => {
+                                  setQuestionImportMetadataTagValue(
+                                    question.metadata,
+                                    field.type,
+                                    event.target.value,
+                                  );
+                                })
+                              }
+                              placeholder={field.label}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <h3 className="text-sm font-semibold text-foreground">
-                            Custom tags
+                            Other tags
                           </h3>
                           <p className="text-sm text-muted-foreground">
-                            Add optional metadata as tag type and value pairs.
+                            Use this only for extra metadata that does not belong to the
+                            canonical diagnostic tag set above.
                           </p>
                         </div>
                         <Button
@@ -1593,13 +1687,13 @@ export default function QuestionImportReviewClient({
                           Add tag
                         </Button>
                       </div>
-                      {selectedQuestion.metadata.customTags.length === 0 ? (
+                      {selectedQuestionOtherTags.length === 0 ? (
                         <div className="app-import-note-card border-dashed">
                           No extra tags added for this question.
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {selectedQuestion.metadata.customTags.map((tag, index) => (
+                          {selectedQuestionOtherTags.map(({ tag, index }) => (
                             <div
                               key={`${selectedQuestion.id}-tag-${index}`}
                               className="app-import-nested-card grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"

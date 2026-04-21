@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
+import SummerCrashEarlyBirdOffer from "@/components/summer-crash/SummerCrashEarlyBirdOffer";
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
 import {
@@ -10,12 +11,16 @@ import {
 } from "@/lib/client/api";
 import { CashfreeSDK, load } from "@/lib/cashfree";
 import { SUMMER_CRASH_SCHOOL_KEY } from "@/lib/summer-crash/constants";
+import type { SummerCrashEarlyBirdOffer as SummerCrashEarlyBirdOfferData } from "@/lib/summer-crash/offer";
 import { formatSummerCrashPrice } from "@/lib/summer-crash/shared";
 
 type SummerCrashPaymentCardProps = {
   price: number;
   currency: string;
   latestPaymentStatus: "none" | "pending" | "paid" | "failed";
+  autoOpen?: boolean;
+  earlyBirdOffer?: SummerCrashEarlyBirdOfferData | null;
+  offerVariant?: "surface" | "soft" | "inverse";
 };
 
 type SummerCrashPaymentResponse = {
@@ -27,12 +32,17 @@ export default function SummerCrashPaymentCard({
   price,
   currency,
   latestPaymentStatus,
+  autoOpen = false,
+  earlyBirdOffer = null,
+  offerVariant = "soft",
 }: SummerCrashPaymentCardProps) {
   const [cashfreeSDK, setCashfreeSDK] = useState<CashfreeSDK | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSdkLoading, setIsSdkLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
   const sdkPromiseRef = useRef<Promise<CashfreeSDK | null> | null>(null);
+  const autoOpenTriggeredRef = useRef(false);
+  const handlePayNowRef = useRef<() => void>(() => undefined);
 
   const ensureCashfreeSdk = async (): Promise<CashfreeSDK> => {
     if (cashfreeSDK) {
@@ -62,6 +72,23 @@ export default function SummerCrashPaymentCard({
     } finally {
       setIsSdkLoading(false);
     }
+  };
+
+  const clearAutoOpenPaymentIntent = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("promptPayment")) {
+      return;
+    }
+
+    url.searchParams.delete("promptPayment");
+    url.searchParams.delete("source");
+
+    const nextPath = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState(window.history.state, "", nextPath);
   };
 
   const handlePayNow = () => {
@@ -105,6 +132,18 @@ export default function SummerCrashPaymentCard({
     });
   };
 
+  handlePayNowRef.current = handlePayNow;
+
+  useEffect(() => {
+    if (!autoOpen || autoOpenTriggeredRef.current) {
+      return;
+    }
+
+    autoOpenTriggeredRef.current = true;
+    clearAutoOpenPaymentIntent();
+    handlePayNowRef.current();
+  }, [autoOpen]);
+
   const amountLabel = formatSummerCrashPrice(price, currency);
   const primaryLabel =
     latestPaymentStatus === "pending"
@@ -115,6 +154,16 @@ export default function SummerCrashPaymentCard({
     <div className="space-y-3">
       {errorMessage ? (
         <FeedbackNotice variant="error">{errorMessage}</FeedbackNotice>
+      ) : null}
+
+      {earlyBirdOffer ? (
+        <SummerCrashEarlyBirdOffer
+          offer={earlyBirdOffer}
+          variant={offerVariant}
+          compact
+          title="Early bird course price"
+          subtitle="Use the discounted course price before the timer ends. The free diagnostic stays open."
+        />
       ) : null}
 
       <div className="public-summer-flow-stack">

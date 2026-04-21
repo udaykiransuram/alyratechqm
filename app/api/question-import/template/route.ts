@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 
 import { buildQuestionImportTemplateDocx } from "@/lib/question-import/template";
+import { buildDiagnosticQuestionWorkbookTemplateBuffer } from "@/lib/question-import/xlsx";
 import { toBinaryResponseBody } from "@/lib/server/binary-response";
 
 export async function GET(req: NextRequest) {
@@ -11,25 +12,32 @@ export async function GET(req: NextRequest) {
     .trim()
     .toLowerCase();
 
-  if (format !== "docx") {
+  if (format !== "docx" && format !== "xlsx") {
     return NextResponse.json(
       {
         success: false,
-        message: "Only the DOCX teacher-master template is supported.",
+        message: "Supported template formats are DOCX and XLSX.",
       },
       { status: 400 },
     );
   }
 
-  const fileBuffer = await buildQuestionImportTemplateDocx();
+  const fileBuffer =
+    format === "xlsx"
+      ? buildDiagnosticQuestionWorkbookTemplateBuffer()
+      : await buildQuestionImportTemplateDocx();
 
   return new NextResponse(toBinaryResponseBody(fileBuffer), {
     status: 200,
     headers: {
       "Content-Type":
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        format === "xlsx"
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "Content-Disposition":
-        'attachment; filename="teacher-master-import-template.docx"',
+        format === "xlsx"
+          ? 'attachment; filename="diagnostic-question-import-template.xlsx"'
+          : 'attachment; filename="teacher-master-import-template.docx"',
       "Cache-Control": "no-store",
     },
   });

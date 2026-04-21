@@ -96,6 +96,11 @@ function getPerformanceHeadline(percent: number) {
 function getPerformanceNarrative(report: SummerCrashDiagnosticParentReport) {
   const leadFocus = getLeadFocus(report);
   const leadStrength = getLeadStrength(report);
+  const rootCauseSummary = report.rootCauseSummary;
+
+  if (rootCauseSummary.primaryBarrier !== "mixed") {
+    return rootCauseSummary.explanation;
+  }
 
   if (report.percent >= 70) {
     return `Your child already has a workable base${
@@ -114,6 +119,25 @@ function getPerformanceNarrative(report: SummerCrashDiagnosticParentReport) {
   return `The score suggests that core maths foundations still need repair${
     leadFocus ? ` around ${leadFocus.label}` : ""
   }. The good news is that you do not need to revise everything at once. Start with the weak areas below and build back confidence step by step.`;
+}
+
+function getMetricToneClass(key: string) {
+  if (key === "foundations-readiness") {
+    return "border-sky-200/80 bg-sky-50/88 text-sky-950";
+  }
+  if (key === "concept-clarity") {
+    return "border-teal-200/80 bg-teal-50/88 text-teal-950";
+  }
+  if (key === "method-accuracy-fluency") {
+    return "border-cyan-200/80 bg-cyan-50/88 text-cyan-950";
+  }
+  if (key === "reasoning-application") {
+    return "border-indigo-200/80 bg-indigo-50/88 text-indigo-950";
+  }
+  if (key === "visual-data-interpretation") {
+    return "border-violet-200/80 bg-violet-50/88 text-violet-950";
+  }
+  return "border-emerald-200/80 bg-emerald-50/88 text-emerald-950";
 }
 
 function getCourseStatusLabel(report: SummerCrashDiagnosticParentReport) {
@@ -378,6 +402,143 @@ function SummarySnapshot({
   );
 }
 
+function DiagnosticMetricsSection({
+  report,
+}: {
+  report: SummerCrashDiagnosticParentReport;
+}) {
+  const metrics = report.metrics.filter((metric) => metric.isVisible);
+
+  if (metrics.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+          <Sparkles className="h-4 w-4" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-slate-950">
+            Learning snapshot
+          </p>
+          <p className="text-sm leading-6 text-slate-600">
+            These cards translate the tags into simple parent-facing signals.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {metrics.map((metric) => (
+          <div
+            key={metric.key}
+            className={cn(
+              "rounded-[1.35rem] border px-4 py-4 shadow-[0_18px_36px_-34px_rgba(15,23,42,0.22)]",
+              getMetricToneClass(metric.key),
+            )}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] opacity-75">
+                  {metric.label}
+                </p>
+                <p className="mt-2 text-2xl font-semibold tabular-nums">
+                  {metric.score}%
+                </p>
+              </div>
+              {!metric.isReportable ? (
+                <Badge variant="outline" className="bg-white/72">
+                  Early signal
+                </Badge>
+              ) : null}
+            </div>
+            <p className="mt-3 text-sm leading-6 opacity-80">{metric.note}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RepairSignalsSection({
+  report,
+}: {
+  report: SummerCrashDiagnosticParentReport;
+}) {
+  if (
+    report.prerequisiteFocus.length === 0 &&
+    report.misconceptionPatterns.length === 0
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6 grid gap-4 lg:grid-cols-2">
+      <div className="rounded-[1.45rem] border border-slate-200/80 bg-slate-50/88 px-4 py-4">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-slate-700" />
+          <p className="text-sm font-semibold text-slate-950">
+            Start here first
+          </p>
+        </div>
+        <div className="mt-3 space-y-3">
+          {report.prerequisiteFocus.length > 0 ? (
+            report.prerequisiteFocus.map((area) => (
+              <div
+                key={`prerequisite-${area.label}`}
+                className="rounded-[1.15rem] border border-slate-200/80 bg-white/92 px-3 py-3"
+              >
+                <p className="text-sm font-semibold text-slate-950">
+                  {area.label}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">
+                  {formatAreaMeta(area.totalQuestions, area.weaknessPct)}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm leading-6 text-slate-600">
+              The report is still clearer at the topic level than at the prerequisite level.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-[1.45rem] border border-slate-200/80 bg-slate-50/88 px-4 py-4">
+        <div className="flex items-center gap-2">
+          <TriangleAlert className="h-4 w-4 text-amber-700" />
+          <p className="text-sm font-semibold text-slate-950">
+            Common error pattern
+          </p>
+        </div>
+        <div className="mt-3 space-y-3">
+          {report.misconceptionPatterns.length > 0 ? (
+            report.misconceptionPatterns.map((pattern) => (
+              <div
+                key={`misconception-${pattern.label}`}
+                className="rounded-[1.15rem] border border-amber-200/80 bg-amber-50/78 px-3 py-3"
+              >
+                <p className="text-sm font-semibold text-amber-950">
+                  {pattern.label}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-amber-900/70">
+                  Seen in {pattern.evidenceCount} incorrect question
+                  {pattern.evidenceCount === 1 ? "" : "s"}.
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm leading-6 text-slate-600">
+              No repeated misconception pattern stood out strongly enough yet.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SectionShell({
   eyebrow,
   title,
@@ -582,7 +743,7 @@ function LearningSignalsSection({
               Parent takeaway
             </p>
             <h3 className="mt-3 text-pretty font-[family:var(--font-display)] text-[1.55rem] leading-tight">
-              {getPerformanceHeadline(report.percent)}
+              {report.rootCauseSummary.headline || getPerformanceHeadline(report.percent)}
             </h3>
             <p className="mt-3 text-sm leading-7 text-sky-50/90">
               {getPerformanceNarrative(report)}
@@ -633,6 +794,9 @@ function LearningSignalsSection({
         </div>
         <WeakAreaBars areas={report.focusAreas} />
       </div>
+
+      <DiagnosticMetricsSection report={report} />
+      <RepairSignalsSection report={report} />
     </SectionShell>
   );
 }
@@ -1039,6 +1203,11 @@ function JoinCard({ report }: { report: SummerCrashDiagnosticParentReport }) {
           <span className="inline-flex rounded-full border border-white/14 bg-white/10 px-3 py-1 text-xs font-semibold text-white">
             {priceLabel}
           </span>
+          {report.courseAccess.earlyBirdOffer ? (
+            <span className="inline-flex rounded-full border border-white/14 bg-white/10 px-3 py-1 text-xs font-semibold text-white/88">
+              Early bird active
+            </span>
+          ) : null}
           <span className="inline-flex rounded-full border border-white/14 bg-white/10 px-3 py-1 text-xs font-semibold text-white/88">
             {getCourseStatusLabel(report)}
           </span>
@@ -1064,6 +1233,8 @@ function JoinCard({ report }: { report: SummerCrashDiagnosticParentReport }) {
             price={report.courseAccess.price}
             currency={report.courseAccess.currency}
             latestPaymentStatus={report.courseAccess.latestPaymentStatus}
+            earlyBirdOffer={report.courseAccess.earlyBirdOffer}
+            offerVariant="inverse"
           />
         </div>
       </CardContent>

@@ -5,9 +5,16 @@
  */
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+const CONNECT_OPTIONS = {
+  bufferCommands: false,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 20000,
+  family: 4,
+};
+
 // Load .env.local if present, else fallback to .env
-dotenv.config({ path: '.env.local' });
-dotenv.config();
+dotenv.config({ path: '.env.local', quiet: true });
+dotenv.config({ quiet: true });
 
 function sanitizeKey(key) {
   return String(key).replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
@@ -87,7 +94,7 @@ async function ensureIndexesForTenant(dbName) {
 async function main() {
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI env var is required');
-  await mongoose.connect(uri, { bufferCommands: false });
+  await mongoose.connect(uri, CONNECT_OPTIONS);
   const globalDb = mongoose.connection.db;
   if (!globalDb) throw new Error('No DB connection');
 

@@ -68,7 +68,9 @@
     "verify:learning-content": "npm run test:e2e:learning-content",
     "test:seed": "ts-node scripts/seed-test-data.ts",
     "migrate:class-sections": "ts-node --esm scripts/migrate-class-sections.ts",
-    "smoke:upload-benchmark": "node scripts/smoke-upload-benchmark.mjs"
+    "smoke:upload-benchmark": "node scripts/smoke-upload-benchmark.mjs",
+    "remotion:preview": "npx remotion preview remotion/index.tsx",
+    "remotion:render": "npx remotion render remotion/index.tsx SummerCrash45s output/summer-crash-45s.mp4"
   },
   "keywords": [
     "nextjs",
@@ -212,6 +214,7 @@
     "tailwindcss": "^3.4.4",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
+    "remotion": "^4.0.0",
     "typescript": "^5.8.3"
   }
 }

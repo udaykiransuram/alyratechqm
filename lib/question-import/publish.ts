@@ -10,6 +10,7 @@ import {
   deriveSectionDefaultMarks,
   deriveSectionDefaultNegativeMarks,
 } from "@/lib/question-paper/sections";
+import { buildQuestionImportMetadataTagPairs } from "@/lib/question-import/diagnostic-tags";
 import { resolveTeacherPaperScope } from "@/lib/question-paper/access";
 import {
   sanitizeQuestionOptions,
@@ -383,6 +384,11 @@ export async function publishQuestionImportDraft({
 
   const includedQuestions = validatePublishableDraft(normalizedDraft);
   const classId = normalizeId(normalizedDraft.payload.paper.classId);
+  const includedQuestionSubjectTokens = new Set(
+    includedQuestions
+      .map((question) => normalizeName(question.subjectToken || ""))
+      .filter(Boolean),
+  );
 
   const classDoc = await ClassModel.findById(classId).select("_id").lean();
   if (!classDoc) {
@@ -391,7 +397,12 @@ export async function publishQuestionImportDraft({
 
   const subjectIdByToken = await resolveSubjectMappings(
     SubjectModel,
-    normalizedDraft.payload.mappings.subjects,
+    (Array.isArray(normalizedDraft.payload.mappings.subjects)
+      ? normalizedDraft.payload.mappings.subjects
+      : []
+    ).filter((mapping) =>
+      includedQuestionSubjectTokens.has(normalizeName(mapping?.token || "")),
+    ),
   );
   const assignedAcademicSectionIds = await resolveAssignedAcademicSections(
     AcademicSectionModel,
@@ -409,20 +420,7 @@ export async function publishQuestionImportDraft({
       );
     }
 
-    const tagPairs = [
-      question.metadata?.difficulty
-        ? { type: "difficulty", value: question.metadata.difficulty }
-        : null,
-      question.metadata?.topic
-        ? { type: "topic", value: question.metadata.topic }
-        : null,
-      question.metadata?.templateId
-        ? { type: "templateid", value: question.metadata.templateId }
-        : null,
-      ...((Array.isArray(question.metadata?.customTags)
-        ? question.metadata.customTags
-        : []) || []),
-    ].filter(Boolean) as Array<{ type: string; value: string }>;
+    const tagPairs = buildQuestionImportMetadataTagPairs(question.metadata);
 
     return {
       draftQuestion: question,

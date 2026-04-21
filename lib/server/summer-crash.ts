@@ -10,7 +10,10 @@ import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { getSafeReturnToPath } from "@/lib/navigation/returnTo";
 import { listStudentCoursesPage } from "@/lib/server/student-courses";
-import { getMockSummerCrashStudentState } from "@/lib/test-fixtures/summer-crash";
+import {
+  getMockSummerCrashStudentState,
+  MOCK_SUMMER_CRASH_LOCKED_STUDENT_ID,
+} from "@/lib/test-fixtures/summer-crash";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 import {
   buildSummerCrashDiagnosticHref,
@@ -22,6 +25,10 @@ import {
   resolveSummerCrashPostRegistrationHref,
   resolveSummerCrashSupportHref,
 } from "@/lib/summer-crash/shared";
+import {
+  resolveSummerCrashPricing,
+  type SummerCrashEarlyBirdOffer,
+} from "@/lib/summer-crash/offer";
 import {
   deriveSummerCrashCourseAccessState,
   type SummerCrashCourseAccessState,
@@ -56,12 +63,15 @@ import SummerCrashEnrollment, {
 import SummerCrashPayment from "@/models/SummerCrashPayment";
 import School from "@/models/School";
 import {
-  SUMMER_CRASH_CURRENCY,
-  SUMMER_CRASH_DEFAULT_CLASS_BANDS,
-  SUMMER_CRASH_DISPLAY_NAME,
-  SUMMER_CRASH_HOME_PATH,
-  SUMMER_CRASH_PRICE,
-  SUMMER_CRASH_SCHOOL_KEY,
+    SUMMER_CRASH_CURRENCY,
+    SUMMER_CRASH_DEFAULT_CLASS_BANDS,
+    SUMMER_CRASH_DISPLAY_NAME,
+    SUMMER_CRASH_EARLY_BIRD_ENDS_AT,
+    SUMMER_CRASH_EARLY_BIRD_LABEL,
+    SUMMER_CRASH_EARLY_BIRD_PRICE,
+    SUMMER_CRASH_HOME_PATH,
+    SUMMER_CRASH_PRICE,
+    SUMMER_CRASH_SCHOOL_KEY,
   SUMMER_CRASH_SIGNIN_PATH,
   SUMMER_CRASH_SUPPORT_CONTACT,
   SUMMER_CRASH_WHATSAPP_GROUP_URL,
@@ -97,9 +107,21 @@ export type SummerCrashPublicConfig = {
   supportHref: string;
   price: number;
   currency: string;
+  earlyBirdOffer: SummerCrashEarlyBirdOffer | null;
   whatsappGroupUrl: string;
   classBands: SummerCrashPublicClassBand[];
 };
+
+type SummerCrashPublicConfigCampaignSource = Pick<
+  ISummerCrashCampaign,
+  | "isActive"
+  | "title"
+  | "supportContact"
+  | "price"
+  | "currency"
+  | "whatsappGroupUrl"
+  | "classMappings"
+>;
 
 export type SummerCrashLookupMatch = {
   studentName: string;
@@ -638,6 +660,17 @@ async function resolveSummerCrashRegistrationDestination(params: {
   return buildSummerCrashDiagnosticHref(diagnosticQuestionPaperId);
 }
 
+function shouldPromptSummerCrashPaymentAfterRegistration(params: {
+  entrySource: SummerCrashEnrollmentEntrySource;
+  courseAccess: Pick<SummerCrashCourseAccessState, "requiresPayment" | "isUnlocked">;
+}) {
+  return (
+    params.entrySource === "direct_registration" &&
+    params.courseAccess.requiresPayment &&
+    !params.courseAccess.isUnlocked
+  );
+}
+
 async function findLatestSummerCrashDiagnosticSubmission(params: {
   schoolKey: string;
   studentId: string;
@@ -797,16 +830,7 @@ async function buildSummerCrashDiagnosticState(params: {
 }
 
 function normalizeSummerCrashPublicConfigFromCampaign(
-  campaign: Pick<
-    ISummerCrashCampaign,
-    | "isActive"
-    | "title"
-    | "supportContact"
-    | "price"
-    | "currency"
-    | "whatsappGroupUrl"
-    | "classMappings"
-  >,
+  campaign: SummerCrashPublicConfigCampaignSource,
 ): SummerCrashPublicConfig {
   const supportContact =
     normalizeSummerCrashText(campaign.supportContact) ||
@@ -814,6 +838,10 @@ function normalizeSummerCrashPublicConfigFromCampaign(
   const whatsappGroupUrl =
     normalizeSummerCrashText(campaign.whatsappGroupUrl) ||
     SUMMER_CRASH_WHATSAPP_GROUP_URL;
+  const pricing = resolveSummerCrashCampaignPricing({
+    price: campaign.price,
+    currency: campaign.currency,
+  });
 
   return {
     isActive: Boolean(campaign.isActive),
@@ -823,11 +851,9 @@ function normalizeSummerCrashPublicConfigFromCampaign(
       supportContact,
       whatsappGroupUrl,
     }),
-    price:
-      typeof campaign.price === "number" ? campaign.price : SUMMER_CRASH_PRICE,
-    currency: String(campaign.currency || SUMMER_CRASH_CURRENCY || "INR")
-      .trim()
-      .toUpperCase(),
+    price: pricing.price,
+    currency: pricing.currency,
+    earlyBirdOffer: pricing.earlyBirdOffer,
     whatsappGroupUrl,
     classBands: normalizeSummerCrashClassMappings(campaign.classMappings).map(
       (mapping) => ({
@@ -839,8 +865,8 @@ function normalizeSummerCrashPublicConfigFromCampaign(
   } satisfies SummerCrashPublicConfig;
 }
 
-function buildSummerCrashDefaultPublicConfig() {
-  return normalizeSummerCrashPublicConfigFromCampaign({
+function buildSummerCrashDefaultPublicConfigSource(): SummerCrashPublicConfigCampaignSource {
+  return {
     isActive: true,
     title: SUMMER_CRASH_DISPLAY_NAME,
     supportContact: SUMMER_CRASH_SUPPORT_CONTACT || undefined,
@@ -848,11 +874,30 @@ function buildSummerCrashDefaultPublicConfig() {
     currency: SUMMER_CRASH_CURRENCY,
     whatsappGroupUrl: SUMMER_CRASH_WHATSAPP_GROUP_URL || undefined,
     classMappings: buildDefaultSummerCrashClassMappings(),
+  };
+}
+
+function buildSummerCrashDefaultPublicConfig() {
+  return normalizeSummerCrashPublicConfigFromCampaign(
+    buildSummerCrashDefaultPublicConfigSource(),
+  );
+}
+
+function resolveSummerCrashCampaignPricing(params: {
+  price: unknown;
+  currency: unknown;
+}) {
+  return resolveSummerCrashPricing({
+    basePrice: params.price,
+    currency: params.currency,
+    earlyBirdPrice: SUMMER_CRASH_EARLY_BIRD_PRICE,
+    earlyBirdEndsAt: SUMMER_CRASH_EARLY_BIRD_ENDS_AT,
+    earlyBirdLabel: SUMMER_CRASH_EARLY_BIRD_LABEL,
   });
 }
 
 const getSummerCrashPublicConfigCached = unstable_cache(
-  async () => {
+  async (): Promise<SummerCrashPublicConfigCampaignSource> => {
     try {
       await connectDB();
 
@@ -862,19 +907,10 @@ const getSummerCrashPublicConfigCached = unstable_cache(
         .select(
           "isActive title supportContact price currency whatsappGroupUrl classMappings",
         )
-        .lean()) as Pick<
-        ISummerCrashCampaign,
-        | "isActive"
-        | "title"
-        | "supportContact"
-        | "price"
-        | "currency"
-        | "whatsappGroupUrl"
-        | "classMappings"
-      > | null;
+        .lean()) as SummerCrashPublicConfigCampaignSource | null;
 
       if (existingCampaign) {
-        return normalizeSummerCrashPublicConfigFromCampaign(existingCampaign);
+        return existingCampaign;
       }
 
       // Public reads should not force tenant provisioning on every request.
@@ -882,9 +918,17 @@ const getSummerCrashPublicConfigCached = unstable_cache(
       const campaign = await getOrCreateSummerCrashCampaign({
         ensureTenantProvisioned: false,
       });
-      return normalizeSummerCrashPublicConfigFromCampaign(campaign);
+      return {
+        isActive: campaign.isActive,
+        title: campaign.title,
+        supportContact: campaign.supportContact,
+        price: campaign.price,
+        currency: campaign.currency,
+        whatsappGroupUrl: campaign.whatsappGroupUrl,
+        classMappings: campaign.classMappings,
+      };
     } catch {
-      return buildSummerCrashDefaultPublicConfig();
+      return buildSummerCrashDefaultPublicConfigSource();
     }
   },
   ["summer-crash-public-config"],
@@ -895,20 +939,23 @@ const getSummerCrashPublicConfigCached = unstable_cache(
 );
 
 export async function getSummerCrashPublicConfig() {
-  return getSummerCrashPublicConfigCached();
+  const campaign = await getSummerCrashPublicConfigCached();
+  return normalizeSummerCrashPublicConfigFromCampaign(campaign);
 }
 
 export async function getSummerCrashCampaignForPayment() {
   const campaign = await getOrCreateSummerCrashCampaign();
+  const pricing = resolveSummerCrashCampaignPricing({
+    price: campaign.price,
+    currency: campaign.currency,
+  });
 
   return {
     campaign,
     classBands: normalizeSummerCrashClassMappings(campaign.classMappings),
-    price:
-      typeof campaign.price === "number" ? campaign.price : SUMMER_CRASH_PRICE,
-    currency: String(campaign.currency || SUMMER_CRASH_CURRENCY || "INR")
-      .trim()
-      .toUpperCase(),
+    price: pricing.price,
+    currency: pricing.currency,
+    earlyBirdOffer: pricing.earlyBirdOffer,
     whatsappGroupUrl:
       normalizeSummerCrashText(campaign.whatsappGroupUrl) ||
       SUMMER_CRASH_WHATSAPP_GROUP_URL,
@@ -994,9 +1041,14 @@ async function resolveSummerCrashCourseAccessState(params: {
   campaign: Pick<ISummerCrashCampaign, "_id" | "price" | "currency">;
   enrollment: SummerCrashPaymentLookupContext | null;
 }) {
-  const baseAccess = deriveSummerCrashCourseAccessState({
+  const pricing = resolveSummerCrashCampaignPricing({
     price: params.campaign.price,
     currency: params.campaign.currency,
+  });
+  const baseAccess = deriveSummerCrashCourseAccessState({
+    price: pricing.price,
+    currency: pricing.currency,
+    earlyBirdOffer: pricing.earlyBirdOffer,
   });
 
   if (!baseAccess.requiresPayment) {
@@ -1035,8 +1087,9 @@ async function resolveSummerCrashCourseAccessState(params: {
   }
 
   return deriveSummerCrashCourseAccessState({
-    price: params.campaign.price,
-    currency: params.campaign.currency,
+    price: pricing.price,
+    currency: pricing.currency,
+    earlyBirdOffer: pricing.earlyBirdOffer,
     paymentStatuses,
   });
 }
@@ -1282,6 +1335,57 @@ export async function registerSummerCrashStudent(input: {
     throw new Error("Create a password to continue.");
   }
 
+  const defaultPassword = getDefaultStudentPassword(phoneDigits);
+  if (!defaultPassword) {
+    throw new Error("We couldn't create the account without a valid phone number.");
+  }
+
+  if (password === defaultPassword) {
+    throw new Error("Choose a password that is different from the phone number digits.");
+  }
+
+  const passwordValidation = validatePasswordInput({
+    role: "student",
+    mobileNumber: phoneDigits,
+    password,
+  });
+  if (!passwordValidation.ok) {
+    throw new Error(passwordValidation.message);
+  }
+
+  if (isMockedE2ETestMode()) {
+    const mockedState = getMockSummerCrashStudentState();
+    const destinationHref =
+      entrySource === "diagnostic"
+        ? mockedState.diagnostic?.launchHref || mockedState.destinationHref
+        : mockedState.destinationHref;
+    const nextDestinationHref = resolveSummerCrashPostRegistrationHref({
+      destinationHref,
+      entrySource,
+      promptPayment: shouldPromptSummerCrashPaymentAfterRegistration({
+        entrySource,
+        courseAccess: mockedState.courseAccess,
+      }),
+    });
+
+    return {
+      campaignTitle: mockedState.title,
+      supportContact: mockedState.supportContact,
+      studentName,
+      guardianName,
+      classBand,
+      sourceSchoolName,
+      summerId: mockedState.summerId,
+      studentId: "111111111111111111111111",
+      autoSignInAllowed: true,
+      signInPassword: password,
+      signInPath: SUMMER_CRASH_SIGNIN_PATH,
+      destinationHref: nextDestinationHref,
+      entrySource,
+      enrollment: null,
+    };
+  }
+
   const campaign = await getOrCreateSummerCrashCampaign();
   if (!campaign.isActive) {
     throw new Error("Summer Crash Course registrations are not open right now.");
@@ -1305,24 +1409,6 @@ export async function registerSummerCrashStudent(input: {
     studentNameNormalized,
     classBandNormalized,
   }).lean();
-
-  const defaultPassword = getDefaultStudentPassword(phoneDigits);
-  if (!defaultPassword) {
-    throw new Error("We couldn't create the account without a valid phone number.");
-  }
-
-  if (password === defaultPassword) {
-    throw new Error("Choose a password that is different from the phone number digits.");
-  }
-
-  const passwordValidation = validatePasswordInput({
-    role: "student",
-    mobileNumber: phoneDigits,
-    password,
-  });
-  if (!passwordValidation.ok) {
-    throw new Error(passwordValidation.message);
-  }
 
   let summerId = String(existingEnrollment?.summerId || "").trim().toUpperCase();
   let studentRecord: any =
@@ -1448,9 +1534,17 @@ export async function registerSummerCrashStudent(input: {
     classBand,
     entrySource,
   });
+  const courseAccess = await resolveSummerCrashCourseAccessState({
+    campaign,
+    enrollment: updatedEnrollment,
+  });
   const nextDestinationHref = resolveSummerCrashPostRegistrationHref({
     destinationHref,
     entrySource,
+    promptPayment: shouldPromptSummerCrashPaymentAfterRegistration({
+      entrySource,
+      courseAccess,
+    }),
   });
   invalidateSummerCrashPortalPolicyForStudent({
     schoolKey: SUMMER_CRASH_SCHOOL_KEY,
@@ -1745,6 +1839,9 @@ export async function getSummerCrashStudentState(params: {
   if (isMockedE2ETestMode()) {
     return getMockSummerCrashStudentState({
       includeCourses: params.includeCourses !== false,
+      paymentUnlocked:
+        String(params.studentId || "").trim() !==
+        MOCK_SUMMER_CRASH_LOCKED_STUDENT_ID,
     });
   }
 

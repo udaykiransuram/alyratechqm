@@ -3,6 +3,10 @@ import { randomUUID } from "crypto";
 import JSZip from "jszip";
 
 import {
+  appendQuestionImportMetadataTagPair,
+  normalizeQuestionImportDiagnosticTagType,
+} from "@/lib/question-import/diagnostic-tags";
+import {
   convertOmmlNodeToLatex,
   createMathNodeHtml,
   getMathMappingTableVersion,
@@ -168,6 +172,34 @@ const FRIENDLY_FIELD_MARKER_MAP: Record<string, string> = {
   "negative marks": "QUESTION_NEGATIVE_MARKS",
   "difficulty": "QUESTION_DIFFICULTY",
   "topic": "QUESTION_TOPIC",
+  "subtopic": "QUESTION_TAG_subtopic",
+  "sub topic": "QUESTION_TAG_subtopic",
+  "subskill": "QUESTION_TAG_subskill",
+  "sub skill": "QUESTION_TAG_subskill",
+  "skill focus": "QUESTION_TAG_subskill",
+  "skill": "QUESTION_TAG_subskill",
+  "competency": "QUESTION_TAG_competency",
+  "process": "QUESTION_TAG_process",
+  "prerequisite": "QUESTION_TAG_prerequisite",
+  "representation mode": "QUESTION_TAG_representation-mode",
+  "conceptual procedural load": "QUESTION_TAG_conceptual-procedural-load",
+  "conceptual-procedural load": "QUESTION_TAG_conceptual-procedural-load",
+  "calculation load": "QUESTION_TAG_calculation-load",
+  "foundation role": "QUESTION_TAG_foundation-role",
+  "time target sec": "QUESTION_TAG_time-target-sec",
+  "misconception family": "QUESTION_TAG_misconception-family",
+  "option a misconception": "QUESTION_TAG_option-a-misconception",
+  "option b misconception": "QUESTION_TAG_option-b-misconception",
+  "option c misconception": "QUESTION_TAG_option-c-misconception",
+  "option d misconception": "QUESTION_TAG_option-d-misconception",
+  "option e misconception": "QUESTION_TAG_option-e-misconception",
+  "context": "QUESTION_TAG_context",
+  "multi-step depth": "QUESTION_TAG_multi-step-depth",
+  "precision units demand": "QUESTION_TAG_precision-units-demand",
+  "structure generalisation": "QUESTION_TAG_structure-generalisation",
+  "structure generalization": "QUESTION_TAG_structure-generalisation",
+  "estimation sense check": "QUESTION_TAG_estimation-sense-check",
+  "additional tags": "QUESTION_TAGS",
   "template id": "QUESTION_TEMPLATEID",
   "templateid": "QUESTION_TEMPLATEID",
   "tags": "QUESTION_TAGS",
@@ -294,8 +326,12 @@ function parseQuestionTags(value: string) {
         };
       }
 
+      const rawType = normalizeWhitespace(item.slice(0, separatorIndex));
+      const normalizedType =
+        normalizeQuestionImportDiagnosticTagType(rawType) || rawType;
+
       return {
-        type: normalizeWhitespace(item.slice(0, separatorIndex)),
+        type: normalizedType,
         value: normalizeWhitespace(item.slice(separatorIndex + 1)),
       };
     })
@@ -802,6 +838,16 @@ export async function parseTeacherMasterDocx({
         flushActiveBlock();
       }
 
+      if (key.startsWith("QUESTION_TAG_") && key !== "QUESTION_TAGS") {
+        if (currentQuestion) {
+          appendQuestionImportMetadataTagPair(currentQuestion.metadata, {
+            type: key.replace("QUESTION_TAG_", ""),
+            value,
+          });
+        }
+        continue;
+      }
+
       switch (key) {
         case "TEMPLATE_VERSION":
           templateVersion = value || QUESTION_IMPORT_TEMPLATE_VERSION;
@@ -942,7 +988,12 @@ export async function parseTeacherMasterDocx({
           if (currentQuestion) currentQuestion.metadata.templateId = value;
           break;
         case "QUESTION_TAGS":
-          if (currentQuestion) currentQuestion.metadata.customTags = parseQuestionTags(value);
+          if (currentQuestion) {
+            const questionMetadata = currentQuestion.metadata;
+            parseQuestionTags(value).forEach((pair) => {
+              appendQuestionImportMetadataTagPair(questionMetadata, pair);
+            });
+          }
           break;
         case "STEM":
           if (currentQuestion) {

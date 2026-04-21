@@ -1,0 +1,406 @@
+<style>
+  .intro {
+    margin-bottom: 24px;
+    padding: 24px;
+    border-radius: 30px;
+    background:
+      radial-gradient(circle at top right, rgba(45, 212, 191, 0.18) 0%, transparent 28%),
+      linear-gradient(145deg, #f4fbf9 0%, #fcfefe 100%);
+    border: 1px solid rgba(15, 118, 110, 0.12);
+    box-shadow: 0 32px 90px -58px rgba(15, 23, 42, 0.24);
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: rgba(13, 148, 136, 0.1);
+    color: #0f766e;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .intro h2 {
+    margin: 0 0 10px;
+    font-size: 34px;
+    line-height: 1;
+    letter-spacing: -0.05em;
+    color: #0f172a;
+  }
+
+  .intro p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.58;
+    color: rgba(30, 41, 59, 0.82);
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px;
+  }
+
+  .option-card {
+    border-radius: 30px;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 26px 70px -56px rgba(15, 23, 42, 0.24);
+    cursor: pointer;
+  }
+
+  .option-top {
+    padding: 18px 18px 16px;
+    background: linear-gradient(155deg, #0f5e5f 0%, #117a72 100%);
+    color: #f2fffc;
+  }
+
+  .option-top small {
+    display: inline-flex;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.14);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .option-top h3 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+  }
+
+  .option-top p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: rgba(242,255,252,0.84);
+  }
+
+  .preview {
+    padding: 18px;
+    background: linear-gradient(180deg, #f6fbfa 0%, #ffffff 100%);
+  }
+
+  .phone {
+    border-radius: 28px;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(255,255,255,0.95);
+  }
+
+  .shell {
+    background: linear-gradient(180deg, #f3fbf9 0%, #fbfdfd 100%);
+  }
+
+  .mobile-top {
+    background: linear-gradient(160deg, #0f5e5f 0%, #117a72 100%);
+    color: #f2fffc;
+  }
+
+  .mobile-top small {
+    display: inline-flex;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.14);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .mobile-top h4 {
+    margin: 0;
+    font-size: 21px;
+    line-height: 1.03;
+    letter-spacing: -0.04em;
+  }
+
+  .mobile-top p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: rgba(240,253,250,0.82);
+  }
+
+  .mobile-body {
+    display: grid;
+  }
+
+  .metric-row,
+  .cta-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric,
+  .field,
+  .card {
+    border-radius: 18px;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+  }
+
+  .metric,
+  .card {
+    padding: 14px;
+  }
+
+  .metric label,
+  .card label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(71, 85, 105, 0.82);
+  }
+
+  .metric strong,
+  .card strong {
+    font-size: 14px;
+    color: #0f172a;
+  }
+
+  .field {
+    min-height: 48px;
+  }
+
+  .cta-primary,
+  .cta-secondary {
+    border-radius: 18px;
+    padding: 14px;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .cta-primary {
+    background: #0f7a72;
+    color: #f2fffc;
+  }
+
+  .cta-secondary {
+    background: rgba(15,118,110,0.08);
+    color: #0f5e5f;
+    border: 1px solid rgba(15,118,110,0.16);
+  }
+
+  .notes {
+    padding: 16px 18px 20px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .note {
+    font-size: 12px;
+    line-height: 1.48;
+    color: rgba(30, 41, 59, 0.86);
+  }
+
+  .note strong {
+    color: #0f172a;
+  }
+
+  .compact .mobile-top {
+    padding: 14px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .compact .mobile-body {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .compact .metric-row,
+  .compact .cta-row {
+    gap: 8px;
+  }
+
+  .compact .field {
+    min-height: 42px;
+  }
+
+  .balanced .mobile-top {
+    padding: 18px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .balanced .mobile-body {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .balanced .metric-row,
+  .balanced .cta-row {
+    gap: 10px;
+  }
+
+  .airy .mobile-top {
+    padding: 22px;
+    display: grid;
+    gap: 12px;
+  }
+
+  .airy .mobile-body {
+    padding: 20px;
+    gap: 16px;
+  }
+
+  .airy .metric-row,
+  .airy .cta-row {
+    gap: 14px;
+  }
+
+  .airy .field {
+    min-height: 54px;
+  }
+
+  .recommend {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 16px 0 0;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.06);
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(15, 23, 42, 0.82);
+  }
+
+  @media (max-width: 1180px) {
+    .cards {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="intro">
+  <div class="eyebrow">Spacing Revision</div>
+  <h2>Which rhythm feels right?</h2>
+  <p>
+    I agree the spacing was drifting a bit. Here I’m isolating just the vertical rhythm and density,
+    especially for mobile shells, forms, cards, and CTA grouping. Pick the one that feels most professional.
+  </p>
+  <div class="recommend">Recommended: <strong style="margin-left:4px;">B. Balanced Premium</strong></div>
+</div>
+
+<div class="cards">
+  <div class="option-card" data-choice="A" onclick="toggleSelect(this)">
+    <div class="option-top">
+      <small>A · Tighter Product</small>
+      <h3>Compact</h3>
+      <p>Less breathing room, more app-density, faster scan.</p>
+    </div>
+    <div class="preview">
+      <div class="phone shell compact">
+        <div class="mobile-top">
+          <small>Summer Crash</small>
+          <h4>Register & start test</h4>
+          <p>Compact, direct, and very product-like.</p>
+        </div>
+        <div class="mobile-body">
+          <div class="metric-row">
+            <div class="metric"><label>Class</label><strong>Class 7</strong></div>
+            <div class="metric"><label>Status</label><strong>Ready</strong></div>
+          </div>
+          <div class="field"></div>
+          <div class="field"></div>
+          <div class="field"></div>
+          <div class="cta-row">
+            <div class="cta-primary">Primary</div>
+            <div class="cta-secondary">Secondary</div>
+          </div>
+          <div class="card"><label>Support</label><strong>WhatsApp help</strong></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><strong>Best for:</strong> maximum mobile efficiency.</div>
+      <div class="note"><strong>Risk:</strong> might feel a bit too compressed for a parent-facing premium flow.</div>
+    </div>
+  </div>
+
+  <div class="option-card" data-choice="B" onclick="toggleSelect(this)">
+    <div class="option-top">
+      <small>B · Balanced Premium</small>
+      <h3>Controlled</h3>
+      <p>Cleaner rhythm, better hierarchy, still has air.</p>
+    </div>
+    <div class="preview">
+      <div class="phone shell balanced">
+        <div class="mobile-top">
+          <small>Summer Crash</small>
+          <h4>Register & start test</h4>
+          <p>Professional spacing with enough calm, but not loose.</p>
+        </div>
+        <div class="mobile-body">
+          <div class="metric-row">
+            <div class="metric"><label>Class</label><strong>Class 7</strong></div>
+            <div class="metric"><label>Status</label><strong>Ready</strong></div>
+          </div>
+          <div class="field"></div>
+          <div class="field"></div>
+          <div class="field"></div>
+          <div class="cta-row">
+            <div class="cta-primary">Primary</div>
+            <div class="cta-secondary">Secondary</div>
+          </div>
+          <div class="card"><label>Support</label><strong>WhatsApp help</strong></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><strong>Best for:</strong> a polished mobile feel across both marketing and utility screens.</div>
+      <div class="note"><strong>Why I recommend it:</strong> it keeps things premium without drifting airy or cramped.</div>
+    </div>
+  </div>
+
+  <div class="option-card" data-choice="C" onclick="toggleSelect(this)">
+    <div class="option-top">
+      <small>C · Editorial Air</small>
+      <h3>Looser</h3>
+      <p>More breathing room and softer pacing.</p>
+    </div>
+    <div class="preview">
+      <div class="phone shell airy">
+        <div class="mobile-top">
+          <small>Summer Crash</small>
+          <h4>Register & start test</h4>
+          <p>Calmer and more luxurious, with extra whitespace.</p>
+        </div>
+        <div class="mobile-body">
+          <div class="metric-row">
+            <div class="metric"><label>Class</label><strong>Class 7</strong></div>
+            <div class="metric"><label>Status</label><strong>Ready</strong></div>
+          </div>
+          <div class="field"></div>
+          <div class="field"></div>
+          <div class="field"></div>
+          <div class="cta-row">
+            <div class="cta-primary">Primary</div>
+            <div class="cta-secondary">Secondary</div>
+          </div>
+          <div class="card"><label>Support</label><strong>WhatsApp help</strong></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><strong>Best for:</strong> a softer, more brochure-like premium feel.</div>
+      <div class="note"><strong>Risk:</strong> may feel slightly too loose for frequent mobile actions like sign-in and help flows.</div>
+    </div>
+  </div>
+</div>

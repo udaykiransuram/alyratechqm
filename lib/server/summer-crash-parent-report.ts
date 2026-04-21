@@ -6,6 +6,13 @@ import { connectDB } from "@/lib/db";
 import { getTenantModels } from "@/lib/db-tenant";
 import { resolveExamRuntimeMongoResponseIdWithCooldown } from "@/lib/exam-runtime-sync-cache";
 import { buildHrefWithReturnTo } from "@/lib/navigation/returnTo";
+import {
+  buildTagDrivenDiagnosticSummary,
+  type DiagnosticMetricSummary,
+  type DiagnosticMisconceptionPattern,
+  type DiagnosticPriorityArea,
+  type DiagnosticRootCauseSummary,
+} from "@/lib/diagnostics/tag-driven-summary";
 import { buildPaperQuestionLookup } from "@/lib/question-paper/grading";
 import {
   buildSummerCrashAnswerSummary,
@@ -72,8 +79,12 @@ export type SummerCrashDiagnosticParentReport = {
   totalMarks: number;
   percent: number;
   overview: SummerCrashDiagnosticOverview;
-  strengths: SummerCrashDiagnosticAreaSummary[];
-  focusAreas: SummerCrashDiagnosticAreaSummary[];
+  metrics: DiagnosticMetricSummary[];
+  strengths: DiagnosticPriorityArea[];
+  focusAreas: DiagnosticPriorityArea[];
+  prerequisiteFocus: DiagnosticPriorityArea[];
+  misconceptionPatterns: DiagnosticMisconceptionPattern[];
+  rootCauseSummary: DiagnosticRootCauseSummary;
   weakSubskills: SummerCrashDiagnosticAreaSummary[];
   weakTopics: SummerCrashDiagnosticAreaSummary[];
   nextSteps: string[];
@@ -224,6 +235,36 @@ function buildSummerCrashWhatsappSummaryText(params: {
     .join("\n");
 }
 
+function toParentReportAreaSummary(
+  area: DiagnosticPriorityArea,
+): DiagnosticPriorityArea {
+  return {
+    ...area,
+  };
+}
+
+function computeTotalDurationSeconds(response: any) {
+  const startedAt = response?.startedAt ? new Date(String(response.startedAt)) : null;
+  const finishedAt =
+    response?.submittedAt || response?.updatedAt
+      ? new Date(String(response?.submittedAt || response?.updatedAt))
+      : null;
+
+  if (
+    !startedAt ||
+    !finishedAt ||
+    Number.isNaN(startedAt.getTime()) ||
+    Number.isNaN(finishedAt.getTime())
+  ) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000),
+  );
+}
+
 export async function getSummerCrashDiagnosticParentReport(params: {
   schoolKey: string;
   studentId: string;
@@ -269,7 +310,9 @@ export async function getSummerCrashDiagnosticParentReport(params: {
     _id: resolvedResponseId,
     student: params.studentId,
   })
-    .select("paper status submittedAt updatedAt totalMarksAwarded sectionAnswers")
+    .select(
+      "paper status startedAt submittedAt updatedAt totalMarksAwarded sectionAnswers",
+    )
     .populate({
       path: "paper",
       model: QuestionPaperModel,
@@ -340,6 +383,12 @@ export async function getSummerCrashDiagnosticParentReport(params: {
     fallbackSubjectName?: string;
     status: "correct" | "incorrect" | "unattempted";
   }> = [];
+  const summaryQuestions: Array<{
+    questionId: string;
+    questionNumber: number;
+    status: "correct" | "incorrect" | "unattempted";
+    tags: Array<{ type: string; value: string }>;
+  }> = [];
   const reviewQuestions: SummerCrashDiagnosticParentReviewQuestion[] = [];
 
   let questionNumber = 0;
@@ -387,6 +436,18 @@ export async function getSummerCrashDiagnosticParentReport(params: {
           sectionName,
           fallbackSubjectName: paperSubjectNames[0],
           status,
+        });
+        summaryQuestions.push({
+          questionId,
+          questionNumber,
+          status,
+          tags: (Array.isArray(question?.tags) ? question.tags : []).map((tag: any) => ({
+            type:
+              normalizeText(tag?.type?.name) ||
+              normalizeText(tag?.typeName) ||
+              "",
+            value: normalizeText(tag?.name ?? tag?.value),
+          })),
         });
 
         if (status === "correct") {
@@ -458,6 +519,10 @@ export async function getSummerCrashDiagnosticParentReport(params: {
   const insights = buildSummerCrashAreaInsights({
     questionResults,
   });
+  const summary = buildTagDrivenDiagnosticSummary({
+    totalDurationSeconds: computeTotalDurationSeconds(response),
+    questions: summaryQuestions,
+  });
   const weakSubskills = insights.subskillInsights
     .filter((row) => row.weaknessPct > 0)
     .slice(0, 3);
@@ -494,8 +559,12 @@ export async function getSummerCrashDiagnosticParentReport(params: {
     totalMarks: paperTotalMarks,
     percent,
     overview,
-    strengths: insights.strengths,
-    focusAreas: insights.focusAreas,
+    metrics: summary.metrics,
+    strengths: summary.strengths.map(toParentReportAreaSummary),
+    focusAreas: summary.focusAreas.map(toParentReportAreaSummary),
+    prerequisiteFocus: summary.prerequisiteFocus.map(toParentReportAreaSummary),
+    misconceptionPatterns: summary.misconceptionPatterns,
+    rootCauseSummary: summary.rootCauseSummary,
     weakSubskills,
     weakTopics,
     nextSteps,

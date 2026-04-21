@@ -25,6 +25,8 @@ import { getPublicSchoolOptionByKey } from "@/lib/server/public-school-data";
 import { comparePasswordHash } from "@/lib/server/password-compare";
 import { invalidateStudentSessionValidationCache } from "@/lib/student-session-cache";
 import { invalidateStudentTestResourceCache } from "@/lib/student-test-server";
+import { SUMMER_CRASH_SCHOOL_KEY } from "@/lib/summer-crash/constants";
+import { isMockedE2ETestMode } from "@/lib/test-mode";
 import CompanyAdmin from "@/models/CompanyAdmin";
 
 const SCHOOL_NOT_FOUND_ERROR = "SchoolNotFound";
@@ -57,6 +59,15 @@ const CredentialsProvider =
 if (typeof CredentialsProvider !== "function") {
   throw new Error("Failed to initialize NextAuth credentials provider.");
 }
+
+const MOCK_SUMMER_CRASH_STUDENT = {
+  id: "student-e2e",
+  name: "Aarav",
+  summerId: "SC123456",
+  studentSessionId: "mock-summer-session",
+  studentClassId: "111111111111111111111111",
+  studentAcademicSectionId: "222222222222222222222222",
+} as const;
 
 function isValidMongoObjectId(value: unknown) {
   return (
@@ -137,8 +148,29 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
         try {
-          await connectDB();
           const schoolKey = String(credentials.schoolKey).trim().toLowerCase();
+          const identifier = String(rawIdentifier).trim();
+
+          if (
+            isMockedE2ETestMode() &&
+            schoolKey === SUMMER_CRASH_SCHOOL_KEY &&
+            identifier.toUpperCase() === MOCK_SUMMER_CRASH_STUDENT.summerId &&
+            String(credentials.password).trim()
+          ) {
+            return {
+              id: MOCK_SUMMER_CRASH_STUDENT.id,
+              name: MOCK_SUMMER_CRASH_STUDENT.name,
+              accountType: "school_user" as AccountType,
+              role: "student" as SchoolUserRole,
+              schoolKey,
+              studentSessionId: MOCK_SUMMER_CRASH_STUDENT.studentSessionId,
+              studentClassId: MOCK_SUMMER_CRASH_STUDENT.studentClassId,
+              studentAcademicSectionId:
+                MOCK_SUMMER_CRASH_STUDENT.studentAcademicSectionId,
+            };
+          }
+
+          await connectDB();
           const school = await getPublicSchoolOptionByKey(schoolKey, {
             includeHidden: true,
           });
@@ -146,7 +178,6 @@ export const authOptions: NextAuthOptions = {
             throw new Error(SCHOOL_NOT_FOUND_ERROR);
           }
 
-          const identifier = String(rawIdentifier).trim();
           const { User } = await getTenantModels(schoolKey, ["User"]);
           const email = identifier.includes("@")
             ? normalizeEmail(identifier)

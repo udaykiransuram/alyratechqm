@@ -56,6 +56,7 @@ export default async function StudentSummerCrashHomePage({
   ]);
   const submitted = getSearchParam(resolvedSearchParams?.submitted) === "1";
   const mode = getSearchParam(resolvedSearchParams?.mode);
+  const promptPayment = getSearchParam(resolvedSearchParams?.promptPayment) === "1";
 
   if (submitted && mode === "diagnostic" && state.diagnostic?.reportHref) {
     redirect(state.diagnostic.reportHref);
@@ -172,6 +173,9 @@ export default async function StudentSummerCrashHomePage({
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <span className="app-meta-chip">{priceLabel}</span>
+                  {state.courseAccess.earlyBirdOffer ? (
+                    <span className="app-meta-chip">Early bird live</span>
+                  ) : null}
                   <span className="app-meta-chip">
                     {state.courseAccess.latestPaymentStatus === "pending"
                       ? "Checking payment"
@@ -184,6 +188,8 @@ export default async function StudentSummerCrashHomePage({
                   price={state.courseAccess.price}
                   currency={state.courseAccess.currency}
                   latestPaymentStatus={state.courseAccess.latestPaymentStatus}
+                  earlyBirdOffer={state.courseAccess.earlyBirdOffer}
+                  autoOpen={promptPayment}
                 />
               </CardContent>
             </Card>

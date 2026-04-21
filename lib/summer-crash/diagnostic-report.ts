@@ -243,7 +243,7 @@ export function selectSummerCrashQuestionLabels(params: {
   const sectionLabel = normalizeText(params.fallbackSectionName);
 
   const subskillLabel =
-    pickTagLabel(tags, ["subtopic", "skillfocus", "skill", "competency"]) ||
+    pickTagLabel(tags, ["subskill", "subtopic", "skillfocus", "skill", "competency"]) ||
     "";
 
   const rawTopicLabel = pickTagLabel(tags, ["topic"]);

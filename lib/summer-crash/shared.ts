@@ -144,8 +144,28 @@ export function buildSummerCrashDiagnosticHref(paperId: unknown) {
 export function resolveSummerCrashPostRegistrationHref(params: {
   destinationHref?: string | null;
   entrySource?: "diagnostic" | "direct_registration" | null;
+  promptPayment?: boolean;
 }) {
-  return getSafeReturnToPath(params.destinationHref) || SUMMER_CRASH_HOME_PATH;
+  const safeDestinationHref =
+    getSafeReturnToPath(params.destinationHref) || SUMMER_CRASH_HOME_PATH;
+
+  if (
+    params.entrySource !== "direct_registration" ||
+    !params.promptPayment
+  ) {
+    return safeDestinationHref;
+  }
+
+  const [pathWithQuery, hashFragment = ""] = safeDestinationHref.split("#");
+  const [pathname, existingQuery = ""] = pathWithQuery.split("?");
+  const searchParams = new URLSearchParams(existingQuery);
+  searchParams.set("promptPayment", "1");
+  searchParams.set("source", "registration");
+
+  const nextQuery = searchParams.toString();
+  return `${pathname}${nextQuery ? `?${nextQuery}` : ""}${
+    hashFragment ? `#${hashFragment}` : ""
+  }`;
 }
 
 export function buildSummerCrashStudentReportHref(responseId: unknown) {

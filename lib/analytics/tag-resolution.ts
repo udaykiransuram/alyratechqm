@@ -1,3 +1,5 @@
+import { normalizeCanonicalDiagnosticTagType } from "@/lib/question-import/diagnostic-tags";
+
 export type AnalyticsResolvedTag = {
   _id: string;
   name: string;
@@ -48,6 +50,12 @@ export function normalizeAnalyticsTagTypeName(value: unknown) {
   const normalizedKey = normalizeTagTypeKey(value);
   if (!normalizedKey) {
     return "";
+  }
+
+  const canonicalDiagnosticType =
+    normalizeCanonicalDiagnosticTagType(normalizedKey);
+  if (canonicalDiagnosticType) {
+    return canonicalDiagnosticType;
   }
 
   return TAG_TYPE_ALIAS_MAP[normalizedKey] || normalizedKey;

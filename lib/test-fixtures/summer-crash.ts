@@ -1,5 +1,6 @@
 import type { StudentCourseSummary } from "@/lib/courses/types";
 import type { SummerCrashCourseAccessState } from "@/lib/summer-crash/course-access";
+import type { SummerCrashEarlyBirdOffer } from "@/lib/summer-crash/offer";
 import {
   buildSummerCrashDiagnosticHref,
   buildSummerCrashStudentReportHref,
@@ -44,12 +45,31 @@ export const MOCK_SUMMER_COURSE: StudentCourseSummary = {
   },
 };
 
+const MOCK_EARLY_BIRD_OFFER: SummerCrashEarlyBirdOffer = {
+  label: "Early Bird Offer",
+  price: 3999,
+  originalPrice: 4999,
+  currency: "INR",
+  savingsAmount: 1000,
+  endsAt: "2026-05-05T18:30:00.000Z",
+};
+
 const MOCK_COURSE_ACCESS: SummerCrashCourseAccessState = {
   isUnlocked: true,
   requiresPayment: true,
   latestPaymentStatus: "paid",
-  price: 4999,
+  price: 3999,
   currency: "INR",
+  earlyBirdOffer: MOCK_EARLY_BIRD_OFFER,
+};
+
+const MOCK_LOCKED_COURSE_ACCESS: SummerCrashCourseAccessState = {
+  isUnlocked: false,
+  requiresPayment: true,
+  latestPaymentStatus: "none",
+  price: 3999,
+  currency: "INR",
+  earlyBirdOffer: MOCK_EARLY_BIRD_OFFER,
 };
 
 const MOCK_DIAGNOSTIC: SummerCrashDiagnosticState = {
@@ -65,10 +85,14 @@ const MOCK_DIAGNOSTIC: SummerCrashDiagnosticState = {
   available: true,
 };
 
+export const MOCK_SUMMER_CRASH_LOCKED_STUDENT_ID = "student-e2e-payment-locked";
+
 export function getMockSummerCrashStudentState(params?: {
   includeCourses?: boolean;
+  paymentUnlocked?: boolean;
 }): SummerCrashStudentState {
   const includeCourses = params?.includeCourses !== false;
+  const paymentUnlocked = params?.paymentUnlocked !== false;
 
   return cloneForTransport({
     title: "Summer Crash Course",
@@ -79,10 +103,11 @@ export function getMockSummerCrashStudentState(params?: {
     classBand: "Class 7",
     summerId: "SC123456",
     requiresPasswordSetup: false,
-    courseAccess: MOCK_COURSE_ACCESS,
+    courseAccess: paymentUnlocked
+      ? MOCK_COURSE_ACCESS
+      : MOCK_LOCKED_COURSE_ACCESS,
     courses: includeCourses ? [MOCK_SUMMER_COURSE] : [],
     destinationHref: "/student/crash-course",
     diagnostic: MOCK_DIAGNOSTIC,
   });
 }
-

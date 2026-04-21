@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, MessageCircleMore } from "lucide-react";
 import { useState, useTransition } from "react";
 
+import SummerCrashEarlyBirdOffer from "@/components/summer-crash/SummerCrashEarlyBirdOffer";
 import { Button } from "@/components/ui/button";
 import FeedbackNotice from "@/components/ui/feedback-notice";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ import {
   SUMMER_CRASH_SCHOOL_KEY,
   SUMMER_CRASH_SIGNIN_PATH,
 } from "@/lib/summer-crash/constants";
+import type { SummerCrashEarlyBirdOffer as SummerCrashEarlyBirdOfferData } from "@/lib/summer-crash/offer";
 
 type SummerCrashRegistrationClientProps = {
   title: string;
@@ -38,6 +40,7 @@ type SummerCrashRegistrationClientProps = {
   isActive: boolean;
   price: number;
   currency: string;
+  earlyBirdOffer?: SummerCrashEarlyBirdOfferData | null;
   entrySource?: "diagnostic" | "direct_registration";
 };
 
@@ -76,6 +79,8 @@ export default function SummerCrashRegistrationClient({
   supportHref = "",
   classBands,
   isActive,
+  price,
+  earlyBirdOffer = null,
   entrySource,
 }: SummerCrashRegistrationClientProps) {
   const [form, setForm] = useState(INITIAL_FORM_STATE);
@@ -87,6 +92,7 @@ export default function SummerCrashRegistrationClient({
     entrySource === "diagnostic" ? "diagnostic" : "direct_registration";
 
   const isDiagnosticEntry = resolvedEntrySource === "diagnostic";
+  const hasPaidCourseAccess = Number(price) > 0;
   const campaignTitle =
     String(title || SUMMER_CRASH_DISPLAY_NAME).trim() ||
     SUMMER_CRASH_DISPLAY_NAME;
@@ -95,10 +101,14 @@ export default function SummerCrashRegistrationClient({
     : "Create parent account";
   const pageSummary = isDiagnosticEntry
     ? "Free diagnostic opens right after signup."
-    : "Use one parent sign-in for the full Summer Crash flow.";
+    : hasPaidCourseAccess
+      ? "Use one parent sign-in for the full Summer Crash flow. Payment opens right after signup."
+      : "Use one parent sign-in for the full Summer Crash flow.";
   const submitLabel = isDiagnosticEntry
     ? "Create account & start test"
-    : "Create account";
+    : hasPaidCourseAccess
+      ? "Create account & pay course fee"
+      : "Create account";
   const supportLabel = supportContact || "";
   const supportWhatsappHref = String(supportHref || "").trim();
   const supportText = supportWhatsappHref
@@ -298,6 +308,21 @@ export default function SummerCrashRegistrationClient({
               </Link>
             </p>
           </div>
+
+          {earlyBirdOffer ? (
+            <SummerCrashEarlyBirdOffer
+              offer={earlyBirdOffer}
+              variant="soft"
+              compact
+              className="mt-2 mx-auto w-full max-w-[34rem] sm:mx-0"
+              title="Early bird course price"
+              subtitle={
+                isDiagnosticEntry
+                  ? "Start the free diagnostic now and keep this course price."
+                  : "Create the parent account now and keep this course price."
+              }
+            />
+          ) : null}
 
           {errorMessage ? (
             <FeedbackNotice variant="error">{errorMessage}</FeedbackNotice>

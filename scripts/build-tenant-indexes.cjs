@@ -1,8 +1,15 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+const CONNECT_OPTIONS = {
+  bufferCommands: false,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 20000,
+  family: 4,
+};
+
 // Load .env.local if present, else fallback to .env
-dotenv.config({ path: '.env.local' });
-dotenv.config();
+dotenv.config({ path: '.env.local', quiet: true });
+dotenv.config({ quiet: true });
 
 function sanitizeKey(key) {
   return String(key).replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
@@ -82,7 +89,7 @@ async function ensureIndexesForTenant(dbName) {
 async function main() {
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI env var is required');
-  await mongoose.connect(uri, { bufferCommands: false });
+  await mongoose.connect(uri, CONNECT_OPTIONS);
   const globalDb = mongoose.connection.db;
   if (!globalDb) throw new Error('No DB connection');
 
@@ -98,4 +105,30 @@ async function main() {
   console.log('Done building tenant indexes');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+function formatReachabilityMessage(err) {
+  const selectionError =
+    err?.name === 'MongooseServerSelectionError' ||
+    err?.name === 'MongoServerSelectionError';
+
+  if (!selectionError) {
+    return null;
+  }
+
+  const topologyType = err?.reason?.type || err?.cause?.type;
+  if (topologyType === 'ReplicaSetNoPrimary') {
+    return 'Skipping tenant index build because MongoDB Atlas did not expose a primary. This is usually a transient network, VPN, or Atlas IP allowlist issue.';
+  }
+
+  return `Skipping tenant index build because MongoDB was unreachable during predev startup${topologyType ? ` (${topologyType})` : ''}.`;
+}
+
+main().catch((err) => {
+  const reachabilityMessage = formatReachabilityMessage(err);
+  if (reachabilityMessage) {
+    console.warn(`[predev] ${reachabilityMessage}`);
+    process.exit(0);
+  }
+
+  console.error(err);
+  process.exit(1);
+});

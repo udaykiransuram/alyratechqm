@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Edit,
   Eye,
+  FileSpreadsheet,
   MessageCircle,
 } from "lucide-react";
 
@@ -46,6 +47,7 @@ export default function QuestionPaperDirectoryRowActions({
     selectedAcademicSectionId !== "all"
       ? encodeURIComponent(selectedAcademicSectionId)
       : "";
+  const diagnosticExportHref = `/api/question-import/export?paperId=${encodedPaperId}`;
 
   return (
     <div className="min-w-0 space-y-2">
@@ -131,6 +133,17 @@ export default function QuestionPaperDirectoryRowActions({
               <AppPrefetchLink href={buildReturnHref(uploadHref)}>
                 Upload Excel
               </AppPrefetchLink>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="app-button-compact w-full"
+            >
+              <a href={diagnosticExportHref}>
+                <FileSpreadsheet className="h-4 w-4" />
+                Diagnostic XLSX
+              </a>
             </Button>
             <Button
               asChild
@@ -251,6 +264,17 @@ export default function QuestionPaperDirectoryRowActions({
             Upload Excel
           </Button>
         </AppPrefetchLink>
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="app-button-compact w-full md:w-auto"
+        >
+          <a href={diagnosticExportHref}>
+            <FileSpreadsheet className="h-4 w-4" />
+            Diagnostic XLSX
+          </a>
+        </Button>
         <AppPrefetchLink
           href={buildReturnHref(classAnalyticsHref)}
           relatedApiPrefetches={[

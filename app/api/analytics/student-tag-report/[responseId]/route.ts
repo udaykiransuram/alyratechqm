@@ -31,6 +31,7 @@ import {
   buildAnalyticsTagLookup,
   resolveAnalyticsTags,
 } from "@/lib/analytics/tag-resolution";
+import { getQuestionImportDiagnosticTagLabel } from "@/lib/question-import/diagnostic-tags";
 import {
   filterResponsesByAcademicSection,
   getStudentAcademicSectionId,
@@ -418,7 +419,7 @@ export async function GET(
       ].concat(
         Array.from(tagTypeSet).map((name) => ({
           value: name.toLowerCase(),
-          label: name,
+          label: getQuestionImportDiagnosticTagLabel(name) || name,
         })),
       );
 

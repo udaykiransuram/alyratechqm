@@ -1,0 +1,18 @@
+export const colors = {
+  bg: "hsl(212 34% 97%)",
+  surface: "hsl(212 36% 99%)",
+  surface2: "hsl(209 22% 94%)",
+  ink: "hsl(218 44% 12%)",
+  inkSoft: "hsl(217 27% 21%)",
+  muted: "hsl(214 13% 42%)",
+  accent: "hsl(184 74% 42%)",
+  accentStrong: "hsl(195 92% 71%)",
+  brandStart: "hsl(184 72% 32%)",
+  brandEnd: "hsl(211 58% 18%)",
+  heroStart: "hsl(206 50% 6%)",
+  heroMid: "hsl(198 42% 10%)",
+  heroEnd: "hsl(194 31% 14%)",
+  warm: "hsl(192 78% 66%)",
+  border: "hsl(210 18% 82%)",
+  shadow: "hsl(220 40% 10%)",
+};

@@ -12,6 +12,8 @@ interface InnerHeroProps {
   subtitle: string;
   pillText?: string;
   children?: React.ReactNode;
+  topLeftContent?: React.ReactNode;
+  topRightContent?: React.ReactNode;
   variant?: "flagship" | "story" | "conversion";
   /** Optional WhatsApp link to show a simple icon in the hero header */
   whatsappHref?: string;
@@ -53,6 +55,8 @@ export const InnerHero = ({
   subtitle,
   pillText,
   children,
+  topLeftContent,
+  topRightContent,
   variant = "story",
   whatsappHref,
   lottieRight,
@@ -75,6 +79,12 @@ export const InnerHero = ({
         variantClasses.shell,
       )}
     >
+      {topLeftContent ? (
+        <div className="absolute left-4 top-[max(env(safe-area-inset-top,0px),1rem)] z-20 hidden lg:block xl:left-6 2xl:left-8">
+          {topLeftContent}
+        </div>
+      ) : null}
+
       {whatsappHref && (
         <a
           href={whatsappHref}
@@ -156,6 +166,16 @@ export const InnerHero = ({
       )}
 
       <div className="relative z-10 mx-auto max-w-7xl px-5 lg:px-8">
+        {topRightContent ? (
+          <div
+            className={cn(
+              "absolute top-[max(env(safe-area-inset-top,0px),1rem)] z-20 hidden lg:block",
+              whatsappHref ? "right-16" : "right-5",
+            )}
+          >
+            {topRightContent}
+          </div>
+        ) : null}
         <div className={cn("mx-auto text-center", variantClasses.content)}>
           {pillText && (
             <motion.div

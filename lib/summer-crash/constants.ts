@@ -22,6 +22,18 @@ export const SUMMER_CRASH_CURRENCY = String(
   .trim()
   .toUpperCase();
 
+export const SUMMER_CRASH_EARLY_BIRD_PRICE = String(
+  process.env.SUMMER_CRASH_EARLY_BIRD_PRICE || "",
+).trim();
+
+export const SUMMER_CRASH_EARLY_BIRD_ENDS_AT = String(
+  process.env.SUMMER_CRASH_EARLY_BIRD_ENDS_AT || "2026-05-05T23:59:59+05:30",
+).trim();
+
+export const SUMMER_CRASH_EARLY_BIRD_LABEL = String(
+  process.env.SUMMER_CRASH_EARLY_BIRD_LABEL || "Early Bird Offer",
+).trim();
+
 export const SUMMER_CRASH_WHATSAPP_GROUP_URL = String(
   process.env.SUMMER_CRASH_WHATSAPP_GROUP_URL || "",
 ).trim();

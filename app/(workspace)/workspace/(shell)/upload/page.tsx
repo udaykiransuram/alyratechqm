@@ -14,20 +14,25 @@ import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/ui/use-toast';
 import { useBackNavigation } from '@/hooks/useReturnNavigation';
 
-const ACCEPTED_DOCX_FORMATS = '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const ACCEPTED_IMPORT_FORMATS = [
+  '.docx',
+  '.xlsx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+].join(',');
 
 export default function UploadPage() {
   const router = useRouter();
   const { navigateBack } = useBackNavigation('/workspace/questions');
   const { toast } = useToast();
-  const [docxFile, setDocxFile] = useState<File | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   async function handleCreateDraft() {
-    if (!docxFile) {
+    if (!importFile) {
       toast({
-        title: 'No DOCX selected',
-        description: 'Choose a teacher-master DOCX file before starting the import.',
+        title: 'No file selected',
+        description: 'Choose a teacher-master DOCX or diagnostic XLSX file before starting the import.',
         variant: 'destructive',
       });
       return;
@@ -37,7 +42,7 @@ export default function UploadPage() {
 
     try {
       const formData = new FormData();
-      formData.append('file', docxFile, docxFile.name || 'teacher-master.docx');
+      formData.append('file', importFile, importFile.name || 'question-import.xlsx');
 
       const response = await fetch('/api/question-imports', {
         method: 'POST',
@@ -52,7 +57,7 @@ export default function UploadPage() {
 
       toast({
         title: 'Draft created',
-        description: 'The DOCX was parsed successfully. Review and approve the questions before publish.',
+        description: 'The import file was parsed successfully. Review and approve the questions before publish.',
       });
 
       router.push(`/workspace/upload/${data.draft._id}`);
@@ -62,7 +67,7 @@ export default function UploadPage() {
         description:
           error instanceof Error
             ? error.message
-            : 'Failed to create the DOCX import draft.',
+            : 'Failed to create the import draft.',
         variant: 'destructive',
       });
     } finally {
@@ -77,8 +82,8 @@ export default function UploadPage() {
           variant="editor"
           density="compact"
           eyebrow="Import Tools"
-          title="Import Teacher Master DOCX"
-          description="Upload the teacher-master DOCX, review the parsed paper and questions, and publish only the items you approve."
+          title="Import Diagnostic Questions"
+          description="Upload the teacher-master DOCX or the canonical diagnostic XLSX, review the parsed paper and questions, and publish only the items you approve."
           actions={
             <div className="app-import-inline-actions">
               <Button
@@ -101,7 +106,7 @@ export default function UploadPage() {
           }
           meta={
             <>
-              <span className="app-meta-chip">DOCX only</span>
+              <span className="app-meta-chip">DOCX or XLSX</span>
               <span className="app-meta-chip">Mandatory review</span>
               <span className="app-meta-chip">Question approval before publish</span>
             </>
@@ -109,8 +114,8 @@ export default function UploadPage() {
           stats={[
             {
               label: 'Selected file',
-              value: docxFile?.name || 'No file selected',
-              meta: 'Upload the official teacher-master DOCX template or a file edited from it.',
+              value: importFile?.name || 'No file selected',
+              meta: 'Upload the official teacher-master DOCX or the canonical diagnostic workbook.',
             },
             {
               label: 'Workflow',
@@ -119,7 +124,7 @@ export default function UploadPage() {
             },
             {
               label: 'Template',
-              value: 'Versioned DOCX',
+              value: 'DOCX + XLSX',
               meta: 'Download the latest template before authoring a new paper.',
             },
           ]}
@@ -128,9 +133,9 @@ export default function UploadPage() {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <Card className="app-surface overflow-hidden shadow-none">
             <CardHeader className="app-section-header">
-              <CardTitle>Start a DOCX import draft</CardTitle>
+              <CardTitle>Start an import draft</CardTitle>
               <CardDescription>
-                Parse the uploaded DOCX into a review draft. Nothing is published until the review is complete.
+                Parse the uploaded DOCX or XLSX into a review draft. Nothing is published until the review is complete.
               </CardDescription>
             </CardHeader>
             <CardContent className="app-section-body space-y-5">
@@ -138,7 +143,13 @@ export default function UploadPage() {
                 <Button type="button" variant="outline" size="sm" className="app-import-action-button" asChild>
                   <a href="/api/question-import/template?format=docx">
                     <FileText className="h-4 w-4" />
-                    Download template
+                    DOCX template
+                  </a>
+                </Button>
+                <Button type="button" variant="outline" size="sm" className="app-import-action-button" asChild>
+                  <a href="/api/question-import/template?format=xlsx">
+                    <TableProperties className="h-4 w-4" />
+                    XLSX template
                   </a>
                 </Button>
                 <Button type="button" variant="outline" size="sm" className="app-import-action-button" asChild>
@@ -152,16 +163,16 @@ export default function UploadPage() {
               <div className="app-field-group">
                 <FilePickerField
                   id="teacherMasterDocx"
-                  label="Teacher master DOCX"
-                  accept={ACCEPTED_DOCX_FORMATS}
-                  onChange={(event) => setDocxFile(event.target.files?.[0] || null)}
-                  selectedFileName={docxFile?.name || null}
-                  placeholder="Choose a DOCX file"
+                  label="Teacher master DOCX or diagnostic XLSX"
+                  accept={ACCEPTED_IMPORT_FORMATS}
+                  onChange={(event) => setImportFile(event.target.files?.[0] || null)}
+                  selectedFileName={importFile?.name || null}
+                  placeholder="Choose a DOCX or XLSX file"
                 />
               </div>
 
               <div className="app-import-note-card">
-                Supported in this version: DOCX files created from the official template, embedded images inside stem, option, and explanation blocks, plus Word or Mathpix-style math that can be normalized into the editor.
+                Supported in this version: DOCX files created from the official template, canonical diagnostic XLSX workbooks, embedded images inside DOCX stem/option/explanation blocks, and Word or Mathpix-style math that can be normalized into the editor.
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
@@ -170,7 +181,7 @@ export default function UploadPage() {
                   size="sm"
                   className="app-import-action-button-primary"
                   onClick={() => void handleCreateDraft()}
-                  disabled={isUploading || !docxFile}
+                  disabled={isUploading || !importFile}
                 >
                   {isUploading ? <Spinner className="h-4 w-4" /> : null}
                   Create draft
@@ -188,7 +199,7 @@ export default function UploadPage() {
             </CardHeader>
             <CardContent className="app-section-body space-y-3 text-sm text-muted-foreground">
               <div className="app-import-note-card">
-                1. The DOCX is parsed into a review draft with paper metadata, sections, images, math fragments, and question blocks.
+                1. The import file is parsed into a review draft with paper metadata, sections, question blocks, and any supported images or math fragments.
               </div>
               <div className="app-import-note-card">
                 2. You review the parsed questions in a create-style editor, fix issues, and approve or exclude each item.

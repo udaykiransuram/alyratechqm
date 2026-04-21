@@ -16,6 +16,10 @@ import {
   resolveSummerCrashSelectedSummerId,
 } from "../../../lib/summer-crash/shared";
 import {
+  getSummerCrashCountdownParts,
+  resolveSummerCrashPricing,
+} from "../../../lib/summer-crash/offer";
+import {
   SUMMER_CRASH_DEFAULT_CLASS_BANDS,
   SUMMER_CRASH_SCHOOL_KEY,
 } from "../../../lib/summer-crash/constants";
@@ -106,6 +110,85 @@ test.describe("Summer crash course helpers @desktop", () => {
     expect(formatSummerCrashPrice(1499, "INR")).toBe("₹1,499");
   });
 
+  test("activates early-bird pricing before the deadline and keeps the base price after it expires", async () => {
+    const activePricing = resolveSummerCrashPricing({
+      basePrice: 4999,
+      currency: "INR",
+      earlyBirdPrice: 3999,
+      earlyBirdEndsAt: "2026-05-05T18:30:00.000Z",
+      earlyBirdLabel: "Early Bird Offer",
+      now: "2026-04-21T04:30:00.000Z",
+    });
+
+    expect(activePricing.price).toBe(3999);
+    expect(activePricing.earlyBirdOffer).toMatchObject({
+      label: "Early Bird Offer",
+      price: 3999,
+      originalPrice: 4999,
+      savingsAmount: 1000,
+      endsAt: "2026-05-05T18:30:00.000Z",
+    });
+
+    const expiredPricing = resolveSummerCrashPricing({
+      basePrice: 4999,
+      currency: "INR",
+      earlyBirdPrice: 3999,
+      earlyBirdEndsAt: "2026-05-05T18:30:00.000Z",
+      earlyBirdLabel: "Early Bird Offer",
+      now: "2026-05-06T04:30:00.000Z",
+    });
+
+    expect(expiredPricing.price).toBe(4999);
+    expect(expiredPricing.earlyBirdOffer).toBeNull();
+  });
+
+  test("falls back to a sensible early-bird discount when only the deadline is configured", async () => {
+    const pricing = resolveSummerCrashPricing({
+      basePrice: 1000,
+      currency: "INR",
+      earlyBirdPrice: "",
+      earlyBirdEndsAt: "2026-05-05T18:30:00.000Z",
+      now: "2026-04-21T04:30:00.000Z",
+    });
+
+    expect(pricing.price).toBe(800);
+    expect(pricing.earlyBirdOffer).toMatchObject({
+      price: 800,
+      originalPrice: 1000,
+      savingsAmount: 200,
+    });
+  });
+
+  test("builds a stable countdown snapshot for the early-bird timer", async () => {
+    expect(
+      getSummerCrashCountdownParts({
+        endsAt: "2026-04-23T10:15:30.000Z",
+        now: "2026-04-21T08:10:05.000Z",
+      }),
+    ).toEqual({
+      totalMs: 180_325_000,
+      days: 2,
+      hours: 2,
+      minutes: 5,
+      seconds: 25,
+      expired: false,
+    });
+
+    expect(
+      getSummerCrashCountdownParts({
+        endsAt: "2026-04-21T08:10:05.000Z",
+        now: "2026-04-21T08:10:05.000Z",
+      }),
+    ).toEqual({
+      totalMs: 0,
+      days: 0,
+      hours: 0,
+      minutes: 0,
+      seconds: 0,
+      expired: true,
+    });
+  });
+
   test("sends both diagnostic and direct summer registrations to the real destination", async () => {
     const diagnosticHref = buildSummerCrashDiagnosticHref("paper_123");
 
@@ -120,8 +203,9 @@ test.describe("Summer crash course helpers @desktop", () => {
       resolveSummerCrashPostRegistrationHref({
         destinationHref: "/student/crash-course",
         entrySource: "direct_registration",
+        promptPayment: true,
       }),
-    ).toBe("/student/crash-course");
+    ).toBe("/student/crash-course?promptPayment=1&source=registration");
 
     expect(
       resolveSummerCrashPostRegistrationHref({
@@ -233,6 +317,7 @@ test.describe("Summer crash course helpers @desktop", () => {
       latestPaymentStatus: "none",
       price: 0,
       currency: "INR",
+      earlyBirdOffer: null,
     });
 
     expect(
@@ -246,6 +331,7 @@ test.describe("Summer crash course helpers @desktop", () => {
       latestPaymentStatus: "none",
       price: 1999,
       currency: "INR",
+      earlyBirdOffer: null,
     });
 
     expect(
