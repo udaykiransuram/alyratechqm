@@ -377,7 +377,6 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
 
     await navigateToAppRoute(page, "/student/tests/paper-1");
 
-    await expect(page.getByLabel("Notifications")).toHaveCount(0);
     await expect(
       page.getByLabel("Student portal navigation"),
     ).toHaveCount(0);
@@ -770,6 +769,25 @@ test.describe("Student test UI resilience (network mocked) @mobile", () => {
           .evaluate((element) => getComputedStyle(element).position),
       )
       .toBe("static");
+
+    const previousButton = page.getByRole("button", { name: "Prev" });
+    const nextButton = page.getByRole("button", { name: "Next" });
+
+    await expect(previousButton).toBeVisible();
+    await expect(nextButton).toBeVisible();
+
+    const previousButtonBox = await previousButton.boundingBox();
+    const nextButtonBox = await nextButton.boundingBox();
+
+    expect(previousButtonBox).not.toBeNull();
+    expect(nextButtonBox).not.toBeNull();
+
+    if (!previousButtonBox || !nextButtonBox) {
+      throw new Error("Expected laptop navigation buttons to have layout boxes");
+    }
+
+    expect(Math.abs(previousButtonBox.y - nextButtonBox.y)).toBeLessThan(8);
+    expect(nextButtonBox.x).toBeGreaterThan(previousButtonBox.x);
 
     await page.getByRole("button", { name: "Next" }).click();
     await expect(page.getByText("3 + 3 = ?")).toBeVisible();

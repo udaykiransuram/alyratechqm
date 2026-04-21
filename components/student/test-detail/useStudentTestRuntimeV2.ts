@@ -16,6 +16,12 @@ import {
   getApiRequestErrorPayload,
   isRetryableApiError,
 } from "@/lib/client/api";
+import {
+  exitCurrentFullscreen,
+  isFullscreenSupported,
+  requestElementFullscreen,
+  requestGlobalFullscreen,
+} from "@/lib/client/fullscreen";
 import { announceNavigationStart } from "@/lib/client/navigation-feedback";
 import {
   clearStudentTestDraft,
@@ -115,12 +121,34 @@ function shouldLockExamUntilFullscreen(nextAttempt: StudentAttempt | null) {
   return !isVisible || !hasFocus || !Boolean(document.fullscreenElement);
 }
 
-function isFullscreenActive() {
-  if (typeof document === "undefined") {
+function isExamFullscreenElement(
+  fullscreenElement: Element | null | undefined,
+  examContainer: HTMLDivElement | null,
+) {
+  if (!fullscreenElement) {
     return false;
   }
 
-  return Boolean(document.fullscreenElement);
+  if (
+    fullscreenElement instanceof HTMLElement &&
+    fullscreenElement.classList.contains("app-exam-focus-shell")
+  ) {
+    return true;
+  }
+
+  if (!examContainer) {
+    return typeof document !== "undefined" && fullscreenElement === document.documentElement;
+  }
+
+  if (fullscreenElement.contains(examContainer)) {
+    return true;
+  }
+
+  return (
+    examContainer.contains(fullscreenElement) &&
+    fullscreenElement instanceof HTMLElement &&
+    fullscreenElement.classList.contains("app-exam-focus-shell")
+  );
 }
 
 function countPaperQuestions(paper: StudentPaper | null) {
@@ -223,8 +251,11 @@ export function useStudentTestRuntime({
   const isExamLockedRef = useRef(initialExamLocked);
   const requiresResumeRef = useRef(false);
   const autoStartTriggeredRef = useRef(false);
+  const autoFullscreenAttemptIdRef = useRef<string | null>(null);
   const wasFullscreenRef = useRef(false);
   const hasSeenFocusRef = useRef(false);
+  const windowFocusedRef = useRef(true);
+  const pageVisibleRef = useRef(true);
   const fullscreenTransitionUntilRef = useRef(0);
   const lastFrameTimeRef = useRef<number | null>(null);
   const rafIdRef = useRef<number | null>(null);
@@ -236,6 +267,7 @@ export function useStudentTestRuntime({
   const attemptLocked =
     attempt?.status === "submitted" || attempt?.status === "auto_submitted";
   const attemptStarted = Boolean(attempt?._id && attempt?.startedAt);
+  const attemptId = attempt?._id ? String(attempt._id) : null;
   const deferredAnswers = useDeferredValue(answers);
 
   const setIsExamLockedIfChanged = useCallback((nextIsExamLocked: boolean) => {
@@ -287,6 +319,14 @@ export function useStudentTestRuntime({
     }
   }, [canRequireFullscreenResume, fullscreenRequired]);
 
+  const isExamFullscreenActive = useCallback(() => {
+    if (typeof document === "undefined") {
+      return false;
+    }
+
+    return isExamFullscreenElement(document.fullscreenElement, examContainerRef.current);
+  }, []);
+
 
   const computeExamLockState = useCallback((nextAttempt: StudentAttempt | null) => {
     if (!fullscreenRequired) {
@@ -304,9 +344,10 @@ export function useStudentTestRuntime({
       return true;
     }
 
-    const isNowFullscreen =
-      Boolean(document.fullscreenElement) &&
-      document.fullscreenElement === examContainerRef.current;
+    const isNowFullscreen = isExamFullscreenElement(
+      document.fullscreenElement,
+      examContainerRef.current,
+    );
 
     return !isNowFullscreen || requiresResumeRef.current;
   }, [fullscreenRequired]);
@@ -316,9 +357,17 @@ export function useStudentTestRuntime({
       return;
     }
 
-    const isNowFullscreen =
-      Boolean(document.fullscreenElement) &&
-      document.fullscreenElement === examContainerRef.current;
+    const isNowFullscreen = isExamFullscreenElement(
+      document.fullscreenElement,
+      examContainerRef.current,
+    );
+    const isVisible = pageVisibleRef.current;
+    const hasFocus = windowFocusedRef.current;
+
+    if (isNowFullscreen && isVisible && hasFocus) {
+      requiresResumeRef.current = false;
+    }
+
     if (wasFullscreenRef.current && !isNowFullscreen && canRequireFullscreenResume()) {
       requiresResumeRef.current = true;
     }
@@ -355,59 +404,60 @@ export function useStudentTestRuntime({
   ]);
 
   const requestFullscreenForExamInternal = useCallback(async () => {
-    if (typeof document === "undefined") {
+    if (typeof document === "undefined" || !isFullscreenSupported()) {
       return false;
     }
 
-    if (!document.fullscreenEnabled) {
+    const examContainer = examContainerRef.current;
+    if (!examContainer) {
       return false;
     }
 
-    if (examContainerRef.current) {
-      startFullscreenTransition(2000);
-      try {
-        if (document.fullscreenElement === examContainerRef.current) {
-          enforceFullscreenLock();
-          return true;
-        }
+    startFullscreenTransition(2000);
 
-        if (
-          document.fullscreenElement &&
-          document.fullscreenElement !== examContainerRef.current
-        ) {
-          try {
-            await document.exitFullscreen();
-          } catch {}
-        }
-
-        await examContainerRef.current.requestFullscreen();
-        enforceFullscreenLock();
-        return document.fullscreenElement === examContainerRef.current;
-      } catch {
-        return false;
-      }
+    if (isExamFullscreenElement(document.fullscreenElement, examContainer)) {
+      enforceFullscreenLock();
+      return true;
     }
 
-    return false;
+    if (document.fullscreenElement) {
+      await exitCurrentFullscreen();
+    }
+
+    await requestElementFullscreen(examContainer);
+
+    if (!isExamFullscreenElement(document.fullscreenElement, examContainer)) {
+      await requestGlobalFullscreen();
+    }
+
+    enforceFullscreenLock();
+    return isExamFullscreenElement(document.fullscreenElement, examContainer);
   }, [enforceFullscreenLock, startFullscreenTransition]);
 
   const resumeFullscreenLock = useCallback(async () => {
+    setActionError(null);
     const didEnter = await requestFullscreenForExamInternal();
     if (!didEnter || typeof document === "undefined") {
       enforceFullscreenLock();
+      if (!didEnter) {
+        setActionError(
+          "We couldn't restore fullscreen. Close any other fullscreen window and try again.",
+        );
+      }
       return;
     }
 
     const start = Date.now();
     const waitForFullscreen = () => {
-      const isNowFullscreen =
-        Boolean(document.fullscreenElement) &&
-        document.fullscreenElement === examContainerRef.current;
+      const isNowFullscreen = isExamFullscreenElement(
+        document.fullscreenElement,
+        examContainerRef.current,
+      );
 
       if (isNowFullscreen) {
         requiresResumeRef.current = false;
         wasFullscreenRef.current = true;
-        startFullscreenTransition(900);
+        startFullscreenTransition(250);
         enforceFullscreenLock();
         return;
       }
@@ -1072,19 +1122,20 @@ export function useStudentTestRuntime({
       return;
     }
 
-    if (!auto && !isFullscreenActive()) {
+    if (!auto && !isExamFullscreenActive()) {
       await requestFullscreenForExamInternal();
-    if (
-      typeof document === "undefined" ||
-      !document.fullscreenElement ||
-      (examContainerRef.current &&
-        document.fullscreenElement !== examContainerRef.current)
-    ) {
-      setActionError(
-        "Please enter fullscreen to submit the test. Fullscreen is required for the entire test.",
-      );
-      return;
-    }
+      if (
+        typeof document === "undefined" ||
+        !isExamFullscreenElement(document.fullscreenElement, examContainerRef.current)
+      ) {
+        const isAnyFullscreen = Boolean(document?.fullscreenElement);
+        setActionError(
+          isAnyFullscreen
+            ? "The test must stay in the active fullscreen view to submit. Close other fullscreen views and try again."
+            : "Please enter fullscreen to submit the test. Fullscreen is required for the entire test.",
+        );
+        return;
+      }
     }
 
     submitTriggeredRef.current = true;
@@ -1189,23 +1240,18 @@ export function useStudentTestRuntime({
 
     try {
       if (fullscreenRequired) {
-        if (!isFullscreenActive()) {
+        if (!isExamFullscreenActive()) {
           await requestFullscreenForExamInternal();
         }
 
         if (
           typeof document === "undefined" ||
-          !document.fullscreenElement ||
-          (examContainerRef.current &&
-            document.fullscreenElement !== examContainerRef.current)
+          !isExamFullscreenElement(document.fullscreenElement, examContainerRef.current)
         ) {
           const isAnyFullscreen = Boolean(document?.fullscreenElement);
-          const isExamFullscreen =
-            Boolean(document?.fullscreenElement) &&
-            document.fullscreenElement === examContainerRef.current;
           const message =
-            isAnyFullscreen && !isExamFullscreen
-              ? "The test must be the fullscreen element. Close other fullscreen views and try again."
+            isAnyFullscreen
+              ? "The test must stay in the active fullscreen view. Close other fullscreen views and try again."
               : "Please enter fullscreen to start the test. Fullscreen is required for the entire test.";
           setActionError(message);
           return;
@@ -1213,7 +1259,7 @@ export function useStudentTestRuntime({
       }
 
       requiresResumeRef.current = false;
-      startFullscreenTransition(900);
+      startFullscreenTransition(250);
       setIsExamLockedIfChanged(false);
       enforceFullscreenLock();
 
@@ -1255,6 +1301,7 @@ export function useStudentTestRuntime({
     computeExamLockState,
     enforceFullscreenLock,
     fullscreenRequired,
+    isExamFullscreenActive,
     isStarting,
     isSubmitting,
     paper,
@@ -1277,6 +1324,45 @@ export function useStudentTestRuntime({
     autoStartTriggeredRef.current = true;
     void startAttempt();
   }, [autoStart, attemptStarted, isStarting, isSubmitting, loadError, paper, startAttempt]);
+
+  useEffect(() => {
+    if (
+      !fullscreenRequired ||
+      !attemptStarted ||
+      attemptLocked ||
+      !attemptId ||
+      autoFullscreenAttemptIdRef.current === attemptId
+    ) {
+      return;
+    }
+
+    autoFullscreenAttemptIdRef.current = attemptId;
+
+    if (isExamFullscreenActive()) {
+      requiresResumeRef.current = false;
+      enforceFullscreenLock();
+      return;
+    }
+
+    void (async () => {
+      const didEnter = await requestFullscreenForExamInternal();
+      if (didEnter) {
+        requiresResumeRef.current = false;
+        wasFullscreenRef.current = true;
+        startFullscreenTransition(250);
+      }
+      enforceFullscreenLock();
+    })();
+  }, [
+    attemptId,
+    attemptLocked,
+    attemptStarted,
+    enforceFullscreenLock,
+    fullscreenRequired,
+    isExamFullscreenActive,
+    requestFullscreenForExamInternal,
+    startFullscreenTransition,
+  ]);
 
   useEffect(() => {
     if (!deadlineAt || !attemptStarted || attemptLocked) return;
@@ -1486,11 +1572,12 @@ export function useStudentTestRuntime({
       return;
     }
 
+    pageVisibleRef.current = document.visibilityState === "visible";
+    windowFocusedRef.current =
+      typeof document.hasFocus === "function" ? document.hasFocus() : true;
+
     const handleFullscreenChange = () => {
-      if (
-        !document.fullscreenElement ||
-        document.fullscreenElement !== examContainerRef.current
-      ) {
+      if (!isExamFullscreenElement(document.fullscreenElement, examContainerRef.current)) {
         requireFullscreenResume();
       }
       enforceFullscreenLock();
@@ -1498,6 +1585,7 @@ export function useStudentTestRuntime({
 
     const handleVisibilityChange = () => {
       const nextVisible = document.visibilityState === "visible";
+      pageVisibleRef.current = nextVisible;
       if (!nextVisible) {
         requireFullscreenResume();
       }
@@ -1505,24 +1593,33 @@ export function useStudentTestRuntime({
     };
 
     const handleBlur = () => {
+      windowFocusedRef.current = false;
+      if (isExamFullscreenElement(document.fullscreenElement, examContainerRef.current)) {
+        requiresResumeRef.current = true;
+        setIsExamLockedIfChanged(true);
+        return;
+      }
+
       requireFullscreenResume();
-      enforceFullscreenLock();
     };
 
     const handleFocus = () => {
-      if (hasSeenFocusRef.current) {
-        requireFullscreenResume();
-      }
       hasSeenFocusRef.current = true;
+      windowFocusedRef.current = true;
+      if (isExamFullscreenElement(document.fullscreenElement, examContainerRef.current)) {
+        requiresResumeRef.current = false;
+        setIsExamLockedIfChanged(false);
+      }
       enforceFullscreenLock();
     };
 
     const handlePageHide = () => {
+      pageVisibleRef.current = false;
       requireFullscreenResume();
-      enforceFullscreenLock();
     };
 
     const handlePageShow = () => {
+      pageVisibleRef.current = document.visibilityState === "visible";
       enforceFullscreenLock();
     };
 
@@ -1549,17 +1646,17 @@ export function useStudentTestRuntime({
       }
       lastIntervalTickRef.current = now;
 
-      const nextVisible = document.visibilityState === "visible";
-      const nextHasFocus =
-        typeof document.hasFocus === "function" ? document.hasFocus() : true;
+      const nextVisible = pageVisibleRef.current;
+      const nextHasFocus = windowFocusedRef.current;
       const isMinimized =
         window.innerWidth === 0 ||
         window.innerHeight === 0 ||
         window.outerWidth === 0 ||
         window.outerHeight === 0;
-      const isNowFullscreen =
-        Boolean(document.fullscreenElement) &&
-        document.fullscreenElement === examContainerRef.current;
+      const isNowFullscreen = isExamFullscreenElement(
+        document.fullscreenElement,
+        examContainerRef.current,
+      );
 
       if (!nextVisible || !nextHasFocus || !isNowFullscreen || isMinimized) {
         requireFullscreenResume();
@@ -1759,7 +1856,13 @@ export function useStudentTestRuntime({
 
   const toggleFullscreen = useCallback(async () => {
     try {
-      await requestFullscreenForExamInternal();
+      setActionError(null);
+      const didEnter = await requestFullscreenForExamInternal();
+      if (!didEnter) {
+        setActionError(
+          "Fullscreen mode is not available right now. Close other fullscreen views and try again.",
+        );
+      }
     } catch {
       setActionError(
         "Fullscreen mode is not available right now. Fullscreen is required to continue.",
