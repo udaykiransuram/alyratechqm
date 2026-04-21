@@ -56,10 +56,10 @@ export default async function SummerCrashPaymentPage({
   if (!providedToken) {
     return (
       <div className="public-flow-page flex items-center justify-center">
-        <div className="public-flow-shell-narrow">
-          <div className="public-flow-surface mx-auto max-w-xl text-center">
+        <div className="public-flow-shell-narrow public-summer-shell">
+          <div className="public-flow-surface public-summer-flow-surface mx-auto max-w-xl text-center">
             <div className="public-flow-badge mb-5">Secure Link Required</div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            <h1 className="text-[clamp(1.95rem,4vw,2.7rem)] font-extrabold tracking-tight text-foreground">
               Invalid or expired payment link
             </h1>
             <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
@@ -81,10 +81,10 @@ export default async function SummerCrashPaymentPage({
   if (!payment) {
     return (
       <div className="public-flow-page flex items-center justify-center">
-        <div className="public-flow-shell-narrow">
-          <div className="public-flow-surface mx-auto max-w-xl text-center">
+        <div className="public-flow-shell-narrow public-summer-shell">
+          <div className="public-flow-surface public-summer-flow-surface mx-auto max-w-xl text-center">
             <div className="public-flow-badge mb-5">Payment Lookup</div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            <h1 className="text-[clamp(1.95rem,4vw,2.7rem)] font-extrabold tracking-tight text-foreground">
               Invalid payment link
             </h1>
             <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
@@ -109,8 +109,8 @@ export default async function SummerCrashPaymentPage({
 
   return (
     <div className="public-flow-page flex items-center justify-center">
-      <div className="public-flow-shell-narrow">
-        <div className="public-flow-surface mx-auto max-w-xl text-center">
+      <div className="public-flow-shell-narrow public-summer-shell">
+        <div className="public-flow-surface public-summer-flow-surface mx-auto max-w-xl text-center">
           <div className="public-flow-badge mb-5">
             {paid
               ? "Payment Confirmed"
@@ -118,7 +118,7 @@ export default async function SummerCrashPaymentPage({
                 ? "Payment Not Completed"
                 : "Payment Pending"}
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+          <h1 className="text-[clamp(1.95rem,4vw,2.7rem)] font-extrabold tracking-tight text-foreground">
             {paid
               ? "Summer Course Unlocked"
               : failed
@@ -133,7 +133,7 @@ export default async function SummerCrashPaymentPage({
                 : "We are still waiting for the payment provider to confirm this transaction. Please check again in a moment."}
           </p>
 
-          <div className="public-flow-card-soft mt-6 space-y-2 text-left sm:text-center">
+          <div className="public-flow-card-soft mt-5 space-y-2 text-left sm:text-center">
             {payment.studentName ? (
               <p className="text-sm font-medium text-foreground">
                 Student: {payment.studentName}

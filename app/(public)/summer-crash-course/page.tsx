@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { MessageCircleMore } from "lucide-react";
 import {
   AcademicCapIcon,
@@ -193,9 +194,12 @@ const summerDarkCardTitleClass =
 
 const summerDarkCardCopyClass = "mt-3 text-[0.95rem] leading-7 text-white";
 
-export default async function SummerCrashCourseLandingPage() {
+async function SummerCrashSessionRedirect() {
   await redirectSummerCrashPublicSession();
+  return null;
+}
 
+export default async function SummerCrashCourseLandingPage() {
   const config = await getSummerCrashPublicConfig();
 
   const hasPaidCourseAccess = Number(config.price) > 0;
@@ -293,7 +297,10 @@ export default async function SummerCrashCourseLandingPage() {
   ] as const;
 
   return (
-    <main className="public-page">
+    <main className="public-page public-summer-shell">
+      <Suspense fallback={null}>
+        <SummerCrashSessionRedirect />
+      </Suspense>
       <InnerHero
         title={
           <>
@@ -303,7 +310,7 @@ export default async function SummerCrashCourseLandingPage() {
             </span>
           </>
         }
-        subtitle="A simple Summer maths recovery program that helps families find weak foundations, understand the next steps, and rebuild confidence before the next term."
+        subtitle="A simpler Summer maths recovery program that helps families find weak foundations and start the right next step faster."
         pillText="Summer Crash Course"
         variant="flagship"
         lottieLeft="/animations/teacher-classroom.lottie"
@@ -355,7 +362,7 @@ export default async function SummerCrashCourseLandingPage() {
         </div>
       </InnerHero>
 
-      <section className="public-section pt-8 md:pt-12">
+      <section className="public-section pt-6 md:pt-10">
         <div className="public-shell">
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 xl:gap-6">
             {summerHeroMetricCards.map((card) => {
@@ -418,7 +425,7 @@ export default async function SummerCrashCourseLandingPage() {
         </div>
       </section>
 
-      <section className="public-section pt-0">
+      <section className="public-section pt-8 md:pt-12">
         <div className="public-shell">
           <div className="space-y-8 md:space-y-10">
             <div className="grid gap-6 lg:grid-cols-[1.02fr,0.98fr] lg:items-start xl:gap-8">
