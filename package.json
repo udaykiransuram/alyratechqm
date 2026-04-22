@@ -69,8 +69,8 @@
     "test:seed": "ts-node scripts/seed-test-data.ts",
     "migrate:class-sections": "ts-node --esm scripts/migrate-class-sections.ts",
     "smoke:upload-benchmark": "node scripts/smoke-upload-benchmark.mjs",
-    "remotion:preview": "npx remotion preview remotion/index.tsx",
-    "remotion:render": "npx remotion render remotion/index.tsx SummerCrash45s output/summer-crash-45s.mp4"
+    "remotion:preview": "npx remotion preview remotion/entry.tsx",
+    "remotion:render": "npx remotion render remotion/entry.tsx SummerCrash45s output/summer-crash-45s.mp4"
   },
   "keywords": [
     "nextjs",
