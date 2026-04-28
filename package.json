@@ -148,7 +148,7 @@
     "mongoose": "^8.4.5",
     "next": "15.5.15",
     "next-auth": "^4.24.13",
-    "pdf-parse": "^1.1.1",
+    "pdf-parse": "^2.4.5",
     "pdf.js-extract": "^0.2.1",
     "pdfjs-dist": "^5.3.93",
     "pdfkit": "^0.17.1",
