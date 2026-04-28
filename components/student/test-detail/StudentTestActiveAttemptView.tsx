@@ -1385,10 +1385,7 @@ const ExamQuestionPanel = memo(function ExamQuestionPanel({
                   <Button
                     variant="ghost"
                     size="md"
-                    className={cn(
-                      "app-student-action-compact app-exam-nav-button",
-                      !isSingleQuestionActionRow && "hidden sm:inline-flex",
-                    )}
+                    className="app-student-action-compact app-exam-nav-button"
                     onClick={onClearCurrentAnswer}
                   >
                     Clear

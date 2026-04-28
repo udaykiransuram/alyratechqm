@@ -9,10 +9,16 @@ import {
   didLiveSessionScheduleChange,
   filterEligibleLiveSessionTeachers,
   isLiveSessionJoinable,
+  LIVE_SESSION_ATTENDANCE_STATUSES,
   LIVE_SESSION_ITEM_STATUSES,
   LIVE_SESSION_ITEM_TYPES,
   normalizeLiveSessionDate,
 } from "@/lib/live-sessions/shared";
+import {
+  isRedisConfigured,
+  isRedisInBackoffWindow,
+  runRedisCommand,
+} from "@/lib/redis";
 import type {
   LiveSessionAttendanceStatus,
   LiveSessionItemResponsePage,
@@ -71,6 +77,7 @@ import {
   upsertMockLiveSessionTranscript,
 } from "@/lib/test-fixtures/live-sessions";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
+import { Types } from "mongoose";
 
 export type WorkspaceLiveSessionFilters = {
   status?: string;
@@ -123,6 +130,29 @@ type LiveSessionAttendanceUpdate = {
   status: LiveSessionAttendanceStatus;
 };
 
+type LiveSessionPresenceCacheEntry = {
+  attendanceStatus: LiveSessionAttendanceStatus;
+  expiresAt: number;
+};
+
+type LiveSessionTeacherItemStats = {
+  responseCount: number;
+  correctCount: number | null;
+  optionCounts: Map<number, number>;
+};
+
+type LiveSessionTeacherItemStatsContext = {
+  itemId: string;
+  objectId: Types.ObjectId;
+  type: LiveSessionItemType;
+  answerIndexes: number[];
+  options: Array<{ index: number; contentHtml: string }>;
+};
+
+const MAX_LIVE_SESSION_RESPONSE_ANSWER_HTML_LENGTH = 12_000;
+const STUDENT_LIVE_SESSION_HISTORY_DAYS = 90;
+const STUDENT_LIVE_SESSION_LIST_LIMIT = 120;
+
 class LiveSessionHttpError extends Error {
   status: number;
 
@@ -151,6 +181,116 @@ export function getLiveSessionErrorStatus(error: unknown) {
   }
 
   return 500;
+}
+
+const LIVE_SESSION_PRESENCE_CACHE_TTL_SECONDS = (() => {
+  const configured = Number(
+    process.env.LIVE_SESSION_PRESENCE_CACHE_TTL_SECONDS || "",
+  );
+  return Number.isFinite(configured) && configured >= 30
+    ? Math.floor(configured)
+    : 90;
+})();
+
+function normalizeLiveSessionPresenceKeySegment(value: unknown) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9:_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || "unknown";
+}
+
+function buildLiveSessionPresenceCacheKey(params: {
+  schoolKey: string;
+  studentId: string;
+  liveSessionId: string;
+}) {
+  return [
+    "live-session",
+    "presence",
+    normalizeLiveSessionPresenceKeySegment(params.schoolKey),
+    normalizeLiveSessionPresenceKeySegment(params.liveSessionId),
+    normalizeLiveSessionPresenceKeySegment(params.studentId),
+  ].join(":");
+}
+
+function getLiveSessionPresenceCache() {
+  const globalState = globalThis as typeof globalThis & {
+    __liveSessionPresenceCache?: Map<string, LiveSessionPresenceCacheEntry>;
+  };
+
+  if (!globalState.__liveSessionPresenceCache) {
+    globalState.__liveSessionPresenceCache = new Map();
+  }
+
+  return globalState.__liveSessionPresenceCache;
+}
+
+function normalizeLiveSessionAttendanceStatus(
+  value: unknown,
+): LiveSessionAttendanceStatus | null {
+  const normalized = String(value || "").trim();
+  return LIVE_SESSION_ATTENDANCE_STATUSES.includes(
+    normalized as LiveSessionAttendanceStatus,
+  )
+    ? (normalized as LiveSessionAttendanceStatus)
+    : null;
+}
+
+function readLocalLiveSessionPresenceStatus(cacheKey: string) {
+  const cache = getLiveSessionPresenceCache();
+  const cached = cache.get(cacheKey);
+  if (!cached) {
+    return null;
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    cache.delete(cacheKey);
+    return null;
+  }
+
+  return cached.attendanceStatus;
+}
+
+async function readCachedLiveSessionPresenceStatus(cacheKey: string) {
+  if (isRedisConfigured() && !isRedisInBackoffWindow()) {
+    const redisValue = await runRedisCommand<string>(["GET", cacheKey]);
+    const redisStatus = normalizeLiveSessionAttendanceStatus(redisValue);
+    if (redisStatus) {
+      return redisStatus;
+    }
+  }
+
+  return readLocalLiveSessionPresenceStatus(cacheKey);
+}
+
+async function cacheLiveSessionPresenceStatus(
+  cacheKey: string,
+  attendanceStatus: LiveSessionAttendanceStatus,
+) {
+  const expiresAt = Date.now() + LIVE_SESSION_PRESENCE_CACHE_TTL_SECONDS * 1000;
+  const localCache = getLiveSessionPresenceCache();
+  localCache.set(cacheKey, { attendanceStatus, expiresAt });
+
+  if (localCache.size > 10_000) {
+    for (const [key, entry] of localCache.entries()) {
+      if (entry.expiresAt <= Date.now()) {
+        localCache.delete(key);
+      }
+    }
+  }
+
+  if (isRedisConfigured() && !isRedisInBackoffWindow()) {
+    await runRedisCommand([
+      "SET",
+      cacheKey,
+      attendanceStatus,
+      "EX",
+      LIVE_SESSION_PRESENCE_CACHE_TTL_SECONDS,
+    ]);
+  }
 }
 
 function toId(value: unknown) {
@@ -342,6 +482,7 @@ function serializePublishedLiveSessionTranscript(
 function serializeLiveSessionTeacherItem(
   item: any,
   responses: any[],
+  stats?: LiveSessionTeacherItemStats,
 ): LiveSessionTeacherItem {
   const options: LiveSessionTeacherItem["options"] = (
     Array.isArray(item?.options) ? item.options : []
@@ -351,22 +492,25 @@ function serializeLiveSessionTeacherItem(
   const responseRows = Array.isArray(responses) ? responses : [];
   const optionStats = options.map((option) => ({
     optionIndex: option.index,
-    responseCount: responseRows.filter((response) =>
-      normalizeIntegerIndexes(response?.selectedOptionIndexes).includes(
-        option.index,
-      ),
-    ).length,
+    responseCount:
+      stats?.optionCounts.get(option.index) ??
+      responseRows.filter((response) =>
+        normalizeIntegerIndexes(response?.selectedOptionIndexes).includes(
+          option.index,
+        ),
+      ).length,
   }));
-  const responseCount = responseRows.length;
+  const responseCount = stats?.responseCount ?? responseRows.length;
   const correctCount =
     type === "short-text"
       ? null
-      : responseRows.filter((response) =>
-          isObjectiveResponseCorrect(
-            normalizeIntegerIndexes(response?.selectedOptionIndexes),
-            answerIndexes,
-          ),
-        ).length;
+      : (stats?.correctCount ??
+        responseRows.filter((response) =>
+            isObjectiveResponseCorrect(
+              normalizeIntegerIndexes(response?.selectedOptionIndexes),
+              answerIndexes,
+            ),
+          ).length);
 
   return {
     _id: toId(item?._id),
@@ -575,11 +719,25 @@ export function normalizeLiveSessionTranscriptWriteInput(
 export function normalizeStudentLiveSessionResponseInput(
   input: Record<string, unknown>,
 ): StudentLiveSessionResponseInput {
+  const rawAnswerHtml = String(input?.answerHtml || input?.answer || "");
+  if (rawAnswerHtml.length > MAX_LIVE_SESSION_RESPONSE_ANSWER_HTML_LENGTH) {
+    throwLiveSessionError(
+      "Live response is too long. Shorten the answer and try again.",
+      413,
+    );
+  }
+
+  const answerHtml = sanitizeLiveSessionRichText(rawAnswerHtml);
+  if (answerHtml.length > MAX_LIVE_SESSION_RESPONSE_ANSWER_HTML_LENGTH) {
+    throwLiveSessionError(
+      "Live response is too long. Shorten the answer and try again.",
+      413,
+    );
+  }
+
   return {
     selectedOptionIndexes: normalizeIntegerIndexes(input?.selectedOptionIndexes),
-    answerHtml: sanitizeLiveSessionRichText(
-      input?.answerHtml || input?.answer || "",
-    ),
+    answerHtml,
   };
 }
 
@@ -904,6 +1062,119 @@ async function loadLiveSessionResponseRows(params: {
     .lean();
 }
 
+function toMongoObjectId(value: string) {
+  const normalized = String(value || "").trim();
+  return Types.ObjectId.isValid(normalized) ? new Types.ObjectId(normalized) : null;
+}
+
+async function loadLiveSessionTeacherItemStats(params: {
+  schoolKey: string;
+  itemRows: any[];
+}) {
+  const itemContexts: LiveSessionTeacherItemStatsContext[] = (
+    Array.isArray(params.itemRows) ? params.itemRows : []
+  )
+    .map((item) => {
+      const itemId = toId(item?._id);
+      return {
+        itemId,
+        objectId: toMongoObjectId(itemId),
+        type: normalizeLiveSessionItemType(item?.type),
+        answerIndexes: normalizeIntegerIndexes(item?.answerIndexes),
+        options: (Array.isArray(item?.options) ? item.options : []).map(
+          mapLiveSessionItemOption,
+        ),
+      };
+    })
+    .filter((item): item is LiveSessionTeacherItemStatsContext =>
+      Boolean(item.itemId && item.objectId),
+    );
+
+  if (itemContexts.length === 0) {
+    return new Map<string, LiveSessionTeacherItemStats>();
+  }
+
+  const { LiveSessionResponse: LiveSessionResponseModel } = await getTenantModels(
+    params.schoolKey,
+    ["LiveSessionResponse"],
+  );
+  const rows = (await LiveSessionResponseModel.aggregate([
+    {
+      $match: {
+        item: { $in: itemContexts.map((item) => item.objectId as Types.ObjectId) },
+      },
+    },
+    {
+      $project: {
+        item: 1,
+        selectedOptionIndexes: { $ifNull: ["$selectedOptionIndexes", []] },
+      },
+    },
+    {
+      $group: {
+        _id: {
+          item: "$item",
+          selectedOptionIndexes: "$selectedOptionIndexes",
+        },
+        count: { $sum: 1 },
+      },
+    },
+  ])) as Array<{
+    _id?: {
+      item?: unknown;
+      selectedOptionIndexes?: unknown;
+    };
+    count?: unknown;
+  }>;
+
+  const contextByItemId = new Map(
+    itemContexts.map((item) => [item.itemId, item] as const),
+  );
+  const statsByItemId = new Map<string, LiveSessionTeacherItemStats>();
+
+  itemContexts.forEach((item) => {
+    statsByItemId.set(item.itemId, {
+      responseCount: 0,
+      correctCount: item.type === "short-text" ? null : 0,
+      optionCounts: new Map(item.options.map((option) => [option.index, 0])),
+    });
+  });
+
+  rows.forEach((row) => {
+    const itemId = toId(row?._id?.item);
+    const context = contextByItemId.get(itemId);
+    const stats = statsByItemId.get(itemId);
+    if (!context || !stats) {
+      return;
+    }
+
+    const count = Math.max(0, Number(row?.count || 0));
+    if (!Number.isFinite(count) || count <= 0) {
+      return;
+    }
+
+    const selectedOptionIndexes = normalizeIntegerIndexes(
+      row?._id?.selectedOptionIndexes,
+    );
+    stats.responseCount += count;
+    selectedOptionIndexes.forEach((optionIndex) => {
+      stats.optionCounts.set(
+        optionIndex,
+        (stats.optionCounts.get(optionIndex) || 0) + count,
+      );
+    });
+
+    if (
+      stats.correctCount !== null &&
+      isObjectiveResponseCorrect(selectedOptionIndexes, context.answerIndexes)
+    ) {
+      stats.correctCount += count;
+    }
+  });
+
+  return statsByItemId;
+}
+
 async function loadWorkspaceLiveSessionV2State(params: {
   schoolKey: string;
   liveSessionId: string;
@@ -920,30 +1191,16 @@ async function loadWorkspaceLiveSessionV2State(params: {
     }),
   ]);
 
-  const itemIds = itemRows.map((item) => toId(item?._id)).filter(Boolean);
-  const responseRows = await loadLiveSessionResponseRows({
+  const itemStatsByItemId = await loadLiveSessionTeacherItemStats({
     schoolKey: params.schoolKey,
-    itemIds,
-  });
-  const responsesByItemId = new Map<string, any[]>();
-
-  (Array.isArray(responseRows) ? responseRows : []).forEach((response) => {
-    const itemId = toId(response?.item);
-    if (!itemId) {
-      return;
-    }
-
-    if (!responsesByItemId.has(itemId)) {
-      responsesByItemId.set(itemId, []);
-    }
-
-    responsesByItemId.get(itemId)?.push(response);
+    itemRows,
   });
 
   const items = (Array.isArray(itemRows) ? itemRows : []).map((item) =>
     serializeLiveSessionTeacherItem(
       item,
-      responsesByItemId.get(toId(item?._id)) || [],
+      [],
+      itemStatsByItemId.get(toId(item?._id)),
     ),
   );
 
@@ -3531,6 +3788,21 @@ export async function listStudentLiveSessions(params: {
   const query: Record<string, any> = {
     class: classId,
     status: { $ne: "draft" },
+    $and: [
+      {
+        $or: [
+          {
+            scheduledEndAt: {
+              $gte: new Date(
+                Date.now() -
+                  STUDENT_LIVE_SESSION_HISTORY_DAYS * 24 * 60 * 60 * 1000,
+              ),
+            },
+          },
+          { status: { $in: ["scheduled", "live"] } },
+        ],
+      },
+    ],
     $or: [
       { assignedAcademicSections: { $exists: false } },
       { assignedAcademicSections: { $size: 0 } },
@@ -3552,7 +3824,8 @@ export async function listStudentLiveSessions(params: {
       },
     })
     .populate({ path: "hostTeacher", model: UserModel, select: "name" })
-    .sort({ scheduledStartAt: 1, createdAt: -1 })
+    .sort({ scheduledStartAt: -1, createdAt: -1 })
+    .limit(STUDENT_LIVE_SESSION_LIST_LIMIT)
     .lean();
 
   const sessionIds = sessions.map((session: any) => toId(session?._id)).filter(Boolean);
@@ -3694,28 +3967,40 @@ export async function recordStudentLiveSessionJoin(params: {
   const liveSession = await LiveSessionModel.findById(params.liveSessionId)
     .select("studentJoinUrl")
     .lean();
-  const attendance = await LiveSessionAttendanceModel.findOne({
-    liveSession: params.liveSessionId,
-    student: params.studentId,
-  });
-
-  if (!attendance) {
-    await LiveSessionAttendanceModel.create({
+  const now = new Date();
+  const attendance = await LiveSessionAttendanceModel.findOneAndUpdate(
+    {
       liveSession: params.liveSessionId,
       student: params.studentId,
-      joinClicks: 1,
-      firstJoinedAt: new Date(),
-      lastJoinedAt: new Date(),
-      status: "joined",
-    });
-  } else {
-    attendance.joinClicks = Math.max(0, Number(attendance.joinClicks || 0)) + 1;
-    attendance.firstJoinedAt = attendance.firstJoinedAt || new Date();
-    attendance.lastJoinedAt = new Date();
-    if (String(attendance.status || "") === "invited") {
-      attendance.status = "joined";
-    }
-    await attendance.save();
+    },
+    {
+      $inc: { joinClicks: 1 },
+      $set: { lastJoinedAt: now },
+      $setOnInsert: {
+        firstJoinedAt: now,
+        status: "joined",
+      },
+    },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+    },
+  );
+
+  if (String(attendance?.status || "") === "invited") {
+    await LiveSessionAttendanceModel.updateOne(
+      {
+        _id: attendance._id,
+        status: "invited",
+      },
+      {
+        $set: {
+          status: "joined",
+          lastJoinedAt: now,
+        },
+      },
+    );
   }
 
   await invalidateStudentDashboardCacheForStudents(
@@ -3746,6 +4031,15 @@ export async function recordStudentLiveSessionPresence(params: {
     };
   }
 
+  const presenceCacheKey = buildLiveSessionPresenceCacheKey(params);
+  const cachedAttendanceStatus =
+    await readCachedLiveSessionPresenceStatus(presenceCacheKey);
+  if (cachedAttendanceStatus) {
+    return {
+      attendanceStatus: cachedAttendanceStatus,
+    };
+  }
+
   await connectDB();
 
   const detail = await getStudentLiveSessionById(params);
@@ -3754,37 +4048,52 @@ export async function recordStudentLiveSessionPresence(params: {
   }
 
   if (!detail.canJoin) {
+    const attendanceStatus = detail.attendanceStatus || "invited";
+    await cacheLiveSessionPresenceStatus(presenceCacheKey, attendanceStatus);
     return {
-      attendanceStatus: detail.attendanceStatus || "invited",
+      attendanceStatus,
     };
   }
 
   const { LiveSessionAttendance: LiveSessionAttendanceModel } =
     await getTenantModels(params.schoolKey, ["LiveSessionAttendance"]);
 
-  const attendance = await LiveSessionAttendanceModel.findOne({
-    liveSession: params.liveSessionId,
-    student: params.studentId,
-  });
-
-  let attendanceStatus: LiveSessionAttendanceStatus = "joined";
-
-  if (!attendance) {
-    const now = new Date();
-    await LiveSessionAttendanceModel.create({
+  const now = new Date();
+  const attendanceResult = (await LiveSessionAttendanceModel.findOneAndUpdate(
+    {
       liveSession: params.liveSessionId,
       student: params.studentId,
-      joinClicks: 0,
-      firstJoinedAt: now,
-      lastJoinedAt: now,
-      status: "joined",
-    });
-    attendanceStatus = "joined";
+    },
+    {
+      $set: { lastJoinedAt: now },
+      $setOnInsert: {
+        joinClicks: 0,
+        firstJoinedAt: now,
+        status: "joined",
+      },
+    },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+      includeResultMetadata: true,
+    },
+  )) as {
+    value?: any;
+    lastErrorObject?: {
+      updatedExisting?: boolean;
+    };
+  } | null;
+  const attendance = attendanceResult?.value || null;
+
+  let attendanceStatus: LiveSessionAttendanceStatus =
+    (attendance?.status as LiveSessionAttendanceStatus) || "joined";
+  let shouldInvalidateDashboardCache = false;
+
+  if (!attendanceResult?.lastErrorObject?.updatedExisting) {
+    shouldInvalidateDashboardCache = true;
   } else {
-    const now = new Date();
-    attendance.firstJoinedAt = attendance.firstJoinedAt || now;
-    attendance.lastJoinedAt = now;
-    const currentStatus = String(attendance.status || "");
+    const previousStatus = String(attendance.status || "");
     const hasManualOverride = Boolean(attendance.markedBy);
     const elapsedMs =
       attendance.firstJoinedAt instanceof Date
@@ -3792,19 +4101,40 @@ export async function recordStudentLiveSessionPresence(params: {
         : 0;
     if (
       !hasManualOverride &&
-      (currentStatus === "invited" || currentStatus === "joined") &&
+      (previousStatus === "invited" || previousStatus === "joined") &&
       elapsedMs >= MIN_PRESENCE_MS
     ) {
-      attendance.status = "present";
+      const updatedAttendance =
+        await LiveSessionAttendanceModel.findOneAndUpdate(
+          {
+            _id: attendance._id,
+            status: { $in: ["invited", "joined"] },
+            $or: [{ markedBy: { $exists: false } }, { markedBy: null }],
+          },
+          {
+            $set: {
+              status: "present",
+              lastJoinedAt: now,
+            },
+          },
+          { new: true },
+        );
+      if (updatedAttendance) {
+        attendanceStatus =
+          (updatedAttendance.status as LiveSessionAttendanceStatus) || "present";
+      }
     }
-    await attendance.save();
-    attendanceStatus = (attendance.status as LiveSessionAttendanceStatus) || "joined";
+    shouldInvalidateDashboardCache = previousStatus !== attendanceStatus;
   }
 
-  await invalidateStudentDashboardCacheForStudents(
-    params.schoolKey,
-    [params.studentId],
-  ).catch(() => undefined);
+  await cacheLiveSessionPresenceStatus(presenceCacheKey, attendanceStatus);
+
+  if (shouldInvalidateDashboardCache) {
+    await invalidateStudentDashboardCacheForStudents(
+      params.schoolKey,
+      [params.studentId],
+    ).catch(() => undefined);
+  }
 
   return {
     attendanceStatus,

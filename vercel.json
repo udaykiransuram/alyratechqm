@@ -1,1 +1,50 @@
-{}
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/api/summer-crash/register/route.ts": {
+      "maxDuration": 20
+    },
+    "app/api/summer-crash/lookup-id/route.ts": {
+      "maxDuration": 15
+    },
+    "app/api/summer-crash/complete-setup/route.ts": {
+      "maxDuration": 20
+    },
+    "app/api/summer-crash/me/route.ts": {
+      "maxDuration": 15
+    },
+    "app/api/summer-crash/public-config/route.ts": {
+      "maxDuration": 10
+    },
+    "app/api/cashfree/summer-crash-pay/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/student/tests/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/student/tests/[paperId]/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/student/tests/[paperId]/attempt/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/student/tests/[paperId]/submit/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/student/live-sessions/route.ts": {
+      "maxDuration": 15
+    },
+    "app/api/student/live-sessions/[id]/route.ts": {
+      "maxDuration": 15
+    },
+    "app/api/student/live-sessions/[id]/join/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/student/live-sessions/[id]/presence/route.ts": {
+      "maxDuration": 20
+    },
+    "app/api/student/live-sessions/[id]/response/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}

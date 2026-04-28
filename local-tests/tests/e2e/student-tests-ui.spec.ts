@@ -298,7 +298,7 @@ test.describe("Student test UI (network mocked) @desktop", () => {
 
     await navigateToAppRoute(page, "/student/tests/paper-1");
 
-    await expect(page.getByLabel("Notifications")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Notifications" })).toHaveCount(0);
     await expect(
       page.getByLabel("Student portal navigation"),
     ).toHaveCount(0);

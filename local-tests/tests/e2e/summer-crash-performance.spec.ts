@@ -29,7 +29,7 @@ test.describe("Summer Crash performance guardrails @desktop", () => {
     await navigateToAppRoute(page, "/summer-crash-course");
     await expect(
       page.getByRole("heading", {
-        name: /Repair weak maths foundations/i,
+        name: /Strengthen weak maths foundations/i,
       }),
     ).toBeVisible();
     await page.waitForLoadState("networkidle");

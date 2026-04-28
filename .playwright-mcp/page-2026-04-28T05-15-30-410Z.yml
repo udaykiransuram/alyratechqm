@@ -1,0 +1,247 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - link "Alyra Tech Precision Diagnostics" [ref=e5] [cursor=pointer]:
+          - /url: /
+          - img [ref=e7]
+          - generic [ref=e9]:
+            - generic [ref=e10]: Alyra Tech
+            - generic [ref=e11]: Precision Diagnostics
+        - navigation [ref=e12]:
+          - link "Home" [ref=e13] [cursor=pointer]:
+            - /url: /
+          - generic [ref=e15]:
+            - link "Solutions" [ref=e16] [cursor=pointer]:
+              - /url: /product
+            - button "Toggle Solutions menu" [ref=e17] [cursor=pointer]:
+              - img [ref=e18]
+          - link "Benefits" [ref=e20] [cursor=pointer]:
+            - /url: /benefits
+          - link "Case Studies" [ref=e21] [cursor=pointer]:
+            - /url: /case-study
+          - link "Company" [ref=e22] [cursor=pointer]:
+            - /url: /about
+        - generic [ref=e23]:
+          - link "Sign In" [ref=e24] [cursor=pointer]:
+            - /url: /auth/signin
+          - link "Request Demo" [ref=e25] [cursor=pointer]:
+            - /url: /contact
+          - link "Register for Summer Crash Course" [ref=e26] [cursor=pointer]:
+            - /url: /summer-crash-course/register
+            - generic [ref=e27]: Summer Crash Course
+            - img [ref=e28]
+    - main [ref=e30]:
+      - main [ref=e31]:
+        - generic [ref=e34]:
+          - generic [ref=e35]: Summer Crash Course
+          - heading "Strengthen weak maths foundations before they become a bigger problem next year" [level=1] [ref=e38]:
+            - text: Strengthen weak maths foundations
+            - generic [ref=e39]: before they become a bigger problem next year
+          - paragraph [ref=e40]: A simpler Summer recovery program that helps your child fix weak basics now, build stronger confidence, and start the next school term feeling ready.
+          - generic [ref=e41]:
+            - link "Register & Write Test" [ref=e42] [cursor=pointer]:
+              - /url: /summer-crash-course/register?entry=diagnostic
+            - link "Join Summer Crash Course" [ref=e43] [cursor=pointer]:
+              - /url: /summer-crash-course/register?entry=direct_registration
+            - generic [ref=e44]:
+              - paragraph [ref=e45]: Existing families
+              - generic [ref=e46]:
+                - link "Parent sign in" [ref=e47] [cursor=pointer]:
+                  - /url: /summer-crash-course/signin
+                - link "Find registered account" [ref=e48] [cursor=pointer]:
+                  - /url: /summer-crash-course/help
+        - generic [ref=e52]:
+          - article [ref=e53]:
+            - generic [ref=e54]:
+              - generic [ref=e55]:
+                - img [ref=e57]
+                - generic [ref=e59]: Why it matters
+              - generic [ref=e61]: 2,000+
+              - heading "Weak-foundation patterns reviewed" [level=3] [ref=e62]
+              - generic [ref=e63]: We focus on the basics that most often make children lose confidence when the next school term gets harder.
+              - generic [ref=e64]:
+                - generic [ref=e65]: Pattern-backed
+                - generic [ref=e66]: Foundation-first
+          - article [ref=e67]:
+            - generic [ref=e68]:
+              - generic [ref=e69]:
+                - img [ref=e71]
+                - generic [ref=e73]: For your child
+              - generic [ref=e75]: Class 5-10
+              - heading "Class-matched support" [level=3] [ref=e76]
+              - generic [ref=e77]: Your child is routed into the right diagnostic and lesson path for the selected class band.
+              - generic [ref=e78]:
+                - generic [ref=e79]: Right level
+                - generic [ref=e80]: No guesswork
+          - article [ref=e81]:
+            - generic [ref=e82]:
+              - generic [ref=e83]:
+                - img [ref=e85]
+                - generic [ref=e87]: Start here
+              - generic [ref=e89]: Free test
+              - heading "Course fee separate" [level=3] [ref=e90]
+              - generic [ref=e91]: The diagnostic is free. Guided lessons stay separate, but the weak-foundation report is still available first.
+              - generic [ref=e92]:
+                - generic [ref=e93]: Diagnostic is free
+                - generic [ref=e94]: Course access separate
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - generic [ref=e99]:
+              - generic [ref=e100]: What Families Get
+              - heading "Support that helps your child feel stronger in maths again" [level=2] [ref=e101]
+              - paragraph [ref=e102]: Your child starts with a free diagnostic, fixes the real weak foundation, and moves into guided support that can significantly boost confidence for next year.
+            - generic [ref=e104]:
+              - generic [ref=e105]: Built for parents
+              - heading "Clear support for your child and clearer next steps for you" [level=3] [ref=e106]
+              - paragraph [ref=e107]: When the foundation becomes strong now, next year's maths feels less stressful and your child is more willing to try, answer, and improve.
+          - generic [ref=e110]:
+            - article [ref=e111]:
+              - img [ref=e113]
+              - heading "Catch the weak foundation early" [level=3] [ref=e115]
+              - paragraph [ref=e116]: The diagnostic shows the exact basic skill your child is missing before that gap turns into a bigger maths problem next year.
+            - article [ref=e117]:
+              - img [ref=e119]
+              - heading "Rebuild the base in live classes" [level=3] [ref=e121]
+              - paragraph [ref=e122]: Teachers slow down the confusing step, rebuild it clearly, and help your child feel secure before moving ahead.
+            - article [ref=e123]:
+              - img [ref=e125]
+              - heading "Practice in short, confident steps" [level=3] [ref=e127]
+              - paragraph [ref=e128]: Small daily practice keeps your child from feeling overwhelmed and helps confidence grow steadily at home.
+            - article [ref=e129]:
+              - img [ref=e131]
+              - heading "Know what your child needs next" [level=3] [ref=e133]
+              - paragraph [ref=e134]: You see the weak areas, the stronger areas, and the next support step that will actually help.
+        - generic [ref=e142]:
+          - generic [ref=e143]:
+            - generic [ref=e144]: How Families Start
+            - heading "A simple path to stronger foundations" [level=2] [ref=e145]
+            - paragraph [ref=e146]: No confusing school portal. Just register, let your child take the free diagnostic, and move into the right support quickly.
+          - generic [ref=e147]:
+            - article [ref=e148]:
+              - generic [ref=e149]: "01"
+              - heading "Register your child once" [level=3] [ref=e150]
+              - paragraph [ref=e151]: Use one parent phone number and one password for your child's complete Summer Crash journey.
+            - article [ref=e152]:
+              - generic [ref=e153]: "02"
+              - heading "Take the free diagnostic" [level=3] [ref=e154]
+              - paragraph [ref=e155]: Your child starts with a class-matched test that reveals the weak foundation first.
+            - article [ref=e156]:
+              - generic [ref=e157]: "03"
+              - heading "Start the confidence-building plan" [level=3] [ref=e158]
+              - paragraph [ref=e159]: Move into the report, summer home, and guided lesson path without the usual school-portal confusion.
+          - generic [ref=e160]:
+            - link "Register & Write Test" [ref=e161] [cursor=pointer]:
+              - /url: /summer-crash-course/register?entry=diagnostic
+            - link "Join Summer Crash Course" [ref=e162] [cursor=pointer]:
+              - /url: /summer-crash-course/register?entry=direct_registration
+            - link "Parent sign in" [ref=e163] [cursor=pointer]:
+              - /url: /summer-crash-course/signin
+            - link "Find registered account" [ref=e164] [cursor=pointer]:
+              - /url: /summer-crash-course/help
+        - generic [ref=e168]:
+          - article [ref=e169]:
+            - generic [ref=e171]:
+              - generic [ref=e172]: Track the change
+              - heading "Simple updates that show how your child is getting stronger" [level=2] [ref=e173]
+              - paragraph [ref=e174]: You can see the weak foundation, the recovery progress, and the next best support step without second-guessing what your child needs.
+          - generic [ref=e177]:
+            - article [ref=e178]:
+              - img [ref=e180]
+              - heading "Live class updates" [level=3] [ref=e182]
+              - paragraph [ref=e183]: See what your child learned, where they are still stuck, and where progress is starting to show.
+            - article [ref=e184]:
+              - img [ref=e186]
+              - heading "Foundation tracker" [level=3] [ref=e188]
+              - paragraph [ref=e189]: The same weak basics stay visible until the foundation becomes strong enough to support next year's maths.
+            - article [ref=e190]:
+              - img [ref=e192]
+              - heading "Practice for home" [level=3] [ref=e194]
+              - paragraph [ref=e195]: Get the right follow-up work for your child instead of broad revision that misses the real problem.
+            - article [ref=e196]:
+              - img [ref=e198]
+              - heading "Confidence for next year" [level=3] [ref=e200]
+              - paragraph [ref=e201]: This course can significantly boost your kid's confidence before the next school year begins.
+        - generic [ref=e208]:
+          - generic [ref=e209]: Start This Summer
+          - heading "Help your child start next term with stronger foundations and more confidence" [level=2] [ref=e210]
+          - paragraph [ref=e211]: Start with the free diagnostic, catch weak basics early, and give your child a better chance to feel confident in maths next year.
+          - generic [ref=e212]:
+            - link "Register & Write Test" [ref=e213] [cursor=pointer]:
+              - /url: /summer-crash-course/register?entry=diagnostic
+            - link "Join Summer Crash Course" [ref=e214] [cursor=pointer]:
+              - /url: /summer-crash-course/register?entry=direct_registration
+          - generic [ref=e216]:
+            - generic [ref=e217]: Existing family?
+            - link "Parent sign in" [ref=e218] [cursor=pointer]:
+              - /url: /summer-crash-course/signin
+            - link "Find registered account" [ref=e219] [cursor=pointer]:
+              - /url: /summer-crash-course/help
+    - contentinfo [ref=e220]:
+      - generic [ref=e221]:
+        - generic [ref=e222]:
+          - generic [ref=e223]:
+            - generic [ref=e224]:
+              - img [ref=e226]
+              - generic [ref=e228]:
+                - generic [ref=e229]: Alyra Tech
+                - paragraph [ref=e230]: School intelligence platform
+            - paragraph [ref=e231]: AI-driven diagnostic assessments that go beyond grades to reveal how students think, learn, and grow. Built for schools that want clearer academic decisions without more operational noise.
+            - generic [ref=e232]:
+              - link "Book a demo" [ref=e233] [cursor=pointer]:
+                - /url: /contact
+              - link "Explore talent test" [ref=e234] [cursor=pointer]:
+                - /url: /talent-test
+          - generic [ref=e235]:
+            - heading "Company" [level=4] [ref=e236]
+            - list [ref=e237]:
+              - listitem [ref=e238]:
+                - link "About" [ref=e239] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=e240]:
+                - link "Solutions" [ref=e241] [cursor=pointer]:
+                  - /url: /product
+              - listitem [ref=e242]:
+                - link "Case studies" [ref=e243] [cursor=pointer]:
+                  - /url: /case-study
+              - listitem [ref=e244]:
+                - link "Benefits" [ref=e245] [cursor=pointer]:
+                  - /url: /benefits
+          - generic [ref=e246]:
+            - heading "Explore" [level=4] [ref=e247]
+            - list [ref=e248]:
+              - listitem [ref=e249]:
+                - link "Platform home" [ref=e250] [cursor=pointer]:
+                  - /url: /platform-home
+              - listitem [ref=e251]:
+                - link "Talent test" [ref=e252] [cursor=pointer]:
+                  - /url: /talent-test
+              - listitem [ref=e253]:
+                - link "Registration" [ref=e254] [cursor=pointer]:
+                  - /url: /register
+              - listitem [ref=e255]:
+                - link "Terms" [ref=e256] [cursor=pointer]:
+                  - /url: /terms
+          - generic [ref=e257]:
+            - heading "Contact" [level=4] [ref=e258]
+            - list [ref=e259]:
+              - listitem [ref=e260]:
+                - link "hello@beyondmarks.edu" [ref=e261] [cursor=pointer]:
+                  - /url: mailto:hello@beyondmarks.edu
+              - listitem [ref=e262]:
+                - link "+91 98765 43210" [ref=e263] [cursor=pointer]:
+                  - /url: tel:+919876543210
+              - listitem [ref=e264]: Hitech City, Hyderabad
+            - link "WhatsApp us" [ref=e265] [cursor=pointer]:
+              - /url: https://wa.me/919876543210?text=Hello%20Alyra%20Tech!%20I%20would%20like%20to%20know%20more%20about%20your%20diagnostics.
+              - img [ref=e266]
+              - text: WhatsApp us
+        - generic [ref=e268]:
+          - paragraph [ref=e269]: © 2026 AlyraTech LLP. All rights reserved.
+          - generic [ref=e270]:
+            - link "Terms" [ref=e271] [cursor=pointer]:
+              - /url: /terms
+            - link "Contact" [ref=e272] [cursor=pointer]:
+              - /url: /contact
+  - region "Notifications (F8)":
+    - list

@@ -7,6 +7,7 @@ import {
   assertSummerCrashStudentApiAccess,
 } from "@/lib/server/summer-crash";
 import { getLiveSessionErrorStatus, listStudentLiveSessions } from "@/lib/server/live-sessions";
+import { withRequestBudget } from "@/lib/server/request-governor";
 
 export async function GET(req: NextRequest) {
   const auth = await requireTenantSession(req, {
@@ -30,20 +31,39 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  try {
-    const liveSessions = await listStudentLiveSessions({
-      schoolKey: auth.schoolKey,
-      studentId: String(auth.session.user.id || "").trim(),
-      studentPlacement: {
-        classId: auth.session.user.studentClassId,
-        academicSectionId: auth.session.user.studentAcademicSectionId,
-      },
-    });
+  const studentId = String(auth.session.user.id || "").trim();
 
-    return NextResponse.json({
-      success: true,
-      liveSessions,
-    });
+  try {
+    return withRequestBudget(
+      {
+        request: req,
+        policy: "liveSessionList",
+        schoolKey: auth.schoolKey,
+        userId: studentId,
+      },
+      async () => {
+        const liveSessions = await listStudentLiveSessions({
+          schoolKey: auth.schoolKey,
+          studentId,
+          studentPlacement: {
+            classId: auth.session.user.studentClassId,
+            academicSectionId: auth.session.user.studentAcademicSectionId,
+          },
+        });
+
+        return NextResponse.json(
+          {
+            success: true,
+            liveSessions,
+          },
+          {
+            headers: {
+              "Cache-Control": "private, no-store",
+            },
+          },
+        );
+      },
+    );
   } catch (error) {
     return NextResponse.json(
       {

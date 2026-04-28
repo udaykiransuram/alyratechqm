@@ -139,32 +139,22 @@ test.describe("Live classes workflow @desktop", () => {
     const response = await navigateToAppRoute(page, "/student/live-classes");
     expect(response?.status() ?? 0).toBeLessThan(400);
 
-    await expect(
-      page.getByRole("heading", { name: "Mathematics Live Doubt Clinic" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Science Lab Readiness Session" }),
-    ).toBeVisible();
+    await expect(page.getByText("Mathematics Live Doubt Clinic")).toBeVisible();
+    await expect(page.getByText("Science Lab Readiness Session")).toBeVisible();
 
     await page.getByLabel("Status").selectOption("live");
     await Promise.all([
-      page.waitForURL(/\/student\/live-classes\?status=live$/),
+      page.waitForURL(/\/student\/live-classes\?status=live(?:&.*)?$/),
       page.getByRole("button", { name: "Apply filters" }).click(),
     ]);
 
-    await expect(
-      page.getByRole("heading", { name: "Science Lab Readiness Session" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Mathematics Live Doubt Clinic" }),
-    ).toHaveCount(0);
+    await expect(page.getByText("Science Lab Readiness Session")).toBeVisible();
+    await expect(page.getByText("Mathematics Live Doubt Clinic")).toHaveCount(0);
     await Promise.all([
       page.waitForURL(/\/student\/live-classes$/),
       page.getByRole("link", { name: "Reset" }).click(),
     ]);
-    await expect(
-      page.getByRole("heading", { name: "Weekly Exam Strategy Session" }),
-    ).toBeVisible();
+    await expect(page.getByText("Weekly Exam Strategy Session")).toBeVisible();
   });
 
   test("admin can schedule a live class that students join and attendance can be marked", async ({
@@ -188,10 +178,10 @@ test.describe("Live classes workflow @desktop", () => {
     await page.getByLabel("Title").fill(liveClassTitle);
     await page.getByLabel("Description").fill(description);
 
-    await page.getByRole("button", { name: /Select class/i }).click();
+    await page.getByRole("combobox").filter({ hasText: /Select class/i }).click();
     await page.getByRole("option", { name: "CLASS X" }).click();
 
-    await page.getByRole("button", { name: /Select subject/i }).click();
+    await page.getByRole("combobox").filter({ hasText: /Select subject/i }).click();
     await page.getByRole("option", { name: "Mathematics" }).click();
 
     await page.getByRole("button", {
@@ -199,9 +189,6 @@ test.describe("Live classes workflow @desktop", () => {
     }).click();
     await page.getByRole("option", { name: "Watson" }).click();
     await page.getByRole("button", { name: "Done" }).click();
-
-    await page.getByRole("button", { name: /Select host teacher/i }).click();
-    await page.getByRole("option", { name: "Mock Mathematics Teacher" }).click();
 
     await page.getByLabel("Start time").fill(toDateTimeLocal(start));
     await page.getByLabel("End time").fill(toDateTimeLocal(end));
@@ -214,26 +201,25 @@ test.describe("Live classes workflow @desktop", () => {
       .fill("Bring a notebook and keep audio muted unless invited.");
 
     await Promise.all([
-      page.waitForURL(/\/workspace\/live-classes\/[^/]+$/),
+      page.waitForURL(/\/workspace\/live-classes\/(?!create$)[^/]+$/),
       page.getByRole("button", { name: /Create live class/i }).click(),
     ]);
 
-    await expect(page.getByText("Session Operations")).toBeVisible();
+    await expect(page.getByRole("heading", { name: liveClassTitle })).toBeVisible();
     const detailUrl = page.url();
     const liveSessionId = detailUrl.split("/").pop() ?? "";
     expect(liveSessionId).not.toBe("");
 
     await setStudentSession(page);
     await navigateToAppRoute(page, "/student/live-classes");
-    await expect(page.getByRole("heading", { name: liveClassTitle })).toBeVisible();
+    await expect(page.getByText(liveClassTitle)).toBeVisible();
 
     const joinResponse = await page.request.get(
       new URL(`/api/student/live-sessions/${liveSessionId}/join`, page.url()).toString(),
+      { maxRedirects: 0 },
     );
     expect(joinResponse.status()).toBeLessThan(400);
-
-    await navigateToAppRoute(page, "/student/live-classes");
-    await expect(page.getByText(/You joined 1 time/i)).toBeVisible();
+    expect(joinResponse.headers().location).toBe(studentJoinLink);
 
     await setSchoolAdminSession(page);
     const detailResponse = await navigateToAppRoute(
@@ -279,7 +265,7 @@ test.describe("Live classes workflow @desktop", () => {
         hostTeacherId: "live-session-teacher-1",
         scheduledStartAt: start.toISOString(),
         scheduledEndAt: end.toISOString(),
-        studentJoinUrl: "https://meet.example.com/student/live-class-v2",
+        studentJoinUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         hostJoinUrl: "https://meet.example.com/host/live-class-v2",
         meetingCode: "LIVE-V2",
         meetingPasscode: "BROWSER",
@@ -305,7 +291,10 @@ test.describe("Live classes workflow @desktop", () => {
           '<p>Select the two checks you should complete before the teacher starts.</p><p><span data-type="math" data-latex="2+2" data-display-mode="false"></span> stays here as a rendering check.</p>',
         options: [
           { contentHtml: "<p>Keep your notebook ready.</p>" },
-          { contentHtml: "<p>Leave time for a final review.</p>" },
+          {
+            contentHtml:
+              "<p>Leave time for a final review, including checking every handwritten step, every sign change, and every unit conversion before you submit.</p>",
+          },
           { contentHtml: "<p>Skip the instructions entirely.</p>" },
         ],
         answerIndexes: [0, 1],
@@ -347,13 +336,32 @@ test.describe("Live classes workflow @desktop", () => {
       );
       expect(studentDetailResponse?.status() ?? 0).toBeLessThan(400);
 
-      await expect(page.getByText("Question")).toBeVisible();
+      await expect(page.getByText("Question", { exact: true })).toBeVisible();
       await expect(
         page.getByText(/Select the two checks you should complete/i),
       ).toBeVisible();
       await expect(
         page.getByText(/Focus:\s*keep your workings tidy and leave time for a final check/i),
       ).toBeVisible();
+
+      await page.setViewportSize({ width: 390, height: 720 });
+      await expect(page.locator(".app-live-session-focus-bar")).toBeHidden();
+      await expect(page.locator(".app-live-session-focus-fab")).toBeVisible();
+      await expect
+        .poll(() =>
+          page
+            .locator(".app-live-session-stream-shell")
+            .evaluate((element) => element.getBoundingClientRect().height),
+        )
+        .toBeLessThan(500);
+      await expect
+        .poll(() =>
+          page
+            .getByRole("button", { name: /select option 2/i })
+            .locator(".app-live-session-option-content")
+            .evaluate((element) => getComputedStyle(element).webkitLineClamp),
+        )
+        .toBe("none");
 
       await page.getByRole("button", { name: /select option 1/i }).click();
       await page.getByRole("button", { name: /select option 2/i }).click();
@@ -366,7 +374,7 @@ test.describe("Live classes workflow @desktop", () => {
         `/workspace/live-classes/${liveSessionId}`,
       );
       expect(teacherObjectiveResponse?.status() ?? 0).toBeLessThan(400);
-      await expect(page.getByText(/1 responses/i)).toBeVisible();
+      await expect(page.getByText(/^1 responses$/i).first()).toBeVisible();
       await expect(page.getByText(/1 correct/i)).toBeVisible();
 
       await activateLiveItemViaApi(page, liveSessionId, shortTextItem!._id);

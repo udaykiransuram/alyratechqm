@@ -34,15 +34,17 @@ test.describe("Learning content automation @desktop", () => {
     expect(response, "workspace course detail should respond").not.toBeNull();
     expect(response?.status() ?? 0).toBeLessThan(400);
     await expect(page.getByRole("heading", { name: "Diagnostic Foundations" })).toBeVisible();
-    await expect(page.getByText("Baseline readiness check")).toBeVisible();
+    await expect(
+      page.getByText("Baseline readiness check", { exact: true }).first(),
+    ).toBeVisible();
 
     response = await navigateToAppRoute(page, "/workspace/courses/create");
     expect(response, "workspace course create page should respond").not.toBeNull();
     expect(response?.status() ?? 0).toBeLessThan(400);
     await expect(page.getByRole("heading", { name: "Create Course" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Course Setup" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Curriculum" })).toBeVisible();
-    await expect(page.getByDisplayValue("Lesson 1")).toBeVisible();
+    await expect(page.getByText("Course Setup", { exact: true })).toBeVisible();
+    await expect(page.getByText("Curriculum", { exact: true })).toBeVisible();
+    await expect(page.getByText("Lesson 1", { exact: true }).first()).toBeVisible();
     await page.getByRole("button", { name: "Add activity" }).click();
     await page.getByRole("button", { name: "Assessment" }).click();
     await expect(page.getByText("Link a question paper.")).toBeVisible();
@@ -59,7 +61,7 @@ test.describe("Learning content automation @desktop", () => {
     await expect(
       page.getByRole("heading", { name: "Fractions recap and correction work" }),
     ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Roster Status" })).toBeVisible();
+    await expect(page.getByText("Roster Status", { exact: true })).toBeVisible();
 
     response = await navigateToAppRoute(page, "/workspace/diary/create");
     expect(response, "workspace diary create page should respond").not.toBeNull();
@@ -67,10 +69,10 @@ test.describe("Learning content automation @desktop", () => {
     await expect(
       page.getByRole("heading", { name: "Create Diary Entry" }),
     ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Diary Setup" })).toBeVisible();
+    await expect(page.getByText("Diary Setup", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Image" }).click();
     await page.getByRole("button", { name: "YouTube" }).click();
-    await page.getByRole("button", { name: "File" }).click();
+    await page.getByRole("button", { name: "File", exact: true }).click();
     await expect(page.getByText("Resource 1")).toBeVisible();
     await expect(page.getByText("Resource 3")).toBeVisible();
 
@@ -96,7 +98,9 @@ test.describe("Learning content automation @desktop", () => {
     expect(response?.status() ?? 0).toBeLessThan(400);
     await expect(page.getByRole("heading", { name: "Diagnostic Foundations" })).toBeVisible();
 
-    const noteArea = page.getByPlaceholder("Add your notes for this lesson...");
+    const noteArea = page
+      .getByPlaceholder("Add your notes for this lesson...")
+      .first();
     await noteArea.fill("Focus on misconception clusters.");
     await page.getByRole("button", { name: "Save Note" }).first().click();
     await expect(page.getByText("Saved").first()).toBeVisible();

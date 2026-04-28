@@ -182,7 +182,7 @@ test.describe("Mobile-first page behavior @mobile", () => {
     await navigateToAppRoute(page, "/student/tests");
 
     await expect(page.getByRole("heading", { name: "Tests" })).toBeVisible();
-    await expect(page.getByText("Assigned Tests")).toBeVisible();
+    await expect(page.getByText("Assigned Tests", { exact: true })).toBeVisible();
 
     const chemistryCard = page
       .getByRole("article")

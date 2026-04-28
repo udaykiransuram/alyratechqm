@@ -10,6 +10,7 @@ import {
   getLiveSessionErrorStatus,
   getStudentLiveSessionById,
 } from "@/lib/server/live-sessions";
+import { withRequestBudget } from "@/lib/server/request-governor";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -23,9 +24,10 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     return auth.response;
   }
 
+  const studentId = String(auth.session.user.id || "").trim();
   const accessCheck = await assertSummerCrashStudentApiAccess({
     schoolKey: auth.schoolKey,
-    studentId: String(auth.session.user.id || "").trim(),
+    studentId,
     target: {
       kind: "locked-student-content",
     },
@@ -39,27 +41,47 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
   try {
     const { id } = await params;
-    const liveSession = await getStudentLiveSessionById({
-      schoolKey: auth.schoolKey,
-      studentId: String(auth.session.user.id || "").trim(),
-      studentPlacement: {
-        classId: auth.session.user.studentClassId,
-        academicSectionId: auth.session.user.studentAcademicSectionId,
+    return withRequestBudget(
+      {
+        request: req,
+        policy: "liveSessionDetail",
+        schoolKey: auth.schoolKey,
+        userId: studentId,
+        metadata: {
+          liveSessionId: id,
+        },
       },
-      liveSessionId: id,
-    });
+      async () => {
+        const liveSession = await getStudentLiveSessionById({
+          schoolKey: auth.schoolKey,
+          studentId,
+          studentPlacement: {
+            classId: auth.session.user.studentClassId,
+            academicSectionId: auth.session.user.studentAcademicSectionId,
+          },
+          liveSessionId: id,
+        });
 
-    if (!liveSession) {
-      return NextResponse.json(
-        { success: false, message: "Live class not found." },
-        { status: 404 },
-      );
-    }
+        if (!liveSession) {
+          return NextResponse.json(
+            { success: false, message: "Live class not found." },
+            { status: 404 },
+          );
+        }
 
-    return NextResponse.json({
-      success: true,
-      liveSession,
-    });
+        return NextResponse.json(
+          {
+            success: true,
+            liveSession,
+          },
+          {
+            headers: {
+              "Cache-Control": "private, no-store",
+            },
+          },
+        );
+      },
+    );
   } catch (error) {
     return NextResponse.json(
       {

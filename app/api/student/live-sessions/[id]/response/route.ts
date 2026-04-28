@@ -11,10 +11,65 @@ import {
   normalizeStudentLiveSessionResponseInput,
   submitStudentLiveSessionResponse,
 } from "@/lib/server/live-sessions";
+import { withRequestBudget } from "@/lib/server/request-governor";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
+
+const MAX_LIVE_SESSION_RESPONSE_BODY_BYTES = 64 * 1024;
+
+async function readBoundedJsonBody(req: NextRequest) {
+  const contentLength = Number(req.headers.get("content-length") || 0);
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_LIVE_SESSION_RESPONSE_BODY_BYTES
+  ) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        {
+          success: false,
+          message: "Live response is too large. Shorten the answer and try again.",
+        },
+        { status: 413 },
+      ),
+    };
+  }
+
+  const rawBody = await req.text().catch(() => "");
+  if (rawBody.length > MAX_LIVE_SESSION_RESPONSE_BODY_BYTES) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        {
+          success: false,
+          message: "Live response is too large. Shorten the answer and try again.",
+        },
+        { status: 413 },
+      ),
+    };
+  }
+
+  if (!rawBody.trim()) {
+    return {
+      ok: true as const,
+      body: {} as Record<string, unknown> & { itemId?: string },
+    };
+  }
+
+  try {
+    return {
+      ok: true as const,
+      body: JSON.parse(rawBody) as Record<string, unknown> & { itemId?: string },
+    };
+  } catch {
+    return {
+      ok: true as const,
+      body: {} as Record<string, unknown> & { itemId?: string },
+    };
+  }
+}
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const auth = await requireTenantSession(req, {
@@ -24,9 +79,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return auth.response;
   }
 
+  const studentId = String(auth.session.user.id || "").trim();
   const accessCheck = await assertSummerCrashStudentApiAccess({
     schoolKey: auth.schoolKey,
-    studentId: String(auth.session.user.id || "").trim(),
+    studentId,
     target: {
       kind: "locked-student-content",
     },
@@ -39,33 +95,48 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   try {
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown> & {
-      itemId?: string;
-    };
     const { id } = await params;
-    const liveSession = await submitStudentLiveSessionResponse({
-      schoolKey: auth.schoolKey,
-      studentId: String(auth.session.user.id || "").trim(),
-      studentPlacement: {
-        classId: auth.session.user.studentClassId,
-        academicSectionId: auth.session.user.studentAcademicSectionId,
+    return withRequestBudget(
+      {
+        request: req,
+        policy: "liveSessionResponse",
+        schoolKey: auth.schoolKey,
+        userId: studentId,
+        metadata: {
+          liveSessionId: id,
+        },
       },
-      liveSessionId: id,
-      itemId: String(body?.itemId || "").trim(),
-      input: normalizeStudentLiveSessionResponseInput(body),
-    });
+      async () => {
+        const parsedBody = await readBoundedJsonBody(req);
+        if (!parsedBody.ok) {
+          return parsedBody.response;
+        }
+        const body = parsedBody.body;
+        const liveSession = await submitStudentLiveSessionResponse({
+          schoolKey: auth.schoolKey,
+          studentId,
+          studentPlacement: {
+            classId: auth.session.user.studentClassId,
+            academicSectionId: auth.session.user.studentAcademicSectionId,
+          },
+          liveSessionId: id,
+          itemId: String(body?.itemId || "").trim(),
+          input: normalizeStudentLiveSessionResponseInput(body),
+        });
 
-    if (!liveSession) {
-      return NextResponse.json(
-        { success: false, message: "Live class or live item not found." },
-        { status: 404 },
-      );
-    }
+        if (!liveSession) {
+          return NextResponse.json(
+            { success: false, message: "Live class or live item not found." },
+            { status: 404 },
+          );
+        }
 
-    return NextResponse.json({
-      success: true,
-      liveSession,
-    });
+        return NextResponse.json({
+          success: true,
+          liveSession,
+        });
+      },
+    );
   } catch (error) {
     return NextResponse.json(
       {

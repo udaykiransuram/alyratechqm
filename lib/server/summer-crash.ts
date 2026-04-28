@@ -84,6 +84,10 @@ const SUMMER_CRASH_SUMMER_ID_MAX = 999999;
 
 export const SUMMER_CRASH_PUBLIC_CONFIG_CACHE_TAG =
   "summer-crash:public-config";
+const SUMMER_CRASH_PUBLIC_CONFIG_REVALIDATE_SECONDS = 60;
+const SUMMER_CRASH_PUBLIC_CONFIG_FALLBACK_SYMBOL = Symbol.for(
+  "summer-crash-public-config-fallback",
+);
 
 type SummerCrashQuestionPaperSummary = {
   _id: string;
@@ -883,6 +887,42 @@ function buildSummerCrashDefaultPublicConfig() {
   );
 }
 
+function buildInactiveSummerCrashPublicConfigFallback() {
+  const supportContact = SUMMER_CRASH_SUPPORT_CONTACT;
+  const whatsappGroupUrl = SUMMER_CRASH_WHATSAPP_GROUP_URL;
+  const fallback = {
+    isActive: false,
+    title: SUMMER_CRASH_DISPLAY_NAME,
+    supportContact,
+    supportHref: resolveSummerCrashSupportHref({
+      supportContact,
+      whatsappGroupUrl,
+    }),
+    price: SUMMER_CRASH_PRICE,
+    currency: SUMMER_CRASH_CURRENCY,
+    earlyBirdOffer: null,
+    whatsappGroupUrl,
+    classBands: [],
+  } satisfies SummerCrashPublicConfig;
+
+  Object.defineProperty(fallback, SUMMER_CRASH_PUBLIC_CONFIG_FALLBACK_SYMBOL, {
+    value: true,
+    enumerable: false,
+  });
+
+  return fallback;
+}
+
+export function isSummerCrashPublicConfigFallback(
+  config: SummerCrashPublicConfig,
+) {
+  return Boolean(
+    (config as SummerCrashPublicConfig & Record<symbol, boolean>)[
+      SUMMER_CRASH_PUBLIC_CONFIG_FALLBACK_SYMBOL
+    ],
+  );
+}
+
 function resolveSummerCrashCampaignPricing(params: {
   price: unknown;
   currency: unknown;
@@ -898,49 +938,53 @@ function resolveSummerCrashCampaignPricing(params: {
 
 const getSummerCrashPublicConfigCached = unstable_cache(
   async (): Promise<SummerCrashPublicConfigCampaignSource> => {
-    try {
-      await connectDB();
+    await connectDB();
 
-      const existingCampaign = (await SummerCrashCampaign.findOne({
-        summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
-      })
-        .select(
-          "isActive title supportContact price currency whatsappGroupUrl classMappings",
-        )
-        .lean()) as SummerCrashPublicConfigCampaignSource | null;
+    const existingCampaign = (await SummerCrashCampaign.findOne({
+      summerSchoolKey: SUMMER_CRASH_SCHOOL_KEY,
+    })
+      .select(
+        "isActive title supportContact price currency whatsappGroupUrl classMappings",
+      )
+      .lean()) as SummerCrashPublicConfigCampaignSource | null;
 
-      if (existingCampaign) {
-        return existingCampaign;
-      }
-
-      // Public reads should not force tenant provisioning on every request.
-      // Bootstrap only when campaign is missing.
-      const campaign = await getOrCreateSummerCrashCampaign({
-        ensureTenantProvisioned: false,
-      });
-      return {
-        isActive: campaign.isActive,
-        title: campaign.title,
-        supportContact: campaign.supportContact,
-        price: campaign.price,
-        currency: campaign.currency,
-        whatsappGroupUrl: campaign.whatsappGroupUrl,
-        classMappings: campaign.classMappings,
-      };
-    } catch {
-      return buildSummerCrashDefaultPublicConfigSource();
+    if (existingCampaign) {
+      return existingCampaign;
     }
+
+    // Public reads should not force tenant provisioning on every request.
+    // Bootstrap only when campaign is missing.
+    const campaign = await getOrCreateSummerCrashCampaign({
+      ensureTenantProvisioned: false,
+    });
+    return {
+      isActive: campaign.isActive,
+      title: campaign.title,
+      supportContact: campaign.supportContact,
+      price: campaign.price,
+      currency: campaign.currency,
+      whatsappGroupUrl: campaign.whatsappGroupUrl,
+      classMappings: campaign.classMappings,
+    };
   },
   ["summer-crash-public-config"],
   {
-    revalidate: 300,
+    revalidate: SUMMER_CRASH_PUBLIC_CONFIG_REVALIDATE_SECONDS,
     tags: [SUMMER_CRASH_PUBLIC_CONFIG_CACHE_TAG],
   },
 );
 
 export async function getSummerCrashPublicConfig() {
-  const campaign = await getSummerCrashPublicConfigCached();
-  return normalizeSummerCrashPublicConfigFromCampaign(campaign);
+  try {
+    const campaign = await getSummerCrashPublicConfigCached();
+    return normalizeSummerCrashPublicConfigFromCampaign(campaign);
+  } catch (error) {
+    console.error("Failed to load Summer Crash public config:", error);
+    if (isMockedE2ETestMode()) {
+      return buildSummerCrashDefaultPublicConfig();
+    }
+    return buildInactiveSummerCrashPublicConfigFallback();
+  }
 }
 
 export async function getSummerCrashCampaignForPayment() {

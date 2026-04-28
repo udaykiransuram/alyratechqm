@@ -1842,6 +1842,10 @@ export function useStudentTestRuntime({
         return;
       }
 
+      if (hasUnsavedChangesRef.current) {
+        void saveAttemptRef.current();
+      }
+
       currentIndexRef.current = nextIndex;
       setCurrentIndex(nextIndex);
       if (

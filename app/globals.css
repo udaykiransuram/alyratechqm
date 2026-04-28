@@ -2909,7 +2909,7 @@
       justify-content: center;
     }
 
-    [data-live-focus=\"true\"] .app-live-session-focus-fab {
+    [data-live-focus="true"] .app-live-session-focus-fab {
       bottom: max(1rem, env(safe-area-inset-bottom));
     }
 
@@ -2988,10 +2988,6 @@
     display: none;
   }
 
-  [data-live-focus="true"] .app-live-session-focus-bar {
-    display: none;
-  }
-
   [data-live-completed="true"] .app-live-session-focus-bar {
     display: none;
   }
@@ -3035,6 +3031,14 @@
 
   .app-live-session-focus-fab-disabled {
     opacity: 0.7;
+  }
+
+  .app-live-session-option-content,
+  .app-live-session-option-content :where(p, li, div, span) {
+    display: revert;
+    overflow: visible;
+    -webkit-box-orient: initial;
+    -webkit-line-clamp: unset;
   }
 
   .app-live-response-panel {
@@ -3146,6 +3150,45 @@
     opacity: 0;
     transform: translateY(6px);
     pointer-events: none;
+  }
+
+  @media (max-width: 768px), (pointer: coarse) and (hover: none) {
+    .app-live-session-focus-stage .app-live-session-focus-bar,
+    [data-live-focus="true"] .app-live-session-focus-bar {
+      display: none;
+    }
+
+    .app-live-session-focus-fab {
+      position: fixed;
+      right: max(0.75rem, env(safe-area-inset-right));
+      bottom: calc(
+        var(--app-student-mobile-nav-height, 0px) + 1.25rem + env(safe-area-inset-bottom)
+      );
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    [data-live-focus="true"] .app-live-session-focus-fab {
+      top: 50%;
+      right: max(0.75rem, env(safe-area-inset-right));
+      bottom: auto;
+      display: flex;
+      transform: translateY(-50%);
+    }
+
+    [data-live-focus="true"] .app-live-session-focus-fab-hidden {
+      opacity: 0.34;
+      transform: translateY(-50%) translateX(0.55rem);
+      pointer-events: auto;
+    }
+
+    [data-live-focus="true"] .app-live-session-focus-fab-hidden .app-live-session-focus-fab-button {
+      box-shadow:
+        0 14px 26px -18px hsl(var(--app-shadow-deep) / 0.34),
+        inset 0 1px 0 hsl(var(--app-surface-1) / 0.86);
+    }
   }
 
   .app-student-page-shell .app-section-header {
@@ -4730,15 +4773,15 @@
   }
 
   @media (max-width: 768px) {
-    .app-live-session-focus-stage {
+    [data-live-focus="true"].app-live-session-focus-stage {
       min-height: 100dvh;
     }
 
-    .app-live-session-focus-stage .app-live-session-stream-shell {
+    [data-live-focus="true"] .app-live-session-stream-shell {
       min-height: 100dvh;
     }
 
-    .app-live-session-focus-stage .app-live-session-stream-frame {
+    [data-live-focus="true"] .app-live-session-stream-frame {
       width: 100vw;
       height: 100dvh;
     }
@@ -8583,6 +8626,14 @@
       overflow: hidden;
     }
 
+    .app-exam-focus-shell-fullscreen > div {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+      flex-direction: column;
+    }
+
     .app-exam-focus-topbar-fullscreen {
       position: static;
       top: auto;
@@ -8633,11 +8684,19 @@
     }
 
     .app-exam-focus-shell-fullscreen .app-exam-question-card {
+      display: flex;
+      flex-direction: column;
       min-height: 0;
       flex: 1 1 auto;
+      overflow: hidden;
+    }
+
+    .app-exam-focus-shell-fullscreen .app-exam-question-card > .app-section-header {
+      flex: 0 0 auto;
     }
 
     .app-exam-focus-shell-fullscreen .app-exam-question-body {
+      flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
       padding-bottom: calc(var(--app-exam-mobile-nav-height) + env(safe-area-inset-bottom) + 0.85rem);

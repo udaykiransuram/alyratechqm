@@ -14,6 +14,18 @@ type CashfreeWebhookPayload = {
   payment_id?: string;
   transaction_id?: string;
   event_id?: string;
+  type?: string;
+  data?: {
+    order?: {
+      order_id?: string;
+      order_status?: string;
+    };
+    payment?: {
+      cf_payment_id?: string | number;
+      payment_id?: string | number;
+      payment_status?: string;
+    };
+  };
 };
 
 function generateHallTicket(orderId: string) {
@@ -50,12 +62,19 @@ async function sendWhatsAppCloudAPI(phone: string, message: string) {
 function resolveWebhookEventId(
   payload: Record<string, unknown>,
   signature: string,
+  idempotencyKey?: string | null,
 ) {
+  const nestedData = getRecord(payload.data);
+  const nestedPayment = getRecord(nestedData?.payment);
   const providerIdCandidates = [
     payload.cf_payment_id,
     payload.payment_id,
     payload.transaction_id,
     payload.event_id,
+    payload.type,
+    nestedPayment?.cf_payment_id,
+    nestedPayment?.payment_id,
+    idempotencyKey,
   ]
     .map((value) => String(value || "").trim())
     .filter(Boolean);
@@ -80,13 +99,72 @@ function safeEqualBase64(left: string, right: string) {
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
+function getRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    const normalized = String(value || "").trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return "";
+}
+
+function verifyCashfreeWebhookSignature(params: {
+  rawBody: string;
+  signature: string;
+  timestamp: string;
+}) {
+  const signedPayload = params.timestamp
+    ? `${params.timestamp}${params.rawBody}`
+    : params.rawBody;
+  const expected = crypto
+    .createHmac("sha256", process.env.CASHFREE_WEBHOOK_SECRET!)
+    .update(signedPayload)
+    .digest("base64");
+
+  return safeEqualBase64(params.signature, expected);
+}
+
+function extractCashfreeWebhookFields(payload: CashfreeWebhookPayload) {
+  const data = getRecord(payload.data);
+  const order = getRecord(data?.order);
+  const payment = getRecord(data?.payment);
+  const orderId = firstNonEmptyString(payload.order_id, order?.order_id);
+  const orderStatus = firstNonEmptyString(
+    payload.order_status,
+    order?.order_status,
+    payment?.payment_status,
+  ).toUpperCase();
+  const paymentId = firstNonEmptyString(
+    payload.cf_payment_id,
+    payload.payment_id,
+    payload.transaction_id,
+    payment?.cf_payment_id,
+    payment?.payment_id,
+  );
+
+  return {
+    orderId,
+    orderStatus,
+    paymentId,
+  };
+}
+
 function normalizeSummerCrashWebhookStatus(orderStatus: unknown) {
   const normalized = String(orderStatus || "").trim().toUpperCase();
-  if (normalized === "PAID") {
+  if (normalized === "PAID" || normalized === "SUCCESS") {
     return "paid" as const;
   }
   if (
     normalized === "FAILED" ||
+    normalized === "FAILURE" ||
     normalized === "EXPIRED" ||
     normalized === "CANCELLED" ||
     normalized === "USER_DROPPED"
@@ -94,6 +172,10 @@ function normalizeSummerCrashWebhookStatus(orderStatus: unknown) {
     return "failed" as const;
   }
   return null;
+}
+
+function isCashfreePaidStatus(value: unknown) {
+  return normalizeSummerCrashWebhookStatus(value) === "paid";
 }
 
 async function handleSummerCrashPaymentWebhook(params: {
@@ -159,7 +241,7 @@ async function handleTalentTestRegistrationWebhook(params: {
   paymentId: string;
   orderStatus: string;
 }) {
-  if (params.orderStatus !== "PAID") {
+  if (!isCashfreePaidStatus(params.orderStatus)) {
     return NextResponse.json({ status: "ignored" });
   }
 
@@ -252,22 +334,26 @@ export async function POST(req: NextRequest) {
 
     const rawBody = await req.text();
     const signature = req.headers.get("x-webhook-signature");
+    const timestamp = req.headers.get("x-webhook-timestamp") || "";
+    const idempotencyKey = req.headers.get("x-idempotency-key");
 
     if (!signature) {
       return new NextResponse("Missing signature", { status: 400 });
     }
 
-    const expected = crypto
-      .createHmac("sha256", process.env.CASHFREE_WEBHOOK_SECRET)
-      .update(rawBody)
-      .digest("base64");
-
-    if (!safeEqualBase64(signature, expected)) {
+    if (
+      !verifyCashfreeWebhookSignature({
+        rawBody,
+        signature,
+        timestamp,
+      })
+    ) {
       return new NextResponse("Invalid signature", { status: 403 });
     }
 
     const payload = JSON.parse(rawBody) as CashfreeWebhookPayload;
-    const orderId = String(payload.order_id || "").trim();
+    const { orderId, orderStatus, paymentId } =
+      extractCashfreeWebhookFields(payload);
 
     if (!orderId) {
       return NextResponse.json({ status: "ignored" });
@@ -276,10 +362,8 @@ export async function POST(req: NextRequest) {
     const eventId = resolveWebhookEventId(
       payload as Record<string, unknown>,
       signature,
+      idempotencyKey,
     );
-    const paymentId = String(
-      payload.cf_payment_id || payload.payment_id || payload.transaction_id || "",
-    ).trim();
 
     await connectDB();
 
@@ -287,7 +371,7 @@ export async function POST(req: NextRequest) {
       orderId,
       eventId,
       paymentId,
-      normalizedStatus: normalizeSummerCrashWebhookStatus(payload.order_status),
+      normalizedStatus: normalizeSummerCrashWebhookStatus(orderStatus),
     });
     if (summerResponse) {
       return summerResponse;
@@ -297,7 +381,7 @@ export async function POST(req: NextRequest) {
       orderId,
       eventId,
       paymentId,
-      orderStatus: String(payload.order_status || "").trim().toUpperCase(),
+      orderStatus,
     });
   } catch (error: unknown) {
     console.error("Webhook error:", error);

@@ -8,6 +8,8 @@ import {
 } from "@/lib/security/registration-security";
 import { isMockedE2ETestMode } from "@/lib/test-mode";
 
+const PRIVATE_REGISTRATION_CACHE_CONTROL = "private, no-store";
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -17,31 +19,55 @@ export async function GET(req: NextRequest) {
   if (!schoolKey) {
     return NextResponse.json(
       { success: false, message: "school required" },
-      { status: 400 },
+      {
+        status: 400,
+        headers: {
+          "Cache-Control": PRIVATE_REGISTRATION_CACHE_CONTROL,
+        },
+      },
     );
   }
 
   try {
     if (isMockedE2ETestMode()) {
-      return NextResponse.json({
-        success: true,
-        classes: [],
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          classes: [],
+        },
+        {
+          headers: {
+            "Cache-Control": PRIVATE_REGISTRATION_CACHE_CONTROL,
+          },
+        },
+      );
     }
 
     const school = await getPublicSchoolOptionByKey(schoolKey);
     if (!school) {
       return NextResponse.json(
         { success: false, message: "Unknown school." },
-        { status: 404 },
+        {
+          status: 404,
+          headers: {
+            "Cache-Control": PRIVATE_REGISTRATION_CACHE_CONTROL,
+          },
+        },
       );
     }
 
     const classes = await getPublicClassOptions(schoolKey);
-    const response = NextResponse.json({
-      success: true,
-      classes,
-    });
+    const response = NextResponse.json(
+      {
+        success: true,
+        classes,
+      },
+      {
+        headers: {
+          "Cache-Control": PRIVATE_REGISTRATION_CACHE_CONTROL,
+        },
+      },
+    );
     response.cookies.set({
       name: getPublicRegistrationScopeCookieName(),
       value: buildPublicRegistrationScopeValue(schoolKey),
@@ -59,7 +85,12 @@ export async function GET(req: NextRequest) {
         message:
           error instanceof Error ? error.message : "Failed to load classes.",
       },
-      { status: 500 },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": PRIVATE_REGISTRATION_CACHE_CONTROL,
+        },
+      },
     );
   }
 }

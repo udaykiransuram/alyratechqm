@@ -689,6 +689,106 @@ test.describe("Student test UI resilience (network mocked) @desktop", () => {
 });
 
 test.describe("Student test UI resilience (network mocked) @mobile", () => {
+  test("keeps mobile fullscreen questions scrollable with accessible bottom controls", async ({
+    page,
+  }) => {
+    await installFullscreenMock(page);
+    await page.setViewportSize({ width: 390, height: 720 });
+    await setStudentSession(page);
+
+    const paper = buildPaper();
+    paper.sections[0].questions[0].question.content = `
+      <p>Read the full setup before answering.</p>
+      ${Array.from({ length: 16 })
+        .map(
+          (_, index) =>
+            `<p>Context line ${index + 1}: this line makes the mobile fullscreen question body tall enough to require internal scrolling.</p>`,
+        )
+        .join("")}
+      <p>2 + 2 = ?</p>
+    `;
+    paper.sections[0].questions[0].question.options = [
+      {
+        content:
+          "<p>4, after checking all details in the long question prompt above.</p>",
+      },
+      {
+        content:
+          "<p>5, which is intentionally incorrect but still needs to remain reachable above the bottom controls.</p>",
+      },
+    ];
+    let attempt: StudentAttempt | null = null;
+
+    await routeRunnerApis(page, {
+      paper,
+      getAttempt: () => attempt,
+      onStart: async (route) => {
+        attempt = buildAttempt();
+        await route.fulfill(
+          json({
+            success: true,
+            attempt,
+            status: attempt.status,
+            remainingTimeMs: 25 * 60 * 1000,
+            deadlineAt: isoFromNow(25),
+          }),
+        );
+      },
+    });
+
+    await navigateToAppRoute(page, "/student/tests/paper-1?autoStart=1");
+
+    await expect(page.getByRole("button", { name: "Screen" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "Screen" }).click();
+
+    await expect(page.locator(".app-exam-focus-shell-fullscreen")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator(".app-exam-mobile-nav-bar")).toBeVisible();
+
+    const questionBody = page.locator(".app-exam-question-body");
+    await expect
+      .poll(() =>
+        questionBody.evaluate(
+          (element) => element.scrollHeight > element.clientHeight,
+        ),
+      )
+      .toBe(true);
+
+    await questionBody.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+
+    const lastOption = page.locator(".app-exam-option").last();
+    await expect(lastOption).toBeVisible();
+
+    const mobileNavBox = await page
+      .locator(".app-exam-mobile-nav-bar")
+      .boundingBox();
+    const lastOptionBox = await lastOption.boundingBox();
+    expect(mobileNavBox).not.toBeNull();
+    expect(lastOptionBox).not.toBeNull();
+
+    if (!mobileNavBox || !lastOptionBox) {
+      throw new Error("Expected mobile navigation and last option to have layout boxes");
+    }
+
+    expect(lastOptionBox.y + lastOptionBox.height).toBeLessThanOrEqual(
+      mobileNavBox.y - 8,
+    );
+
+    await page.locator(".app-exam-option").first().click();
+    const clearButton = page.getByRole("button", { name: "Clear" });
+    await expect(clearButton).toBeVisible();
+    await expect(clearButton).toBeEnabled();
+    await clearButton.click();
+    await expect(page.locator(".app-exam-option").first()).not.toHaveClass(
+      /app-exam-option-selected/,
+    );
+  });
+
   test("keeps auto-start phone flows interactive when fullscreen is optional", async ({
     page,
   }) => {
@@ -771,7 +871,10 @@ test.describe("Student test UI resilience (network mocked) @mobile", () => {
       .toBe("static");
 
     const previousButton = page.getByRole("button", { name: "Prev" });
-    const nextButton = page.getByRole("button", { name: "Next" });
+    const nextButton = page.getByRole("button", {
+      name: "Next",
+      exact: true,
+    });
 
     await expect(previousButton).toBeVisible();
     await expect(nextButton).toBeVisible();
@@ -789,7 +892,7 @@ test.describe("Student test UI resilience (network mocked) @mobile", () => {
     expect(Math.abs(previousButtonBox.y - nextButtonBox.y)).toBeLessThan(8);
     expect(nextButtonBox.x).toBeGreaterThan(previousButtonBox.x);
 
-    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
     await expect(page.getByText("3 + 3 = ?")).toBeVisible();
     await expect.poll(() => saveCount).toBe(1);
   });
@@ -874,7 +977,7 @@ test.describe("Student test UI resilience (network mocked) @mobile", () => {
       )
       .toBe("static");
 
-    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
     await expect(page.getByText("3 + 3 = ?")).toBeVisible();
     await expect.poll(() => saveCount).toBe(1);
   });

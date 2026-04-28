@@ -48,6 +48,31 @@ type SummerCrashPaymentRequestContext = {
   summerId?: string;
 };
 
+async function markPendingSummerCrashPaymentFailed(params: {
+  orderId: string;
+  reason: string;
+}) {
+  try {
+    await SummerCrashPayment.updateOne(
+      {
+        orderId: params.orderId,
+        status: "pending",
+      },
+      {
+        $set: {
+          status: "failed",
+        },
+      },
+    );
+  } catch (error) {
+    console.error("Failed to mark Summer Crash payment failed:", {
+      orderId: params.orderId,
+      reason: params.reason,
+      error,
+    });
+  }
+}
+
 async function resolveSummerCrashPaymentRequestContext(params: {
   auth:
     | Awaited<ReturnType<typeof requireTenantSession>>
@@ -296,6 +321,26 @@ export async function POST(req: NextRequest) {
           registrationLookupToken,
         )}`;
 
+        await SummerCrashPayment.create({
+          campaignId: context.campaignId,
+          summerSchoolKey: context.summerSchoolKey,
+          orderId,
+          studentName: context.studentName,
+          studentNameNormalized: context.studentNameNormalized,
+          guardianName: context.guardianName,
+          phone: context.phoneDigits,
+          phoneDigits: context.phoneDigits,
+          classBand: context.classBand,
+          classBandNormalized: context.classBandNormalized,
+          sourceSchoolName: context.sourceSchoolName || undefined,
+          amount: context.price,
+          currency: context.currency,
+          status: "pending",
+          successLookupTokenHash: registrationLookupTokenHash,
+          enrollmentId: context.enrollmentId || null,
+          summerId: context.summerId,
+        });
+
         const timeoutController = new AbortController();
         const timeoutId = setTimeout(() => {
           timeoutController.abort();
@@ -332,6 +377,10 @@ export async function POST(req: NextRequest) {
             (error.name === "AbortError" ||
               timeoutController.signal.aborted)
           ) {
+            await markPendingSummerCrashPaymentFailed({
+              orderId,
+              reason: "cashfree-timeout",
+            });
             return NextResponse.json(
               {
                 error:
@@ -340,6 +389,10 @@ export async function POST(req: NextRequest) {
               { status: 504 },
             );
           }
+          await markPendingSummerCrashPaymentFailed({
+            orderId,
+            reason: "cashfree-fetch-error",
+          });
           throw error;
         } finally {
           clearTimeout(timeoutId);
@@ -348,37 +401,34 @@ export async function POST(req: NextRequest) {
         if (!res.ok) {
           const errorText = await res.text();
           console.error("Cashfree API error:", errorText);
+          await markPendingSummerCrashPaymentFailed({
+            orderId,
+            reason: "cashfree-non-ok",
+          });
           return NextResponse.json({ error: errorText }, { status: res.status });
         }
 
-        const data = await res.json();
+        let data: { payment_session_id?: unknown };
+        try {
+          data = (await res.json()) as { payment_session_id?: unknown };
+        } catch (error) {
+          await markPendingSummerCrashPaymentFailed({
+            orderId,
+            reason: "cashfree-invalid-json",
+          });
+          throw error;
+        }
 
         if (!data.payment_session_id) {
+          await markPendingSummerCrashPaymentFailed({
+            orderId,
+            reason: "cashfree-missing-session",
+          });
           return NextResponse.json(
             { error: "Payment session not received." },
             { status: 500 },
           );
         }
-
-        await SummerCrashPayment.create({
-          campaignId: context.campaignId,
-          summerSchoolKey: context.summerSchoolKey,
-          orderId,
-          studentName: context.studentName,
-          studentNameNormalized: context.studentNameNormalized,
-          guardianName: context.guardianName,
-          phone: context.phoneDigits,
-          phoneDigits: context.phoneDigits,
-          classBand: context.classBand,
-          classBandNormalized: context.classBandNormalized,
-          sourceSchoolName: context.sourceSchoolName || undefined,
-          amount: context.price,
-          currency: context.currency,
-          status: "pending",
-          successLookupTokenHash: registrationLookupTokenHash,
-          enrollmentId: context.enrollmentId || null,
-          summerId: context.summerId,
-        });
 
         return NextResponse.json({
           payment_session_id: data.payment_session_id,

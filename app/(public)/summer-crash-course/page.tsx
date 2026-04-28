@@ -17,7 +17,6 @@ import { PublicFinalCta } from "@/components/public/PublicFinalCta";
 import { PublicSectionIntro } from "@/components/public/PublicSectionIntro";
 import SummerCrashEarlyBirdOffer from "@/components/summer-crash/SummerCrashEarlyBirdOffer";
 import { getSummerCrashPublicConfig } from "@/lib/server/summer-crash";
-import { redirectSummerCrashPublicSession } from "@/lib/server/summer-crash-session";
 import {
   SUMMER_CRASH_HELP_PATH,
   SUMMER_CRASH_REGISTER_PATH,
@@ -31,6 +30,8 @@ export const metadata: Metadata = {
   description:
     "A parent-focused Summer Crash Course page designed to help your child strengthen weak maths foundations, build confidence, and start the next term stronger.",
 };
+
+export const revalidate = 300;
 
 const summerSupportPillars = [
   {
@@ -196,8 +197,6 @@ const summerDarkCardTitleClass =
 const summerDarkCardCopyClass = "mt-3 text-[0.95rem] leading-7 text-white";
 
 export default async function SummerCrashCourseLandingPage() {
-  await redirectSummerCrashPublicSession();
-
   const config = await getSummerCrashPublicConfig();
 
   const hasPaidCourseAccess = Number(config.price) > 0;

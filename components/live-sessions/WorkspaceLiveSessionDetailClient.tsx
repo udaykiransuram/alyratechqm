@@ -259,6 +259,7 @@ export default function WorkspaceLiveSessionDetailClient({
     Boolean(liveSession.transcript?.isPublished),
   );
   const [isSavingTranscript, setIsSavingTranscript] = useState(false);
+  const [absoluteShareLink, setAbsoluteShareLink] = useState(liveSession.shareHref);
 
   const filteredResponses = useMemo(() => {
     const responses = responsePage?.responses || [];
@@ -296,6 +297,10 @@ export default function WorkspaceLiveSessionDetailClient({
     liveSession.transcript?.rawText,
     liveSession.transcript?.summaryHtml,
   ]);
+
+  useEffect(() => {
+    setAbsoluteShareLink(getAbsoluteShareLink(liveSession.shareHref));
+  }, [liveSession.shareHref]);
 
   const draftItems = useMemo(
     () =>
@@ -466,7 +471,7 @@ export default function WorkspaceLiveSessionDetailClient({
 
   async function handleCopyShareLink() {
     try {
-      await navigator.clipboard.writeText(getAbsoluteShareLink(liveSession.shareHref));
+      await navigator.clipboard.writeText(absoluteShareLink);
       setError(null);
     } catch {
       setError("Could not copy the student share link.");
@@ -739,7 +744,7 @@ export default function WorkspaceLiveSessionDetailClient({
                   </Button>
                 </div>
                 <p className="mt-3 break-all rounded-[0.9rem] border border-dashed border-border/60 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
-                  {getAbsoluteShareLink(liveSession.shareHref)}
+                  {absoluteShareLink}
                 </p>
                 <p className="mt-3 leading-6 text-muted-foreground">
                   {liveSession.joinInstructions ||

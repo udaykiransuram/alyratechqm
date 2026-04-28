@@ -25,7 +25,8 @@ export type RequestGovernorCostClass =
   | "analytics"
   | "report"
   | "worker"
-  | "stream";
+  | "stream"
+  | "live";
 
 export type RequestGovernorMetric =
   | "allowed"
@@ -445,6 +446,126 @@ export const REQUEST_GOVERNOR_POLICIES = {
         "This account already has the maximum number of open notification streams.",
       unavailable:
         "Live notification updates are temporarily unavailable. Please retry shortly.",
+    },
+  },
+  liveSessionList: {
+    id: "live-session-list",
+    label: "Student live class list",
+    scope: "user",
+    windowMs: 60 * 1000,
+    maxRequests: 30,
+    maxConcurrent: 3,
+    failMode: "closed",
+    costClass: "live",
+    retryAfterSeconds: 10,
+    alertThresholds: {
+      rate_limited: 10,
+      concurrency_limited: 10,
+      unavailable: 1,
+    },
+    messages: {
+      rateLimited:
+        "Too many live class refreshes were made. Please wait a moment and try again.",
+      concurrencyLimited:
+        "Live class list is already refreshing for this account. Please retry in a moment.",
+      unavailable:
+        "Live class list is temporarily unavailable. Please retry shortly.",
+    },
+  },
+  liveSessionDetail: {
+    id: "live-session-detail",
+    label: "Student live class detail refresh",
+    scope: "user",
+    windowMs: 60 * 1000,
+    maxRequests: 24,
+    maxConcurrent: 3,
+    failMode: "closed",
+    costClass: "live",
+    retryAfterSeconds: 10,
+    alertThresholds: {
+      rate_limited: 10,
+      concurrency_limited: 10,
+      unavailable: 1,
+    },
+    messages: {
+      rateLimited:
+        "Too many live class updates were requested. Please wait a moment and try again.",
+      concurrencyLimited:
+        "Live class updates are already refreshing for this account. Please retry in a moment.",
+      unavailable:
+        "Live class updates are temporarily unavailable. Please retry shortly.",
+    },
+  },
+  liveSessionJoin: {
+    id: "live-session-join",
+    label: "Student live class join",
+    scope: "user",
+    windowMs: 60 * 1000,
+    maxRequests: 15,
+    maxConcurrent: 2,
+    failMode: "closed",
+    costClass: "live",
+    retryAfterSeconds: 10,
+    alertThresholds: {
+      rate_limited: 8,
+      concurrency_limited: 8,
+      unavailable: 1,
+    },
+    messages: {
+      rateLimited:
+        "Too many live class join requests were made. Please wait a moment and try again.",
+      concurrencyLimited:
+        "A live class join request is already in progress for this account. Please retry in a moment.",
+      unavailable:
+        "Live class joining is temporarily unavailable. Please retry shortly.",
+    },
+  },
+  liveSessionPresence: {
+    id: "live-session-presence",
+    label: "Student live class presence heartbeat",
+    scope: "user",
+    windowMs: 60 * 1000,
+    maxRequests: 30,
+    maxConcurrent: 2,
+    failMode: "closed",
+    costClass: "live",
+    retryAfterSeconds: 10,
+    alertThresholds: {
+      rate_limited: 10,
+      concurrency_limited: 10,
+      unavailable: 1,
+    },
+    messages: {
+      rateLimited:
+        "Too many live class attendance updates were sent. Please wait a moment and try again.",
+      concurrencyLimited:
+        "A live class attendance update is already in progress for this account. Please retry in a moment.",
+      unavailable:
+        "Live class attendance updates are temporarily unavailable. Please retry shortly.",
+    },
+  },
+  liveSessionResponse: {
+    id: "live-session-response",
+    label: "Student live class response submit",
+    scope: "user",
+    windowMs: 60 * 1000,
+    maxRequests: 60,
+    maxConcurrent: 3,
+    failMode: "closed",
+    costClass: "live",
+    retryAfterSeconds: 10,
+    alertThresholds: {
+      rate_limited: 10,
+      concurrency_limited: 10,
+      unavailable: 1,
+    },
+    messages: {
+      rateLimited:
+        "Too many live class responses were submitted. Please wait a moment and try again.",
+      concurrencyLimited:
+        "A live class response is already being submitted for this account. Please retry in a moment.",
+      unavailable:
+        "Live class responses are temporarily unavailable. Please retry shortly.",
     },
   },
 } as const satisfies Record<string, RequestGovernorPolicy>;
@@ -922,6 +1043,20 @@ export async function enforceRequestBudget(
 ): Promise<RequestGovernorResult> {
   const policy = resolvePolicy(context.policy);
   const scopeKey = buildScopeKey(policy, context);
+
+  if (isMockedE2ETestMode()) {
+    return {
+      ok: true,
+      policy,
+      scopeKey,
+      lease: {
+        policy,
+        scopeKey,
+        release: async () => {},
+      },
+    };
+  }
+
   const shouldSoftAllowUnavailable =
     shouldSoftAllowUnavailableRequestBudget(policy);
 

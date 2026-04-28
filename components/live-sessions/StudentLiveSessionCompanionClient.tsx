@@ -42,10 +42,15 @@ type StudentLiveSessionCompanionClientProps = {
   initialLiveSession: StudentLiveSessionDetail;
 };
 
-const LIVE_SESSION_POLL_INTERVAL_MS = 8_000;
-const LIVE_SESSION_PRESENCE_INTERVAL_MS = 20_000;
-const LIVE_SESSION_POLL_INTERVAL_LITE_MS = 16_000;
-const LIVE_SESSION_PRESENCE_INTERVAL_LITE_MS = 40_000;
+const LIVE_SESSION_POLL_INTERVAL_MS = 20_000;
+const LIVE_SESSION_PRESENCE_INTERVAL_MS = 60_000;
+const LIVE_SESSION_POLL_INTERVAL_LITE_MS = 45_000;
+const LIVE_SESSION_PRESENCE_INTERVAL_LITE_MS = 90_000;
+
+function withClientJitter(intervalMs: number) {
+  const jitterMs = Math.max(500, Math.floor(intervalMs * 0.35));
+  return Math.max(1_000, intervalMs + Math.floor(Math.random() * jitterMs));
+}
 
 function formatDateTime(value?: string | null) {
   if (!value) {
@@ -297,6 +302,7 @@ export default function StudentLiveSessionCompanionClient({
 
   useEffect(() => {
     let disposed = false;
+    let timeoutId: number | null = null;
 
     const refreshWhenVisible = () => {
       if (disposed) {
@@ -310,7 +316,18 @@ export default function StudentLiveSessionCompanionClient({
       void refreshLiveSession({ silent: true });
     };
 
-    const intervalId = window.setInterval(refreshWhenVisible, pollIntervalMs);
+    const scheduleNextRefresh = () => {
+      if (disposed) {
+        return;
+      }
+
+      timeoutId = window.setTimeout(() => {
+        refreshWhenVisible();
+        scheduleNextRefresh();
+      }, withClientJitter(pollIntervalMs));
+    };
+
+    scheduleNextRefresh();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -322,13 +339,16 @@ export default function StudentLiveSessionCompanionClient({
 
     return () => {
       disposed = true;
-      window.clearInterval(intervalId);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [pollIntervalMs, refreshLiveSession]);
 
   useEffect(() => {
     let disposed = false;
+    let timeoutId: number | null = null;
 
     const sendPresence = async () => {
       if (disposed || presenceInFlightRef.current) {
@@ -353,10 +373,16 @@ export default function StudentLiveSessionCompanionClient({
       }
     };
 
-    const intervalId = window.setInterval(
-      () => void sendPresence(),
-      presenceIntervalMs,
-    );
+    const scheduleNextPresence = () => {
+      if (disposed) {
+        return;
+      }
+
+      timeoutId = window.setTimeout(() => {
+        void sendPresence();
+        scheduleNextPresence();
+      }, withClientJitter(presenceIntervalMs));
+    };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -366,10 +392,13 @@ export default function StudentLiveSessionCompanionClient({
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     void sendPresence();
+    scheduleNextPresence();
 
     return () => {
       disposed = true;
-      window.clearInterval(intervalId);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [liveSession._id, presenceIntervalMs]);
@@ -409,7 +438,7 @@ export default function StudentLiveSessionCompanionClient({
   const isSessionOver =
     liveSession.status === "completed" || liveSession.status === "cancelled";
   const hasSupportingContent = Boolean(
-    studentJoinStream || (isSessionOver && liveSession.publishedTranscriptSummary),
+    studentJoinStream || liveSession.publishedTranscriptSummary,
   );
   const showSplitCompanionStage = Boolean(studentJoinStream);
   const useCompactQuestionLayout = Boolean(activeItem && studentJoinStream);
@@ -824,7 +853,7 @@ export default function StudentLiveSessionCompanionClient({
                         >
                           {String.fromCharCode(65 + option.index)}
                         </span>
-                        <div className="min-w-0 flex-1 line-clamp-1">
+                        <div className="app-live-session-option-content min-w-0 flex-1 text-sm leading-6">
                           <ContentRenderer htmlContent={option.contentHtml} />
                         </div>
                         {isSelected ? (
@@ -1352,7 +1381,7 @@ export default function StudentLiveSessionCompanionClient({
             >
               <div className={cn("space-y-5", isFocusModeActive && "space-y-0")}>
                 {studentJoinStreamCard}
-                {isSessionOver && !isFocusModeActive ? transcriptCard : null}
+                {!isFocusModeActive ? transcriptCard : null}
               </div>
               {activeItem ? (
                 <div
@@ -1395,7 +1424,7 @@ export default function StudentLiveSessionCompanionClient({
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(20rem,0.92fr)] xl:items-start">
                 <div className="space-y-5">
                   {studentJoinStreamCard}
-                  {isSessionOver ? transcriptCard : null}
+                  {transcriptCard}
                 </div>
                 {isSessionOver ? afterClassStatsCard : accessCard}
               </div>
