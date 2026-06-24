@@ -103,7 +103,7 @@ jobs:
       ONLINE_TEST_GATE_LIST_FIRST: ${{ inputs.list_first }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
